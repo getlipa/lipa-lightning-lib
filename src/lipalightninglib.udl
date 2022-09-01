@@ -1,0 +1,65 @@
+enum Network {
+    "Bitcoin",
+    "Testnet",
+    "Signet",
+    "Regtest",
+};
+
+dictionary LipaLightningConfig {
+    sequence<u8> seed;
+    string bitcoind_rpc_username;
+    string bitcoind_rpc_password;
+    u16 bitcoind_rpc_port;
+    string bitcoind_rpc_host;
+    u16 ldk_peer_listening_port;
+    Network network;
+};
+
+callback interface PersistCallback {
+    boolean exists(string path);
+    sequence<string> read_dir(string path);
+    boolean write_to_file(string path, sequence<u8> data);
+    sequence<u8> read(string path);
+};
+
+dictionary LipaNodeInfo {
+    sequence<u8> node_pubkey;
+    u64 num_channels;
+    u64 num_usable_channels;
+    u64 local_balance_msat;
+    u64 num_peers;
+};
+
+[Error]
+enum LipaLightningError {
+    "Placeholder",
+    "PeerConnection",
+    "ChannelOpen",
+    "InvoiceParsing",
+    "InvoiceInvalid",
+    "Routing",
+    "PaymentFail",
+    "InternalError",
+    "PubkeyParsing",
+    "InvalidPayee",
+    "InvoiceCreation",
+};
+
+interface LipaLightning {
+    constructor(LipaLightningConfig config, PersistCallback persist_callback);
+    void stop();
+    sequence<u8> get_my_node_id();
+    LipaNodeInfo get_node_info();
+    [Throws=LipaLightningError]
+    void connect_open_channel(sequence<u8> node_id, string node_address, u64 channel_value_sat);
+    [Throws=LipaLightningError]
+    void send_payment(string invoice_str);
+    [Throws=LipaLightningError]
+    void send_spontaneous_payment(u64 amout_msat, sequence<u8> node_id);
+    [Throws=LipaLightningError]
+    string create_invoice(u64 amount_msat, u32 expiry_secs);
+};
+
+namespace lipalightninglib {
+    void init_logger_once();
+};
