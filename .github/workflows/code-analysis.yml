@@ -36,8 +36,6 @@ jobs:
         with:
           toolchain: stable
           components: clippy
-      - name: Install UniFFI
-        run: cargo install uniffi_bindgen@0.19.6
       - name: Clippy
         run: cargo clippy
   unused_dependencies:
@@ -50,8 +48,6 @@ jobs:
         with:
           toolchain: nightly
           override: true
-      - name: Install UniFFI
-        run: cargo install uniffi_bindgen@0.19.6
       - name: Install unused dependency checker
         run: cargo install cargo-udeps --locked
       - name: Run unused dependency checker

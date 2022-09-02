@@ -1,20 +1,32 @@
+use camino::Utf8Path;
 use std::env;
-use std::process::Command;
 
 fn main() {
-    //uniffi_build::generate_scaffolding("./src/lipalightninglib.udl").unwrap();
+    uniffi_bindgen::generate_component_scaffolding(
+        Utf8Path::new("src/lipalightninglib.udl"),
+        None,
+        Some(Utf8Path::new(&env::var("OUT_DIR").unwrap())),
+        false,
+    )
+    .unwrap();
 
-    Command::new("uniffi-bindgen")
-        .arg("scaffolding")
-        .arg("src/lipalightninglib.udl")
-        .arg("--no-format")
-        .arg("--out-dir")
-        .arg(env::var("OUT_DIR").unwrap())
-        .output()
-        .expect("Failed to generate scaffolding");
+    uniffi_bindgen::generate_bindings(
+        Utf8Path::new("src/lipalightninglib.udl"),
+        None,
+        Vec::from(["swift"]),
+        Some(Utf8Path::new("bindings/swift")),
+        None,
+        false,
+    )
+    .unwrap();
 
-    /*Command::new("sh")
-    .arg("scripts/generate-bindings.sh")
-    .output()
-    .expect("Failed to generate bindings");*/
+    uniffi_bindgen::generate_bindings(
+        Utf8Path::new("src/lipalightninglib.udl"),
+        None,
+        Vec::from(["kotlin"]),
+        Some(Utf8Path::new("bindings/kotlin")),
+        None,
+        false,
+    )
+    .unwrap();
 }
