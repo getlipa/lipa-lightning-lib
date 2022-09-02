@@ -19,3 +19,13 @@ jobs:
         run: cargo build --verbose
       - name: Run unit tests
         run: cargo test --verbose
+      - name: Verify if bindings change
+        uses: tj-actions/verify-changed-files@v11.1
+        id: verify-bindings
+        with:
+          files: |
+            bindings/swift/*
+            bindings/kotlin/uniffi/lipalightninglib/lipalightninglib.kt
+      - name: Fail if bindings change
+        if: steps.verify-bindings.outputs.files_changed == 'true'
+        run: exit 1
