@@ -7,6 +7,7 @@ mod bitcoind_client;
 pub mod callbacks;
 pub mod config;
 mod convert;
+mod electrum_client;
 mod errors;
 mod event_handler;
 mod hex_utils;
@@ -17,6 +18,7 @@ mod util;
 use crate::bitcoind_client::BitcoindClient;
 use crate::callbacks::PersistCallback;
 use crate::config::LipaLightningConfig;
+use crate::electrum_client::ElectrumClient;
 use crate::errors::LipaLightningError;
 use crate::event_handler::LipaEventHandler;
 use crate::hex_utils::to_compressed_pubkey;
@@ -392,6 +394,8 @@ impl LipaLdk {
 
         // Step 1: Initialize the FeeEstimator
         let fee_estimator = bitcoind_client.clone();
+
+        let _electrum_fee_estimator = ElectrumClient {};
 
         // Step 2: Initialize the Logger
         let logger = Arc::new(LipaLogger {});
