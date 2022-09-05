@@ -19,6 +19,8 @@ jobs:
         run: cargo build --verbose
       - name: Run unit tests
         run: cargo test --verbose
+      - name: Build examples
+        run: cargo build --verbose --examples
       - name: Verify if bindings change
         uses: tj-actions/verify-changed-files@v11.1
         id: verify-bindings

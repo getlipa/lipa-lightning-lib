@@ -7,10 +7,6 @@ edition = "2021"
 crate-type = ["lib", "staticlib", "cdylib"]
 name = "uniffi_lipalightninglib"
 
-[[bin]]
-name = "example-3l-usage"
-path = "src/example-3L-usage/bin.rs"
-
 [dependencies]
 tokio = { version = "1", features = [ "io-util", "macros", "rt", "rt-multi-thread", "sync", "net", "time" ] }
 uniffi = "0.19.6"
