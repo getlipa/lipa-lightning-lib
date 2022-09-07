@@ -1,0 +1,238 @@
+name: Deploy a new release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  cross-compile-ios:
+    name: cross-compile-ios
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [ x86_64-apple-ios, aarch64-apple-ios, aarch64-apple-ios-sim ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+      - name: Build target
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: false
+          command: build
+          args: --release --target ${{ matrix.target }}
+      - name: Upload library binaries
+        uses: actions/upload-artifact@master
+        with:
+          path: target/${{ matrix.target }}/release/libuniffi_lipalightninglib.a
+          name: build-${{ matrix.target }}
+      - name: Upload header file
+        uses: actions/upload-artifact@master
+        with:
+          path: bindings/swift/lipalightninglibFFI.h
+          name: header-file
+      - name: Upload bindings file
+        uses: actions/upload-artifact@master
+        with:
+          path: bindings/swift/lipalightninglib.swift
+          name: bindings-file-ios
+
+  cross-compile-android:
+    name: cross-compile-android
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [ aarch64-linux-android, armv7-linux-androideabi, i686-linux-android ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+      - name: Build target
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release --target ${{ matrix.target }}
+      - name: Upload library binaries
+        uses: actions/upload-artifact@master
+        with:
+          path: target/${{ matrix.target }}/release/libuniffi_lipalightninglib.so
+          name: build-${{ matrix.target }}
+      - name: Upload bindings file
+        uses: actions/upload-artifact@master
+        with:
+          path: bindings/kotlin/uniffi/lipalightninglib/lipalightninglib.kt
+          name: bindings-file-android
+
+  lipo-ios:
+    name: lipo-ios
+    needs: [ cross-compile-ios, cross-compile-android ]
+    runs-on: macos-latest
+    steps:
+      - name: Download x86 bin
+        uses: actions/download-artifact@master
+        with:
+          path: target/x86_64-apple-ios/release
+          name: build-x86_64-apple-ios
+      - name: Download aarch64 bin
+        uses: actions/download-artifact@master
+        with:
+          path: target/aarch64-apple-ios/release
+          name: build-aarch64-apple-ios
+      - name: Download aarch64sim bin
+        uses: actions/download-artifact@master
+        with:
+          path: target/aarch64-apple-ios-sim/release
+          name: build-aarch64-apple-ios-sim
+      - name: Package simulator binaries
+        run: |
+          mkdir -p target/universal/release
+          lipo -create -output target/universal/release/libuniffi_lipalightninglib_simulator.a \
+            target/aarch64-apple-ios-sim/release/libuniffi_lipalightninglib.a \
+            target/x86_64-apple-ios/release/libuniffi_lipalightninglib.a
+      - name: Upload universal binary
+        uses: actions/upload-artifact@master
+        with:
+          path: target/universal/release/libuniffi_lipalightninglib_simulator.a
+          name: build-ios-simulator-universal
+
+  deploy-ios:
+    name: deploy-ios
+    needs: lipo-ios
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.LIPA_BOT_IOS_DEPLOY_KEY }}
+      - name: Download aarch64 bin
+        uses: actions/download-artifact@master
+        with:
+          path: target/aarch64-apple-ios/release
+          name: build-aarch64-apple-ios
+      - name: Download simulator universal bin
+        uses: actions/download-artifact@master
+        with:
+          path: target/universal/release
+          name: build-ios-simulator-universal
+      - name: Download header file
+        uses: actions/download-artifact@master
+        with:
+          path: bindings/swift/
+          name: header-file
+      - name: Download bindings file
+        uses: actions/download-artifact@master
+        with:
+          path: bindings/swift/
+          name: bindings-file-ios
+      - name: Create xcframework
+        run: |
+          git clone git@github.com:getlipa/lipa-lightning-lib-swift.git
+          cp bindings/swift/lipalightninglibFFI.h lipa-lightning-lib-swift/lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/Headers/lipalightninglibFFI.h
+          cp bindings/swift/lipalightninglibFFI.h lipa-lightning-lib-swift/lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/Headers/lipalightninglibFFI.h
+          cp target/aarch64-apple-ios/release/libuniffi_lipalightninglib.a lipa-lightning-lib-swift/lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/lipalightninglibFFI
+          cp target/universal/release/libuniffi_lipalightninglib_simulator.a lipa-lightning-lib-swift/lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/lipalightninglibFFI
+          cd lipa-lightning-lib-swift
+          zip -9 -r lipalightninglibFFI.xcframework.zip lipalightninglibFFI.xcframework
+      - name: Upload xcframework zip
+        uses: actions/upload-artifact@master
+        with:
+          path: lipa-lightning-lib-swift/lipalightninglibFFI.xcframework.zip
+          name: lipalightninglibFFI.xcframework
+      - name: Push to target repo
+        env:
+          GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
+        run: |
+          cd lipa-lightning-lib-swift
+          git config --global user.email "lipa-lightning-engineering@getlipa.com"
+          git config --global user.name "lipa-github-bot"
+          
+          cp ../bindings/swift/lipalightninglib.swift Sources/LipaLightningLib/LipaLightningLib.swift
+          
+          cp Package.swift.template Package.swift
+          shasum -a 256 lipalightninglibFFI.xcframework.zip | sed 's/ .*//' > checksum
+          sed -i "s/to_replace_release_version/${{ env.RELEASE_VERSION }}/g" Package.swift
+          sed -i "s/to_replace_zip_checksum/$(cat checksum)/g" Package.swift
+          
+          git add Package.swift
+          git add Sources/LipaLightningLib/LipaLightningLib.swift
+          git commit -m "This commit was created automatically by the lipa bot"
+          git tag -a ${{ env.RELEASE_VERSION }} HEAD -m "This release was create automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib"
+          git push
+          git push --tag
+          gh release create ${{ env.RELEASE_VERSION }} lipalightninglibFFI.xcframework.zip
+
+  deploy-android:
+    name: deploy-android
+    needs: lipo-ios
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.LIPA_BOT_ANDROID_DEPLOY_KEY }}
+      - name: Download aarch64 bin
+        uses: actions/download-artifact@master
+        with:
+          path: target/aarch64-linux-android/release
+          name: build-aarch64-linux-android
+      - name: Download armv7 bin
+        uses: actions/download-artifact@master
+        with:
+          path: target/armv7-linux-androideabi/release
+          name: build-armv7-linux-androideabi
+      - name: Download i686 bin
+        uses: actions/download-artifact@master
+        with:
+          path: target/i686-linux-android/release
+          name: build-i686-linux-android
+      - name: Download bindings file
+        uses: actions/download-artifact@master
+        with:
+          path: bindings/kotlin/uniffi/lipalightninglib
+          name: bindings-file-android
+      - name: Push to target repo
+        env:
+          GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
+        run: |
+          git clone git@github.com:getlipa/lipa-lightning-lib-android.git
+          cd lipa-lightning-lib-android
+          git config --global user.email "lipa-lightning-engineering@getlipa.com"
+          git config --global user.name "lipa-github-bot"
+          
+          cp ../bindings/kotlin/uniffi/lipalightninglib/lipalightninglib.kt LipaLightningLib/src/main/java/com/getlipa/lipalightninglib/lipalightninglib.kt
+          
+          mv ../target/aarch64-linux-android/release/libuniffi_lipalightninglib.so libuniffi_lipalightninglib_arm64.so
+          mv ../target/armv7-linux-androideabi/release/libuniffi_lipalightninglib.so libuniffi_lipalightninglib_armeabi.so
+          mv ../target/i686-linux-android/release/libuniffi_lipalightninglib.so libuniffi_lipalightninglib_x86.so
+
+          cp jitpack.yml.template jitpack.yml
+          sed -i "s/to_replace_release_version/${{ env.RELEASE_VERSION }}/g" jitpack.yml
+
+          git add LipaLightningLib/src/main/java/com/getlipa/lipalightninglib/lipalightninglib.kt
+          git add jitpack.yml
+          git commit -m "This commit was created automatically by the lipa bot"
+          git tag -a ${{ env.RELEASE_VERSION }} HEAD -m "This release was create automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib"
+          git push
+          git push --tag
+          gh release create ${{ env.RELEASE_VERSION }} \
+            libuniffi_lipalightninglib_arm64.so \
+            libuniffi_lipalightninglib_armeabi.so \
+            libuniffi_lipalightninglib_x86.so
