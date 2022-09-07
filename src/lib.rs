@@ -50,7 +50,7 @@ use lightning_block_sync::{init, poll, SpvClient, UnboundedCache};
 use lightning_invoice::utils::DefaultRouter;
 use lightning_invoice::{payment, Invoice};
 use lightning_net_tokio::SocketDescriptor;
-use log::{error, info, Level};
+use log::{error, info, Level as LogLevel};
 use rand::Rng;
 use std::collections::HashMap;
 use std::fmt;
@@ -749,8 +749,8 @@ impl LipaLdk {
     }
 }
 
-pub fn init_native_logger_once() {
-    native_logger::init_native_logger_once(Level::Trace);
+pub fn init_native_logger_once(min_level: LogLevel) {
+    native_logger::init_native_logger_once(min_level);
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));

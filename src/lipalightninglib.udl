@@ -60,6 +60,14 @@ interface LipaLightning {
     string create_invoice(u64 amount_msat, u32 expiry_secs);
 };
 
+enum LogLevel {
+    "Error",
+    "Warn",
+    "Info",
+    "Debug",
+    "Trace",
+};
+
 namespace lipalightninglib {
-    void init_native_logger_once();
+    void init_native_logger_once(LogLevel min_level);
 };
