@@ -2,6 +2,8 @@
 .idea
 .ldk
 
+/bindings
+
 # Added by cargo
 /target
 /Cargo.lock
