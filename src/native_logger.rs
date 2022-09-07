@@ -1,6 +1,8 @@
 #[cfg(target_os = "android")]
 use android_logger::Config;
 use log::Level;
+#[cfg(target_os = "ios")]
+use oslog::OsLogger;
 use std::sync::Once;
 
 fn init_native_logger(min_level: Level) {
