@@ -46,63 +46,63 @@ typedef struct RustCallStatus {
 // ⚠️ increment the version suffix in all instances of UNIFFI_SHARED_HEADER_V4 in this file.           ⚠️
 #endif // def UNIFFI_SHARED_H
 
-void ffi_lipalightninglib_f0e0_LipaLightning_object_free(
+void ffi_lipalightninglib_4ef5_LipaLightning_object_free(
       void*_Nonnull ptr,
     RustCallStatus *_Nonnull out_status
     );
-void*_Nonnull lipalightninglib_f0e0_LipaLightning_new(
+void*_Nonnull lipalightninglib_4ef5_LipaLightning_new(
       RustBuffer config,uint64_t persist_callback,
     RustCallStatus *_Nonnull out_status
     );
-void lipalightninglib_f0e0_LipaLightning_stop(
+void lipalightninglib_4ef5_LipaLightning_stop(
       void*_Nonnull ptr,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer lipalightninglib_f0e0_LipaLightning_get_my_node_id(
+RustBuffer lipalightninglib_4ef5_LipaLightning_get_my_node_id(
       void*_Nonnull ptr,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer lipalightninglib_f0e0_LipaLightning_get_node_info(
+RustBuffer lipalightninglib_4ef5_LipaLightning_get_node_info(
       void*_Nonnull ptr,
     RustCallStatus *_Nonnull out_status
     );
-void lipalightninglib_f0e0_LipaLightning_connect_open_channel(
+void lipalightninglib_4ef5_LipaLightning_connect_open_channel(
       void*_Nonnull ptr,RustBuffer node_id,RustBuffer node_address,uint64_t channel_value_sat,
     RustCallStatus *_Nonnull out_status
     );
-void lipalightninglib_f0e0_LipaLightning_send_payment(
+void lipalightninglib_4ef5_LipaLightning_send_payment(
       void*_Nonnull ptr,RustBuffer invoice_str,
     RustCallStatus *_Nonnull out_status
     );
-void lipalightninglib_f0e0_LipaLightning_send_spontaneous_payment(
+void lipalightninglib_4ef5_LipaLightning_send_spontaneous_payment(
       void*_Nonnull ptr,uint64_t amout_msat,RustBuffer node_id,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer lipalightninglib_f0e0_LipaLightning_create_invoice(
+RustBuffer lipalightninglib_4ef5_LipaLightning_create_invoice(
       void*_Nonnull ptr,uint64_t amount_msat,uint32_t expiry_secs,
     RustCallStatus *_Nonnull out_status
     );
-void ffi_lipalightninglib_f0e0_PersistCallback_init_callback(
+void ffi_lipalightninglib_4ef5_PersistCallback_init_callback(
       ForeignCallback  _Nonnull callback_stub,
     RustCallStatus *_Nonnull out_status
     );
-void lipalightninglib_f0e0_init_logger_once(
-      
+void lipalightninglib_4ef5_init_native_logger_once(
+      RustBuffer min_level,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer ffi_lipalightninglib_f0e0_rustbuffer_alloc(
+RustBuffer ffi_lipalightninglib_4ef5_rustbuffer_alloc(
       int32_t size,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer ffi_lipalightninglib_f0e0_rustbuffer_from_bytes(
+RustBuffer ffi_lipalightninglib_4ef5_rustbuffer_from_bytes(
       ForeignBytes bytes,
     RustCallStatus *_Nonnull out_status
     );
-void ffi_lipalightninglib_f0e0_rustbuffer_free(
+void ffi_lipalightninglib_4ef5_rustbuffer_free(
       RustBuffer buf,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer ffi_lipalightninglib_f0e0_rustbuffer_reserve(
+RustBuffer ffi_lipalightninglib_4ef5_rustbuffer_reserve(
       RustBuffer buf,int32_t additional,
     RustCallStatus *_Nonnull out_status
     );

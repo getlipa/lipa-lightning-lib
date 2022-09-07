@@ -1,6 +1,6 @@
 use crate::{
-    hex_utils, BitcoindClient, ChannelManager, HTLCStatus, LipaLogger, MillisatAmount, PaymentInfo,
-    PaymentInfoStorage,
+    hex_utils, BitcoindClient, ChannelManager, HTLCStatus, LightningLogger, MillisatAmount,
+    PaymentInfo, PaymentInfoStorage,
 };
 use bitcoin::consensus::encode;
 use bitcoin::secp256k1::Secp256k1;
@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Handle;
 
-pub(crate) type NetworkGraph = gossip::NetworkGraph<Arc<LipaLogger>>;
+pub(crate) type NetworkGraph = gossip::NetworkGraph<Arc<LightningLogger>>;
 
 pub(crate) struct LipaEventHandler {
     pub(crate) channel_manager: Arc<ChannelManager>,

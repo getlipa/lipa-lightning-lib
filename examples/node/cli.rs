@@ -8,7 +8,7 @@ use uniffi_lipalightninglib::LipaLightning;
 
 pub(crate) fn poll_for_user_input(lipa_lightning: &LipaLightning) {
     println!("LDK startup successful. To view available commands: \"help\".");
-    println!("LDK logs are available at .ldk/logs");
+    println!("Detailed logs are available at .ldk/logs.txt");
     println!("To stop the LDK node, please type \"stop\" for a graceful shutdown.");
     println!(
         "Local Node ID is {}.",

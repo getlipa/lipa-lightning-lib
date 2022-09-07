@@ -12,6 +12,7 @@ mod errors;
 mod event_handler;
 mod hex_utils;
 mod logger;
+mod native_logger;
 mod persist;
 mod util;
 
@@ -22,13 +23,11 @@ use crate::electrum_client::ElectrumClient;
 use crate::errors::LipaLightningError;
 use crate::event_handler::LipaEventHandler;
 use crate::hex_utils::to_compressed_pubkey;
-use crate::logger::LipaLogger;
+use crate::logger::LightningLogger;
 use crate::persist::LipaPersister;
 use crate::util::{
     connect_peer_if_necessary, do_connect_peer, do_send_payment, get_invoice, keysend, open_channel,
 };
-#[cfg(target_os = "android")]
-use android_logger::Config;
 use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::PublicKey;
@@ -51,13 +50,7 @@ use lightning_block_sync::{init, poll, SpvClient, UnboundedCache};
 use lightning_invoice::utils::DefaultRouter;
 use lightning_invoice::{payment, Invoice};
 use lightning_net_tokio::SocketDescriptor;
-use log::error;
-#[cfg(target_os = "android")]
-use log::Level;
-#[cfg(not(target_os = "android"))]
-use log::LevelFilter;
-#[cfg(target_os = "ios")]
-use oslog::OsLogger;
+use log::{error, info, Level as LogLevel};
 use rand::Rng;
 use std::collections::HashMap;
 use std::fmt;
@@ -78,16 +71,12 @@ pub struct LipaLightning {
 ///
 /// Creating an instance initializes all Lightning related background tasks.
 ///
-/// If logging is required, `init_logger_once()` should be called before instantiating this object.
-///
 /// For a safe shutdown of the Lightning node, `stop()` must be called before terminating the app.
 impl LipaLightning {
     /// Returns a LipaLightning instance
     ///
     /// Creates a tokio async runtime and spawns all background tasks necessary for a functioning
     /// Lightning node
-    ///
-    /// For logging to work, `init_logger_once()` must be called beforehand.
     ///
     /// # Arguments
     ///
@@ -278,12 +267,12 @@ type ChainMonitor = chainmonitor::ChainMonitor<
     Arc<dyn Filter + Send + Sync>,
     Arc<BitcoindClient>,
     Arc<BitcoindClient>,
-    Arc<LipaLogger>,
+    Arc<LightningLogger>,
     Arc<LipaPersister>,
 >;
 
 pub(crate) type ChannelManager =
-    SimpleArcChannelManager<ChainMonitor, BitcoindClient, BitcoindClient, LipaLogger>;
+    SimpleArcChannelManager<ChainMonitor, BitcoindClient, BitcoindClient, LightningLogger>;
 
 pub(crate) type PeerManager = SimpleArcPeerManager<
     SocketDescriptor,
@@ -291,7 +280,7 @@ pub(crate) type PeerManager = SimpleArcPeerManager<
     BitcoindClient,
     BitcoindClient,
     dyn chain::Access + Send + Sync,
-    LipaLogger,
+    LightningLogger,
 >;
 
 pub(crate) enum HTLCStatus {
@@ -320,15 +309,15 @@ pub(crate) struct PaymentInfo {
 
 pub(crate) type PaymentInfoStorage = Arc<Mutex<HashMap<PaymentHash, PaymentInfo>>>;
 
-type Router = DefaultRouter<Arc<NetworkGraph>, Arc<LipaLogger>>;
+type Router = DefaultRouter<Arc<NetworkGraph>, Arc<LightningLogger>>;
 
-pub(crate) type NetworkGraph = gossip::NetworkGraph<Arc<LipaLogger>>;
+pub(crate) type NetworkGraph = gossip::NetworkGraph<Arc<LightningLogger>>;
 
 pub(crate) type InvoicePayer = payment::InvoicePayer<
     Arc<ChannelManager>,
     Router,
-    Arc<Mutex<ProbabilisticScorer<Arc<NetworkGraph>, Arc<LipaLogger>>>>,
-    Arc<LipaLogger>,
+    Arc<Mutex<ProbabilisticScorer<Arc<NetworkGraph>, Arc<LightningLogger>>>>,
+    Arc<LightningLogger>,
     Arc<LipaEventHandler>,
 >;
 
@@ -343,8 +332,8 @@ struct LipaLdk {
     outbound_payments: PaymentInfoStorage,
     network_graph: Arc<NetworkGraph>,
     keys_manager: Arc<KeysManager>,
-    logger: Arc<LipaLogger>,
-    scorer: Arc<Mutex<ProbabilisticScorer<Arc<NetworkGraph>, Arc<LipaLogger>>>>,
+    logger: Arc<LightningLogger>,
+    scorer: Arc<Mutex<ProbabilisticScorer<Arc<NetworkGraph>, Arc<LightningLogger>>>>,
     network: Network,
 }
 
@@ -392,13 +381,15 @@ impl LipaLdk {
 
         // ## Setup
 
+        info!("Setting up the node");
+
         // Step 1: Initialize the FeeEstimator
         let fee_estimator = bitcoind_client.clone();
 
         let _electrum_fee_estimator = ElectrumClient {};
 
         // Step 2: Initialize the Logger
-        let logger = Arc::new(LipaLogger {});
+        let logger = Arc::new(LightningLogger {});
 
         // Step 3: Initialize the BroadcasterInterface
         let broadcaster = bitcoind_client.clone();
@@ -758,21 +749,8 @@ impl LipaLdk {
     }
 }
 
-/// Initializes Rust-side logging.
-///
-/// For logging to work it must be called first.
-///
-/// Must only be called once. Calling this function more than once can cause a panic.
-pub fn init_logger_once() {
-    #[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
-    env_logger::Builder::filter_level(&mut Default::default(), LevelFilter::Info).init();
-    #[cfg(target_os = "android")]
-    android_logger::init_once(Config::default().with_min_level(Level::Trace));
-    #[cfg(target_os = "ios")]
-    OsLogger::new("com.example.rust_test")
-        .level_filter(LevelFilter::Trace)
-        .init()
-        .unwrap();
+pub fn init_native_logger_once(min_level: LogLevel) {
+    native_logger::init_native_logger_once(min_level);
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));

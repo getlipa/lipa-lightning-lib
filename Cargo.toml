@@ -20,7 +20,6 @@ lightning-background-processor = { version = "0.0.110" }
 bitcoin = "0.28.1"
 rand = "0.4"
 log = "0.4.17"
-env_logger = "0.9.0"
 serde_json = { version = "1.0" }
 
 # needed for ldk-sample
@@ -30,6 +29,9 @@ time = "0.3.12"
 bitcoin-bech32 = "0.12"
 bech32 = "0.9"
 libc = "0.2.126"
+
+[dev-dependencies]
+simplelog = "0.12.0"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 oslog = "0.2.0"

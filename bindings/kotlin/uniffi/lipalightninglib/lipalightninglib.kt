@@ -44,7 +44,7 @@ open class RustBuffer : Structure() {
 
     companion object {
         internal fun alloc(size: Int = 0) = rustCall() { status ->
-            _UniFFILib.INSTANCE.ffi_lipalightninglib_f0e0_rustbuffer_alloc(size, status).also {
+            _UniFFILib.INSTANCE.ffi_lipalightninglib_4ef5_rustbuffer_alloc(size, status).also {
                 if(it.data == null) {
                    throw RuntimeException("RustBuffer.alloc() returned null data pointer (size=${size})")
                }
@@ -52,7 +52,7 @@ open class RustBuffer : Structure() {
         }
 
         internal fun free(buf: RustBuffer.ByValue) = rustCall() { status ->
-            _UniFFILib.INSTANCE.ffi_lipalightninglib_f0e0_rustbuffer_free(buf, status)
+            _UniFFILib.INSTANCE.ffi_lipalightninglib_4ef5_rustbuffer_free(buf, status)
         }
     }
 
@@ -264,63 +264,63 @@ internal interface _UniFFILib : Library {
         }
     }
 
-    fun ffi_lipalightninglib_f0e0_LipaLightning_object_free(`ptr`: Pointer,
+    fun ffi_lipalightninglib_4ef5_LipaLightning_object_free(`ptr`: Pointer,
     _uniffi_out_err: RustCallStatus
     ): Unit
 
-    fun lipalightninglib_f0e0_LipaLightning_new(`config`: RustBuffer.ByValue,`persistCallback`: Long,
+    fun lipalightninglib_4ef5_LipaLightning_new(`config`: RustBuffer.ByValue,`persistCallback`: Long,
     _uniffi_out_err: RustCallStatus
     ): Pointer
 
-    fun lipalightninglib_f0e0_LipaLightning_stop(`ptr`: Pointer,
+    fun lipalightninglib_4ef5_LipaLightning_stop(`ptr`: Pointer,
     _uniffi_out_err: RustCallStatus
     ): Unit
 
-    fun lipalightninglib_f0e0_LipaLightning_get_my_node_id(`ptr`: Pointer,
+    fun lipalightninglib_4ef5_LipaLightning_get_my_node_id(`ptr`: Pointer,
     _uniffi_out_err: RustCallStatus
     ): RustBuffer.ByValue
 
-    fun lipalightninglib_f0e0_LipaLightning_get_node_info(`ptr`: Pointer,
+    fun lipalightninglib_4ef5_LipaLightning_get_node_info(`ptr`: Pointer,
     _uniffi_out_err: RustCallStatus
     ): RustBuffer.ByValue
 
-    fun lipalightninglib_f0e0_LipaLightning_connect_open_channel(`ptr`: Pointer,`nodeId`: RustBuffer.ByValue,`nodeAddress`: RustBuffer.ByValue,`channelValueSat`: Long,
+    fun lipalightninglib_4ef5_LipaLightning_connect_open_channel(`ptr`: Pointer,`nodeId`: RustBuffer.ByValue,`nodeAddress`: RustBuffer.ByValue,`channelValueSat`: Long,
     _uniffi_out_err: RustCallStatus
     ): Unit
 
-    fun lipalightninglib_f0e0_LipaLightning_send_payment(`ptr`: Pointer,`invoiceStr`: RustBuffer.ByValue,
+    fun lipalightninglib_4ef5_LipaLightning_send_payment(`ptr`: Pointer,`invoiceStr`: RustBuffer.ByValue,
     _uniffi_out_err: RustCallStatus
     ): Unit
 
-    fun lipalightninglib_f0e0_LipaLightning_send_spontaneous_payment(`ptr`: Pointer,`amoutMsat`: Long,`nodeId`: RustBuffer.ByValue,
+    fun lipalightninglib_4ef5_LipaLightning_send_spontaneous_payment(`ptr`: Pointer,`amoutMsat`: Long,`nodeId`: RustBuffer.ByValue,
     _uniffi_out_err: RustCallStatus
     ): Unit
 
-    fun lipalightninglib_f0e0_LipaLightning_create_invoice(`ptr`: Pointer,`amountMsat`: Long,`expirySecs`: Int,
+    fun lipalightninglib_4ef5_LipaLightning_create_invoice(`ptr`: Pointer,`amountMsat`: Long,`expirySecs`: Int,
     _uniffi_out_err: RustCallStatus
     ): RustBuffer.ByValue
 
-    fun ffi_lipalightninglib_f0e0_PersistCallback_init_callback(`callbackStub`: ForeignCallback,
+    fun ffi_lipalightninglib_4ef5_PersistCallback_init_callback(`callbackStub`: ForeignCallback,
     _uniffi_out_err: RustCallStatus
     ): Unit
 
-    fun lipalightninglib_f0e0_init_logger_once(
+    fun lipalightninglib_4ef5_init_native_logger_once(`minLevel`: RustBuffer.ByValue,
     _uniffi_out_err: RustCallStatus
     ): Unit
 
-    fun ffi_lipalightninglib_f0e0_rustbuffer_alloc(`size`: Int,
+    fun ffi_lipalightninglib_4ef5_rustbuffer_alloc(`size`: Int,
     _uniffi_out_err: RustCallStatus
     ): RustBuffer.ByValue
 
-    fun ffi_lipalightninglib_f0e0_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,
+    fun ffi_lipalightninglib_4ef5_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,
     _uniffi_out_err: RustCallStatus
     ): RustBuffer.ByValue
 
-    fun ffi_lipalightninglib_f0e0_rustbuffer_free(`buf`: RustBuffer.ByValue,
+    fun ffi_lipalightninglib_4ef5_rustbuffer_free(`buf`: RustBuffer.ByValue,
     _uniffi_out_err: RustCallStatus
     ): Unit
 
-    fun ffi_lipalightninglib_f0e0_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Int,
+    fun ffi_lipalightninglib_4ef5_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Int,
     _uniffi_out_err: RustCallStatus
     ): RustBuffer.ByValue
 
@@ -667,7 +667,7 @@ class LipaLightning(
     constructor(`config`: LipaLightningConfig, `persistCallback`: PersistCallback) :
         this(
     rustCall() { _status ->
-    _UniFFILib.INSTANCE.lipalightninglib_f0e0_LipaLightning_new(FfiConverterTypeLipaLightningConfig.lower(`config`), FfiConverterTypePersistCallback.lower(`persistCallback`), _status)
+    _UniFFILib.INSTANCE.lipalightninglib_4ef5_LipaLightning_new(FfiConverterTypeLipaLightningConfig.lower(`config`), FfiConverterTypePersistCallback.lower(`persistCallback`), _status)
 })
 
     /**
@@ -680,21 +680,21 @@ class LipaLightning(
      */
     override protected fun freeRustArcPtr() {
         rustCall() { status ->
-            _UniFFILib.INSTANCE.ffi_lipalightninglib_f0e0_LipaLightning_object_free(this.pointer, status)
+            _UniFFILib.INSTANCE.ffi_lipalightninglib_4ef5_LipaLightning_object_free(this.pointer, status)
         }
     }
 
     override fun `stop`() =
         callWithPointer {
     rustCall() { _status ->
-    _UniFFILib.INSTANCE.lipalightninglib_f0e0_LipaLightning_stop(it,  _status)
+    _UniFFILib.INSTANCE.lipalightninglib_4ef5_LipaLightning_stop(it,  _status)
 }
         }
     
     override fun `getMyNodeId`(): List<UByte> =
         callWithPointer {
     rustCall() { _status ->
-    _UniFFILib.INSTANCE.lipalightninglib_f0e0_LipaLightning_get_my_node_id(it,  _status)
+    _UniFFILib.INSTANCE.lipalightninglib_4ef5_LipaLightning_get_my_node_id(it,  _status)
 }
         }.let {
             FfiConverterSequenceUByte.lift(it)
@@ -702,7 +702,7 @@ class LipaLightning(
     override fun `getNodeInfo`(): LipaNodeInfo =
         callWithPointer {
     rustCall() { _status ->
-    _UniFFILib.INSTANCE.lipalightninglib_f0e0_LipaLightning_get_node_info(it,  _status)
+    _UniFFILib.INSTANCE.lipalightninglib_4ef5_LipaLightning_get_node_info(it,  _status)
 }
         }.let {
             FfiConverterTypeLipaNodeInfo.lift(it)
@@ -711,7 +711,7 @@ class LipaLightning(
     @Throws(LipaLightningException::class)override fun `connectOpenChannel`(`nodeId`: List<UByte>, `nodeAddress`: String, `channelValueSat`: ULong) =
         callWithPointer {
     rustCallWithError(LipaLightningException) { _status ->
-    _UniFFILib.INSTANCE.lipalightninglib_f0e0_LipaLightning_connect_open_channel(it, FfiConverterSequenceUByte.lower(`nodeId`), FfiConverterString.lower(`nodeAddress`), FfiConverterULong.lower(`channelValueSat`),  _status)
+    _UniFFILib.INSTANCE.lipalightninglib_4ef5_LipaLightning_connect_open_channel(it, FfiConverterSequenceUByte.lower(`nodeId`), FfiConverterString.lower(`nodeAddress`), FfiConverterULong.lower(`channelValueSat`),  _status)
 }
         }
     
@@ -719,7 +719,7 @@ class LipaLightning(
     @Throws(LipaLightningException::class)override fun `sendPayment`(`invoiceStr`: String) =
         callWithPointer {
     rustCallWithError(LipaLightningException) { _status ->
-    _UniFFILib.INSTANCE.lipalightninglib_f0e0_LipaLightning_send_payment(it, FfiConverterString.lower(`invoiceStr`),  _status)
+    _UniFFILib.INSTANCE.lipalightninglib_4ef5_LipaLightning_send_payment(it, FfiConverterString.lower(`invoiceStr`),  _status)
 }
         }
     
@@ -727,7 +727,7 @@ class LipaLightning(
     @Throws(LipaLightningException::class)override fun `sendSpontaneousPayment`(`amoutMsat`: ULong, `nodeId`: List<UByte>) =
         callWithPointer {
     rustCallWithError(LipaLightningException) { _status ->
-    _UniFFILib.INSTANCE.lipalightninglib_f0e0_LipaLightning_send_spontaneous_payment(it, FfiConverterULong.lower(`amoutMsat`), FfiConverterSequenceUByte.lower(`nodeId`),  _status)
+    _UniFFILib.INSTANCE.lipalightninglib_4ef5_LipaLightning_send_spontaneous_payment(it, FfiConverterULong.lower(`amoutMsat`), FfiConverterSequenceUByte.lower(`nodeId`),  _status)
 }
         }
     
@@ -735,7 +735,7 @@ class LipaLightning(
     @Throws(LipaLightningException::class)override fun `createInvoice`(`amountMsat`: ULong, `expirySecs`: UInt): String =
         callWithPointer {
     rustCallWithError(LipaLightningException) { _status ->
-    _UniFFILib.INSTANCE.lipalightninglib_f0e0_LipaLightning_create_invoice(it, FfiConverterULong.lower(`amountMsat`), FfiConverterUInt.lower(`expirySecs`),  _status)
+    _UniFFILib.INSTANCE.lipalightninglib_4ef5_LipaLightning_create_invoice(it, FfiConverterULong.lower(`amountMsat`), FfiConverterUInt.lower(`expirySecs`),  _status)
 }
         }.let {
             FfiConverterString.lift(it)
@@ -856,6 +856,29 @@ public object FfiConverterTypeLipaNodeInfo: FfiConverterRustBuffer<LipaNodeInfo>
             FfiConverterULong.write(value.`numPeers`, buf)
     }
 }
+
+
+
+
+enum class LogLevel {
+    ERROR,WARN,INFO,DEBUG,TRACE;
+}
+
+public object FfiConverterTypeLogLevel: FfiConverterRustBuffer<LogLevel> {
+    override fun read(buf: ByteBuffer) = try {
+        LogLevel.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: LogLevel) = 4
+
+    override fun write(value: LogLevel, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
 
 
 
@@ -1147,7 +1170,7 @@ public object FfiConverterTypePersistCallback: FfiConverterCallbackInterface<Per
 ) {
     override fun register(lib: _UniFFILib) {
         rustCall() { status ->
-            lib.ffi_lipalightninglib_f0e0_PersistCallback_init_callback(this.foreignCallback, status)
+            lib.ffi_lipalightninglib_4ef5_PersistCallback_init_callback(this.foreignCallback, status)
         }
     }
 }
@@ -1202,10 +1225,10 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<String>> {
     }
 }
 
-fun `initLoggerOnce`() =
+fun `initNativeLoggerOnce`(`minLevel`: LogLevel) =
     
     rustCall() { _status ->
-    _UniFFILib.INSTANCE.lipalightninglib_f0e0_init_logger_once( _status)
+    _UniFFILib.INSTANCE.lipalightninglib_4ef5_init_native_logger_once(FfiConverterTypeLogLevel.lower(`minLevel`), _status)
 }
 
 
