@@ -1,80 +1,25 @@
-use lightning::util::logger::{Logger, Record};
-#[cfg(target_os = "android")]
-use {lightning::util::logger::Level, log::log};
-#[cfg(target_os = "ios")]
-use {lightning::util::logger::Level, log::log};
-#[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
-use {std::fs, std::io::Write, time::OffsetDateTime};
+use lightning::util::logger::{Level, Logger, Record};
+use log::{log, log_enabled};
 
-pub(crate) struct LipaLogger {}
+pub(crate) struct LightningLogger;
 
-impl Logger for LipaLogger {
+impl Logger for LightningLogger {
     fn log(&self, record: &Record) {
-        let raw_log = record.args.to_string();
-        #[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
-        {
-            let log = format!(
-                "{} {:<5} [{}:{}] {}\n",
-                // Note that a "real" lightning node almost certainly does *not* want subsecond
-                // precision for message-receipt information as it makes log entries a target for
-                // deanonymization attacks. For testing, however, its quite useful.
-                //Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
-                OffsetDateTime::now_utc(),
-                record.level,
-                record.module_path,
-                record.line,
-                raw_log
-            );
-            let logs_file_path = ".ldk/logs.txt".to_string();
-            fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(logs_file_path)
-                .unwrap()
-                .write_all(log.as_bytes())
-                .unwrap();
+        let level = map_level(record.level);
+        if log_enabled!(level) {
+            let message = record.args.to_string();
+            log!(level, "[{}] {}", record.module_path, message);
         }
-        #[cfg(target_os = "android")]
-        match record.level {
-            Level::Gossip => {
-                log!(log::Level::Trace, "{}", raw_log);
-            }
-            Level::Trace => {
-                log!(log::Level::Trace, "{}", raw_log);
-            }
-            Level::Debug => {
-                log!(log::Level::Debug, "{}", raw_log);
-            }
-            Level::Info => {
-                log!(log::Level::Info, "{}", raw_log);
-            }
-            Level::Warn => {
-                log!(log::Level::Warn, "{}", raw_log);
-            }
-            Level::Error => {
-                log!(log::Level::Error, "{}", raw_log);
-            }
-        }
-        #[cfg(target_os = "ios")]
-        match record.level {
-            Level::Gossip => {
-                log!(log::Level::Trace, "{}", raw_log);
-            }
-            Level::Trace => {
-                log!(log::Level::Trace, "{}", raw_log);
-            }
-            Level::Debug => {
-                log!(log::Level::Debug, "{}", raw_log);
-            }
-            Level::Info => {
-                log!(log::Level::Info, "{}", raw_log);
-            }
-            Level::Warn => {
-                log!(log::Level::Warn, "{}", raw_log);
-            }
-            Level::Error => {
-                log!(log::Level::Error, "{}", raw_log);
-            }
-        }
+    }
+}
+
+fn map_level(level: lightning::util::logger::Level) -> log::Level {
+    match level {
+        Level::Gossip => log::Level::Trace,
+        Level::Trace => log::Level::Trace,
+        Level::Debug => log::Level::Debug,
+        Level::Info => log::Level::Info,
+        Level::Warn => log::Level::Warn,
+        Level::Error => log::Level::Error,
     }
 }

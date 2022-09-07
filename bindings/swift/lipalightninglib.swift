@@ -19,13 +19,13 @@ fileprivate extension RustBuffer {
     }
 
     static func from(_ ptr: UnsafeBufferPointer<UInt8>) -> RustBuffer {
-        try! rustCall { ffi_lipalightninglib_f0e0_rustbuffer_from_bytes(ForeignBytes(bufferPointer: ptr), $0) }
+        try! rustCall { ffi_lipalightninglib_fc45_rustbuffer_from_bytes(ForeignBytes(bufferPointer: ptr), $0) }
     }
 
     // Frees the buffer in place.
     // The buffer must not be used after this is called.
     func deallocate() {
-        try! rustCall { ffi_lipalightninglib_f0e0_rustbuffer_free(self, $0) }
+        try! rustCall { ffi_lipalightninglib_fc45_rustbuffer_free(self, $0) }
     }
 }
 
@@ -418,14 +418,14 @@ public class LipaLightning: LipaLightningProtocol {
     
     rustCall() {
     
-    lipalightninglib_f0e0_LipaLightning_new(
+    lipalightninglib_fc45_LipaLightning_new(
         FfiConverterTypeLipaLightningConfig.lower(config), 
         FfiConverterCallbackInterfacePersistCallback.lower(persistCallback), $0)
 })
     }
 
     deinit {
-        try! rustCall { ffi_lipalightninglib_f0e0_LipaLightning_object_free(pointer, $0) }
+        try! rustCall { ffi_lipalightninglib_fc45_LipaLightning_object_free(pointer, $0) }
     }
 
     
@@ -435,7 +435,7 @@ public class LipaLightning: LipaLightningProtocol {
         try!
     rustCall() {
     
-    lipalightninglib_f0e0_LipaLightning_stop(self.pointer, $0
+    lipalightninglib_fc45_LipaLightning_stop(self.pointer, $0
     )
 }
     }
@@ -444,7 +444,7 @@ public class LipaLightning: LipaLightningProtocol {
             try!
     rustCall() {
     
-    lipalightninglib_f0e0_LipaLightning_get_my_node_id(self.pointer, $0
+    lipalightninglib_fc45_LipaLightning_get_my_node_id(self.pointer, $0
     )
 }
         )
@@ -454,7 +454,7 @@ public class LipaLightning: LipaLightningProtocol {
             try!
     rustCall() {
     
-    lipalightninglib_f0e0_LipaLightning_get_node_info(self.pointer, $0
+    lipalightninglib_fc45_LipaLightning_get_node_info(self.pointer, $0
     )
 }
         )
@@ -462,7 +462,7 @@ public class LipaLightning: LipaLightningProtocol {
     public func connectOpenChannel(nodeId: [UInt8], nodeAddress: String, channelValueSat: UInt64) throws {
         try
     rustCallWithError(FfiConverterTypeLipaLightningError.self) {
-    lipalightninglib_f0e0_LipaLightning_connect_open_channel(self.pointer, 
+    lipalightninglib_fc45_LipaLightning_connect_open_channel(self.pointer, 
         FfiConverterSequenceUInt8.lower(nodeId), 
         FfiConverterString.lower(nodeAddress), 
         FfiConverterUInt64.lower(channelValueSat), $0
@@ -472,7 +472,7 @@ public class LipaLightning: LipaLightningProtocol {
     public func sendPayment(invoiceStr: String) throws {
         try
     rustCallWithError(FfiConverterTypeLipaLightningError.self) {
-    lipalightninglib_f0e0_LipaLightning_send_payment(self.pointer, 
+    lipalightninglib_fc45_LipaLightning_send_payment(self.pointer, 
         FfiConverterString.lower(invoiceStr), $0
     )
 }
@@ -480,7 +480,7 @@ public class LipaLightning: LipaLightningProtocol {
     public func sendSpontaneousPayment(amoutMsat: UInt64, nodeId: [UInt8]) throws {
         try
     rustCallWithError(FfiConverterTypeLipaLightningError.self) {
-    lipalightninglib_f0e0_LipaLightning_send_spontaneous_payment(self.pointer, 
+    lipalightninglib_fc45_LipaLightning_send_spontaneous_payment(self.pointer, 
         FfiConverterUInt64.lower(amoutMsat), 
         FfiConverterSequenceUInt8.lower(nodeId), $0
     )
@@ -490,7 +490,7 @@ public class LipaLightning: LipaLightningProtocol {
         return try FfiConverterString.lift(
             try
     rustCallWithError(FfiConverterTypeLipaLightningError.self) {
-    lipalightninglib_f0e0_LipaLightning_create_invoice(self.pointer, 
+    lipalightninglib_fc45_LipaLightning_create_invoice(self.pointer, 
         FfiConverterUInt64.lower(amountMsat), 
         FfiConverterUInt32.lower(expirySecs), $0
     )
@@ -1069,7 +1069,7 @@ fileprivate struct FfiConverterCallbackInterfacePersistCallback {
     private static var callbackInitialized = false
     private static func initCallback() {
         try! rustCall { (err: UnsafeMutablePointer<RustCallStatus>) in
-                ffi_lipalightninglib_f0e0_PersistCallback_init_callback(foreignCallbackCallbackInterfacePersistCallback, err)
+                ffi_lipalightninglib_fc45_PersistCallback_init_callback(foreignCallbackCallbackInterfacePersistCallback, err)
         }
     }
     private static func ensureCallbackinitialized() {
@@ -1160,12 +1160,12 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
     }
 }
 
-public func initLoggerOnce()  {
+public func initNativeLoggerOnce()  {
     try!
     
     rustCall() {
     
-    lipalightninglib_f0e0_init_logger_once($0)
+    lipalightninglib_fc45_init_native_logger_once($0)
 }
 }
 

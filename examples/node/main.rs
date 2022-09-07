@@ -3,6 +3,7 @@ mod hex_utils;
 
 use bitcoin::Network;
 use rand::{thread_rng, Rng};
+use simplelog;
 use std::fmt::{Debug, Formatter};
 use std::fs;
 use std::os::unix::io::AsRawFd;
@@ -11,7 +12,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use uniffi_lipalightninglib::callbacks::PersistCallback;
 use uniffi_lipalightninglib::config::LipaLightningConfig;
-use uniffi_lipalightninglib::{init_logger_once, LipaLightning};
+use uniffi_lipalightninglib::LipaLightning;
 
 #[cfg(target_os = "windows")]
 extern crate winapi;
@@ -111,14 +112,14 @@ impl PersistCallback for RustPersistCallback {
 }
 
 fn main() {
-    init_logger_once();
-
     // Start nigiri (needs docker to be running)
     /*Command::new("nigiri")
     .arg("start")
     .arg("--ln")
     .status()
     .expect("Failed to start nigiri.");*/
+
+    init_logger();
 
     let persist_callback = Box::new(RustPersistCallback {});
 
@@ -165,4 +166,26 @@ fn main() {
     .arg("--delete")
     .status()
     .expect("Failed to stop nigiri.");*/
+}
+
+fn init_logger() {
+    let log_file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(".ldk/logs.txt")
+        .unwrap();
+    simplelog::CombinedLogger::init(vec![
+        simplelog::TermLogger::new(
+            log::LevelFilter::Warn,
+            simplelog::Config::default(),
+            simplelog::TerminalMode::Mixed,
+            simplelog::ColorChoice::Auto,
+        ),
+        simplelog::WriteLogger::new(
+            log::LevelFilter::Trace,
+            simplelog::Config::default(),
+            log_file,
+        ),
+    ])
+    .unwrap();
 }
