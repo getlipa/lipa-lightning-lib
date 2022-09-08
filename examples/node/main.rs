@@ -169,6 +169,7 @@ fn main() {
 }
 
 fn init_logger() {
+    fs::create_dir_all(".ldk").unwrap();
     let log_file = fs::OpenOptions::new()
         .create(true)
         .append(true)
