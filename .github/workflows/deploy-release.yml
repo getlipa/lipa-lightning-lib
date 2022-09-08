@@ -115,8 +115,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
       - name: Set env
-        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+        run: |
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+          raw=$(git branch -r --contains ${{ github.ref }})
+          branch=${raw##*/}
+          echo "BRANCH=$branch" >> $GITHUB_ENV
       - uses: webfactory/ssh-agent@v0.5.4
         with:
           ssh-private-key: ${{ secrets.LIPA_BOT_IOS_DEPLOY_KEY }}
@@ -172,10 +178,30 @@ jobs:
           git add Package.swift
           git add Sources/LipaLightningLib/LipaLightningLib.swift
           git commit -m "This commit was created automatically by the lipa bot"
-          git tag -a ${{ env.RELEASE_VERSION }} HEAD -m "This release was create automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib"
+          git tag -a ${{ env.RELEASE_VERSION }} HEAD -m "This release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib"
           git push
           git push --tag
-          gh release create ${{ env.RELEASE_VERSION }} lipalightninglibFFI.xcframework.zip
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
+        if: ${{ env.BRANCH == 'main' }}
+        run: |
+          cd lipa-lightning-lib-swift
+          gh release create ${{ env.RELEASE_VERSION }} \
+            lipalightninglibFFI.xcframework.zip \
+            --title "${{ env.RELEASE_VERSION }}" \
+            --notes "This release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib"
+      - name: Create pre-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
+        if: ${{ env.BRANCH != 'main' }}
+        run: |
+          cd lipa-lightning-lib-swift
+          gh release create ${{ env.RELEASE_VERSION }} \
+            lipalightninglibFFI.xcframework.zip \
+            --title "${{ env.RELEASE_VERSION }}" \
+            --notes "This pre-release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib" \
+            --prerelease
 
   deploy-android:
     name: deploy-android
@@ -183,8 +209,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
       - name: Set env
-        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+        run: |
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+          raw=$(git branch -r --contains ${{ github.ref }})
+          branch=${raw##*/}
+          echo "BRANCH=$branch" >> $GITHUB_ENV
       - uses: webfactory/ssh-agent@v0.5.4
         with:
           ssh-private-key: ${{ secrets.LIPA_BOT_ANDROID_DEPLOY_KEY }}
@@ -209,8 +241,6 @@ jobs:
           path: bindings/kotlin/uniffi/lipalightninglib
           name: bindings-file-android
       - name: Push to target repo
-        env:
-          GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
         run: |
           git clone git@github.com:getlipa/lipa-lightning-lib-android.git
           cd lipa-lightning-lib-android
@@ -229,10 +259,31 @@ jobs:
           git add LipaLightningLib/src/main/java/com/getlipa/lipalightninglib/lipalightninglib.kt
           git add jitpack.yml
           git commit -m "This commit was created automatically by the lipa bot"
-          git tag -a ${{ env.RELEASE_VERSION }} HEAD -m "This release was create automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib"
+          git tag -a ${{ env.RELEASE_VERSION }} HEAD -m "This tag was created automatically by the lipa bot."
           git push
           git push --tag
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
+        if: ${{ env.BRANCH == 'main' }}
+        run: |
+          cd lipa-lightning-lib-android
           gh release create ${{ env.RELEASE_VERSION }} \
             libuniffi_lipalightninglib_arm64.so \
             libuniffi_lipalightninglib_armeabi.so \
-            libuniffi_lipalightninglib_x86.so
+            libuniffi_lipalightninglib_x86.so \
+            --title "${{ env.RELEASE_VERSION }}" \
+            --notes "This release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib"
+      - name: Create pre-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
+        if: ${{ env.BRANCH != 'main' }}
+        run: |
+          cd lipa-lightning-lib-android
+          gh release create ${{ env.RELEASE_VERSION }} \
+            libuniffi_lipalightninglib_arm64.so \
+            libuniffi_lipalightninglib_armeabi.so \
+            libuniffi_lipalightninglib_x86.so \
+            --title "${{ env.RELEASE_VERSION }}" \
+            --notes "This pre-release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib" \
+            --prerelease
