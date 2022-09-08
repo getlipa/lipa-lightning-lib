@@ -21,7 +21,7 @@ jobs:
         run: cargo test --verbose
   build-ios:
     name: Build for iOS targets
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         target: [ x86_64-apple-ios, aarch64-apple-ios, aarch64-apple-ios-sim ]
@@ -38,9 +38,9 @@ jobs:
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
-          use-cross: false
+          use-cross: true
           command: build
-          args: --release --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }}
   build-android:
     name: Build for Android targets
     runs-on: ubuntu-latest
@@ -62,4 +62,4 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }}

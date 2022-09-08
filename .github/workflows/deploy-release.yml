@@ -8,7 +8,7 @@ on:
 jobs:
   cross-compile-ios:
     name: cross-compile-ios
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         target: [ x86_64-apple-ios, aarch64-apple-ios, aarch64-apple-ios-sim ]
@@ -25,7 +25,7 @@ jobs:
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
-          use-cross: false
+          use-cross: true
           command: build
           args: --release --target ${{ matrix.target }}
       - name: Upload library binaries
