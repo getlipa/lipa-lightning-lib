@@ -21,7 +21,7 @@ jobs:
         run: cargo test --verbose
   build-ios:
     name: Build for iOS targets
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     strategy:
       matrix:
         target: [ x86_64-apple-ios, aarch64-apple-ios, aarch64-apple-ios-sim ]
