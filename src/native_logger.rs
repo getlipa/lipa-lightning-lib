@@ -11,7 +11,7 @@ fn init_native_logger(min_level: Level) {
 
     #[cfg(target_os = "ios")]
     OsLogger::new("com.getlipa.lipalightninglib")
-        .level_filter(min_level)
+        .level_filter(min_level.to_level_filter())
         .init()
         .unwrap();
 

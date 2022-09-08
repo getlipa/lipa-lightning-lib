@@ -7,7 +7,7 @@ env:
 
 jobs:
   build:
-    name: Build and Test
+    name: Build and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -19,13 +19,47 @@ jobs:
         run: cargo build --verbose
       - name: Run unit tests
         run: cargo test --verbose
-      - name: Verify if bindings change
-        uses: tj-actions/verify-changed-files@v11.1
-        id: verify-bindings
+  build-ios:
+    name: Build for iOS targets
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [ x86_64-apple-ios, aarch64-apple-ios, aarch64-apple-ios-sim ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
         with:
-          files: |
-            bindings/swift/*
-            bindings/kotlin/uniffi/lipalightninglib/lipalightninglib.kt
-      - name: Fail if bindings change
-        if: steps.verify-bindings.outputs.files_changed == 'true'
-        run: exit 1
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+      - name: Build target
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --target ${{ matrix.target }}
+  build-android:
+    name: Build for Android targets
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [ aarch64-linux-android, armv7-linux-androideabi, i686-linux-android ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+      - name: Build target
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --target ${{ matrix.target }}
