@@ -22,6 +22,14 @@ callback interface PersistCallback {
     sequence<u8> read(string path);
 };
 
+callback interface RedundantStorageCallback {
+    boolean object_exists(string bucket, string key);
+    sequence<u8> get_object(string bucket, string key);
+    boolean check_health(string bucket);
+    boolean put_object(string bucket, string key, sequence<u8> value);
+    sequence<string> list_objects(string bucket);
+};
+
 dictionary LipaNodeInfo {
     sequence<u8> node_pubkey;
     u64 num_channels;

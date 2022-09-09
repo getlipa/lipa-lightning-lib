@@ -18,6 +18,7 @@ mod util;
 
 use crate::bitcoind_client::BitcoindClient;
 use crate::callbacks::PersistCallback;
+use crate::callbacks::RedundantStorageCallback;
 use crate::config::LipaLightningConfig;
 use crate::electrum_client::ElectrumClient;
 use crate::errors::LipaLightningError;
