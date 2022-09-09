@@ -119,6 +119,9 @@ fn main() {
     .status()
     .expect("Failed to start nigiri.");*/
 
+    // Create dir for node data persistence
+    fs::create_dir_all(".ldk").unwrap();
+
     init_logger();
 
     let persist_callback = Box::new(RustPersistCallback {});
