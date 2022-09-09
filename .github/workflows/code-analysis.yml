@@ -1,5 +1,11 @@
-on: [push, pull_request]
 name: Static code analysis
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
 jobs:
   security-audit:
     name: Security audit
