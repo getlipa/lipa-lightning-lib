@@ -6,6 +6,10 @@ callback interface RedundantStorageCallback {
     sequence<string> list_objects(string bucket);
 };
 
+interface LightningNode {
+    constructor(RedundantStorageCallback redundant_storage_callback);
+};
+
 enum LogLevel {
     "Error",
     "Warn",

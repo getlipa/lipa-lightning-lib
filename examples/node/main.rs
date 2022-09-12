@@ -1,12 +1,21 @@
+mod file_storage;
+
+use file_storage::FileStorage;
 use simplelog;
 use std::fs;
+use uniffi_lipalightninglib::LightningNode;
+
+static BASE_DIR: &str = ".ldk";
 
 fn main() {
     // Create dir for node data persistence
-    fs::create_dir_all(".ldk").unwrap();
+    fs::create_dir_all(BASE_DIR).unwrap();
 
     init_logger();
     println!("Logger initialized");
+
+    let storage = Box::new(FileStorage::new(BASE_DIR));
+    let _node = LightningNode::new(storage);
 }
 
 fn init_logger() {
