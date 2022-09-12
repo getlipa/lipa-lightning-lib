@@ -8,9 +8,10 @@ crate-type = ["lib", "staticlib", "cdylib"]
 name = "uniffi_lipalightninglib"
 
 [dependencies]
-uniffi = "0.19.6"
+bitcoin = "0.28.1"
 lightning = { version = "0.0.110", features = ["max_level_trace"] }
 log = "0.4.17"
+uniffi = "0.19.6"
 
 [dev-dependencies]
 simplelog = "0.12.0"
@@ -22,5 +23,5 @@ oslog = "0.2.0"
 android_logger = "0.11"
 
 [build-dependencies]
-uniffi_bindgen = "0.19.6"
 camino = "1.1.1"
+uniffi_bindgen = "0.19.6"
