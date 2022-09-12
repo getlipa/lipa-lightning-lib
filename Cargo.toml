@@ -8,27 +8,9 @@ crate-type = ["lib", "staticlib", "cdylib"]
 name = "uniffi_lipalightninglib"
 
 [dependencies]
-tokio = { version = "1", features = [ "io-util", "macros", "rt", "rt-multi-thread", "sync", "net", "time" ] }
 uniffi = "0.19.6"
-thiserror = "1.0"
 lightning = { version = "0.0.110", features = ["max_level_trace"] }
-# won't be used when using esplora
-lightning-block-sync = { version = "0.0.110", features = [ "rpc-client" ] }
-lightning-invoice = { version = "0.18.0" }
-lightning-net-tokio = { version = "0.0.110" }
-lightning-background-processor = { version = "0.0.110" }
-bitcoin = "0.28.1"
-rand = "0.4"
 log = "0.4.17"
-serde_json = { version = "1.0" }
-
-# needed for ldk-sample
-base64 = "0.13.0"
-futures = "0.3"
-time = "0.3.12"
-bitcoin-bech32 = "0.12"
-bech32 = "0.9"
-libc = "0.2.126"
 
 [dev-dependencies]
 simplelog = "0.12.0"
@@ -38,9 +20,6 @@ oslog = "0.2.0"
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.11"
-
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winbase"] }
 
 [build-dependencies]
 uniffi_bindgen = "0.19.6"
