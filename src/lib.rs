@@ -1,19 +1,31 @@
 extern crate core;
 
 pub mod callbacks;
+pub mod config;
+pub mod errors;
+pub mod keys_manager;
+pub mod secret;
+
 mod logger;
 mod native_logger;
 mod storage_persister;
 
 use crate::callbacks::RedundantStorageCallback;
+use crate::config::Config;
+use crate::errors::InitializationError;
+use crate::keys_manager::{generate_secret, init_keys_manager};
 use crate::logger::LightningLogger;
+use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use log::{info, warn, Level as LogLevel};
 
 pub struct LightningNode;
 
 impl LightningNode {
-    pub fn new(redundant_storage_callback: Box<dyn RedundantStorageCallback>) -> Self {
+    pub fn new(
+        config: Config,
+        redundant_storage_callback: Box<dyn RedundantStorageCallback>,
+    ) -> Result<Self, InitializationError> {
         // Step 1. Initialize the FeeEstimator
 
         // Step 2. Initialize the Logger
@@ -30,6 +42,10 @@ impl LightningNode {
         // Step 5. Initialize the ChainMonitor
 
         // Step 6. Initialize the KeysManager
+        let _keys_manager =
+            init_keys_manager(&config.seed).map_err(|e| InitializationError::KeysManager {
+                message: e.to_string(),
+            })?;
 
         // Step 7. Read ChannelMonitor state from disk
         let _channel_monitors = persister.read_channel_monitors();
@@ -58,7 +74,7 @@ impl LightningNode {
 
         // Step 19. Start Background Processing
 
-        Self {}
+        Ok(Self {})
     }
 }
 
