@@ -2,7 +2,7 @@
 ///
 /// # Fields:
 ///
-/// * `secret_seed` - the secret seed as a vector of length 32
+/// * `seed` - the seed derived from the mnemonic and optional pass phrase.
 pub struct Config {
-    pub secret_seed: Vec<u8>,
+    pub seed: Vec<u8>,
 }

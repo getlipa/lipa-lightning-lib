@@ -1,30 +1,41 @@
 use crate::errors::InitializationError;
+use crate::secret::Secret;
 
+use bdk::keys::bip39::Mnemonic;
 use lightning::chain::keysinterface::KeysManager;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::time::SystemTime;
 
-pub fn init_keys_manager(secret_seed: &Vec<u8>) -> Result<KeysManager, &str> {
-    if secret_seed.len() != 32 {
-        return Err("Secret seed must have 32 bytes");
+pub fn init_keys_manager(seed: &Vec<u8>) -> Result<KeysManager, &str> {
+    if seed.len() != 32 {
+        return Err("Seed must have 32 bytes");
     }
     let mut array = [0; 32];
-    array.copy_from_slice(&secret_seed[0..32]);
+    array.copy_from_slice(&seed[0..32]);
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(|_| "SystemTime before UNIX EPOCH")?;
+        .map_err(|_| "System time before Unix epoch")?;
     Ok(KeysManager::new(&array, now.as_secs(), now.subsec_nanos()))
 }
 
-pub fn generate_secret_seed() -> Result<Vec<u8>, InitializationError> {
-    let mut secret_seed = [0u8; 32];
-    OsRng.try_fill_bytes(&mut secret_seed).map_err(|e| {
-        InitializationError::SecretSeedGeneration {
+pub fn generate_secret(passphrase: String) -> Result<Secret, InitializationError> {
+    let mut entropy = [0u8; 32];
+    OsRng
+        .try_fill_bytes(&mut entropy)
+        .map_err(|e| InitializationError::SecretGeneration {
             message: e.to_string(),
-        }
-    })?;
-    Ok(secret_seed.to_vec())
+        })?;
+
+    let mnemonic = Mnemonic::from_entropy(&entropy).unwrap();
+    let seed = mnemonic.to_seed(passphrase.clone())[0..32].to_vec();
+    let mnemonic: Vec<String> = mnemonic.word_iter().map(|s| s.to_string()).collect();
+
+    Ok(Secret {
+        mnemonic,
+        passphrase,
+        seed,
+    })
 }
 
 #[cfg(test)]
@@ -40,8 +51,10 @@ mod test {
     }
 
     #[test]
-    fn test_seed_generation() {
-        let seed = generate_secret_seed().unwrap();
-        assert_eq!(seed.len(), 32);
+    fn test_secret_generation() {
+        let secret = generate_secret("hodl".to_string()).unwrap();
+        assert_eq!(secret.mnemonic.len(), 24);
+        assert_eq!(secret.passphrase, "hodl");
+        assert_eq!(secret.seed.len(), 32);
     }
 }

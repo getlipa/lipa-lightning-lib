@@ -1,5 +1,5 @@
 dictionary Config {
-    sequence<u8> secret_seed;
+    sequence<u8> seed;
 };
 
 callback interface RedundantStorageCallback {
@@ -13,7 +13,7 @@ callback interface RedundantStorageCallback {
 [Error]
 enum InitializationError {
     "KeysManager",
-    "SecretSeedGeneration",
+    "SecretGeneration",
 };
 
 interface LightningNode {
@@ -29,8 +29,16 @@ enum LogLevel {
     "Trace",
 };
 
+dictionary Secret {
+    sequence<string> mnemonic;
+    string passphrase;
+    sequence<u8> seed;
+};
+
 namespace lipalightninglib {
     void init_native_logger_once(LogLevel min_level);
     [Throws=InitializationError]
-    sequence<u8> generate_secret_seed();
+    Secret generate_secret(string passphrase);
+    // TODO: Implement.
+    // sequence<u8> mnemonic_to_seed(sequence<string> mnemonic, string passphrase);
 };

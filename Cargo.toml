@@ -8,6 +8,7 @@ crate-type = ["lib", "staticlib", "cdylib"]
 name = "uniffi_lipalightninglib"
 
 [dependencies]
+bdk = { version = "0.22.0", features = ["keys-bip39"] }
 bitcoin = "0.28.1"
 lightning = { version = "0.0.110", features = ["max_level_trace"] }
 log = "0.4.17"
