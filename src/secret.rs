@@ -1,4 +1,4 @@
-/// An object that holds nessecary secret.
+/// An object that holds necessary secrets.
 ///
 /// # Fields:
 ///
