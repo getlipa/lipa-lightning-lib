@@ -38,6 +38,9 @@ impl LightningNode {
         if !persister.check_monitor_storage_health() {
             warn!("Monitor storage is unhealty");
         }
+        if !persister.check_object_storage_health() {
+            warn!("Object storage is unhealty");
+        }
 
         // Step 5. Initialize the ChainMonitor
 
@@ -51,12 +54,14 @@ impl LightningNode {
         let _channel_monitors = persister.read_channel_monitors();
 
         // Step 8. Initialize the ChannelManager
+        let _channel_manager = persister.read_channel_manager();
 
         // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
 
         // Step 10. Give ChannelMonitors to ChainMonitor
 
         // Step 11: Optional: Initialize the NetGraphMsgHandler
+        let _graph = persister.read_graph();
 
         // Step 12. Initialize the PeerManager
 
@@ -67,10 +72,12 @@ impl LightningNode {
         // Step 15. Initialize an EventHandler
 
         // Step 16. Initialize the ProbabilisticScorer
+        let _scorer = persister.read_scorer();
 
         // Step 17. Initialize the InvoicePayer
 
         // Step 18. Initialize the Persister
+        // Persister trait already implemented and instantiated ("persister")
 
         // Step 19. Start Background Processing
 
