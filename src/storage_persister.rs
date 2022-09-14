@@ -14,6 +14,7 @@ use lightning::chain::ChannelMonitorUpdateErr;
 use lightning::ln::channelmanager::ChannelManager;
 use lightning::routing::gossip::NetworkGraph;
 use lightning::routing::scoring::WriteableScore;
+use lightning::util::config::UserConfig;
 use lightning::util::logger::Logger;
 use lightning::util::persist::Persister;
 use lightning::util::ser::ReadableArgs;
@@ -74,7 +75,7 @@ impl StoragePersister {
         result
     }
 
-    pub fn read_channel_manager(&self) {
+    pub fn read_channel_manager(&self, _user_config: UserConfig) {
         // TODO: Implement
     }
 

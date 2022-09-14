@@ -1,4 +1,12 @@
+enum Network {
+    "Bitcoin",
+    "Testnet",
+    "Signet",
+    "Regtest",
+};
+
 dictionary Config {
+    Network network;
     sequence<u8> seed;
 };
 

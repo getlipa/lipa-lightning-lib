@@ -17,6 +17,9 @@ use crate::keys_manager::{generate_secret, init_keys_manager};
 use crate::logger::LightningLogger;
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
+
+use bitcoin::Network;
+use lightning::util::config::UserConfig;
 use log::{info, warn, Level as LogLevel};
 
 pub struct LightningNode;
@@ -60,7 +63,8 @@ impl LightningNode {
         }
 
         // Step 8. Initialize the ChannelManager
-        let _channel_manager = persister.read_channel_manager();
+        let mobile_node_user_config = build_mobile_node_user_config();
+        let _channel_manager = persister.read_channel_manager(mobile_node_user_config);
 
         // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
 
@@ -89,6 +93,26 @@ impl LightningNode {
 
         Ok(Self {})
     }
+}
+
+#[allow(clippy::field_reassign_with_default)]
+fn build_mobile_node_user_config() -> UserConfig {
+    let mut user_config = UserConfig::default();
+
+    // Reject any HTLCs which were to be forwarded over private channels.
+    user_config.accept_forwards_to_priv_channels = false;
+
+    // For outbound unannounced channels do not include our real on-chain channel UTXO in each invoice.
+    user_config.channel_handshake_config.negotiate_scid_privacy = true;
+
+    // Do not announce the channel publicly.
+    user_config.channel_handshake_config.announced_channel = false;
+
+    // Force an incoming channel to match our announced channel preference.
+    user_config
+        .channel_handshake_limits
+        .force_announced_channel_preference = true;
+    user_config
 }
 
 pub fn init_native_logger_once(min_level: LogLevel) {

@@ -2,6 +2,7 @@ mod file_storage;
 
 use file_storage::FileStorage;
 
+use bitcoin::Network;
 use log::info;
 use simplelog;
 use std::fs;
@@ -21,7 +22,10 @@ fn main() {
 
     let storage = Box::new(FileStorage::new(BASE_DIR));
     let seed = read_or_generate_seed(&storage);
-    let config = Config { seed };
+    let config = Config {
+        network: Network::Regtest,
+        seed,
+    };
     let _node = LightningNode::new(config, storage).unwrap();
 }
 
