@@ -40,7 +40,7 @@ impl StoragePersister {
     }
 
     pub fn check_object_storage_health(&self) -> bool {
-        self.storage.check_health(OBJECT_BUCKET.to_string())
+        self.storage.check_health(OBJECTS_BUCKET.to_string())
     }
 
     pub fn read_channel_monitors(&self) {
@@ -111,7 +111,7 @@ where
         channel_manager: &ChannelManager<Signer, M, T, K, F, L>,
     ) -> Result<(), Error> {
         self.persist_object(
-            OBJECT_BUCKET.to_string(),
+            OBJECTS_BUCKET.to_string(),
             MANAGER_KEY.to_string(),
             channel_manager.encode(),
         )
@@ -119,7 +119,7 @@ where
 
     fn persist_graph(&self, network_graph: &NetworkGraph<L>) -> Result<(), Error> {
         self.persist_object(
-            OBJECT_BUCKET.to_string(),
+            OBJECTS_BUCKET.to_string(),
             GRAPH_KEY.to_string(),
             network_graph.encode(),
         )
@@ -127,7 +127,7 @@ where
 
     fn persist_scorer(&self, scorer: &S) -> Result<(), Error> {
         self.persist_object(
-            OBJECT_BUCKET.to_string(),
+            OBJECTS_BUCKET.to_string(),
             SCORER_KEY.to_string(),
             scorer.encode(),
         )
