@@ -51,11 +51,11 @@ impl LightningNode {
             })?;
 
         // Step 7. Read ChannelMonitor state from disk
-        let _channel_monitors = persister.read_channel_monitors(&keys_manager);
+        let channel_monitors = persister.read_channel_monitors(&keys_manager);
 
         // TODO: If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
         // on each ChannelMonitor to prepare for chain synchronization in Step 9.
-        for (_, _chain_monitor) in _channel_monitors.iter() {
+        for (_, _chain_monitor) in channel_monitors.iter() {
             // chain_monitor.load_outputs_to_watch(&filter);
         }
 

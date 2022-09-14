@@ -11,23 +11,18 @@ use lightning::chain::channelmonitor::ChannelMonitorUpdate;
 use lightning::chain::keysinterface::{KeysInterface, Sign};
 use lightning::chain::transaction::OutPoint;
 use lightning::chain::ChannelMonitorUpdateErr;
-
 use lightning::ln::channelmanager::ChannelManager;
 use lightning::routing::gossip::NetworkGraph;
 use lightning::routing::scoring::WriteableScore;
 use lightning::util::logger::Logger;
 use lightning::util::persist::Persister;
+use lightning::util::ser::ReadableArgs;
 use lightning::util::ser::Writeable;
+use log::error;
 use std::io;
+use std::io::Cursor;
 use std::io::Error;
 use std::ops::Deref;
-
-
-use lightning::util::ser::ReadableArgs;
-use log::error;
-use std::io::Cursor;
-
-
 
 static MONITORS_BUCKET: &str = "monitors";
 static OBJECTS_BUCKET: &str = "objects";
@@ -171,8 +166,13 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use crate::keys_manager::init_keys_manager;
+
     use std::cell::RefCell;
     use std::collections::HashMap;
+    use std::fs;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use std::sync::Mutex;
 
@@ -252,7 +252,7 @@ mod test {
     }
 
     #[test]
-    fn test_check_monitor_storage_health() {
+    fn test_check_storage_health() {
         let storage = Arc::new(Storage::new());
         let persister = StoragePersister::new(Box::new(StorageMock::new(storage.clone())));
         storage
@@ -260,6 +260,11 @@ mod test {
             .lock()
             .unwrap()
             .insert("monitors".to_string(), true);
+        storage
+            .health
+            .lock()
+            .unwrap()
+            .insert("objects".to_string(), true);
         assert!(persister.check_monitor_storage_health());
         assert!(persister.check_object_storage_health());
 
@@ -269,13 +274,48 @@ mod test {
             .unwrap()
             .insert("monitors".to_string(), false);
         assert!(!persister.check_monitor_storage_health());
+        assert!(persister.check_object_storage_health());
     }
 
     #[test]
     fn test_read_channel_monitors() {
         let storage = Arc::new(Storage::new());
-        let _persister = StoragePersister::new(Box::new(StorageMock::new(storage.clone())));
+        let persister = StoragePersister::new(Box::new(StorageMock::new(storage.clone())));
+        let keys_manager = init_keys_manager(&[0u8; 32].to_vec()).unwrap();
 
-        // assert_eq!(persister.read_channel_monitors().len(), 0);
+        assert_eq!(persister.read_channel_monitors(&keys_manager).len(), 0);
+
+        // With invalid object.
+        storage.objects.lock().unwrap().borrow_mut().insert(
+            ("monitors".to_string(), "invalid_object".to_string()),
+            Vec::new(),
+        );
+        assert_eq!(persister.read_channel_monitors(&keys_manager).len(), 0);
+
+        // With valid object.
+        let mut monitors_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        monitors_path.push("tests/resources/monitors");
+        monitors_path.push("739f39903ea426645bd6650c55a568653c4d3c275bcbda17befc468f64c76a58_1");
+        let data = fs::read(monitors_path).unwrap();
+        storage
+            .objects
+            .lock()
+            .unwrap()
+            .borrow_mut()
+            .insert(("monitors".to_string(), "valid_object".to_string()), data);
+        let monitors = persister.read_channel_monitors(&keys_manager);
+        assert_eq!(monitors.len(), 1);
+        let (blockhash, monitor) = &monitors[0];
+        assert_eq!(
+            blockhash.as_hash().to_hex(),
+            "4c1a044c14d1c506431707ad671721cd8b637760ecc26e1975ad71b79721660d"
+        );
+        assert_eq!(monitor.get_latest_update_id(), 0);
+        let txo = monitor.get_funding_txo().0;
+        assert_eq!(
+            txo.txid.as_hash().to_hex(),
+            "739f39903ea426645bd6650c55a568653c4d3c275bcbda17befc468f64c76a58"
+        );
+        assert_eq!(txo.index, 1);
     }
 }
