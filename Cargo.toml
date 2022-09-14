@@ -27,4 +27,4 @@ android_logger = "0.11"
 
 [build-dependencies]
 camino = "1.1.1"
-uniffi_bindgen = "0.19.6"
+uniffi_bindgen = "0.20.0"
