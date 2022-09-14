@@ -20,7 +20,7 @@ use std::ops::Deref;
 use crate::callbacks::RedundantStorageCallback;
 
 static MONITORS_BUCKET: &str = "monitors";
-static OBJECT_BUCKET: &str = "objects";
+static OBJECTS_BUCKET: &str = "objects";
 
 static MANAGER_KEY: &str = "manager";
 static GRAPH_KEY: &str = "graph";
