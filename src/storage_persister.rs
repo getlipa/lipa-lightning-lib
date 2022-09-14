@@ -1,3 +1,6 @@
+use crate::callbacks::RedundantStorageCallback;
+
+use bitcoin::hash_types::BlockHash;
 use bitcoin::hashes::hex::ToHex;
 use lightning::chain;
 use lightning::chain::chaininterface::{BroadcasterInterface, FeeEstimator};
@@ -13,12 +16,13 @@ use lightning::routing::gossip::NetworkGraph;
 use lightning::routing::scoring::WriteableScore;
 use lightning::util::logger::Logger;
 use lightning::util::persist::Persister;
+use lightning::util::ser::ReadableArgs;
 use lightning::util::ser::Writeable;
+use log::error;
 use std::io;
+use std::io::Cursor;
 use std::io::Error;
 use std::ops::Deref;
-
-use crate::callbacks::RedundantStorageCallback;
 
 static MONITORS_BUCKET: &str = "monitors";
 static OBJECTS_BUCKET: &str = "objects";
@@ -44,8 +48,30 @@ impl StoragePersister {
         self.storage.check_health(OBJECTS_BUCKET.to_string())
     }
 
-    pub fn read_channel_monitors(&self) {
-        // TODO: Implement
+    pub fn read_channel_monitors<Signer: Sign, K: Deref>(
+        &self,
+        keys_manager: K,
+    ) -> Vec<(BlockHash, ChannelMonitor<Signer>)>
+    where
+        K::Target: KeysInterface<Signer = Signer> + Sized,
+    {
+        let mut result = Vec::new();
+        for key in self.storage.list_objects(MONITORS_BUCKET.to_string()) {
+            let data = self
+                .storage
+                .get_object(MONITORS_BUCKET.to_string(), key.clone());
+            let mut buffer = Cursor::new(&data);
+            match <(BlockHash, ChannelMonitor<Signer>)>::read(&mut buffer, &*keys_manager) {
+                Ok((blockhash, channel_monitor)) => {
+                    result.push((blockhash, channel_monitor));
+                }
+                Err(e) => {
+                    error!("Failed to deserialize ChannelMonitor `{}`: {}", key, e);
+                    // TODO: Should we return this information to the caller?
+                }
+            }
+        }
+        result
     }
 
     pub fn read_channel_manager(&self) {
@@ -141,40 +167,155 @@ where
 mod test {
     use super::*;
 
+    use crate::keys_manager::init_keys_manager;
+
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+
     #[derive(Debug)]
-    pub struct StorageMock;
+    pub struct Storage {
+        // Put the map into RefCell to allow mutation by immutable ref in StorageMock::put_object().
+        pub objects: Mutex<RefCell<HashMap<(String, String), Vec<u8>>>>,
+        pub health: Mutex<HashMap<String, bool>>,
+    }
+
+    #[derive(Debug)]
+    pub struct StorageMock {
+        storage: Arc<Storage>,
+    }
+
+    impl Storage {
+        pub fn new() -> Self {
+            Self {
+                objects: Mutex::new(RefCell::new(HashMap::new())),
+                health: Mutex::new(HashMap::new()),
+            }
+        }
+    }
+
+    impl StorageMock {
+        pub fn new(storage: Arc<Storage>) -> Self {
+            Self { storage }
+        }
+    }
 
     impl RedundantStorageCallback for StorageMock {
-        fn object_exists(&self, _bucket: String, _key: String) -> bool {
-            println!("object_exists()");
-            false
+        fn object_exists(&self, bucket: String, key: String) -> bool {
+            self.storage
+                .objects
+                .lock()
+                .unwrap()
+                .borrow()
+                .contains_key(&(bucket, key))
         }
 
-        fn get_object(&self, _bucket: String, _key: String) -> Vec<u8> {
-            println!("get_object()");
-            Vec::new()
+        fn get_object(&self, bucket: String, key: String) -> Vec<u8> {
+            self.storage
+                .objects
+                .lock()
+                .unwrap()
+                .borrow()
+                .get(&(bucket, key))
+                .unwrap()
+                .clone()
         }
 
-        fn check_health(&self, _bucket: String) -> bool {
-            println!("check_health()");
+        fn check_health(&self, bucket: String) -> bool {
+            *self.storage.health.lock().unwrap().get(&bucket).unwrap()
+        }
+
+        fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> bool {
+            self.storage
+                .objects
+                .lock()
+                .unwrap()
+                .borrow_mut()
+                .insert((bucket, key), value);
             true
         }
 
-        fn put_object(&self, _bucket: String, _key: String, _value: Vec<u8>) -> bool {
-            println!("put_object()");
-            false
-        }
-
-        fn list_objects(&self, _bucket: String) -> Vec<String> {
-            println!("list_objects()");
-            Vec::new()
+        fn list_objects(&self, bucket: String) -> Vec<String> {
+            self.storage
+                .objects
+                .lock()
+                .unwrap()
+                .borrow()
+                .keys()
+                .filter(|(b, _)| &bucket == b)
+                .map(|(_, k)| k.clone())
+                .collect()
         }
     }
 
     #[test]
-    fn test_out_point() {
-        let persister = StoragePersister::new(Box::new(StorageMock {}));
+    fn test_check_storage_health() {
+        let storage = Arc::new(Storage::new());
+        let persister = StoragePersister::new(Box::new(StorageMock::new(storage.clone())));
+        storage
+            .health
+            .lock()
+            .unwrap()
+            .insert("monitors".to_string(), true);
+        storage
+            .health
+            .lock()
+            .unwrap()
+            .insert("objects".to_string(), true);
         assert!(persister.check_monitor_storage_health());
         assert!(persister.check_object_storage_health());
+
+        storage
+            .health
+            .lock()
+            .unwrap()
+            .insert("monitors".to_string(), false);
+        assert!(!persister.check_monitor_storage_health());
+        assert!(persister.check_object_storage_health());
+    }
+
+    #[test]
+    fn test_read_channel_monitors() {
+        let storage = Arc::new(Storage::new());
+        let persister = StoragePersister::new(Box::new(StorageMock::new(storage.clone())));
+        let keys_manager = init_keys_manager(&[0u8; 32].to_vec()).unwrap();
+
+        assert_eq!(persister.read_channel_monitors(&keys_manager).len(), 0);
+
+        // With invalid object.
+        storage.objects.lock().unwrap().borrow_mut().insert(
+            ("monitors".to_string(), "invalid_object".to_string()),
+            Vec::new(),
+        );
+        assert_eq!(persister.read_channel_monitors(&keys_manager).len(), 0);
+
+        // With valid object.
+        let mut monitors_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        monitors_path.push("tests/resources/monitors");
+        monitors_path.push("739f39903ea426645bd6650c55a568653c4d3c275bcbda17befc468f64c76a58_1");
+        let data = fs::read(monitors_path).unwrap();
+        storage
+            .objects
+            .lock()
+            .unwrap()
+            .borrow_mut()
+            .insert(("monitors".to_string(), "valid_object".to_string()), data);
+        let monitors = persister.read_channel_monitors(&keys_manager);
+        assert_eq!(monitors.len(), 1);
+        let (blockhash, monitor) = &monitors[0];
+        assert_eq!(
+            blockhash.as_hash().to_hex(),
+            "4c1a044c14d1c506431707ad671721cd8b637760ecc26e1975ad71b79721660d"
+        );
+        assert_eq!(monitor.get_latest_update_id(), 0);
+        let txo = monitor.get_funding_txo().0;
+        assert_eq!(
+            txo.txid.as_hash().to_hex(),
+            "739f39903ea426645bd6650c55a568653c4d3c275bcbda17befc468f64c76a58"
+        );
+        assert_eq!(txo.index, 1);
     }
 }

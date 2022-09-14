@@ -45,13 +45,19 @@ impl LightningNode {
         // Step 5. Initialize the ChainMonitor
 
         // Step 6. Initialize the KeysManager
-        let _keys_manager =
+        let keys_manager =
             init_keys_manager(&config.seed).map_err(|e| InitializationError::KeysManager {
                 message: e.to_string(),
             })?;
 
         // Step 7. Read ChannelMonitor state from disk
-        let _channel_monitors = persister.read_channel_monitors();
+        let channel_monitors = persister.read_channel_monitors(&keys_manager);
+
+        // TODO: If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
+        // on each ChannelMonitor to prepare for chain synchronization in Step 9.
+        for (_, _chain_monitor) in channel_monitors.iter() {
+            // chain_monitor.load_outputs_to_watch(&filter);
+        }
 
         // Step 8. Initialize the ChannelManager
         let _channel_manager = persister.read_channel_manager();
