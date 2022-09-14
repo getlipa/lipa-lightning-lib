@@ -62,7 +62,6 @@ impl StoragePersister {
 
     fn persist_object(&self, bucket: String, key: String, data: Vec<u8>) -> Result<(), Error> {
         if !self.storage.put_object(bucket, key, data) {
-            // Operating System I/O Error
             return Err(Error::new(
                 io::ErrorKind::Other,
                 "Failed to persist object using storage callback",
