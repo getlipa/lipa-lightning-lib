@@ -26,10 +26,8 @@ pub struct LipaLightningConfig {
     pub ldk_peer_listening_port: u16,
     pub network: Network,*/
     pub seed: Vec<u8>,
-    pub bitcoind_rpc_username: String,
-    pub bitcoind_rpc_password: String,
-    pub bitcoind_rpc_port: u16,
-    pub bitcoind_rpc_host: String,
+    pub electrum_port: u16,
+    pub electrum_host: String,
     pub ldk_peer_listening_port: u16,
     pub network: Network,
 }

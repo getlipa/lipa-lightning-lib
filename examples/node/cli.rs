@@ -17,6 +17,8 @@ pub(crate) fn poll_for_user_input(lipa_lightning: &LipaLightning) {
     let stdin = io::stdin();
     let mut line_reader = stdin.lock().lines();
     loop {
+        lipa_lightning.sync();
+
         print!("> ");
         io::stdout().flush().unwrap(); // Without flushing, the `>` doesn't print
         let line = match line_reader.next() {

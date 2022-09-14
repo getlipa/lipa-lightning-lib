@@ -1,17 +1,13 @@
 use crate::{
-    hex_utils, BitcoindClient, ChannelManager, HTLCStatus, LightningLogger, MillisatAmount,
-    PaymentInfo, PaymentInfoStorage,
+    hex_utils, ChannelManager, HTLCStatus, LightningLogger, MillisatAmount, PaymentInfo,
+    PaymentInfoStorage,
 };
-use bitcoin::consensus::encode;
-use bitcoin::secp256k1::Secp256k1;
-use bitcoin::{Network, Transaction};
+use bitcoin::Network;
 use bitcoin_bech32::WitnessProgram;
-use lightning::chain::chaininterface::{BroadcasterInterface, ConfirmationTarget, FeeEstimator};
-use lightning::chain::keysinterface::KeysManager;
 use lightning::routing::gossip;
 use lightning::routing::gossip::NodeId;
 use lightning::util::events::{Event, EventHandler, PaymentPurpose};
-use log::{error, info};
+use log::info;
 use rand::{thread_rng, Rng};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -23,9 +19,9 @@ pub(crate) type NetworkGraph = gossip::NetworkGraph<Arc<LightningLogger>>;
 
 pub(crate) struct LipaEventHandler {
     pub(crate) channel_manager: Arc<ChannelManager>,
-    pub(crate) bitcoind_client: Arc<BitcoindClient>,
+    // pub(crate) electrum_client: Arc<EsploraClient>,
     pub(crate) network_graph: Arc<NetworkGraph>,
-    pub(crate) keys_manager: Arc<KeysManager>,
+    // pub(crate) keys_manager: Arc<KeysManager>,
     pub(crate) inbound_payments: PaymentInfoStorage,
     pub(crate) outbound_payments: PaymentInfoStorage,
     pub(crate) network: Network,
@@ -60,8 +56,8 @@ impl EventHandler for LipaEventHandler {
     fn handle_event(&self, event: &Event) {
         match event {
             Event::FundingGenerationReady {
-                temporary_channel_id,
-                counterparty_node_id,
+                temporary_channel_id: _,
+                counterparty_node_id: _,
                 channel_value_satoshis,
                 output_script,
                 ..
@@ -81,37 +77,43 @@ impl EventHandler for LipaEventHandler {
                 .to_address();
                 let mut outputs = vec![HashMap::with_capacity(1)];
                 outputs[0].insert(addr, *channel_value_satoshis as f64 / 100_000_000.0);
-                let raw_tx = self
-                    .tokio_handle
-                    .block_on(self.bitcoind_client.create_raw_transaction(outputs));
 
-                // Have your wallet put the inputs into the transaction such that the output is
-                // satisfied.
-                let funded_tx = self
-                    .tokio_handle
-                    .block_on(self.bitcoind_client.fund_raw_transaction(raw_tx));
+                /* todo implement
 
-                // Sign the final funding transaction and broadcast it.
-                let signed_tx = self.tokio_handle.block_on(
-                    self.bitcoind_client
-                        .sign_raw_transaction_with_wallet(funded_tx.hex),
-                );
-                assert!(signed_tx.complete);
-                let final_tx: Transaction =
-                    encode::deserialize(&hex_utils::to_vec(&signed_tx.hex).unwrap()).unwrap();
-                // Give the funding transaction back to LDK for opening the channel.
-                if self
-                    .channel_manager
-                    .funding_transaction_generated(
-                        temporary_channel_id,
-                        counterparty_node_id,
-                        final_tx,
-                    )
-                    .is_err()
-                {
-                    error!(
-                    "\nChannel went away before we could fund it. The peer disconnected or refused the channel.");
-                }
+
+                               let raw_tx = self
+                                    .tokio_handle
+                                    .block_on(self.bitcoind_client.create_raw_transaction(outputs));
+
+                               // Have your wallet put the inputs into the transaction such that the output is
+                               // satisfied.
+                               let funded_tx = self
+                                   .tokio_handle
+                                   .block_on(self.bitcoind_client.fund_raw_transaction(raw_tx));
+
+                               // Sign the final funding transaction and broadcast it.
+                               let signed_tx = self.tokio_handle.block_on(
+                                   self.bitcoind_client
+                                       .sign_raw_transaction_with_wallet(funded_tx.hex),
+                               );
+                               assert!(signed_tx.complete);
+                               let final_tx: Transaction =
+                                   encode::deserialize(&hex_utils::to_vec(&signed_tx.hex).unwrap()).unwrap();
+                               // Give the funding transaction back to LDK for opening the channel.
+                               if self
+                                   .channel_manager
+                                   .funding_transaction_generated(
+                                       temporary_channel_id,
+                                       counterparty_node_id,
+                                       final_tx,
+                                   )
+                                   .is_err()
+                               {
+                                   error!(
+                                   "\nChannel went away before we could fund it. The peer disconnected or refused the channel.");
+                               }
+
+                */
             }
             Event::PaymentReceived {
                 payment_hash,
@@ -285,25 +287,29 @@ impl EventHandler for LipaEventHandler {
                     forwarding_channel_manager.process_pending_htlc_forwards();
                 });
             }
-            Event::SpendableOutputs { outputs } => {
-                let destination_address = self
-                    .tokio_handle
-                    .block_on(self.bitcoind_client.get_new_address());
-                let output_descriptors = &outputs.iter().collect::<Vec<_>>();
-                let tx_feerate = self
-                    .bitcoind_client
-                    .get_est_sat_per_1000_weight(ConfirmationTarget::Normal);
-                let spending_tx = self
-                    .keys_manager
-                    .spend_spendable_outputs(
-                        output_descriptors,
-                        Vec::new(),
-                        destination_address.script_pubkey(),
-                        tx_feerate,
-                        &Secp256k1::new(),
-                    )
-                    .unwrap();
-                self.bitcoind_client.broadcast_transaction(&spending_tx);
+            Event::SpendableOutputs { outputs: _ } => {
+                /* todo implement
+
+                               let destination_address = self
+                                   .tokio_handle
+                                   .block_on(self.bitcoind_client.get_new_address());
+                               let output_descriptors = &outputs.iter().collect::<Vec<_>>();
+                               let tx_feerate = self
+                                   .bitcoind_client
+                                   .get_est_sat_per_1000_weight(ConfirmationTarget::Normal);
+                               let spending_tx = self
+                                   .keys_manager
+                                   .spend_spendable_outputs(
+                                       output_descriptors,
+                                       Vec::new(),
+                                       destination_address.script_pubkey(),
+                                       tx_feerate,
+                                       &Secp256k1::new(),
+                                   )
+                                   .unwrap();
+                               self.bitcoind_client.broadcast_transaction(&spending_tx);
+
+                */
             }
             Event::ChannelClosed {
                 channel_id,

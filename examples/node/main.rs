@@ -8,6 +8,7 @@ use std::fmt::{Debug, Formatter};
 use std::fs;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 use uniffi_lipalightninglib::callbacks::PersistCallback;
@@ -144,15 +145,13 @@ fn main() {
         ldk_peer_listening_port: 9732,
         network: Network::Regtest,*/
         seed: Vec::from(seed),
-        bitcoind_rpc_username: "polaruser".to_string(),
-        bitcoind_rpc_password: "polarpass".to_string(),
-        bitcoind_rpc_port: 18443,
-        bitcoind_rpc_host: "localhost".to_string(),
+        electrum_port: 50000,
+        electrum_host: "localhost".to_string(),
         ldk_peer_listening_port: 9732,
         network: Network::Regtest,
     };
 
-    let lipa_lightning = LipaLightning::new(config, persist_callback);
+    let lipa_lightning = Arc::new(LipaLightning::new(config, persist_callback));
 
     sleep(Duration::from_secs(1));
 

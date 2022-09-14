@@ -12,14 +12,14 @@ tokio = { version = "1", features = [ "io-util", "macros", "rt", "rt-multi-threa
 uniffi = "0.19.6"
 thiserror = "1.0"
 lightning = { version = "0.0.110", features = ["max_level_trace"] }
-# won't be used when using esplora
-lightning-block-sync = { version = "0.0.110", features = [ "rpc-client" ] }
 lightning-invoice = { version = "0.18.0" }
 lightning-net-tokio = { version = "0.0.110" }
 lightning-background-processor = { version = "0.0.110" }
-bitcoin = "0.28.1"
+bitcoin = { version = "0.28.1", features = ["use-serde"] }
+reqwest = { version = "0.11", features = ["json", "socks"] }
 rand = "0.4"
 log = "0.4.17"
+serde = "1.0.144"
 serde_json = { version = "1.0" }
 
 # needed for ldk-sample
