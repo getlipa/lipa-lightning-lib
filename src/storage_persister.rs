@@ -14,6 +14,7 @@ use lightning::routing::scoring::WriteableScore;
 use lightning::util::logger::Logger;
 use lightning::util::persist::Persister;
 use lightning::util::ser::Writeable;
+use std::io;
 use std::io::Error;
 use std::ops::Deref;
 
@@ -62,7 +63,10 @@ impl StoragePersister {
     fn persist_object(&self, bucket: String, key: String, data: Vec<u8>) -> Result<(), Error> {
         if !self.storage.put_object(bucket, key, data) {
             // Operating System I/O Error
-            return Err(Error::from_raw_os_error(5));
+            return Err(Error::new(
+                io::ErrorKind::Other,
+                "Failed to persist object using storage callback",
+            ));
         }
         Ok(())
     }
