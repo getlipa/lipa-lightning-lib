@@ -3,7 +3,6 @@
 
 extern crate core;
 
-// mod bitcoind_client;
 pub mod callbacks;
 pub mod config;
 mod errors;
@@ -16,7 +15,6 @@ mod native_logger;
 mod persist;
 mod util;
 
-// use crate::bitcoind_client::BitcoindClient;
 use crate::callbacks::PersistCallback;
 use crate::callbacks::RedundantStorageCallback;
 use crate::config::LipaLightningConfig;
@@ -395,15 +393,12 @@ impl LipaLdk {
         info!("Setting up the node");
 
         // Step 1: Initialize the FeeEstimator
-        // let fee_estimator = bitcoind_client.clone();
-
         let fee_estimator = Arc::new(EsploraClient::new(&config.get_esplora_url()));
 
         // Step 2: Initialize the Logger
         let logger = Arc::new(LightningLogger {});
 
         // Step 3: Initialize the BroadcasterInterface
-        // let broadcaster = bitcoind_client.clone();
         let broadcaster = client.clone();
 
         // Step 4: Initialize Persist
