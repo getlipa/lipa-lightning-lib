@@ -388,7 +388,7 @@ impl LipaLdk {
         tokio_handle: &Handle,
         persist_callback: Arc<Box<dyn PersistCallback>>,
     ) -> Result<Self, ()> {
-        let client = Arc::new(EsploraClient::new("http://localhost:3000"));
+        let client = Arc::new(EsploraClient::new(&config.get_esplora_url()));
 
         // ## Setup
 
@@ -397,7 +397,7 @@ impl LipaLdk {
         // Step 1: Initialize the FeeEstimator
         // let fee_estimator = bitcoind_client.clone();
 
-        let fee_estimator = Arc::new(EsploraClient::new("http://localhost:3000"));
+        let fee_estimator = Arc::new(EsploraClient::new(&config.get_esplora_url()));
 
         // Step 2: Initialize the Logger
         let logger = Arc::new(LightningLogger {});

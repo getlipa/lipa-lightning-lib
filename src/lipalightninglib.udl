@@ -7,8 +7,10 @@ enum Network {
 
 dictionary LipaLightningConfig {
     sequence<u8> seed;
-    u16 electrum_port;
-    string electrum_host;
+    string esplora_api_host;
+    u16? esplora_api_port;
+    string? esplora_api_path;
+    boolean esplora_over_tls;
     u16 ldk_peer_listening_port;
     Network network;
 };
