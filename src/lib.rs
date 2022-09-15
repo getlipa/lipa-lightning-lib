@@ -405,10 +405,9 @@ impl LipaLdk {
         let persister = Arc::new(LipaPersister::new(persist_callback.clone()));
 
         // Step 5: (Optional) Initialize the Transaction Filter
-        // We won't use electrum yet so this isn't needed for now
+        let filter = Arc::new(ChainFilter::new());
 
         // Step 6: Initialize the ChainMonitor
-        let filter = Arc::new(ChainFilter::new());
         let chain_monitor: Arc<ChainMonitor> = Arc::new(ChainMonitor::new(
             Some(filter.clone()),
             broadcaster.clone(),
