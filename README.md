@@ -7,10 +7,12 @@
 
 # Test
 
-Start bitcoin core:
+Start [Nigiri Bitcoin](https://github.com/vulpemventures/nigiri):
 ```sh
-bitcoind -chain=regtest -rpcuser=polaruser -rpcpassword=polarpass
+nigiri start --ln
 ```
+*The `--ln` flag is not strictly required, but it starts an LND and a CLN node
+which you are likely going to use to test the library.*
 
 Start the example node:
 ```sh

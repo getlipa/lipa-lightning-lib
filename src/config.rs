@@ -78,7 +78,6 @@ mod tests {
 
     #[test]
     fn test_esplora_url_construction() {
-        // setup
         let mut config = LipaLightningConfig {
             seed: vec![0; 32],
             esplora_api_host: "localhost".to_string(),
