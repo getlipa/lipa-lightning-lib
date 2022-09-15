@@ -4,6 +4,7 @@ use bitcoin::Network;
 ///
 /// # Fields:
 ///
+/// * `network` - the Bitcoin Network the node should run on: Bitcoin | Testnet | Signet | Regtest
 /// * `seed` - the seed derived from the mnemonic and optional pass phrase.
 pub struct Config {
     pub network: Network,
