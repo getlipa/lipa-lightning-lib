@@ -6,11 +6,13 @@ pub mod errors;
 pub mod keys_manager;
 pub mod secret;
 
+mod async_runtime;
 mod event_handler;
 mod logger;
 mod native_logger;
 mod storage_persister;
 
+use crate::async_runtime::AsyncRuntime;
 use crate::callbacks::RedundantStorageCallback;
 use crate::config::Config;
 use crate::errors::InitializationError;
@@ -31,6 +33,8 @@ impl LightningNode {
         config: Config,
         redundant_storage_callback: Box<dyn RedundantStorageCallback>,
     ) -> Result<Self, InitializationError> {
+        let _rt = AsyncRuntime::new()?;
+
         // Step 1. Initialize the FeeEstimator
 
         // Step 2. Initialize the Logger
