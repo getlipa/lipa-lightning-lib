@@ -66,7 +66,7 @@ impl LipaLightningConfig {
                 }
 
                 return path.clone();
-            },
+            }
             None => "".to_string(),
         }
     }
@@ -88,10 +88,7 @@ mod tests {
             network: Network::Regtest,
         };
 
-        assert_eq!(
-            config.get_esplora_url(),
-            "http://localhost:80".to_string()
-        );
+        assert_eq!(config.get_esplora_url(), "http://localhost:80".to_string());
 
         config.esplora_api_host = "localhost".to_string();
         config.esplora_api_port = Some(3000);

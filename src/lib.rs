@@ -19,7 +19,7 @@ use crate::callbacks::PersistCallback;
 use crate::callbacks::RedundantStorageCallback;
 use crate::config::LipaLightningConfig;
 use crate::errors::LipaLightningError;
-use crate::esplora_client::EsploraClient;
+use crate::esplora_client::{EsploraClient, EsploraClientSync};
 use crate::esplora_client_api::Error;
 use crate::event_handler::LipaEventHandler;
 use crate::hex_utils::to_compressed_pubkey;
@@ -52,12 +52,13 @@ use lightning_net_tokio::SocketDescriptor;
 use log::{error, info, Level as LogLevel};
 use rand::Rng;
 use std::collections::HashMap;
-use std::fmt;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::thread::sleep;
 use std::time::{Duration, SystemTime};
+use std::{fmt, thread};
 use tokio::runtime::{Handle, Runtime};
 
 pub type TransactionWithPosition = (usize, Transaction);
@@ -250,12 +251,6 @@ impl LipaLightning {
         )
     }
 
-    pub fn sync(&self) {
-        if let Err(e) = self.tokio_runtime.block_on(self.ldk.sync()) {
-            error!("Syncing Error: {}", e);
-        }
-    }
-
     // TODO: Some other methods are missing here
     // (e.g. get onchain info, channel info, payment info...)
 }
@@ -329,7 +324,6 @@ pub(crate) type InvoicePayer = payment::InvoicePayer<
 
 #[allow(dead_code)]
 struct LipaLdk {
-    client: Arc<EsploraClient>,
     stop_listen_connect: Arc<AtomicBool>,
     peer_manager: Arc<PeerManager>,
     channel_manager: Arc<ChannelManager>,
@@ -343,7 +337,6 @@ struct LipaLdk {
     logger: Arc<LightningLogger>,
     scorer: Arc<Mutex<ProbabilisticScorer<Arc<NetworkGraph>, Arc<LightningLogger>>>>,
     network: Network,
-    filter: Arc<ChainFilter>,
 }
 
 // stuff we are interested in to watch on the chain (since we don't watch everything)
@@ -405,7 +398,7 @@ impl LipaLdk {
         let persister = Arc::new(LipaPersister::new(persist_callback.clone()));
 
         // Step 5: (Optional) Initialize the Transaction Filter
-        let filter = Arc::new(ChainFilter::new());
+        let filter = Arc::new(ChainFilter::new(tokio_handle.clone()));
 
         // Step 6: Initialize the ChainMonitor
         let chain_monitor: Arc<ChainMonitor> = Arc::new(ChainMonitor::new(
@@ -550,6 +543,38 @@ impl LipaLdk {
             }
         });
 
+        // Step 15: Keep LDK Up-to-date with Chain Info
+        let channel_manager_sync = channel_manager.clone();
+        let chain_monitor_sync = chain_monitor.clone();
+        let filter_sync = filter.clone();
+        let esplora_url_sync = config.get_esplora_url().clone();
+        /*tokio_handle.spawn(async move {
+            let esplora_client = EsploraClientSync::new(
+                esplora_url_sync,
+                filter_sync,
+                channel_manager_sync,
+                chain_monitor_sync,
+            );
+            loop {
+                esplora_client.sync().await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        });*/
+        let sync_handle = thread::spawn(move || {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let esplora_client = EsploraClientSync::new(
+                esplora_url_sync,
+                filter_sync,
+                channel_manager_sync,
+                chain_monitor_sync,
+            );
+            loop {
+                //println!("Calling sync");
+                runtime.block_on(esplora_client.sync());
+                sleep(Duration::from_secs(1));
+            }
+        });
+
         // Step 16: Initialize an EventHandler
         // TODO: persist payment info to disk
         let inbound_payments: PaymentInfoStorage = Arc::new(Mutex::new(HashMap::new()));
@@ -668,7 +693,6 @@ impl LipaLdk {
         // We won't have public channels so we don't need to broadcast our node_announcement
 
         Ok(LipaLdk {
-            client,
             stop_listen_connect,
             peer_manager,
             channel_manager,
@@ -682,245 +706,20 @@ impl LipaLdk {
             logger,
             scorer,
             network,
-            filter,
         })
     }
-
-    // pub(crate) fn sync_wallet(&self) -> Result<(), Error> {
-    //     let sync_options = SyncOptions { progress: None };
-    //
-    //     self.wallet
-    //         .lock()
-    //         .unwrap()
-    //         .sync(&self.blockchain, sync_options)
-    //         .map_err(|e| Error::Bdk(e))?;
-    //
-    //     Ok(())
-    // }
-
-    pub(crate) async fn sync(&self) -> Result<(), Error> {
-        let confirmables: Vec<Arc<dyn Confirm + Sync>> =
-            vec![self.channel_manager.clone(), self.chain_monitor.clone()];
-
-        let client = &*self.client;
-
-        let cur_height = client.get_height().await?;
-
-        // todo last_sync_height needs to be persisted
-        // let mut locked_last_sync_height = self.last_sync_height.lock().unwrap();
-        // Todo: mocking some value for now ...
-        let current_sync_height_mock = Mutex::new(Some(10));
-
-        let mut locked_last_sync_height = current_sync_height_mock.lock().unwrap();
-        if cur_height >= locked_last_sync_height.unwrap_or(0) {
-            {
-                // First, inform the interface of the new block.
-                let cur_block_header = client.get_header(cur_height).await?;
-
-                for c in &confirmables {
-                    c.best_block_updated(&cur_block_header, cur_height);
-                }
-
-                *locked_last_sync_height = Some(cur_height);
-            }
-
-            {
-                // First, check the confirmation status of registered transactions as well as the
-                // status of dependent transactions of registered outputs.
-                // let mut locked_queued_transactions = self.queued_transactions.lock().unwrap();
-                // let mut locked_queued_outputs = self.queued_outputs.lock().unwrap();
-                // let mut locked_watched_transactions = self.watched_transactions.lock().unwrap();
-                // let mut locked_watched_outputs = self.watched_outputs.lock().unwrap();
-
-                let mut confirmed_txs = Vec::new();
-
-                // Check in the current queue, as well as in registered transactions leftover from
-                // previous iterations.
-                // let mut registered_txs: Vec<Txid> = locked_watched_transactions
-                //     .iter()
-                //     .chain(locked_queued_transactions.iter())
-                //     .cloned()
-                //     .collect();
-
-                let mut tx_filter = self.filter.filter.lock().unwrap();
-
-                tx_filter
-                    .watched_transactions
-                    .sort_unstable_by(|txid1, txid2| txid1.cmp(&txid2));
-                tx_filter
-                    .watched_transactions
-                    .dedup_by(|txid1, txid2| txid1.eq(&txid2));
-
-                // Remember all registered but unconfirmed transactions for future processing.
-                let mut unconfirmed_registered_txs = Vec::new();
-
-                for txid in tx_filter.watched_transactions.iter() {
-                    let txid = txid.0;
-                    if let Some(tx_status) = client.get_tx_status(&txid).await? {
-                        if tx_status.confirmed {
-                            if let Some(tx) = client.get_tx(&txid).await? {
-                                if let Some(block_height) = tx_status.block_height {
-                                    let block_header = client.get_header(block_height).await?;
-                                    if let Some(merkle_proof) =
-                                        client.get_merkle_proof(&txid).await?
-                                    {
-                                        confirmed_txs.push((
-                                            tx,
-                                            block_height,
-                                            block_header,
-                                            merkle_proof.pos,
-                                        ));
-                                        continue;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    unconfirmed_registered_txs.push(txid);
-                }
-
-                // Check all registered outputs for dependent spending transactions.
-                // let registered_outputs: Vec<WatchedOutput> = locked_watched_outputs
-                //     .iter()
-                //     .chain(locked_queued_outputs.iter())
-                //     .cloned()
-                //     .collect();
-
-                // Remember all registered outputs that haven't been spent for future processing.
-                let mut unspent_registered_outputs = Vec::new();
-
-                for output in tx_filter.watched_outputs.iter() {
-                    if let Some(output_status) = client
-                        .get_output_status(&output.outpoint.txid, output.outpoint.index as u64)
-                        .await?
-                    {
-                        if output_status.spent {
-                            if let Some(spending_tx_status) = output_status.status {
-                                if spending_tx_status.confirmed {
-                                    let spending_txid = output_status.txid.unwrap();
-                                    if let Some(spending_tx) = client.get_tx(&spending_txid).await?
-                                    {
-                                        let block_height = spending_tx_status.block_height.unwrap();
-                                        let block_header = client.get_header(block_height).await?;
-                                        if let Some(merkle_proof) =
-                                            client.get_merkle_proof(&spending_txid).await?
-                                        {
-                                            confirmed_txs.push((
-                                                spending_tx,
-                                                block_height,
-                                                block_header,
-                                                merkle_proof.pos,
-                                            ));
-                                            continue;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    unspent_registered_outputs.push(output);
-                }
-
-                // Sort all confirmed transactions by block height and feed them to the interface
-                // in order.
-                confirmed_txs.sort_unstable_by(
-                    |(_, block_height1, _, _), (_, block_height2, _, _)| {
-                        block_height1.cmp(&block_height2)
-                    },
-                );
-                for (tx, block_height, block_header, pos) in confirmed_txs {
-                    for c in &confirmables {
-                        c.transactions_confirmed(&block_header, &[(pos, &tx)], block_height);
-                    }
-                }
-
-                // *locked_watched_transactions = unconfirmed_registered_txs;
-                // *locked_queued_transactions = Vec::new();
-                // *locked_watched_outputs = unspent_registered_outputs;
-                // *locked_queued_outputs = Vec::new();
-            }
-
-            {
-                /* todo check for reorgs
-
-                // Query the interface for relevant txids and check whether they have been
-                // reorged-out of the chain.
-                let unconfirmed_txids_unfiltered = confirmables
-                    .iter()
-                    .flat_map(|c| c.get_relevant_txids())
-                    .collect::<Vec<Txid>>();
-
-                let mut unconfirmed_txids = Vec::new();
-
-                for unconfirmed_txid in unconfirmed_txids_unfiltered.iter() {
-                    if client
-                        .get_tx_status(unconfirmed_txid).await
-                        .ok()
-                        .unwrap_or(None)
-                        .map_or(true, |status| !status.confirmed) {
-                        unconfirmed_txids.push(*unconfirmed_txid);
-                    }
-                }
-
-                // Mark all relevant unconfirmed transactions as unconfirmed.
-                for txid in &unconfirmed_txids {
-                    for c in &confirmables {
-                        c.transaction_unconfirmed(txid);
-                    }
-                }
-
-                 */
-            }
-        }
-
-        // TODO: check whether new outputs have been registered by now and process them
-        Ok(())
-    }
-
-    // pub(crate) fn create_funding_transaction(
-    //     &self, output_script: &Script, value_sats: u64, confirmation_target: ConfirmationTarget,
-    // ) -> Result<Transaction, Error> {
-    //     let num_blocks = num_blocks_from_conf_target(confirmation_target);
-    //     let fee_rate = self.blockchain.estimate_fee(num_blocks)?;
-    //
-    //     let locked_wallet = self.wallet.lock().unwrap();
-    //     let mut tx_builder = locked_wallet.build_tx();
-    //
-    //     tx_builder.add_recipient(output_script.clone(), value_sats).fee_rate(fee_rate).enable_rbf();
-    //
-    //     let (mut psbt, _) = tx_builder.finish()?;
-    //     log_trace!(self.logger, "Created funding PSBT: {:?}", psbt);
-    //
-    //     // We double-check that no inputs try to spend non-witness outputs. As we use a SegWit
-    //     // wallet descriptor this technically shouldn't ever happen, but better safe than sorry.
-    //     for input in &psbt.inputs {
-    //         if input.witness_utxo.is_none() {
-    //             return Err(Error::FundingTxNonWitnessOuputSpend);
-    //         }
-    //     }
-    //
-    //     let finalized = locked_wallet.sign(&mut psbt, SignOptions::default())?;
-    //     if !finalized {
-    //         return Err(Error::FundingTxNotFinalized);
-    //     }
-    //
-    //     Ok(psbt.extract_tx())
-    // }
-    //
-    // pub(crate) fn get_new_address(&self) -> Result<bitcoin::Address, Error> {
-    //     let address_info = self.wallet.lock().unwrap().get_address(AddressIndex::New)?;
-    //     Ok(address_info.address)
-    // }
 }
 
 struct ChainFilter {
+    runtime_handle: Handle,
     filter: Mutex<TxFilter>,
 }
 
 impl ChainFilter {
-    fn new() -> Self {
+    fn new(runtime_handle: Handle) -> Self {
         Self {
             filter: Mutex::new(TxFilter::new()),
+            runtime_handle,
         }
     }
 }

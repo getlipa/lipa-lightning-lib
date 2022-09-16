@@ -145,7 +145,7 @@ fn main() {
         ldk_peer_listening_port: 9732,
         network: Network::Regtest,*/
         seed: Vec::from(seed),
-        esplora_api_port: Some(3000),
+        esplora_api_port: Some(30000),
         esplora_api_path: None,
         esplora_api_host: "localhost".to_string(),
         esplora_over_tls: false,
