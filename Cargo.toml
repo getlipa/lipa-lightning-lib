@@ -13,6 +13,8 @@ bitcoin = "0.28.1"
 lightning = { version = "0.0.110", features = ["max_level_trace"] }
 log = "0.4.17"
 rand = "0.8.5"
+reqwest = { version = "0.11", features = ["json", "socks"] }
+serde = "1.0.144"
 thiserror = "1.0.34"
 tokio = { version = "1.21.1", features = ["rt-multi-thread", "time"] }
 uniffi = "0.20.0"

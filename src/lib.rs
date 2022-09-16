@@ -7,6 +7,8 @@ pub mod keys_manager;
 pub mod secret;
 
 mod async_runtime;
+mod esplora_client;
+mod esplora_client_api;
 mod event_handler;
 mod logger;
 mod native_logger;
