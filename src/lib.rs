@@ -26,14 +26,16 @@ use bitcoin::Network;
 use lightning::util::config::UserConfig;
 use log::{info, warn, Level as LogLevel};
 
-pub struct LightningNode;
+pub struct LightningNode {
+    rt: AsyncRuntime,
+}
 
 impl LightningNode {
     pub fn new(
         config: Config,
         redundant_storage_callback: Box<dyn RedundantStorageCallback>,
     ) -> Result<Self, InitializationError> {
-        let _rt = AsyncRuntime::new()?;
+        let rt = AsyncRuntime::new()?;
 
         // Step 1. Initialize the FeeEstimator
 
@@ -98,7 +100,7 @@ impl LightningNode {
 
         // Step 19. Start Background Processing
 
-        Ok(Self {})
+        Ok(Self { rt })
     }
 }
 

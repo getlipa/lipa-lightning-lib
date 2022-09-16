@@ -4,7 +4,7 @@ use core::future::Future;
 use core::time::Duration;
 use tokio::runtime::{Builder, Runtime};
 use tokio::task::JoinHandle;
-use tokio::time::{interval, MissedTickBehavior};
+use tokio::time;
 
 pub struct AsyncRuntime {
     rt: Runtime,
@@ -14,7 +14,7 @@ impl AsyncRuntime {
     pub fn new() -> Result<Self, InitializationError> {
         let rt = Builder::new_multi_thread()
             .worker_threads(4)
-            .thread_name("3l-asyn-runtime")
+            .thread_name("3l-async-runtime")
             .enable_time()
             .build()
             .map_err(|e| InitializationError::AsyncRuntime {
@@ -31,15 +31,15 @@ impl AsyncRuntime {
         self.rt.spawn(future)
     }
 
-    pub fn spawn_regularly<Func, F>(&self, duration: Duration, func: Func) -> JoinHandle<()>
+    pub fn spawn_repeating_task<Func, F>(&self, interval: Duration, func: Func) -> JoinHandle<()>
     where
         Func: Fn() -> F + Send + Sync + 'static,
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
         self.rt.spawn(async move {
-            let mut interval = interval(duration);
-            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+            let mut interval = time::interval(interval);
+            interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
                 func().await;
@@ -88,7 +88,7 @@ mod test {
     }
 
     #[test]
-    pub fn test_spawn_regularly() {
+    pub fn test_spawn_repeating_task() {
         let rt = AsyncRuntime::new().unwrap();
         let data = Arc::new(AtomicUsize::new(0));
         let data_in_f = Arc::clone(&data);
@@ -99,7 +99,7 @@ mod test {
             }
         };
 
-        let _handle = rt.spawn_regularly(Duration::from_millis(1), inc);
+        let _handle = rt.spawn_repeating_task(Duration::from_millis(1), inc);
 
         while data.load(Ordering::SeqCst) < 10 {
             yield_now();
