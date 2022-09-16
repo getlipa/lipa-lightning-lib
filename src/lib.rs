@@ -20,7 +20,6 @@ use crate::callbacks::RedundantStorageCallback;
 use crate::config::LipaLightningConfig;
 use crate::errors::LipaLightningError;
 use crate::esplora_client::{EsploraClient, EsploraClientSync};
-use crate::esplora_client_api::Error;
 use crate::event_handler::LipaEventHandler;
 use crate::hex_utils::to_compressed_pubkey;
 use crate::logger::LightningLogger;
@@ -34,7 +33,7 @@ use bitcoin::secp256k1::PublicKey;
 use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use lightning::chain;
 use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Recipient};
-use lightning::chain::{chainmonitor, BestBlock, Confirm, Filter, WatchedOutput};
+use lightning::chain::{chainmonitor, BestBlock, Filter, WatchedOutput};
 use lightning::ln::channelmanager::{
     ChainParameters, ChannelManagerReadArgs, SimpleArcChannelManager,
 };
@@ -398,7 +397,7 @@ impl LipaLdk {
         let persister = Arc::new(LipaPersister::new(persist_callback.clone()));
 
         // Step 5: (Optional) Initialize the Transaction Filter
-        let filter = Arc::new(ChainFilter::new(tokio_handle.clone()));
+        let filter = Arc::new(ChainFilter::new());
 
         // Step 6: Initialize the ChainMonitor
         let chain_monitor: Arc<ChainMonitor> = Arc::new(ChainMonitor::new(
@@ -560,7 +559,7 @@ impl LipaLdk {
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
         });*/
-        let sync_handle = thread::spawn(move || {
+        let _sync_handle = thread::spawn(move || {
             let runtime = tokio::runtime::Runtime::new().unwrap();
             let esplora_client = EsploraClientSync::new(
                 esplora_url_sync,
@@ -570,7 +569,12 @@ impl LipaLdk {
             );
             loop {
                 //println!("Calling sync");
-                runtime.block_on(esplora_client.sync());
+                match runtime.block_on(esplora_client.sync()) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        error!("esplora_client.sync() failed")
+                    }
+                };
                 sleep(Duration::from_secs(1));
             }
         });
@@ -711,15 +715,13 @@ impl LipaLdk {
 }
 
 struct ChainFilter {
-    runtime_handle: Handle,
     filter: Mutex<TxFilter>,
 }
 
 impl ChainFilter {
-    fn new(runtime_handle: Handle) -> Self {
+    fn new() -> Self {
         Self {
             filter: Mutex::new(TxFilter::new()),
-            runtime_handle,
         }
     }
 }

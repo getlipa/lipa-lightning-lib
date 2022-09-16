@@ -32,7 +32,6 @@ use reqwest::{Client, StatusCode};
 use crate::{ChainFilter, ChainMonitor, ChannelManager};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace};
-use rand::distributions::Exp;
 use tokio::sync::Mutex;
 
 use crate::esplora_client_api::{Error, MerkleProof, OutputStatus, TxStatus};
