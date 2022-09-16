@@ -6,6 +6,7 @@ pub mod errors;
 pub mod keys_manager;
 pub mod secret;
 
+mod event_handler;
 mod logger;
 mod native_logger;
 mod storage_persister;
@@ -13,6 +14,7 @@ mod storage_persister;
 use crate::callbacks::RedundantStorageCallback;
 use crate::config::Config;
 use crate::errors::InitializationError;
+use crate::event_handler::LipaEventHandler;
 use crate::keys_manager::{generate_secret, init_keys_manager};
 use crate::logger::LightningLogger;
 use crate::secret::Secret;
@@ -80,6 +82,7 @@ impl LightningNode {
         // Step 14. Keep LDK Up-to-date with Chain Info
 
         // Step 15. Initialize an EventHandler
+        let _event_handler = LipaEventHandler {};
 
         // Step 16. Initialize the ProbabilisticScorer
         let _scorer = persister.read_scorer();
