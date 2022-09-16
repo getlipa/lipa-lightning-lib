@@ -6,11 +6,13 @@ pub mod errors;
 pub mod keys_manager;
 pub mod secret;
 
+mod async_runtime;
 mod event_handler;
 mod logger;
 mod native_logger;
 mod storage_persister;
 
+use crate::async_runtime::AsyncRuntime;
 use crate::callbacks::RedundantStorageCallback;
 use crate::config::Config;
 use crate::errors::InitializationError;
@@ -24,13 +26,17 @@ use bitcoin::Network;
 use lightning::util::config::UserConfig;
 use log::{info, warn, Level as LogLevel};
 
-pub struct LightningNode;
+pub struct LightningNode {
+    rt: AsyncRuntime,
+}
 
 impl LightningNode {
     pub fn new(
         config: Config,
         redundant_storage_callback: Box<dyn RedundantStorageCallback>,
     ) -> Result<Self, InitializationError> {
+        let rt = AsyncRuntime::new()?;
+
         // Step 1. Initialize the FeeEstimator
 
         // Step 2. Initialize the Logger
@@ -94,7 +100,7 @@ impl LightningNode {
 
         // Step 19. Start Background Processing
 
-        Ok(Self {})
+        Ok(Self { rt })
     }
 }
 
