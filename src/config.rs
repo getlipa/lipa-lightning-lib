@@ -61,12 +61,12 @@ impl LipaLightningConfig {
     fn get_path(&self) -> String {
         match &self.esplora_api_path {
             Some(path) => {
-                if path.chars().next().unwrap() != '/' {
+                if !path.starts_with('/') {
                     return format!("/{}", path);
                 }
 
-                return path.clone();
-            },
+                path.clone()
+            }
             None => "".to_string(),
         }
     }
@@ -88,10 +88,7 @@ mod tests {
             network: Network::Regtest,
         };
 
-        assert_eq!(
-            config.get_esplora_url(),
-            "http://localhost:80".to_string()
-        );
+        assert_eq!(config.get_esplora_url(), "http://localhost:80".to_string());
 
         config.esplora_api_host = "localhost".to_string();
         config.esplora_api_port = Some(3000);
