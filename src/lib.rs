@@ -754,9 +754,7 @@ impl LipaLdk {
 
                 let mut tx_filter = self.filter.filter.lock().unwrap();
 
-                tx_filter
-                    .watched_transactions
-                    .sort_unstable_by(|txid1, txid2| txid1.cmp(&txid2));
+                tx_filter.watched_transactions.sort_unstable();
 
                 tx_filter
                     .watched_transactions
@@ -836,7 +834,7 @@ impl LipaLdk {
                 // in order.
                 confirmed_txs.sort_unstable_by(
                     |(_, block_height1, _, _), (_, block_height2, _, _)| {
-                        block_height1.cmp(&block_height2)
+                        block_height1.cmp(block_height2)
                     },
                 );
                 for (tx, block_height, block_header, pos) in confirmed_txs {
