@@ -3,7 +3,7 @@ mod hex_utils;
 
 use bitcoin::Network;
 use rand::{thread_rng, Rng};
-use simplelog;
+
 use std::fmt::{Debug, Formatter};
 use std::fs;
 use std::os::unix::io::AsRawFd;

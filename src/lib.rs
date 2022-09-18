@@ -3,12 +3,12 @@
 
 extern crate core;
 
+mod broadcaster;
 pub mod callbacks;
 pub mod config;
 mod errors;
-mod esplora_client;
-mod esplora_client_api;
 mod event_handler;
+mod fee_estimator;
 mod hex_utils;
 mod logger;
 mod native_logger;
@@ -19,8 +19,6 @@ use crate::callbacks::PersistCallback;
 use crate::callbacks::RedundantStorageCallback;
 use crate::config::LipaLightningConfig;
 use crate::errors::LipaLightningError;
-use crate::esplora_client::EsploraClient;
-use crate::esplora_client_api::Error;
 use crate::event_handler::LipaEventHandler;
 use crate::hex_utils::to_compressed_pubkey;
 use crate::logger::LightningLogger;
@@ -54,10 +52,15 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::fmt;
 use std::net::SocketAddr;
+
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
+
+use crate::broadcaster::BroadcasterInterfaceDummy;
+use crate::fee_estimator::FeeEstimatorDummy;
+use esplora_client::{AsyncClient, Error};
 use tokio::runtime::{Handle, Runtime};
 
 pub type TransactionWithPosition = (usize, Transaction);
@@ -271,20 +274,24 @@ pub struct LipaNodeInfo {
 type ChainMonitor = chainmonitor::ChainMonitor<
     InMemorySigner,
     Arc<dyn Filter + Send + Sync>,
-    Arc<EsploraClient>,
-    Arc<EsploraClient>,
+    Arc<BroadcasterInterfaceDummy>,
+    Arc<FeeEstimatorDummy>,
     Arc<LightningLogger>,
     Arc<LipaPersister>,
 >;
 
-pub(crate) type ChannelManager =
-    SimpleArcChannelManager<ChainMonitor, EsploraClient, EsploraClient, LightningLogger>;
+pub(crate) type ChannelManager = SimpleArcChannelManager<
+    ChainMonitor,
+    BroadcasterInterfaceDummy,
+    FeeEstimatorDummy,
+    LightningLogger,
+>;
 
 pub(crate) type PeerManager = SimpleArcPeerManager<
     SocketDescriptor,
     ChainMonitor,
-    EsploraClient,
-    EsploraClient,
+    BroadcasterInterfaceDummy,
+    FeeEstimatorDummy,
     dyn chain::Access + Send + Sync,
     LightningLogger,
 >;
@@ -329,7 +336,7 @@ pub(crate) type InvoicePayer = payment::InvoicePayer<
 
 #[allow(dead_code)]
 struct LipaLdk {
-    client: Arc<EsploraClient>,
+    esplora_client: Arc<AsyncClient>,
     stop_listen_connect: Arc<AtomicBool>,
     peer_manager: Arc<PeerManager>,
     channel_manager: Arc<ChannelManager>,
@@ -386,20 +393,22 @@ impl LipaLdk {
         tokio_handle: &Handle,
         persist_callback: Arc<Box<dyn PersistCallback>>,
     ) -> Result<Self, ()> {
-        let client = Arc::new(EsploraClient::new(&config.get_esplora_url()));
-
         // ## Setup
 
         info!("Setting up the node");
 
+        use esplora_client::Builder;
+        let builder = Builder::new(&config.get_esplora_url());
+        let esplora_client = Arc::new(builder.build_async().unwrap());
+
         // Step 1: Initialize the FeeEstimator
-        let fee_estimator = Arc::new(EsploraClient::new(&config.get_esplora_url()));
+        let fee_estimator = Arc::new(FeeEstimatorDummy {});
 
         // Step 2: Initialize the Logger
         let logger = Arc::new(LightningLogger {});
 
         // Step 3: Initialize the BroadcasterInterface
-        let broadcaster = client.clone();
+        let broadcaster = Arc::new(BroadcasterInterfaceDummy {});
 
         // Step 4: Initialize Persist
         let persister = Arc::new(LipaPersister::new(persist_callback.clone()));
@@ -453,9 +462,9 @@ impl LipaLdk {
                 }
                 let read_args = ChannelManagerReadArgs::new(
                     keys_manager.clone(),
-                    fee_estimator.clone(),
+                    fee_estimator,
                     chain_monitor.clone(),
-                    broadcaster.clone(),
+                    broadcaster,
                     logger.clone(),
                     user_config,
                     channel_monitor_mut_references,
@@ -468,9 +477,10 @@ impl LipaLdk {
             } else {
                 // We're starting a fresh node.
 
-                let tip_block_height = tokio_handle.block_on(client.get_height()).unwrap();
+                let tip_block_height = tokio_handle.block_on(esplora_client.get_height()).unwrap();
+
                 let tip_block_hash = tokio_handle
-                    .block_on(client.get_block_hash(tip_block_height))
+                    .block_on(esplora_client.get_block_hash(tip_block_height))
                     .unwrap();
 
                 let chain_params = ChainParameters {
@@ -479,9 +489,9 @@ impl LipaLdk {
                 };
 
                 ChannelManager::new(
-                    fee_estimator.clone(),
+                    fee_estimator,
                     chain_monitor.clone(),
-                    broadcaster.clone(),
+                    broadcaster,
                     logger.clone(),
                     keys_manager.clone(),
                     user_config,
@@ -668,7 +678,7 @@ impl LipaLdk {
         // We won't have public channels so we don't need to broadcast our node_announcement
 
         Ok(LipaLdk {
-            client,
+            esplora_client,
             stop_listen_connect,
             peer_manager,
             channel_manager,
@@ -702,7 +712,7 @@ impl LipaLdk {
         let confirmables: Vec<Arc<dyn Confirm + Sync>> =
             vec![self.channel_manager.clone(), self.chain_monitor.clone()];
 
-        let client = &*self.client;
+        let client = &self.esplora_client;
 
         let cur_height = client.get_height().await?;
 
@@ -747,6 +757,7 @@ impl LipaLdk {
                 tx_filter
                     .watched_transactions
                     .sort_unstable_by(|txid1, txid2| txid1.cmp(&txid2));
+
                 tx_filter
                     .watched_transactions
                     .dedup_by(|txid1, txid2| txid1.eq(&txid2));
