@@ -1,4 +1,4 @@
-use crate::async_runtime::AsyncRuntime;
+use crate::async_runtime::Handle;
 
 use bitcoin::blockdata::transaction::Transaction;
 use esplora_client::r#async::AsyncClient;
@@ -6,14 +6,17 @@ use lightning::chain::chaininterface::BroadcasterInterface;
 use log::error;
 use std::sync::Arc;
 
-pub struct TxBroadcaster {
+pub(crate) struct TxBroadcaster {
     esplora_client: Arc<AsyncClient>,
-    rt: Arc<AsyncRuntime>,
+    handle: Handle,
 }
 
 impl TxBroadcaster {
-    pub fn new(esplora_client: Arc<AsyncClient>, rt: Arc<AsyncRuntime>) -> Self {
-        Self { esplora_client, rt }
+    pub fn new(esplora_client: Arc<AsyncClient>, handle: Handle) -> Self {
+        Self {
+            esplora_client,
+            handle,
+        }
     }
 }
 
@@ -23,7 +26,7 @@ impl BroadcasterInterface for TxBroadcaster {
         let tx = tx.clone();
         let txid = tx.txid();
         let result = self
-            .rt
+            .handle
             .block_on(async move { esplora_client.broadcast(&tx).await });
 
         // TODO: Better handle errors. Should we retry?
@@ -37,6 +40,8 @@ impl BroadcasterInterface for TxBroadcaster {
 mod test {
     use super::*;
 
+    use crate::async_runtime::AsyncRuntime;
+
     use bitcoin::consensus::deserialize;
     use bitcoin_hashes::hex::FromHex;
     use esplora_client::Builder;
@@ -47,12 +52,12 @@ mod test {
     fn test_broadcast_failure() {
         simplelog::TestLogger::init(log::LevelFilter::Error, simplelog::Config::default()).unwrap();
 
-        let rt = Arc::new(AsyncRuntime::new().unwrap());
+        let handle = AsyncRuntime::new().unwrap().handle();
         // 9 is a discard port
         // See https://en.wikipedia.org/wiki/Port_(computer_networking)
         let builder = Builder::new("http://localhost:9");
         let esplora_client = Arc::new(builder.build_async().unwrap());
-        let broadcaster = TxBroadcaster::new(esplora_client, rt);
+        let broadcaster = TxBroadcaster::new(esplora_client, handle);
 
         let tx_bytes = Vec::from_hex(
             "02000000000101595895ea20179de87052b4046dfe6fd515860505d6511a9004cf12a1f93cac7c01000000\

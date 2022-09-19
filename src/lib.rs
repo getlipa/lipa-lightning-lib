@@ -45,7 +45,7 @@ impl LightningNode {
         config: Config,
         redundant_storage_callback: Box<dyn RedundantStorageCallback>,
     ) -> Result<Self, InitializationError> {
-        let rt = Arc::new(AsyncRuntime::new()?);
+        let rt = AsyncRuntime::new()?;
         // TODO: Configure the client.
         let builder = Builder::new("https://blockstream.info/testnet/api");
         // TODO: Handle error.
@@ -57,7 +57,7 @@ impl LightningNode {
         let _logger = LightningLogger {};
 
         // Step 3. Initialize the BroadcasterInterface
-        let _tx_broadcaster = TxBroadcaster::new(Arc::clone(&esplora_client), Arc::clone(&rt));
+        let _tx_broadcaster = TxBroadcaster::new(Arc::clone(&esplora_client), rt.handle());
 
         // Step 4. Initialize Persist
         let persister = StoragePersister::new(redundant_storage_callback);
