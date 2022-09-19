@@ -10,6 +10,7 @@ pub mod secret;
 
 mod async_runtime;
 mod event_handler;
+mod fee_estimator;
 mod logger;
 mod native_logger;
 mod storage_persister;
@@ -20,6 +21,7 @@ use crate::callbacks::RedundantStorageCallback;
 use crate::config::Config;
 use crate::errors::InitializationError;
 use crate::event_handler::LipaEventHandler;
+use crate::fee_estimator::FeeEstimator;
 use crate::keys_manager::{generate_secret, init_keys_manager};
 use crate::logger::LightningLogger;
 use crate::secret::Secret;
@@ -52,6 +54,7 @@ impl LightningNode {
         let esplora_client = Arc::new(builder.build_async().unwrap());
 
         // Step 1. Initialize the FeeEstimator
+        let _fee_estimator = FeeEstimator {};
 
         // Step 2. Initialize the Logger
         let _logger = LightningLogger {};
