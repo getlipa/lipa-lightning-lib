@@ -1,3 +1,5 @@
+#![allow(clippy::let_unit_value)]
+
 extern crate core;
 
 pub mod callbacks;
@@ -27,6 +29,7 @@ use lightning::util::config::UserConfig;
 use log::{info, warn, Level as LogLevel};
 
 pub struct LightningNode {
+    #[allow(dead_code)]
     rt: AsyncRuntime,
 }
 
