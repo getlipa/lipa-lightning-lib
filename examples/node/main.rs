@@ -4,7 +4,6 @@ use file_storage::FileStorage;
 
 use bitcoin::Network;
 use log::info;
-use simplelog;
 use std::fs;
 use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
 use uniffi_lipalightninglib::config::Config;
