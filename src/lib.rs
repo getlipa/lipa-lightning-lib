@@ -31,6 +31,9 @@ use crate::tx_broadcaster::TxBroadcaster;
 use bitcoin::Network;
 use esplora_client::r#async::AsyncClient;
 use esplora_client::Builder;
+use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
+use lightning::chain::keysinterface::InMemorySigner;
+use lightning::chain::Filter;
 use lightning::util::config::UserConfig;
 use log::{info, warn, Level as LogLevel};
 use std::sync::Arc;
@@ -41,6 +44,15 @@ pub struct LightningNode {
     rt: AsyncRuntime,
     esplora_client: Arc<AsyncClient>,
 }
+
+type ChainMonitor = LdkChainMonitor<
+    InMemorySigner,
+    Box<dyn Filter + Send + Sync>,
+    Box<TxBroadcaster>,
+    Box<FeeEstimator>,
+    Box<LightningLogger>,
+    Arc<StoragePersister>,
+>;
 
 impl LightningNode {
     pub fn new(
@@ -54,16 +66,16 @@ impl LightningNode {
         let esplora_client = Arc::new(builder.build_async().unwrap());
 
         // Step 1. Initialize the FeeEstimator
-        let _fee_estimator = FeeEstimator {};
+        let fee_estimator = Box::new(FeeEstimator {});
 
         // Step 2. Initialize the Logger
-        let _logger = LightningLogger {};
+        let logger = Box::new(LightningLogger {});
 
         // Step 3. Initialize the BroadcasterInterface
-        let _tx_broadcaster = TxBroadcaster::new(Arc::clone(&esplora_client), rt.handle());
+        let tx_broadcaster = Box::new(TxBroadcaster::new(Arc::clone(&esplora_client), rt.handle()));
 
         // Step 4. Initialize Persist
-        let persister = StoragePersister::new(redundant_storage_callback);
+        let persister = Arc::new(StoragePersister::new(redundant_storage_callback));
         if !persister.check_monitor_storage_health() {
             warn!("Monitor storage is unhealty");
         }
@@ -72,6 +84,13 @@ impl LightningNode {
         }
 
         // Step 5. Initialize the ChainMonitor
+        let _chain_monitor = ChainMonitor::new(
+            None,
+            tx_broadcaster,
+            logger,
+            fee_estimator,
+            Arc::clone(&persister),
+        );
 
         // Step 6. Initialize the KeysManager
         let keys_manager =
