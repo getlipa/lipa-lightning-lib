@@ -17,8 +17,11 @@ thiserror = "1.0.34"
 tokio = { version = "1.21.1", features = ["rt-multi-thread", "time"] }
 uniffi = "0.20.0"
 
+esplora-client = { git = "https://github.com/bitcoindevkit/rust-esplora-client" }
+
 [dev-dependencies]
-simplelog = "0.12.0"
+bitcoin_hashes = "0.11.0"
+simplelog = { version ="0.12.0", features = ["test"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 oslog = "0.2.0"

@@ -16,12 +16,14 @@ pub struct Handle {
     handle: tokio::runtime::Handle,
 }
 
+#[allow(dead_code)]
 impl AsyncRuntime {
     pub fn new() -> Result<Self, InitializationError> {
         let rt = Builder::new_multi_thread()
             .worker_threads(4)
             .thread_name("3l-async-runtime")
             .enable_time()
+            .enable_io()
             .build()
             .map_err(|e| InitializationError::AsyncRuntime {
                 message: e.to_string(),
