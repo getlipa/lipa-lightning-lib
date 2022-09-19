@@ -6,9 +6,14 @@ use tokio::runtime::{Builder, Runtime};
 use tokio::task::JoinHandle;
 use tokio::time;
 
+#[allow(dead_code)]
 pub struct AsyncRuntime {
     #[allow(dead_code)]
     rt: Runtime,
+}
+
+pub struct Handle {
+    handle: tokio::runtime::Handle,
 }
 
 impl AsyncRuntime {
@@ -25,12 +30,20 @@ impl AsyncRuntime {
     }
 
     #[allow(dead_code)]
+    pub fn handle(&self) -> Handle {
+        let handle = self.rt.handle().clone();
+        Handle { handle }
+    }
+}
+
+#[allow(dead_code)]
+impl Handle {
     pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.rt.spawn(future)
+        self.handle.spawn(future)
     }
 
     #[allow(dead_code)]
@@ -40,7 +53,7 @@ impl AsyncRuntime {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.rt.spawn(async move {
+        self.handle.spawn(async move {
             let mut interval = time::interval(interval);
             interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
             loop {
@@ -56,7 +69,7 @@ impl AsyncRuntime {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.rt.block_on(future)
+        self.handle.block_on(future)
     }
 }
 
@@ -76,10 +89,11 @@ mod test {
     #[test]
     pub fn test_spawn() {
         let rt = AsyncRuntime::new().unwrap();
+        let handle = rt.handle();
         let data = Arc::new(AtomicUsize::new(0));
         let data_in_spawn = Arc::clone(&data);
 
-        let _handle = rt.spawn(async move {
+        let _handle = handle.spawn(async move {
             data_in_spawn.store(1, Ordering::SeqCst);
             sleep(Duration::from_secs(10)).await;
             data_in_spawn.store(2, Ordering::SeqCst);
@@ -94,6 +108,7 @@ mod test {
     #[test]
     pub fn test_spawn_repeating_task() {
         let rt = AsyncRuntime::new().unwrap();
+        let handle = rt.handle();
         let data = Arc::new(AtomicUsize::new(0));
         let data_in_f = Arc::clone(&data);
         let inc = move || {
@@ -103,7 +118,7 @@ mod test {
             }
         };
 
-        let _handle = rt.spawn_repeating_task(Duration::from_millis(1), inc);
+        let _handle = handle.spawn_repeating_task(Duration::from_millis(1), inc);
 
         while data.load(Ordering::SeqCst) < 10 {
             yield_now();
