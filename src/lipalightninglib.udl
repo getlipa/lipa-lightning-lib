@@ -8,6 +8,7 @@ enum Network {
 dictionary Config {
     Network network;
     sequence<u8> seed;
+    string esplora_api_url;
 };
 
 callback interface RedundantStorageCallback {
