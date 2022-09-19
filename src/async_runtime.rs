@@ -10,6 +10,7 @@ pub struct AsyncRuntime {
     rt: Runtime,
 }
 
+#[allow(dead_code)]
 impl AsyncRuntime {
     pub fn new() -> Result<Self, InitializationError> {
         let rt = Builder::new_multi_thread()

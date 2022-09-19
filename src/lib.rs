@@ -26,10 +26,12 @@ use bitcoin::Network;
 use lightning::util::config::UserConfig;
 use log::{info, warn, Level as LogLevel};
 
+#[allow(dead_code)]
 pub struct LightningNode {
     rt: AsyncRuntime,
 }
 
+#[allow(clippy::let_unit_value)]
 impl LightningNode {
     pub fn new(
         config: Config,
