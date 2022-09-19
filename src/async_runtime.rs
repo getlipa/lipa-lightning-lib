@@ -7,6 +7,7 @@ use tokio::task::JoinHandle;
 use tokio::time;
 
 pub struct AsyncRuntime {
+    #[allow(dead_code)]
     rt: Runtime,
 }
 
@@ -23,6 +24,7 @@ impl AsyncRuntime {
         Ok(Self { rt })
     }
 
+    #[allow(dead_code)]
     pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
@@ -31,6 +33,7 @@ impl AsyncRuntime {
         self.rt.spawn(future)
     }
 
+    #[allow(dead_code)]
     pub fn spawn_repeating_task<Func, F>(&self, interval: Duration, func: Func) -> JoinHandle<()>
     where
         Func: Fn() -> F + Send + Sync + 'static,
@@ -47,6 +50,7 @@ impl AsyncRuntime {
         })
     }
 
+    #[allow(dead_code)]
     pub fn block_on<F: Future>(&self, future: F) -> F::Output
     where
         F: Future + Send + 'static,
