@@ -13,6 +13,7 @@ mod event_handler;
 mod logger;
 mod native_logger;
 mod storage_persister;
+mod tx_broadcaster;
 
 use crate::async_runtime::AsyncRuntime;
 use crate::callbacks::RedundantStorageCallback;
@@ -23,14 +24,20 @@ use crate::keys_manager::{generate_secret, init_keys_manager};
 use crate::logger::LightningLogger;
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
+use crate::tx_broadcaster::TxBroadcaster;
 
 use bitcoin::Network;
+use esplora_client::r#async::AsyncClient;
+use esplora_client::Builder;
 use lightning::util::config::UserConfig;
 use log::{info, warn, Level as LogLevel};
+use std::sync::Arc;
 
+#[allow(dead_code)]
 pub struct LightningNode {
     #[allow(dead_code)]
     rt: AsyncRuntime,
+    esplora_client: Arc<AsyncClient>,
 }
 
 impl LightningNode {
@@ -39,6 +46,10 @@ impl LightningNode {
         redundant_storage_callback: Box<dyn RedundantStorageCallback>,
     ) -> Result<Self, InitializationError> {
         let rt = AsyncRuntime::new()?;
+        // TODO: Configure the client.
+        let builder = Builder::new("https://blockstream.info/testnet/api");
+        // TODO: Handle error.
+        let esplora_client = Arc::new(builder.build_async().unwrap());
 
         // Step 1. Initialize the FeeEstimator
 
@@ -46,6 +57,7 @@ impl LightningNode {
         let _logger = LightningLogger {};
 
         // Step 3. Initialize the BroadcasterInterface
+        let _tx_broadcaster = TxBroadcaster::new(Arc::clone(&esplora_client), rt.handle());
 
         // Step 4. Initialize Persist
         let persister = StoragePersister::new(redundant_storage_callback);
@@ -103,7 +115,7 @@ impl LightningNode {
 
         // Step 19. Start Background Processing
 
-        Ok(Self { rt })
+        Ok(Self { rt, esplora_client })
     }
 }
 
