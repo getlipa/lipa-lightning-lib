@@ -8,4 +8,7 @@ pub enum InitializationError {
 
     #[error("Failed to start async runtime: {message}")]
     AsyncRuntime { message: String },
+
+    #[error("Failed to create esplora client: {message}")]
+    EsploraClient { message: String },
 }

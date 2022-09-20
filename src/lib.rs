@@ -29,17 +29,19 @@ use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
 
 use bitcoin::Network;
-use esplora_client::r#async::AsyncClient;
+use esplora_client::r#async::AsyncClient as EsploraClient;
 use esplora_client::Builder;
 use lightning::util::config::UserConfig;
 use log::{info, warn, Level as LogLevel};
 use std::sync::Arc;
 
+static ESPLORA_TIMEOUT_SECS: u64 = 30;
+
 #[allow(dead_code)]
 pub struct LightningNode {
     #[allow(dead_code)]
     rt: AsyncRuntime,
-    esplora_client: Arc<AsyncClient>,
+    esplora_client: Arc<EsploraClient>,
 }
 
 impl LightningNode {
@@ -48,10 +50,16 @@ impl LightningNode {
         redundant_storage_callback: Box<dyn RedundantStorageCallback>,
     ) -> Result<Self, InitializationError> {
         let rt = AsyncRuntime::new()?;
-        // TODO: Configure the client.
-        let builder = Builder::new(&config.esplora_api_url);
-        // TODO: Handle error.
-        let esplora_client = Arc::new(builder.build_async().unwrap());
+
+        let builder = Builder::new(&config.esplora_api_url).timeout(ESPLORA_TIMEOUT_SECS);
+        let esplora_client =
+            Arc::new(
+                builder
+                    .build_async()
+                    .map_err(|e| InitializationError::EsploraClient {
+                        message: e.to_string(),
+                    })?,
+            );
 
         // Step 1. Initialize the FeeEstimator
         let _fee_estimator = FeeEstimator {};
