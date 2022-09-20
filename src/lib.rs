@@ -49,7 +49,7 @@ impl LightningNode {
     ) -> Result<Self, InitializationError> {
         let rt = AsyncRuntime::new()?;
         // TODO: Configure the client.
-        let builder = Builder::new("https://blockstream.info/testnet/api");
+        let builder = Builder::new(&config.esplora_api_url);
         // TODO: Handle error.
         let esplora_client = Arc::new(builder.build_async().unwrap());
 

@@ -25,6 +25,7 @@ fn main() {
     let config = Config {
         network: Network::Regtest,
         seed,
+        esplora_api_url: "http://localhost:30000".to_string(),
     };
     let _node = LightningNode::new(config, storage).unwrap();
 }
