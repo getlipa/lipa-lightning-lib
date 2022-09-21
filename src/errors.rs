@@ -18,3 +18,8 @@ pub enum InitializationError {
     #[error("Failed to add a channel monitor to the chain monitor")]
     ChainMonitorWatchChannel,
 }
+
+#[allow(dead_code)]
+pub(crate) enum ChainSyncError {
+    Other,
+}

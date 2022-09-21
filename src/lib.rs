@@ -9,6 +9,7 @@ pub mod keys_manager;
 pub mod secret;
 
 mod async_runtime;
+mod chain_access;
 mod event_handler;
 mod fee_estimator;
 mod logger;
@@ -28,13 +29,13 @@ use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
 
+use crate::chain_access::LipaChainAccess;
 use bitcoin::Network;
 use esplora_client::r#async::AsyncClient as EsploraClient;
 use esplora_client::Builder;
 use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::InMemorySigner;
-use lightning::chain::Filter;
 use lightning::chain::{BestBlock, Watch};
 use lightning::ln::channelmanager::ChainParameters;
 use lightning::util::config::UserConfig;
@@ -52,7 +53,7 @@ pub struct LightningNode {
 
 type ChainMonitor = LdkChainMonitor<
     InMemorySigner,
-    Box<dyn Filter + Send + Sync>,
+    Arc<LipaChainAccess>,
     Arc<TxBroadcaster>,
     Arc<FeeEstimator>,
     Arc<LightningLogger>,
@@ -94,9 +95,12 @@ impl LightningNode {
             warn!("Object storage is unhealty");
         }
 
+        // Step x. Initialize the Transaction Filter
+        let filter = Arc::new(LipaChainAccess::new(esplora_client.clone()));
+
         // Step 5. Initialize the ChainMonitor
         let chain_monitor = Arc::new(ChainMonitor::new(
-            None,
+            Some(Arc::clone(&filter)),
             Arc::clone(&tx_broadcaster),
             Arc::clone(&logger),
             Arc::clone(&fee_estimator),
@@ -113,10 +117,10 @@ impl LightningNode {
         // Step 7. Read ChannelMonitor state from disk
         let mut channel_monitors = persister.read_channel_monitors(&*keys_manager);
 
-        // TODO: If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
+        // If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
         // on each ChannelMonitor to prepare for chain synchronization in Step 9.
-        for (_, _chain_monitor) in channel_monitors.iter() {
-            // chain_monitor.load_outputs_to_watch(&filter);
+        for (_, channel_monitor) in channel_monitors.iter() {
+            channel_monitor.load_outputs_to_watch(&filter);
         }
 
         // Step 8. Initialize the ChannelManager
