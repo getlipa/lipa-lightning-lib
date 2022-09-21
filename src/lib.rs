@@ -9,6 +9,7 @@ pub mod keys_manager;
 pub mod secret;
 
 mod async_runtime;
+mod chain_access;
 mod event_handler;
 mod fee_estimator;
 mod logger;
@@ -28,6 +29,7 @@ use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
 
+use crate::chain_access::LipaChainAccess;
 use bitcoin::Network;
 use esplora_client::r#async::AsyncClient as EsploraClient;
 use esplora_client::Builder;
@@ -94,6 +96,9 @@ impl LightningNode {
             warn!("Object storage is unhealty");
         }
 
+        // Initialize the Transaction Filter
+        let filter = Arc::new(LipaChainAccess::new(esplora_client.clone()));
+
         // Step 5. Initialize the ChainMonitor
         let chain_monitor = Arc::new(ChainMonitor::new(
             None,
@@ -113,10 +118,10 @@ impl LightningNode {
         // Step 7. Read ChannelMonitor state from disk
         let mut channel_monitors = persister.read_channel_monitors(&*keys_manager);
 
-        // TODO: If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
+        // If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
         // on each ChannelMonitor to prepare for chain synchronization in Step 9.
-        for (_, _chain_monitor) in channel_monitors.iter() {
-            // chain_monitor.load_outputs_to_watch(&filter);
+        for (_, channel_monitor) in channel_monitors.iter() {
+            channel_monitor.load_outputs_to_watch(&filter);
         }
 
         // Step 8. Initialize the ChannelManager

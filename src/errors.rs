@@ -15,3 +15,8 @@ pub enum InitializationError {
     #[error("Failed to read channel monitor backup: {message}")]
     ChannelMonitorBackup { message: String },
 }
+
+#[allow(dead_code)]
+pub(crate) enum ChainSyncError {
+    Other,
+}
