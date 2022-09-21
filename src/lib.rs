@@ -35,11 +35,15 @@ use esplora_client::r#async::AsyncClient as EsploraClient;
 use esplora_client::Builder;
 use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
 use lightning::chain::channelmonitor::ChannelMonitor;
-use lightning::chain::keysinterface::InMemorySigner;
+use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, Recipient};
 use lightning::chain::{BestBlock, Watch};
-use lightning::ln::channelmanager::ChainParameters;
+use lightning::ln::channelmanager::{ChainParameters, SimpleArcChannelManager};
+use lightning::ln::peer_handler::{IgnoringMessageHandler, MessageHandler};
 use lightning::util::config::UserConfig;
+use lightning_net_tokio::SocketDescriptor;
 use log::{info, warn, Level as LogLevel};
+use rand::rngs::OsRng;
+use rand::RngCore;
 use std::sync::Arc;
 
 static ESPLORA_TIMEOUT_SECS: u64 = 30;
@@ -58,6 +62,14 @@ type ChainMonitor = LdkChainMonitor<
     Arc<FeeEstimator>,
     Arc<LightningLogger>,
     Arc<StoragePersister>,
+>;
+
+pub(crate) type PeerManager = lightning::ln::peer_handler::PeerManager<
+    SocketDescriptor,
+    Arc<SimpleArcChannelManager<ChainMonitor, TxBroadcaster, FeeEstimator, LightningLogger>>,
+    IgnoringMessageHandler,
+    Arc<LightningLogger>,
+    IgnoringMessageHandler,
 >;
 
 impl LightningNode {
@@ -134,7 +146,7 @@ impl LightningNode {
         let mut_channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>> =
             channel_monitors.iter_mut().map(|(_, m)| m).collect();
 
-        let (channel_manager_block_hash, _channel_manager) = persister
+        let (channel_manager_block_hash, channel_manager) = persister
             .read_or_init_channel_manager(
                 Arc::clone(&chain_monitor),
                 Arc::clone(&tx_broadcaster),
@@ -145,6 +157,7 @@ impl LightningNode {
                 mobile_node_user_config,
                 chain_params,
             )?;
+        let channel_manager = Arc::new(channel_manager);
         if let Some(_channel_manager_block_hash) = channel_manager_block_hash {
             // TODO: You MUST rescan any blocks along the “reorg path”
             // (ie call block_disconnected() until you get to a common block and
@@ -166,6 +179,22 @@ impl LightningNode {
         let _graph = persister.read_graph();
 
         // Step 12. Initialize the PeerManager
+        let mut ephemeral_bytes = [0; 32];
+        OsRng.try_fill_bytes(&mut ephemeral_bytes).map_err(|e| {
+            InitializationError::SecretGeneration {
+                message: e.to_string(),
+            }
+        })?;
+        let _peer_manager = Arc::new(PeerManager::new(
+            MessageHandler {
+                chan_handler: Arc::clone(&channel_manager),
+                route_handler: IgnoringMessageHandler {},
+            },
+            keys_manager.get_node_secret(Recipient::Node).unwrap(), // unwrap because this never fails
+            &ephemeral_bytes,
+            Arc::clone(&logger),
+            IgnoringMessageHandler {},
+        ));
 
         // Step 13. Initialize Networking
 
