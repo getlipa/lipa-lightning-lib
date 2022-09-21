@@ -136,8 +136,8 @@ mod tests {
         filter.register_output(output.clone());
 
         assert_eq!(filter.queued_txs.lock().unwrap().len(), 0);
-        assert_eq!(filter.queued_outputs.lock().unwrap().len(), 0);
-        assert_eq!(filter.watched_txs.lock().unwrap().len(), 1);
+        assert_eq!(filter.queued_outputs.lock().unwrap().len(), 1);
+        assert_eq!(filter.watched_txs.lock().unwrap().len(), 0);
         assert_eq!(filter.watched_outputs.lock().unwrap().len(), 0);
 
         let filter_output = filter
