@@ -54,7 +54,7 @@ pub struct LightningNode {
 
 type ChainMonitor = LdkChainMonitor<
     InMemorySigner,
-    Box<dyn Filter + Send + Sync>,
+    Arc<dyn Filter + Send + Sync>,
     Arc<TxBroadcaster>,
     Arc<FeeEstimator>,
     Arc<LightningLogger>,
@@ -96,12 +96,12 @@ impl LightningNode {
             warn!("Object storage is unhealty");
         }
 
-        // Initialize the Transaction Filter
+        // Step x. Initialize the Transaction Filter
         let filter = Arc::new(LipaChainAccess::new(esplora_client.clone()));
 
         // Step 5. Initialize the ChainMonitor
         let chain_monitor = Arc::new(ChainMonitor::new(
-            None,
+            Some(filter.clone()),
             Arc::clone(&tx_broadcaster),
             Arc::clone(&logger),
             Arc::clone(&fee_estimator),
