@@ -37,7 +37,6 @@ use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::InMemorySigner;
 use lightning::chain::BestBlock;
-use lightning::chain::Filter;
 use lightning::ln::channelmanager::ChainParameters;
 use lightning::util::config::UserConfig;
 use log::{info, warn, Level as LogLevel};
@@ -54,7 +53,7 @@ pub struct LightningNode {
 
 type ChainMonitor = LdkChainMonitor<
     InMemorySigner,
-    Arc<dyn Filter + Send + Sync>,
+    Arc<LipaChainAccess>,
     Arc<TxBroadcaster>,
     Arc<FeeEstimator>,
     Arc<LightningLogger>,
@@ -101,7 +100,7 @@ impl LightningNode {
 
         // Step 5. Initialize the ChainMonitor
         let chain_monitor = Arc::new(ChainMonitor::new(
-            Some(filter.clone()),
+            Some(Arc::clone(&filter)),
             Arc::clone(&tx_broadcaster),
             Arc::clone(&logger),
             Arc::clone(&fee_estimator),
