@@ -66,11 +66,7 @@ impl Handle {
     }
 
     #[allow(dead_code)]
-    pub fn block_on<F: Future>(&self, future: F) -> F::Output
-    where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static,
-    {
+    pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         self.handle.block_on(future)
     }
 }
@@ -104,6 +100,22 @@ mod test {
         while data.load(Ordering::SeqCst) == 0 {
             yield_now();
         }
+        assert_eq!(data.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    pub fn test_block_on() {
+        let rt = AsyncRuntime::new().unwrap();
+        let handle = rt.handle();
+        let data = Arc::new(AtomicUsize::new(0));
+        let data_in_spawn = Arc::clone(&data);
+
+        let result = handle.block_on(async move {
+            sleep(Duration::from_millis(1)).await;
+            data_in_spawn.store(1, Ordering::SeqCst);
+            100
+        });
+        assert_eq!(result, 100);
         assert_eq!(data.load(Ordering::SeqCst), 1);
     }
 
