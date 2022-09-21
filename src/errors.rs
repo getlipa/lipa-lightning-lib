@@ -11,4 +11,7 @@ pub enum InitializationError {
 
     #[error("Failed to create esplora client: {message}")]
     EsploraClient { message: String },
+
+    #[error("Failed to read channel monitor backup: {message}")]
+    ChannelMonitorBackup { message: String },
 }

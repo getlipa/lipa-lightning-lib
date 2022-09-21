@@ -25,6 +25,7 @@ enum InitializationError {
     "SecretGeneration",
     "AsyncRuntime",
     "EsploraClient",
+    "ChannelMonitorBackup",
 };
 
 interface LightningNode {

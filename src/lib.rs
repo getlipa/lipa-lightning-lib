@@ -31,6 +31,12 @@ use crate::tx_broadcaster::TxBroadcaster;
 use bitcoin::Network;
 use esplora_client::r#async::AsyncClient as EsploraClient;
 use esplora_client::Builder;
+use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
+use lightning::chain::channelmonitor::ChannelMonitor;
+use lightning::chain::keysinterface::InMemorySigner;
+use lightning::chain::BestBlock;
+use lightning::chain::Filter;
+use lightning::ln::channelmanager::ChainParameters;
 use lightning::util::config::UserConfig;
 use log::{info, warn, Level as LogLevel};
 use std::sync::Arc;
@@ -43,6 +49,15 @@ pub struct LightningNode {
     rt: AsyncRuntime,
     esplora_client: Arc<EsploraClient>,
 }
+
+type ChainMonitor = LdkChainMonitor<
+    InMemorySigner,
+    Box<dyn Filter + Send + Sync>,
+    Arc<TxBroadcaster>,
+    Arc<FeeEstimator>,
+    Arc<LightningLogger>,
+    Arc<StoragePersister>,
+>;
 
 impl LightningNode {
     pub fn new(
@@ -62,16 +77,16 @@ impl LightningNode {
             );
 
         // Step 1. Initialize the FeeEstimator
-        let _fee_estimator = FeeEstimator {};
+        let fee_estimator = Arc::new(FeeEstimator {});
 
         // Step 2. Initialize the Logger
-        let _logger = LightningLogger {};
+        let logger = Arc::new(LightningLogger {});
 
         // Step 3. Initialize the BroadcasterInterface
-        let _tx_broadcaster = TxBroadcaster::new(Arc::clone(&esplora_client), rt.handle());
+        let tx_broadcaster = Arc::new(TxBroadcaster::new(Arc::clone(&esplora_client), rt.handle()));
 
         // Step 4. Initialize Persist
-        let persister = StoragePersister::new(redundant_storage_callback);
+        let persister = Arc::new(StoragePersister::new(redundant_storage_callback));
         if !persister.check_monitor_storage_health() {
             warn!("Monitor storage is unhealty");
         }
@@ -80,15 +95,23 @@ impl LightningNode {
         }
 
         // Step 5. Initialize the ChainMonitor
+        let chain_monitor = Arc::new(ChainMonitor::new(
+            None,
+            Arc::clone(&tx_broadcaster),
+            Arc::clone(&logger),
+            Arc::clone(&fee_estimator),
+            Arc::clone(&persister),
+        ));
 
         // Step 6. Initialize the KeysManager
-        let keys_manager =
-            init_keys_manager(&config.seed).map_err(|e| InitializationError::KeysManager {
+        let keys_manager = Arc::new(init_keys_manager(&config.seed).map_err(|e| {
+            InitializationError::KeysManager {
                 message: e.to_string(),
-            })?;
+            }
+        })?);
 
         // Step 7. Read ChannelMonitor state from disk
-        let channel_monitors = persister.read_channel_monitors(&keys_manager);
+        let mut channel_monitors = persister.read_channel_monitors(&*keys_manager);
 
         // TODO: If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
         // on each ChannelMonitor to prepare for chain synchronization in Step 9.
@@ -98,7 +121,32 @@ impl LightningNode {
 
         // Step 8. Initialize the ChannelManager
         let mobile_node_user_config = build_mobile_node_user_config();
-        let _channel_manager = persister.read_channel_manager(mobile_node_user_config);
+        // TODO: Init properly.
+        let best_block = BestBlock::from_genesis(config.network);
+        let chain_params = ChainParameters {
+            network: config.network,
+            best_block,
+        };
+        let mut_channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>> =
+            channel_monitors.iter_mut().map(|(_, m)| m).collect();
+
+        let (channel_manager_block_hash, _channel_manager) = persister
+            .read_or_init_channel_manager(
+                Arc::clone(&chain_monitor),
+                Arc::clone(&tx_broadcaster),
+                Arc::clone(&keys_manager),
+                Arc::clone(&fee_estimator),
+                Arc::clone(&logger),
+                mut_channel_monitors,
+                mobile_node_user_config,
+                chain_params,
+            )?;
+        if let Some(_channel_manager_block_hash) = channel_manager_block_hash {
+            // TODO: You MUST rescan any blocks along the “reorg path”
+            // (ie call block_disconnected() until you get to a common block and
+            // then call block_connected() to step towards your best block) upon
+            // deserialization before using the object!
+        }
 
         // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
 

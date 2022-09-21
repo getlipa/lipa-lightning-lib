@@ -1,34 +1,35 @@
 use crate::callbacks::RedundantStorageCallback;
+use crate::errors::InitializationError;
 
 use bitcoin::hash_types::BlockHash;
 use bitcoin::hashes::hex::ToHex;
 use lightning::chain;
 use lightning::chain::chaininterface::{BroadcasterInterface, FeeEstimator};
-use lightning::chain::chainmonitor::MonitorUpdateId;
-use lightning::chain::chainmonitor::Persist;
-use lightning::chain::channelmonitor::ChannelMonitor;
-use lightning::chain::channelmonitor::ChannelMonitorUpdate;
-use lightning::chain::keysinterface::{KeysInterface, Sign};
+use lightning::chain::chainmonitor::{MonitorUpdateId, Persist};
+use lightning::chain::channelmonitor::{ChannelMonitor, ChannelMonitorUpdate};
+use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Sign};
 use lightning::chain::transaction::OutPoint;
-use lightning::chain::ChannelMonitorUpdateErr;
-use lightning::ln::channelmanager::ChannelManager;
+use lightning::chain::{ChannelMonitorUpdateErr, Watch};
+use lightning::ln::channelmanager::{
+    ChainParameters, ChannelManagerReadArgs, SimpleArcChannelManager,
+};
 use lightning::routing::gossip::NetworkGraph;
 use lightning::routing::scoring::WriteableScore;
 use lightning::util::config::UserConfig;
 use lightning::util::logger::Logger;
 use lightning::util::persist::Persister;
-use lightning::util::ser::ReadableArgs;
-use lightning::util::ser::Writeable;
+use lightning::util::ser::{ReadableArgs, Writeable};
 use log::error;
 use std::io;
-use std::io::Cursor;
-use std::io::Error;
+use std::io::{Cursor, Error};
 use std::ops::Deref;
+use std::sync::Arc;
 
 static MONITORS_BUCKET: &str = "monitors";
 static OBJECTS_BUCKET: &str = "objects";
 
 static MANAGER_KEY: &str = "manager";
+static MONITOR_KEY: &str = "monitor";
 static GRAPH_KEY: &str = "graph";
 static SCORER_KEY: &str = "scorer";
 
@@ -75,8 +76,59 @@ impl StoragePersister {
         result
     }
 
-    pub fn read_channel_manager(&self, _user_config: UserConfig) {
-        // TODO: Implement
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    pub fn read_or_init_channel_manager<M, T, F, L>(
+        &self,
+        chain_monitor: Arc<M>,
+        broadcaster: Arc<T>,
+        keys_manager: Arc<KeysManager>,
+        fee_estimator: Arc<F>,
+        logger: Arc<L>,
+        channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>>,
+        user_config: UserConfig,
+        chain_params: ChainParameters,
+    ) -> Result<(Option<BlockHash>, SimpleArcChannelManager<M, T, F, L>), InitializationError>
+    where
+        M: Watch<InMemorySigner>,
+        T: BroadcasterInterface,
+        F: FeeEstimator,
+        L: Logger,
+    {
+        if self
+            .storage
+            .object_exists(OBJECTS_BUCKET.to_string(), MONITOR_KEY.to_string())
+        {
+            let data = self
+                .storage
+                .get_object(OBJECTS_BUCKET.to_string(), MONITOR_KEY.to_string());
+            let read_args = ChannelManagerReadArgs::new(
+                keys_manager,
+                fee_estimator,
+                chain_monitor,
+                broadcaster,
+                logger,
+                user_config,
+                channel_monitors,
+            );
+            let mut buffer = Cursor::new(&data);
+            let (block_hash, channel_manager) =
+                <(BlockHash, SimpleArcChannelManager<M, T, F, L>)>::read(&mut buffer, read_args)
+                    .map_err(|e| InitializationError::ChannelMonitorBackup {
+                        message: e.to_string(),
+                    })?;
+            Ok((Some(block_hash), channel_manager))
+        } else {
+            let channel_manager = SimpleArcChannelManager::new(
+                fee_estimator,
+                chain_monitor,
+                broadcaster,
+                logger,
+                keys_manager,
+                user_config,
+                chain_params,
+            );
+            Ok((None, channel_manager))
+        }
     }
 
     pub fn read_graph(&self) {
@@ -138,7 +190,7 @@ where
 {
     fn persist_manager(
         &self,
-        channel_manager: &ChannelManager<Signer, M, T, K, F, L>,
+        channel_manager: &lightning::ln::channelmanager::ChannelManager<Signer, M, T, K, F, L>,
     ) -> Result<(), Error> {
         self.persist_object(
             OBJECTS_BUCKET.to_string(),
