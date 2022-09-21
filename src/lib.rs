@@ -9,6 +9,7 @@ pub mod keys_manager;
 pub mod secret;
 
 mod async_runtime;
+mod background_processor;
 mod chain_access;
 mod event_handler;
 mod fee_estimator;
@@ -18,6 +19,7 @@ mod storage_persister;
 mod tx_broadcaster;
 
 use crate::async_runtime::AsyncRuntime;
+use crate::background_processor::BackgroundProcessor;
 use crate::callbacks::RedundantStorageCallback;
 use crate::chain_access::LipaChainAccess;
 use crate::config::Config;
@@ -30,6 +32,7 @@ use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
 
+use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::Network;
 use esplora_client::blocking::BlockingClient as EsploraClient;
 use esplora_client::Builder;
@@ -39,10 +42,13 @@ use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager
 use lightning::chain::{BestBlock, Watch};
 use lightning::ln::channelmanager::{ChainParameters, SimpleArcChannelManager};
 use lightning::ln::peer_handler::IgnoringMessageHandler;
+use lightning::routing::gossip::NetworkGraph;
+use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringParameters};
 use lightning::util::config::UserConfig;
 use lightning_net_tokio::SocketDescriptor;
+use lightning_rapid_gossip_sync::RapidGossipSync;
 use log::{info, warn, Level as LogLevel};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 static ESPLORA_TIMEOUT_SECS: u64 = 30;
 
@@ -178,30 +184,47 @@ impl LightningNode {
 
         // Step 11: Optional: Initialize the NetGraphMsgHandler
         let _graph = persister.read_graph();
+        let genesis = genesis_block(config.network).header.block_hash();
+        let graph = Arc::new(NetworkGraph::new(genesis, Arc::clone(&logger)));
+        let rapid_gossip = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
 
         // Step 12. Initialize the PeerManager
-        let _peer_manager = init_peer_manager(
+        let peer_manager = Arc::new(init_peer_manager(
             Arc::clone(&channel_manager),
             &keys_manager,
             Arc::clone(&logger),
-        );
+        )?);
 
         // Step 13. Initialize Networking
 
         // Step 14. Keep LDK Up-to-date with Chain Info
 
         // Step 15. Initialize an EventHandler
-        let _event_handler = LipaEventHandler {};
+        let event_handler = Arc::new(LipaEventHandler {});
 
         // Step 16. Initialize the ProbabilisticScorer
         let _scorer = persister.read_scorer();
-
+        let scorer = Arc::new(Mutex::new(ProbabilisticScorer::new(
+            ProbabilisticScoringParameters::default(),
+            Arc::clone(&graph),
+            Arc::clone(&logger),
+        )));
         // Step 17. Initialize the InvoicePayer
 
         // Step 18. Initialize the Persister
         // Persister trait already implemented and instantiated ("persister")
 
         // Step 19. Start Background Processing
+        let _background_processor = BackgroundProcessor::start(
+            persister,
+            event_handler,
+            chain_monitor,
+            channel_manager,
+            rapid_gossip,
+            peer_manager,
+            logger,
+            scorer,
+        );
 
         Ok(Self { rt, esplora_client })
     }
