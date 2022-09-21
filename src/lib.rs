@@ -151,8 +151,7 @@ impl LightningNode {
         // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
 
         // Step 10. Give ChannelMonitors to ChainMonitor
-        for item in channel_monitors {
-            let channel_monitor = item.1;
+        for (_, channel_monitor) in channel_monitors {
             let funding_outpoint = channel_monitor.get_funding_txo().0;
             chain_monitor
                 .watch_channel(funding_outpoint, channel_monitor)
