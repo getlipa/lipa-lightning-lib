@@ -14,6 +14,9 @@ pub enum InitializationError {
 
     #[error("Failed to read channel monitor backup: {message}")]
     ChannelMonitorBackup { message: String },
+
+    #[error("Failed to add a channel monitor to the chain monitor")]
+    ChainMonitorWatchChannel,
 }
 
 #[allow(dead_code)]

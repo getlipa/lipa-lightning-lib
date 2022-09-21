@@ -26,6 +26,7 @@ enum InitializationError {
     "AsyncRuntime",
     "EsploraClient",
     "ChannelMonitorBackup",
+    "ChainMonitorWatchChannel",
 };
 
 interface LightningNode {

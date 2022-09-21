@@ -36,7 +36,7 @@ use esplora_client::Builder;
 use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::InMemorySigner;
-use lightning::chain::BestBlock;
+use lightning::chain::{BestBlock, Watch};
 use lightning::ln::channelmanager::ChainParameters;
 use lightning::util::config::UserConfig;
 use log::{info, warn, Level as LogLevel};
@@ -155,6 +155,12 @@ impl LightningNode {
         // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
 
         // Step 10. Give ChannelMonitors to ChainMonitor
+        for (_, channel_monitor) in channel_monitors {
+            let funding_outpoint = channel_monitor.get_funding_txo().0;
+            chain_monitor
+                .watch_channel(funding_outpoint, channel_monitor)
+                .map_err(|_e| InitializationError::ChainMonitorWatchChannel)?
+        }
 
         // Step 11: Optional: Initialize the NetGraphMsgHandler
         let _graph = persister.read_graph();
