@@ -1,5 +1,6 @@
 use uniffi::ffi::foreigncallbacks::UnexpectedUniFFICallbackError;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, thiserror::Error)]
 pub enum InitializationError {
     #[error("Failed to start async runtime: {message}")]
@@ -7,6 +8,9 @@ pub enum InitializationError {
 
     #[error("Failed to add a channel monitor to the chain monitor")]
     ChainMonitorWatchChannel,
+
+    #[error("Failed to sync the chain to the chain tip")]
+    ChainSync(#[from] esplora_client::Error),
 
     #[error("Failed to read channel monitor backup: {message}")]
     ChannelMonitorBackup { message: String },
@@ -27,11 +31,11 @@ pub enum InitializationError {
     SecretGeneration { message: String },
 }
 
-#[allow(dead_code)]
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
-    #[error("Failed to synchronize the blockchain: {message}")]
-    ChainSync { message: String },
+    #[error("Failed to synchronize the blockchain")]
+    ChainSync(#[from] esplora_client::Error),
 
     #[error("Address could not be parsed: {message}")]
     InvalidAddress { message: String },

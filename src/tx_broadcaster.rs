@@ -1,15 +1,15 @@
+use crate::EsploraClient;
 use bitcoin::blockdata::transaction::Transaction;
-use esplora_client::blocking::BlockingClient;
 use lightning::chain::chaininterface::BroadcasterInterface;
 use log::error;
 use std::sync::Arc;
 
 pub(crate) struct TxBroadcaster {
-    esplora_client: Arc<BlockingClient>,
+    esplora_client: Arc<EsploraClient>,
 }
 
 impl TxBroadcaster {
-    pub fn new(esplora_client: Arc<BlockingClient>) -> Self {
+    pub fn new(esplora_client: Arc<EsploraClient>) -> Self {
         Self { esplora_client }
     }
 }
@@ -32,7 +32,6 @@ mod test {
 
     use bitcoin::consensus::deserialize;
     use bitcoin_hashes::hex::FromHex;
-    use esplora_client::Builder;
 
     #[test]
     // Run the test `cargo test test_broadcast_failure -- --nocapture` to see logs.
@@ -41,8 +40,8 @@ mod test {
 
         // 9 is a discard port
         // See https://en.wikipedia.org/wiki/Port_(computer_networking)
-        let builder = Builder::new("http://localhost:9");
-        let esplora_client = Arc::new(builder.build_blocking().unwrap());
+        let esplora_url = "http://localhost:9";
+        let esplora_client = Arc::new(EsploraClient::new(esplora_url).unwrap());
         let broadcaster = TxBroadcaster::new(esplora_client);
 
         let tx_bytes = Vec::from_hex(

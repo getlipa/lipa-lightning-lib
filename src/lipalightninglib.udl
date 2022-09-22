@@ -29,6 +29,7 @@ callback interface RedundantStorageCallback {
 enum InitializationError {
     "AsyncRuntime",
     "ChainMonitorWatchChannel",
+    "ChainSync",
     "ChannelMonitorBackup",
     "EsploraClient",
     "KeysManager",
