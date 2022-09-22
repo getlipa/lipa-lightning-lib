@@ -1,12 +1,12 @@
 use crate::errors::ChainSyncError;
 use bitcoin::{Script, Transaction, Txid};
-use esplora_client::AsyncClient;
+use esplora_client::blocking::BlockingClient;
 use lightning::chain::{Confirm, Filter, WatchedOutput};
 use std::sync::{Arc, Mutex};
 
 #[allow(dead_code)]
 pub(crate) struct LipaChainAccess {
-    esplora_client: Arc<AsyncClient>,
+    esplora_client: Arc<BlockingClient>,
     queued_txs: Mutex<Vec<(Txid, Script)>>,
     watched_txs: Mutex<Vec<(Txid, Script)>>,
     queued_outputs: Mutex<Vec<WatchedOutput>>,
@@ -14,7 +14,7 @@ pub(crate) struct LipaChainAccess {
 }
 
 impl LipaChainAccess {
-    pub(crate) fn new(esplora_client: Arc<AsyncClient>) -> Self {
+    pub(crate) fn new(esplora_client: Arc<BlockingClient>) -> Self {
         let queued_txs = Mutex::new(Vec::new());
         let watched_txs = Mutex::new(Vec::new());
         let queued_outputs = Mutex::new(Vec::new());
@@ -73,7 +73,7 @@ mod tests {
         // 9 is a discard port
         // See https://en.wikipedia.org/wiki/Port_(computer_networking)
         let builder = Builder::new("http://localhost:9");
-        let esplora_client = Arc::new(builder.build_async().unwrap());
+        let esplora_client = Arc::new(builder.build_blocking().unwrap());
         LipaChainAccess::new(esplora_client.clone())
     }
 

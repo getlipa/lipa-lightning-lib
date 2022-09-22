@@ -1,36 +1,26 @@
-use crate::async_runtime::Handle;
-
 use bitcoin::blockdata::transaction::Transaction;
-use esplora_client::r#async::AsyncClient;
+use esplora_client::blocking::BlockingClient;
 use lightning::chain::chaininterface::BroadcasterInterface;
 use log::error;
 use std::sync::Arc;
 
 pub(crate) struct TxBroadcaster {
-    esplora_client: Arc<AsyncClient>,
-    handle: Handle,
+    esplora_client: Arc<BlockingClient>,
 }
 
 impl TxBroadcaster {
-    pub fn new(esplora_client: Arc<AsyncClient>, handle: Handle) -> Self {
-        Self {
-            esplora_client,
-            handle,
-        }
+    pub fn new(esplora_client: Arc<BlockingClient>) -> Self {
+        Self { esplora_client }
     }
 }
 
 impl BroadcasterInterface for TxBroadcaster {
     fn broadcast_transaction(&self, tx: &Transaction) {
-        let esplora_client = Arc::clone(&self.esplora_client);
         let tx = tx.clone();
         let txid = tx.txid();
-        let result = self
-            .handle
-            .block_on(async move { esplora_client.broadcast(&tx).await });
 
         // TODO: Better handle errors. Should we retry?
-        if let Err(e) = result {
+        if let Err(e) = self.esplora_client.broadcast(&tx) {
             error!("Error on broadcasting txid: {} message: {}", txid, e);
         }
     }
@@ -39,8 +29,6 @@ impl BroadcasterInterface for TxBroadcaster {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    use crate::async_runtime::AsyncRuntime;
 
     use bitcoin::consensus::deserialize;
     use bitcoin_hashes::hex::FromHex;
@@ -52,12 +40,11 @@ mod test {
     fn test_broadcast_failure() {
         simplelog::TestLogger::init(log::LevelFilter::Error, simplelog::Config::default()).unwrap();
 
-        let handle = AsyncRuntime::new().unwrap().handle();
         // 9 is a discard port
         // See https://en.wikipedia.org/wiki/Port_(computer_networking)
         let builder = Builder::new("http://localhost:9");
-        let esplora_client = Arc::new(builder.build_async().unwrap());
-        let broadcaster = TxBroadcaster::new(esplora_client, handle);
+        let esplora_client = Arc::new(builder.build_blocking().unwrap());
+        let broadcaster = TxBroadcaster::new(esplora_client);
 
         let tx_bytes = Vec::from_hex(
             "02000000000101595895ea20179de87052b4046dfe6fd515860505d6511a9004cf12a1f93cac7c01000000\
