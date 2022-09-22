@@ -21,12 +21,12 @@ callback interface RedundantStorageCallback {
 
 [Error]
 enum InitializationError {
+    "AsyncRuntime",
+    "ChainMonitorWatchChannel",
+    "ChannelMonitorBackup",
+    "EsploraClient",
     "KeysManager",
     "SecretGeneration",
-    "AsyncRuntime",
-    "EsploraClient",
-    "ChannelMonitorBackup",
-    "ChainMonitorWatchChannel",
 };
 
 interface LightningNode {
