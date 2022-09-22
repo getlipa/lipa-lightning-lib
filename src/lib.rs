@@ -19,26 +19,28 @@ mod tx_broadcaster;
 
 use crate::async_runtime::AsyncRuntime;
 use crate::callbacks::RedundantStorageCallback;
+use crate::chain_access::LipaChainAccess;
 use crate::config::Config;
 use crate::errors::InitializationError;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
-use crate::keys_manager::{generate_secret, init_keys_manager};
+use crate::keys_manager::{generate_random_bytes, generate_secret, init_keys_manager};
 use crate::logger::LightningLogger;
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
 
-use crate::chain_access::LipaChainAccess;
 use bitcoin::Network;
 use esplora_client::r#async::AsyncClient as EsploraClient;
 use esplora_client::Builder;
 use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
 use lightning::chain::channelmonitor::ChannelMonitor;
-use lightning::chain::keysinterface::InMemorySigner;
+use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Recipient};
 use lightning::chain::{BestBlock, Watch};
-use lightning::ln::channelmanager::ChainParameters;
+use lightning::ln::channelmanager::{ChainParameters, SimpleArcChannelManager};
+use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::util::config::UserConfig;
+use lightning_net_tokio::SocketDescriptor;
 use log::{info, warn, Level as LogLevel};
 use std::sync::Arc;
 
@@ -58,6 +60,17 @@ type ChainMonitor = LdkChainMonitor<
     Arc<FeeEstimator>,
     Arc<LightningLogger>,
     Arc<StoragePersister>,
+>;
+
+type ChannelManager =
+    SimpleArcChannelManager<ChainMonitor, TxBroadcaster, FeeEstimator, LightningLogger>;
+
+pub(crate) type PeerManager = lightning::ln::peer_handler::PeerManager<
+    SocketDescriptor,
+    Arc<ChannelManager>,
+    IgnoringMessageHandler,
+    Arc<LightningLogger>,
+    IgnoringMessageHandler,
 >;
 
 impl LightningNode {
@@ -96,7 +109,7 @@ impl LightningNode {
         }
 
         // Step x. Initialize the Transaction Filter
-        let filter = Arc::new(LipaChainAccess::new(esplora_client.clone()));
+        let filter = Arc::new(LipaChainAccess::new(Arc::clone(&esplora_client)));
 
         // Step 5. Initialize the ChainMonitor
         let chain_monitor = Arc::new(ChainMonitor::new(
@@ -134,7 +147,7 @@ impl LightningNode {
         let mut_channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>> =
             channel_monitors.iter_mut().map(|(_, m)| m).collect();
 
-        let (channel_manager_block_hash, _channel_manager) = persister
+        let (channel_manager_block_hash, channel_manager) = persister
             .read_or_init_channel_manager(
                 Arc::clone(&chain_monitor),
                 Arc::clone(&tx_broadcaster),
@@ -145,6 +158,7 @@ impl LightningNode {
                 mobile_node_user_config,
                 chain_params,
             )?;
+        let channel_manager = Arc::new(channel_manager);
         if let Some(_channel_manager_block_hash) = channel_manager_block_hash {
             // TODO: You MUST rescan any blocks along the “reorg path”
             // (ie call block_disconnected() until you get to a common block and
@@ -166,6 +180,11 @@ impl LightningNode {
         let _graph = persister.read_graph();
 
         // Step 12. Initialize the PeerManager
+        let _peer_manager = init_peer_manager(
+            Arc::clone(&channel_manager),
+            &keys_manager,
+            Arc::clone(&logger),
+        );
 
         // Step 13. Initialize Networking
 
@@ -206,6 +225,25 @@ fn build_mobile_node_user_config() -> UserConfig {
         .channel_handshake_limits
         .force_announced_channel_preference = true;
     user_config
+}
+
+fn init_peer_manager(
+    channel_manager: Arc<ChannelManager>,
+    keys_manager: &KeysManager,
+    logger: Arc<LightningLogger>,
+) -> Result<PeerManager, InitializationError> {
+    let ephemeral_bytes = generate_random_bytes()?;
+    let our_node_secret = keys_manager
+        .get_node_secret(Recipient::Node)
+        .map_err(|()| InitializationError::Logic {
+            message: "Get node secret for node recipient failed".to_string(),
+        })?;
+    Ok(PeerManager::new_channel_only(
+        channel_manager,
+        our_node_secret,
+        &ephemeral_bytes,
+        logger,
+    ))
 }
 
 pub fn init_native_logger_once(min_level: LogLevel) {
