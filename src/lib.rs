@@ -24,7 +24,7 @@ use crate::config::Config;
 use crate::errors::InitializationError;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
-use crate::keys_manager::{generate_32_random_bytes, generate_secret, init_keys_manager};
+use crate::keys_manager::{generate_random_bytes, generate_secret, init_keys_manager};
 use crate::logger::LightningLogger;
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
@@ -35,10 +35,10 @@ use esplora_client::r#async::AsyncClient as EsploraClient;
 use esplora_client::Builder;
 use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
 use lightning::chain::channelmonitor::ChannelMonitor;
-use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, Recipient};
+use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Recipient};
 use lightning::chain::{BestBlock, Watch};
 use lightning::ln::channelmanager::{ChainParameters, SimpleArcChannelManager};
-use lightning::ln::peer_handler::{IgnoringMessageHandler, MessageHandler};
+use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::util::config::UserConfig;
 use lightning_net_tokio::SocketDescriptor;
 use log::{info, warn, Level as LogLevel};
@@ -62,9 +62,12 @@ type ChainMonitor = LdkChainMonitor<
     Arc<StoragePersister>,
 >;
 
+type ChannelManager =
+    SimpleArcChannelManager<ChainMonitor, TxBroadcaster, FeeEstimator, LightningLogger>;
+
 pub(crate) type PeerManager = lightning::ln::peer_handler::PeerManager<
     SocketDescriptor,
-    Arc<SimpleArcChannelManager<ChainMonitor, TxBroadcaster, FeeEstimator, LightningLogger>>,
+    Arc<ChannelManager>,
     IgnoringMessageHandler,
     Arc<LightningLogger>,
     IgnoringMessageHandler,
@@ -177,17 +180,11 @@ impl LightningNode {
         let _graph = persister.read_graph();
 
         // Step 12. Initialize the PeerManager
-        let ephemeral_bytes = generate_32_random_bytes()?;
-        let _peer_manager = Arc::new(PeerManager::new(
-            MessageHandler {
-                chan_handler: Arc::clone(&channel_manager),
-                route_handler: IgnoringMessageHandler {},
-            },
-            keys_manager.get_node_secret(Recipient::Node).unwrap(), // unwrap because this never fails
-            &ephemeral_bytes,
+        let _peer_manager = init_peer_manager(
+            Arc::clone(&channel_manager),
+            &keys_manager,
             Arc::clone(&logger),
-            IgnoringMessageHandler {},
-        ));
+        );
 
         // Step 13. Initialize Networking
 
@@ -228,6 +225,25 @@ fn build_mobile_node_user_config() -> UserConfig {
         .channel_handshake_limits
         .force_announced_channel_preference = true;
     user_config
+}
+
+fn init_peer_manager(
+    channel_manager: Arc<ChannelManager>,
+    keys_manager: &KeysManager,
+    logger: Arc<LightningLogger>,
+) -> Result<PeerManager, InitializationError> {
+    let ephemeral_bytes = generate_random_bytes()?;
+    let our_node_secret = keys_manager
+        .get_node_secret(Recipient::Node)
+        .map_err(|()| InitializationError::SecretGeneration {
+            message: "Get node secret for node recipient failed".to_string(),
+        })?;
+    Ok(PeerManager::new_channel_only(
+        channel_manager,
+        our_node_secret,
+        &ephemeral_bytes,
+        logger,
+    ))
 }
 
 pub fn init_native_logger_once(min_level: LogLevel) {

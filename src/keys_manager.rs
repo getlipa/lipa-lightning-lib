@@ -19,7 +19,7 @@ pub fn init_keys_manager(seed: &Vec<u8>) -> Result<KeysManager, &str> {
     Ok(KeysManager::new(&array, now.as_secs(), now.subsec_nanos()))
 }
 
-pub fn generate_32_random_bytes() -> Result<[u8; 32], InitializationError> {
+pub fn generate_random_bytes() -> Result<[u8; 32], InitializationError> {
     let mut bytes = [0u8; 32];
     OsRng
         .try_fill_bytes(&mut bytes)
@@ -30,7 +30,7 @@ pub fn generate_32_random_bytes() -> Result<[u8; 32], InitializationError> {
 }
 
 pub fn generate_secret(passphrase: String) -> Result<Secret, InitializationError> {
-    let entropy = generate_32_random_bytes()?;
+    let entropy = generate_random_bytes()?;
     let mnemonic = Mnemonic::from_entropy(&entropy).unwrap();
     let seed = mnemonic.to_seed(passphrase.clone())[0..32].to_vec();
     let mnemonic: Vec<String> = mnemonic.word_iter().map(|s| s.to_string()).collect();
