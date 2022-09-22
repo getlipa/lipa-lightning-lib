@@ -13,6 +13,7 @@ mod async_runtime;
 mod chain_access;
 mod confirm;
 mod encryption;
+mod esplora_client;
 mod event_handler;
 mod fee_estimator;
 mod filter;
@@ -28,6 +29,7 @@ use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, NodeAddress};
 use crate::confirm::ConfirmWrapper;
 use crate::errors::{InitializationError, LspError, RuntimeError};
+use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;
@@ -42,8 +44,6 @@ use crate::types::{ChainMonitor, ChannelManager, PeerManager};
 
 use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::Network;
-use esplora_client::blocking::BlockingClient as EsploraClient;
-use esplora_client::Builder;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Recipient};
 use lightning::chain::{BestBlock, Watch};
@@ -59,8 +59,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
-
-static ESPLORA_TIMEOUT_SECS: u64 = 30;
 
 #[allow(dead_code)]
 pub struct LightningNode {
@@ -79,16 +77,9 @@ impl LightningNode {
         redundant_storage_callback: Box<dyn RedundantStorageCallback>,
     ) -> Result<Self, InitializationError> {
         let rt = AsyncRuntime::new()?;
+        let genesis_hash = genesis_block(config.network).header.block_hash();
 
-        let builder = Builder::new(&config.esplora_api_url).timeout(ESPLORA_TIMEOUT_SECS);
-        let esplora_client =
-            Arc::new(
-                builder
-                    .build_blocking()
-                    .map_err(|e| InitializationError::EsploraClient {
-                        message: e.to_string(),
-                    })?,
-            );
+        let esplora_client = Arc::new(EsploraClient::new(&config.esplora_api_url.clone())?);
 
         // Step 1. Initialize the FeeEstimator
         let fee_estimator = Arc::new(FeeEstimator {});
@@ -159,17 +150,15 @@ impl LightningNode {
                 chain_params,
             )?;
         let channel_manager = Arc::new(channel_manager);
-        if let Some(_channel_manager_block_hash) = channel_manager_block_hash {
-            // TODO: You MUST rescan any blocks along the “reorg path”
-            // (ie call block_disconnected() until you get to a common block and
-            // then call block_connected() to step towards your best block) upon
-            // deserialization before using the object!
-        }
 
         // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
         let confirm = ConfirmWrapper::new(vec![&*channel_manager, &*chain_monitor]);
-        let chain_access = Arc::new(LipaChainAccess::new(Arc::clone(&esplora_client), filter));
-        chain_access.sync(&confirm).unwrap();
+        let chain_access = Arc::new(Mutex::new(LipaChainAccess::new(
+            Arc::clone(&esplora_client),
+            filter,
+            channel_manager_block_hash.unwrap_or(genesis_hash),
+        )));
+        chain_access.lock().unwrap().sync(&confirm)?;
 
         // Step 10. Give ChannelMonitors to ChainMonitor
         for (_, channel_monitor) in channel_monitors {
@@ -181,8 +170,7 @@ impl LightningNode {
 
         // Step 11: Optional: Initialize the NetGraphMsgHandler
         let _graph = persister.read_graph();
-        let genesis = genesis_block(config.network).header.block_hash();
-        let graph = Arc::new(NetworkGraph::new(genesis, Arc::clone(&logger)));
+        let graph = Arc::new(NetworkGraph::new(genesis_hash, Arc::clone(&logger)));
         let rapid_gossip = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
 
         // Step 12. Initialize the PeerManager
@@ -222,7 +210,11 @@ impl LightningNode {
                         &*chain_monitor_regular_sync,
                     ]);
                     let now = Instant::now();
-                    match chain_access_regular_sync.sync(&confirm_regular_sync) {
+                    match chain_access_regular_sync
+                        .lock()
+                        .unwrap()
+                        .sync(&confirm_regular_sync)
+                    {
                         Ok(_) => debug!(
                             "Sync to blockchain finished in {}ms",
                             now.elapsed().as_millis()
@@ -255,7 +247,7 @@ impl LightningNode {
         //     such failures in StoragePersister::persist_manager()
         //  2. on persisting scorer or network graph on exit, but we do not care
         // The other strategy to handle errors and restart the process will be
-        // more difficult but will not provide any benifits.
+        // more difficult but will not provide any benefits.
         let background_processor = BackgroundProcessor::start(
             persister,
             event_handler,
