@@ -9,7 +9,6 @@ pub mod keys_manager;
 pub mod secret;
 
 mod async_runtime;
-mod background_processor;
 mod chain_access;
 mod event_handler;
 mod fee_estimator;
@@ -19,7 +18,6 @@ mod storage_persister;
 mod tx_broadcaster;
 
 use crate::async_runtime::AsyncRuntime;
-use crate::background_processor::BackgroundProcessor;
 use crate::callbacks::RedundantStorageCallback;
 use crate::chain_access::LipaChainAccess;
 use crate::config::Config;
@@ -45,6 +43,7 @@ use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::routing::gossip::NetworkGraph;
 use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringParameters};
 use lightning::util::config::UserConfig;
+use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_net_tokio::SocketDescriptor;
 use lightning_rapid_gossip_sync::RapidGossipSync;
 use log::{info, warn, Level as LogLevel};
@@ -57,6 +56,7 @@ pub struct LightningNode {
     #[allow(dead_code)]
     rt: AsyncRuntime,
     esplora_client: Arc<EsploraClient>,
+    background_processor: BackgroundProcessor,
 }
 
 type ChainMonitor = LdkChainMonitor<
@@ -215,18 +215,25 @@ impl LightningNode {
         // Persister trait already implemented and instantiated ("persister")
 
         // Step 19. Start Background Processing
-        let _background_processor = BackgroundProcessor::start(
+        // This assumes that the background processor will never fail. It may fail if it tries to
+        // persist some object and the persistence layer fails.
+        // TODO: make sure persistence calls made by the background processor don't fail
+        let background_processor = BackgroundProcessor::start(
             persister,
             event_handler,
             chain_monitor,
             channel_manager,
-            rapid_gossip,
+            GossipSync::rapid(rapid_gossip),
             peer_manager,
             logger,
-            scorer,
+            Some(scorer),
         );
 
-        Ok(Self { rt, esplora_client })
+        Ok(Self {
+            rt,
+            esplora_client,
+            background_processor,
+        })
     }
 }
 
