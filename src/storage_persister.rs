@@ -192,11 +192,21 @@ where
         &self,
         channel_manager: &lightning::ln::channelmanager::ChannelManager<Signer, M, T, K, F, L>,
     ) -> Result<(), Error> {
-        self.persist_object(
-            OBJECTS_BUCKET.to_string(),
-            MANAGER_KEY.to_string(),
-            channel_manager.encode(),
-        )
+        if self
+            .persist_object(
+                OBJECTS_BUCKET.to_string(),
+                MANAGER_KEY.to_string(),
+                channel_manager.encode(),
+            )
+            .is_err()
+        {
+            // We ignore errors on persisting the channel manager hoping that it
+            // will succeed next time and meanwhile the user will not try to
+            // recover the wallet from an outdated backup (what will result in
+            // force close for some new channels).
+            error!("Error on persisting channel manager. Ignoring.");
+        }
+        Ok(())
     }
 
     fn persist_graph(&self, network_graph: &NetworkGraph<L>) -> Result<(), Error> {
