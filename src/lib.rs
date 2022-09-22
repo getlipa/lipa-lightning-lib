@@ -31,7 +31,7 @@ use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
 
 use bitcoin::Network;
-use esplora_client::r#async::AsyncClient as EsploraClient;
+use esplora_client::blocking::BlockingClient as EsploraClient;
 use esplora_client::Builder;
 use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
 use lightning::chain::channelmonitor::ChannelMonitor;
@@ -84,7 +84,7 @@ impl LightningNode {
         let esplora_client =
             Arc::new(
                 builder
-                    .build_async()
+                    .build_blocking()
                     .map_err(|e| InitializationError::EsploraClient {
                         message: e.to_string(),
                     })?,
@@ -97,7 +97,7 @@ impl LightningNode {
         let logger = Arc::new(LightningLogger {});
 
         // Step 3. Initialize the BroadcasterInterface
-        let tx_broadcaster = Arc::new(TxBroadcaster::new(Arc::clone(&esplora_client), rt.handle()));
+        let tx_broadcaster = Arc::new(TxBroadcaster::new(Arc::clone(&esplora_client)));
 
         // Step 4. Initialize Persist
         let persister = Arc::new(StoragePersister::new(redundant_storage_callback));
