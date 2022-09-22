@@ -235,7 +235,7 @@ fn init_peer_manager(
     let ephemeral_bytes = generate_random_bytes()?;
     let our_node_secret = keys_manager
         .get_node_secret(Recipient::Node)
-        .map_err(|()| InitializationError::SecretGeneration {
+        .map_err(|()| InitializationError::Logic {
             message: "Get node secret for node recipient failed".to_string(),
         })?;
     Ok(PeerManager::new_channel_only(
