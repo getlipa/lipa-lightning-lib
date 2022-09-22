@@ -216,12 +216,13 @@ impl LightningNode {
         // Persister trait already implemented and instantiated ("persister")
 
         // Step 19. Start Background Processing
-        // This assumes that the background processor will never fail.
-        // It may fail:
+        // The fact that we do not restart the background process assumes that
+        // it will never fail. However it may fail:
         //  1. on persisting channel manager, but it never fails since we ignore
         //     such failures in StoragePersister::persist_manager()
-        //  2. on persisting channel manager, scorer, or network graph on exit,
-        //     but we do not care
+        //  2. on persisting scorer or network graph on exit, but we do not care
+        // The other strategy to handle errors and restart the process will be
+        // more difficult but will not provide any benifits.
         let background_processor = BackgroundProcessor::start(
             persister,
             event_handler,
