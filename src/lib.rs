@@ -19,17 +19,17 @@ mod tx_broadcaster;
 
 use crate::async_runtime::AsyncRuntime;
 use crate::callbacks::RedundantStorageCallback;
+use crate::chain_access::LipaChainAccess;
 use crate::config::Config;
 use crate::errors::InitializationError;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
-use crate::keys_manager::{generate_secret, init_keys_manager};
+use crate::keys_manager::{generate_32_random_bytes, generate_secret, init_keys_manager};
 use crate::logger::LightningLogger;
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
 
-use crate::chain_access::LipaChainAccess;
 use bitcoin::Network;
 use esplora_client::r#async::AsyncClient as EsploraClient;
 use esplora_client::Builder;
@@ -42,8 +42,6 @@ use lightning::ln::peer_handler::{IgnoringMessageHandler, MessageHandler};
 use lightning::util::config::UserConfig;
 use lightning_net_tokio::SocketDescriptor;
 use log::{info, warn, Level as LogLevel};
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::sync::Arc;
 
 static ESPLORA_TIMEOUT_SECS: u64 = 30;
@@ -108,7 +106,7 @@ impl LightningNode {
         }
 
         // Step x. Initialize the Transaction Filter
-        let filter = Arc::new(LipaChainAccess::new(esplora_client.clone()));
+        let filter = Arc::new(LipaChainAccess::new(Arc::clone(&esplora_client)));
 
         // Step 5. Initialize the ChainMonitor
         let chain_monitor = Arc::new(ChainMonitor::new(
@@ -179,12 +177,7 @@ impl LightningNode {
         let _graph = persister.read_graph();
 
         // Step 12. Initialize the PeerManager
-        let mut ephemeral_bytes = [0; 32];
-        OsRng.try_fill_bytes(&mut ephemeral_bytes).map_err(|e| {
-            InitializationError::SecretGeneration {
-                message: e.to_string(),
-            }
-        })?;
+        let ephemeral_bytes = generate_32_random_bytes()?;
         let _peer_manager = Arc::new(PeerManager::new(
             MessageHandler {
                 chan_handler: Arc::clone(&channel_manager),
