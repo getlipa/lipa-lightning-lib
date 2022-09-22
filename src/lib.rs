@@ -209,15 +209,19 @@ impl LightningNode {
             Arc::clone(&graph),
             Arc::clone(&logger),
         )));
+
         // Step 17. Initialize the InvoicePayer
 
         // Step 18. Initialize the Persister
         // Persister trait already implemented and instantiated ("persister")
 
         // Step 19. Start Background Processing
-        // This assumes that the background processor will never fail. It may fail if it tries to
-        // persist some object and the persistence layer fails.
-        // TODO: make sure persistence calls made by the background processor don't fail
+        // This assumes that the background processor will never fail.
+        // It may fail:
+        //  1. on persisting channel manager, but it never fails since we ignore
+        //     such failures in StoragePersister::persist_manager()
+        //  2. on persisting channel manager, scorer, or network graph on exit,
+        //     but we do not care
         let background_processor = BackgroundProcessor::start(
             persister,
             event_handler,

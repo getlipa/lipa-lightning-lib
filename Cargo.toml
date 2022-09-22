@@ -11,8 +11,8 @@ name = "uniffi_lipalightninglib"
 bdk = { version = "0.22.0", features = ["keys-bip39"] }
 bitcoin = "0.28.1"
 lightning = { version = "0.0.110", features = ["max_level_trace"] }
-lightning-net-tokio = "0.0.110"
 lightning-background-processor = "0.0.110"
+lightning-net-tokio = "0.0.110"
 lightning-rapid-gossip-sync = "0.0.110"
 log = "0.4.17"
 rand = "0.8.5"
