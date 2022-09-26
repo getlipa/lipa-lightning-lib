@@ -58,6 +58,7 @@ pub struct LightningNode {
     rt: AsyncRuntime,
     esplora_client: Arc<EsploraClient>,
     background_processor: BackgroundProcessor,
+    peer_manager: Arc<PeerManager>,
 }
 
 type ChainMonitor = LdkChainMonitor<
@@ -230,7 +231,7 @@ impl LightningNode {
             chain_monitor,
             channel_manager,
             GossipSync::rapid(rapid_gossip),
-            peer_manager,
+            Arc::clone(&peer_manager),
             logger,
             Some(scorer),
         );
@@ -239,6 +240,7 @@ impl LightningNode {
             rt,
             esplora_client,
             background_processor,
+            peer_manager,
         })
     }
 }
