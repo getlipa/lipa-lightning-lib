@@ -4,6 +4,9 @@ use bitcoin::secp256k1::PublicKey;
 use log::debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::task::Poll;
+use std::time::Duration;
+use tokio::time::sleep;
 
 pub fn connect_to_peer(
     rt: &AsyncRuntime,
@@ -20,12 +23,12 @@ pub fn connect_to_peer(
             loop {
                 // Make sure the connection is still established.
                 match futures::poll!(&mut connection_closed_future) {
-                    std::task::Poll::Ready(_) => {
+                    Poll::Ready(_) => {
                         return Err(RuntimeError::PeerConnection {
                             message: "Peer disconnected before handshake completed".to_string(),
                         });
                     }
-                    std::task::Poll::Pending => {
+                    Poll::Pending => {
                         debug!("Peer connection to {} still pending", pubkey);
                     }
                 }
@@ -37,7 +40,7 @@ pub fn connect_to_peer(
                     .find(|id| **id == pubkey)
                 {
                     Some(_) => return Ok(()),
-                    None => tokio::time::sleep(std::time::Duration::from_millis(10)).await,
+                    None => sleep(Duration::from_millis(10)).await,
                 }
             }
         }
