@@ -5,7 +5,7 @@ use lightning::chain::{Confirm, Filter, WatchedOutput};
 use std::sync::{Arc, Mutex};
 
 #[allow(dead_code)]
-pub(crate) struct LipaChainAccess {
+pub struct LipaChainAccess {
     esplora_client: Arc<BlockingClient>,
     queued_txs: Mutex<Vec<(Txid, Script)>>,
     watched_txs: Mutex<Vec<(Txid, Script)>>,

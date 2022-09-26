@@ -16,15 +16,6 @@ static BASE_DIR: &str = ".ldk";
 fn main() {
     dotenv::from_path("examples/node/.env").ok();
 
-    println!(
-        "LSP_NODE_PUB_KEY: {}",
-        env::var("LSP_NODE_PUB_KEY").unwrap()
-    );
-    println!(
-        "LSP_NODE_ADDRESS: {}",
-        env::var("LSP_NODE_ADDRESS").unwrap()
-    );
-
     // Create dir for node data persistence.
     fs::create_dir_all(BASE_DIR).unwrap();
 
@@ -38,7 +29,13 @@ fn main() {
         seed,
         esplora_api_url: "http://localhost:30000".to_string(),
     };
-    let _node = LightningNode::new(config, storage).unwrap();
+    let node = LightningNode::new(config, storage).unwrap();
+
+    node.connect_to_peer(
+        env::var("LSP_NODE_PUB_KEY").unwrap(),
+        env::var("LSP_NODE_ADDRESS").unwrap(),
+    )
+    .unwrap();
 }
 
 fn init_logger() {
