@@ -21,7 +21,7 @@ use crate::async_runtime::AsyncRuntime;
 use crate::callbacks::RedundantStorageCallback;
 use crate::chain_access::LipaChainAccess;
 use crate::config::Config;
-use crate::errors::InitializationError;
+use crate::errors::{InitializationError, RuntimeError};
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::keys_manager::{generate_random_bytes, generate_secret, init_keys_manager};

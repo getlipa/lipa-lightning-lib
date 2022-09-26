@@ -1,4 +1,4 @@
-use crate::errors::ChainSyncError;
+use crate::errors::RuntimeError;
 use bitcoin::{Script, Transaction, Txid};
 use esplora_client::blocking::BlockingClient;
 use lightning::chain::{Confirm, Filter, WatchedOutput};
@@ -32,7 +32,7 @@ impl LipaChainAccess {
     pub(crate) fn sync(
         &self,
         _confirmables: Vec<&(dyn Confirm + Sync)>,
-    ) -> Result<(), ChainSyncError> {
+    ) -> Result<(), RuntimeError> {
         // TODO: sync with the chain
         // this will include moving queued txs and outputs to watched ones
 

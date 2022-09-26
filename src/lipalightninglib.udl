@@ -30,6 +30,14 @@ enum InitializationError {
     "SecretGeneration",
 };
 
+[Error]
+enum RuntimeError {
+    "ChainSync",
+    "InvalidAddress",
+    "InvalidPubKey",
+    "PeerConnection",
+};
+
 interface LightningNode {
     [Throws=InitializationError]
     constructor(Config config, RedundantStorageCallback redundant_storage_callback);
