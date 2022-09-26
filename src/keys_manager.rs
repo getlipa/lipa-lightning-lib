@@ -31,7 +31,10 @@ pub fn generate_random_bytes() -> Result<[u8; 32], InitializationError> {
 
 pub fn generate_secret(passphrase: String) -> Result<Secret, InitializationError> {
     let entropy = generate_random_bytes()?;
-    let mnemonic = Mnemonic::from_entropy(&entropy).unwrap();
+    let mnemonic =
+        Mnemonic::from_entropy(&entropy).map_err(|e| InitializationError::SecretGeneration {
+            message: e.to_string(),
+        })?;
     let seed = mnemonic.to_seed(passphrase.clone())[0..32].to_vec();
     let mnemonic: Vec<String> = mnemonic.word_iter().map(|s| s.to_string()).collect();
 

@@ -26,6 +26,7 @@ use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::keys_manager::{generate_random_bytes, generate_secret, init_keys_manager};
 use crate::logger::LightningLogger;
+use crate::native_logger::init_native_logger_once;
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
@@ -46,7 +47,7 @@ use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_net_tokio::SocketDescriptor;
 use lightning_rapid_gossip_sync::RapidGossipSync;
-use log::{info, warn, Level as LogLevel};
+use log::{warn, Level as LogLevel};
 use std::sync::{Arc, Mutex};
 
 static ESPLORA_TIMEOUT_SECS: u64 = 30;
@@ -279,11 +280,6 @@ fn init_peer_manager(
         &ephemeral_bytes,
         logger,
     ))
-}
-
-pub fn init_native_logger_once(min_level: LogLevel) {
-    native_logger::init_native_logger_once(min_level);
-    info!("Logger initialized");
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
