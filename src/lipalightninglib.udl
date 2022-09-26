@@ -9,6 +9,12 @@ dictionary Config {
     Network network;
     sequence<u8> seed;
     string esplora_api_url;
+    LspConfig lsp;
+};
+
+dictionary LspConfig {
+    string pub_key;
+    string address;
 };
 
 callback interface RedundantStorageCallback {
@@ -40,9 +46,7 @@ enum RuntimeError {
 
 interface LightningNode {
     [Throws=InitializationError]
-    constructor(Config config, RedundantStorageCallback redundant_storage_callback);
-    [Throws=RuntimeError]
-    void connect_to_peer(string public_key, string address);
+    constructor([ByRef] Config config, RedundantStorageCallback redundant_storage_callback);
 };
 
 enum LogLevel {

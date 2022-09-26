@@ -21,7 +21,7 @@ mod tx_broadcaster;
 use crate::async_runtime::AsyncRuntime;
 use crate::callbacks::RedundantStorageCallback;
 use crate::chain_access::LipaChainAccess;
-use crate::config::Config;
+use crate::config::{Config, LspConfig};
 use crate::errors::{InitializationError, RuntimeError};
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
@@ -87,7 +87,7 @@ pub(crate) type PeerManager = lightning::ln::peer_handler::PeerManager<
 
 impl LightningNode {
     pub fn new(
-        config: Config,
+        config: &Config,
         redundant_storage_callback: Box<dyn RedundantStorageCallback>,
     ) -> Result<Self, InitializationError> {
         let rt = AsyncRuntime::new()?;
@@ -248,13 +248,16 @@ impl LightningNode {
         })
     }
 
-    pub fn connect_to_peer(&self, pubkey: String, addr: String) -> Result<(), RuntimeError> {
-        let pubkey = PublicKey::from_str(&pubkey).map_err(|e| RuntimeError::InvalidPubKey {
-            message: e.to_string(),
-        })?;
+    pub fn connect_to_peer(&self, lsp_config: &LspConfig) -> Result<(), RuntimeError> {
+        let pubkey =
+            PublicKey::from_str(&lsp_config.pub_key).map_err(|e| RuntimeError::InvalidPubKey {
+                message: e.to_string(),
+            })?;
 
-        let addr = SocketAddr::from_str(&addr).map_err(|e| RuntimeError::InvalidAddress {
-            message: e.to_string(),
+        let addr = SocketAddr::from_str(&lsp_config.address).map_err(|e| {
+            RuntimeError::InvalidAddress {
+                message: e.to_string(),
+            }
         })?;
 
         p2p_networking::connect_to_peer(&self.rt, Arc::clone(&self.peer_manager), pubkey, addr)
