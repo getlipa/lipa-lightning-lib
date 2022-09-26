@@ -3,7 +3,6 @@ mod file_storage;
 use file_storage::FileStorage;
 
 use bitcoin::Network;
-use dotenv::dotenv;
 use log::info;
 use std::env;
 use std::fs;
