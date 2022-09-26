@@ -6,6 +6,7 @@ pub mod callbacks;
 pub mod config;
 pub mod errors;
 pub mod keys_manager;
+pub mod p2p_networking;
 pub mod secret;
 
 mod async_runtime;
@@ -29,8 +30,10 @@ use crate::logger::LightningLogger;
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
+use std::net::SocketAddr;
 
 use bitcoin::blockdata::constants::genesis_block;
+use bitcoin::secp256k1::PublicKey;
 use bitcoin::Network;
 use esplora_client::blocking::BlockingClient as EsploraClient;
 use esplora_client::Builder;
@@ -47,6 +50,7 @@ use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_net_tokio::SocketDescriptor;
 use lightning_rapid_gossip_sync::RapidGossipSync;
 use log::{info, warn, Level as LogLevel};
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 static ESPLORA_TIMEOUT_SECS: u64 = 30;
@@ -241,6 +245,18 @@ impl LightningNode {
             background_processor,
             peer_manager,
         })
+    }
+
+    pub fn connect_to_peer(&self, pubkey: String, addr: String) -> Result<(), RuntimeError> {
+        let pubkey = PublicKey::from_str(&pubkey).map_err(|e| RuntimeError::InvalidPubKey {
+            message: e.to_string(),
+        })?;
+
+        let addr = SocketAddr::from_str(&addr).map_err(|e| RuntimeError::InvalidAddress {
+            message: e.to_string(),
+        })?;
+
+        p2p_networking::connect_to_peer(&self.rt, Arc::clone(&self.peer_manager), pubkey, addr)
     }
 }
 
