@@ -24,6 +24,7 @@ esplora-client = { git = "https://github.com/bitcoindevkit/rust-esplora-client",
 
 [dev-dependencies]
 bitcoin_hashes = "0.11.0"
+dotenv = "0.15.0"
 simplelog = { version ="0.12.0", features = ["test"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]

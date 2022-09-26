@@ -3,8 +3,9 @@ mod file_storage;
 use file_storage::FileStorage;
 
 use bitcoin::Network;
+use dotenv::dotenv;
 use log::info;
-use simplelog;
+use std::env;
 use std::fs;
 use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
 use uniffi_lipalightninglib::config::Config;
@@ -14,6 +15,17 @@ use uniffi_lipalightninglib::LightningNode;
 static BASE_DIR: &str = ".ldk";
 
 fn main() {
+    dotenv::from_path("examples/node/.env").ok();
+
+    println!(
+        "LSP_NODE_PUB_KEY: {}",
+        env::var("LSP_NODE_PUB_KEY").unwrap()
+    );
+    println!(
+        "LSP_NODE_ADDRESS: {}",
+        env::var("LSP_NODE_ADDRESS").unwrap()
+    );
+
     // Create dir for node data persistence.
     fs::create_dir_all(BASE_DIR).unwrap();
 
