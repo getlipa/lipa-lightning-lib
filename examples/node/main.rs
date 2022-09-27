@@ -34,9 +34,7 @@ fn main() {
         },
     };
 
-    let node = LightningNode::new(&config, storage).unwrap();
-
-    node.connect_to_peer(&config.lsp_node).unwrap();
+    let _node = LightningNode::new(&config, storage).unwrap();
 }
 
 fn init_logger() {

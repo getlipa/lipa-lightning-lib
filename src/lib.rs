@@ -31,10 +31,9 @@ use crate::native_logger::init_native_logger_once;
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
-use std::net::SocketAddr;
 
+use crate::p2p_networking::P2pConnections;
 use bitcoin::blockdata::constants::genesis_block;
-use bitcoin::secp256k1::PublicKey;
 use bitcoin::Network;
 use esplora_client::blocking::BlockingClient as EsploraClient;
 use esplora_client::Builder;
@@ -51,7 +50,6 @@ use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_net_tokio::SocketDescriptor;
 use lightning_rapid_gossip_sync::RapidGossipSync;
 use log::{warn, Level as LogLevel};
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 static ESPLORA_TIMEOUT_SECS: u64 = 30;
@@ -202,6 +200,14 @@ impl LightningNode {
         )?);
 
         // Step 13. Initialize Networking
+        let peer_mgr = Arc::clone(&peer_manager);
+        rt.handle().block_on(async move {
+            P2pConnections::connect_peer(&config.lsp_node, Arc::clone(&peer_mgr))
+                .await
+                .map_err(|e| InitializationError::PeerConnection {
+                    message: e.to_string(),
+                })
+        })?;
 
         // Step 14. Keep LDK Up-to-date with Chain Info
 
@@ -246,21 +252,6 @@ impl LightningNode {
             background_processor,
             peer_manager,
         })
-    }
-
-    pub fn connect_to_peer(&self, lsp_config: &NodeAddress) -> Result<(), RuntimeError> {
-        let pubkey =
-            PublicKey::from_str(&lsp_config.pub_key).map_err(|e| RuntimeError::InvalidPubKey {
-                message: e.to_string(),
-            })?;
-
-        let addr = SocketAddr::from_str(&lsp_config.address).map_err(|e| {
-            RuntimeError::InvalidAddress {
-                message: e.to_string(),
-            }
-        })?;
-
-        p2p_networking::connect_to_peer(&self.rt, Arc::clone(&self.peer_manager), pubkey, addr)
     }
 }
 

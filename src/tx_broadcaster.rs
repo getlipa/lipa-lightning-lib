@@ -4,7 +4,7 @@ use lightning::chain::chaininterface::BroadcasterInterface;
 use log::error;
 use std::sync::Arc;
 
-pub struct TxBroadcaster {
+pub(crate) struct TxBroadcaster {
     esplora_client: Arc<BlockingClient>,
 }
 
