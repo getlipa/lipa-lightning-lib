@@ -200,9 +200,10 @@ impl LightningNode {
         )?);
 
         // Step 13. Initialize Networking
-        let peer_mgr = Arc::clone(&peer_manager);
+        let peer_manager_clone = Arc::clone(&peer_manager);
+
         rt.handle().block_on(async move {
-            P2pConnections::connect_peer(&config.lsp_node, Arc::clone(&peer_mgr))
+            P2pConnections::connect_peer(&config.lsp_node, Arc::clone(&peer_manager_clone))
                 .await
                 .map_err(|e| InitializationError::PeerConnection {
                     message: e.to_string(),
