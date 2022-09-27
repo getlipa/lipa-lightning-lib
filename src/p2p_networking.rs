@@ -64,8 +64,7 @@ impl P2pConnections {
         peer_manager
             .get_peer_node_ids()
             .iter()
-            .find(|id| *id == &peer.pub_key)
-            .is_some()
+            .any(|id| *id == peer.pub_key)
     }
 }
 
