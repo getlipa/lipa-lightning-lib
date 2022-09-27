@@ -33,6 +33,7 @@ enum InitializationError {
     "EsploraClient",
     "KeysManager",
     "Logic",
+    "PeerConnection",
     "SecretGeneration",
 };
 
