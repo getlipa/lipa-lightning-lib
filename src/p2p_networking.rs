@@ -18,6 +18,11 @@ impl P2pConnections {
     ) -> Result<(), RuntimeError> {
         let peer = LnPeer::try_from(peer)?;
 
+        if Self::is_connected(&peer, Arc::clone(&peer_manager)) {
+            debug!("Peer {} is already connected", peer.pub_key);
+            return Ok(());
+        }
+
         let result = lightning_net_tokio::connect_outbound(
             Arc::clone(&peer_manager),
             peer.pub_key,
@@ -41,13 +46,11 @@ impl P2pConnections {
                 }
 
                 // Wait for the handshake to complete.
-                match peer_manager
-                    .get_peer_node_ids()
-                    .iter()
-                    .find(|id| **id == peer.pub_key)
-                {
-                    Some(_) => return Ok(()),
-                    None => sleep(Duration::from_millis(10)).await,
+                if Self::is_connected(&peer, Arc::clone(&peer_manager)) {
+                    debug!("Peer connection to {} established", peer.pub_key);
+                    return Ok(());
+                } else {
+                    sleep(Duration::from_millis(10)).await;
                 }
             }
         }
@@ -55,6 +58,14 @@ impl P2pConnections {
         Err(RuntimeError::PeerConnection {
             message: format!("Failed to connect to peer {}", peer.pub_key),
         })
+    }
+
+    fn is_connected(peer: &LnPeer, peer_manager: Arc<PeerManager>) -> bool {
+        peer_manager
+            .get_peer_node_ids()
+            .iter()
+            .find(|id| *id == &peer.pub_key)
+            .is_some()
     }
 }
 
