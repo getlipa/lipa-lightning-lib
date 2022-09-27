@@ -21,7 +21,7 @@ mod tx_broadcaster;
 use crate::async_runtime::AsyncRuntime;
 use crate::callbacks::RedundantStorageCallback;
 use crate::chain_access::LipaChainAccess;
-use crate::config::{Config, LspConfig};
+use crate::config::{Config, NodeAddress};
 use crate::errors::{InitializationError, RuntimeError};
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
@@ -248,7 +248,7 @@ impl LightningNode {
         })
     }
 
-    pub fn connect_to_peer(&self, lsp_config: &LspConfig) -> Result<(), RuntimeError> {
+    pub fn connect_to_peer(&self, lsp_config: &NodeAddress) -> Result<(), RuntimeError> {
         let pubkey =
             PublicKey::from_str(&lsp_config.pub_key).map_err(|e| RuntimeError::InvalidPubKey {
                 message: e.to_string(),

@@ -9,10 +9,10 @@ dictionary Config {
     Network network;
     sequence<u8> seed;
     string esplora_api_url;
-    LspConfig lsp;
+    NodeAddress lsp_node;
 };
 
-dictionary LspConfig {
+dictionary NodeAddress {
     string pub_key;
     string address;
 };

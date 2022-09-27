@@ -7,7 +7,7 @@ use log::info;
 use std::env;
 use std::fs;
 use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
-use uniffi_lipalightninglib::config::{Config, LspConfig};
+use uniffi_lipalightninglib::config::{Config, NodeAddress};
 use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
 
@@ -28,7 +28,7 @@ fn main() {
         network: Network::Regtest,
         seed,
         esplora_api_url: "http://localhost:30000".to_string(),
-        lsp: LspConfig {
+        lsp_node: NodeAddress {
             pub_key: env::var("LSP_NODE_PUB_KEY").unwrap(),
             address: env::var("LSP_NODE_ADDRESS").unwrap(),
         },
@@ -36,7 +36,7 @@ fn main() {
 
     let node = LightningNode::new(&config, storage).unwrap();
 
-    node.connect_to_peer(&config.lsp).unwrap();
+    node.connect_to_peer(&config.lsp_node).unwrap();
 }
 
 fn init_logger() {

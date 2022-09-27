@@ -11,10 +11,10 @@ pub struct Config {
     pub network: Network,
     pub seed: Vec<u8>,
     pub esplora_api_url: String,
-    pub lsp: LspConfig,
+    pub lsp_node: NodeAddress,
 }
 
-pub struct LspConfig {
+pub struct NodeAddress {
     pub pub_key: String,
     pub address: String,
 }
