@@ -258,6 +258,7 @@ impl LightningNode {
 
 impl Drop for LightningNode {
     fn drop(&mut self) {
+        // TODO: Stop reconnecting to peers
         self.peer_manager.disconnect_all_peers();
 
         // The background processor implements the drop trait itself.
