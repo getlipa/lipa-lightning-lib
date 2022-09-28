@@ -18,11 +18,25 @@ pub enum InitializationError {
     #[error("Logic error: {message}")]
     Logic { message: String },
 
+    #[error("Could not connect to peer: {message}")]
+    PeerConnection { message: String },
+
     #[error("Failed to generate random entropy: {message}")]
     SecretGeneration { message: String },
 }
 
 #[allow(dead_code)]
-pub(crate) enum ChainSyncError {
-    Other,
+#[derive(Debug, thiserror::Error)]
+pub enum RuntimeError {
+    #[error("Failed to synchronize the blockchain: {message}")]
+    ChainSync { message: String },
+
+    #[error("Address could not be parsed: {message}")]
+    InvalidAddress { message: String },
+
+    #[error("Pub key could not be parsed: {message}")]
+    InvalidPubKey { message: String },
+
+    #[error("Could not connect to peer: {message}")]
+    PeerConnection { message: String },
 }

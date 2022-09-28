@@ -1,7 +1,7 @@
 use lightning::util::logger::{Level, Logger, Record};
 use log::{log, log_enabled};
 
-pub(crate) struct LightningLogger;
+pub struct LightningLogger;
 
 impl Logger for LightningLogger {
     fn log(&self, record: &Record) {

@@ -7,7 +7,7 @@ use log::info;
 use std::env;
 use std::fs;
 use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
-use uniffi_lipalightninglib::config::Config;
+use uniffi_lipalightninglib::config::{Config, NodeAddress};
 use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
 
@@ -15,15 +15,6 @@ static BASE_DIR: &str = ".ldk";
 
 fn main() {
     dotenv::from_path("examples/node/.env").ok();
-
-    println!(
-        "LSP_NODE_PUB_KEY: {}",
-        env::var("LSP_NODE_PUB_KEY").unwrap()
-    );
-    println!(
-        "LSP_NODE_ADDRESS: {}",
-        env::var("LSP_NODE_ADDRESS").unwrap()
-    );
 
     // Create dir for node data persistence.
     fs::create_dir_all(BASE_DIR).unwrap();
@@ -37,8 +28,13 @@ fn main() {
         network: Network::Regtest,
         seed,
         esplora_api_url: "http://localhost:30000".to_string(),
+        lsp_node: NodeAddress {
+            pub_key: env::var("LSP_NODE_PUB_KEY").unwrap(),
+            address: env::var("LSP_NODE_ADDRESS").unwrap(),
+        },
     };
-    let _node = LightningNode::new(config, storage).unwrap();
+
+    let _node = LightningNode::new(&config, storage).unwrap();
 }
 
 fn init_logger() {

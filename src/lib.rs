@@ -6,6 +6,7 @@ pub mod callbacks;
 pub mod config;
 pub mod errors;
 pub mod keys_manager;
+pub mod p2p_networking;
 pub mod secret;
 
 mod async_runtime;
@@ -20,8 +21,8 @@ mod tx_broadcaster;
 use crate::async_runtime::AsyncRuntime;
 use crate::callbacks::RedundantStorageCallback;
 use crate::chain_access::LipaChainAccess;
-use crate::config::Config;
-use crate::errors::InitializationError;
+use crate::config::{Config, NodeAddress};
+use crate::errors::{InitializationError, RuntimeError};
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::keys_manager::{generate_random_bytes, generate_secret, init_keys_manager};
@@ -31,6 +32,7 @@ use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
 
+use crate::p2p_networking::P2pConnections;
 use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::Network;
 use esplora_client::blocking::BlockingClient as EsploraClient;
@@ -58,6 +60,7 @@ pub struct LightningNode {
     rt: AsyncRuntime,
     esplora_client: Arc<EsploraClient>,
     background_processor: BackgroundProcessor,
+    peer_manager: Arc<PeerManager>,
 }
 
 type ChainMonitor = LdkChainMonitor<
@@ -82,7 +85,7 @@ pub(crate) type PeerManager = lightning::ln::peer_handler::PeerManager<
 
 impl LightningNode {
     pub fn new(
-        config: Config,
+        config: &Config,
         redundant_storage_callback: Box<dyn RedundantStorageCallback>,
     ) -> Result<Self, InitializationError> {
         let rt = AsyncRuntime::new()?;
@@ -197,6 +200,15 @@ impl LightningNode {
         )?);
 
         // Step 13. Initialize Networking
+        let peer_manager_clone = Arc::clone(&peer_manager);
+
+        rt.handle().block_on(async move {
+            P2pConnections::connect_peer(&config.lsp_node, Arc::clone(&peer_manager_clone))
+                .await
+                .map_err(|e| InitializationError::PeerConnection {
+                    message: e.to_string(),
+                })
+        })?;
 
         // Step 14. Keep LDK Up-to-date with Chain Info
 
@@ -230,7 +242,7 @@ impl LightningNode {
             chain_monitor,
             channel_manager,
             GossipSync::rapid(rapid_gossip),
-            peer_manager,
+            Arc::clone(&peer_manager),
             logger,
             Some(scorer),
         );
@@ -239,6 +251,7 @@ impl LightningNode {
             rt,
             esplora_client,
             background_processor,
+            peer_manager,
         })
     }
 }
