@@ -256,6 +256,15 @@ impl LightningNode {
     }
 }
 
+impl Drop for LightningNode {
+    fn drop(&mut self) {
+        self.peer_manager.disconnect_all_peers();
+
+        // The background processor implements the drop trait itself.
+        // It therefore doesn't have to be stopped manually.
+    }
+}
+
 #[allow(clippy::field_reassign_with_default)]
 fn build_mobile_node_user_config() -> UserConfig {
     let mut user_config = UserConfig::default();
