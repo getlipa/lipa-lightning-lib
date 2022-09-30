@@ -14,7 +14,7 @@ use uniffi_lipalightninglib::LightningNode;
 static BASE_DIR: &str = ".ldk";
 
 fn main() {
-    dotenv::from_path("examples/node/.env").ok();
+    dotenv::from_path("examples/node/.env").unwrap();
 
     // Create dir for node data persistence.
     fs::create_dir_all(BASE_DIR).unwrap();
