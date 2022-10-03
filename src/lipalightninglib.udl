@@ -48,6 +48,15 @@ enum RuntimeError {
 interface LightningNode {
     [Throws=InitializationError]
     constructor([ByRef] Config config, RedundantStorageCallback redundant_storage_callback);
+    NodeInfo get_node_info();
+};
+
+dictionary NodeInfo {
+    sequence<u8> node_pubkey;
+    u16 num_channels;
+    u16 num_usable_channels;
+    u64 local_balance_msat;
+    u16 num_peers;
 };
 
 enum LogLevel {
