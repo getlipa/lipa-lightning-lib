@@ -27,6 +27,7 @@ esplora-client = { git = "https://github.com/bitcoindevkit/rust-esplora-client",
 bitcoin_hashes = "0.11.0"
 dotenv = "0.15.0"
 simplelog = { version ="0.12.0", features = ["test"] }
+storage-mock = { path = "util/storage-mock" }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 oslog = "0.2.0"
