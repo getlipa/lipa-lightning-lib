@@ -60,6 +60,7 @@ pub struct LightningNode {
     rt: AsyncRuntime,
     esplora_client: Arc<EsploraClient>,
     background_processor: BackgroundProcessor,
+    channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
 }
 
@@ -240,7 +241,7 @@ impl LightningNode {
             persister,
             event_handler,
             chain_monitor,
-            channel_manager,
+            Arc::clone(&channel_manager),
             GossipSync::rapid(rapid_gossip),
             Arc::clone(&peer_manager),
             logger,
@@ -251,8 +252,21 @@ impl LightningNode {
             rt,
             esplora_client,
             background_processor,
+            channel_manager: Arc::clone(&channel_manager),
             peer_manager,
         })
+    }
+
+    pub fn get_node_info(&self) -> NodeInfo {
+        let chans = self.channel_manager.list_channels();
+        let local_balance_msat = chans.iter().map(|c| c.balance_msat).sum::<u64>();
+        NodeInfo {
+            node_pubkey: self.channel_manager.get_our_node_id().serialize().to_vec(),
+            num_channels: chans.len() as u16,
+            num_usable_channels: chans.iter().filter(|c| c.is_usable).count() as u16,
+            local_balance_msat,
+            num_peers: self.peer_manager.get_peer_node_ids().len() as u16,
+        }
     }
 }
 
@@ -303,6 +317,14 @@ fn init_peer_manager(
         &ephemeral_bytes,
         logger,
     ))
+}
+
+pub struct NodeInfo {
+    pub node_pubkey: Vec<u8>,
+    pub num_channels: u16,
+    pub num_usable_channels: u16,
+    pub local_balance_msat: u64,
+    pub num_peers: u16,
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));

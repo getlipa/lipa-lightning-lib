@@ -1,3 +1,4 @@
+mod cli;
 mod file_storage;
 
 use file_storage::FileStorage;
@@ -6,12 +7,15 @@ use bitcoin::Network;
 use log::info;
 use std::env;
 use std::fs;
+use std::thread::sleep;
+use std::time::Duration;
 use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
 use uniffi_lipalightninglib::config::{Config, NodeAddress};
 use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
 
 static BASE_DIR: &str = ".ldk";
+static LOG_FILE: &str = "logs.txt";
 
 fn main() {
     dotenv::from_path("examples/node/.env").unwrap();
@@ -34,14 +38,18 @@ fn main() {
         },
     };
 
-    let _node = LightningNode::new(&config, storage).unwrap();
+    let node = LightningNode::new(&config, storage).unwrap();
+
+    // Lauch CLI
+    sleep(Duration::from_secs(1));
+    cli::poll_for_user_input(&node, &format!("{}/{}", BASE_DIR, LOG_FILE));
 }
 
 fn init_logger() {
     let log_file = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(BASE_DIR.to_string() + "/logs.txt")
+        .open(format!("{}/{}", BASE_DIR, LOG_FILE))
         .unwrap();
     simplelog::CombinedLogger::init(vec![
         simplelog::TermLogger::new(
