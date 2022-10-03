@@ -3,8 +3,10 @@
 .ldk
 examples/node/.env
 
-/bindings
+bindings
 
 # Added by cargo
-/target
-/Cargo.lock
+target
+Cargo.lock
+util/storage-mock/target
+util/storage-mock/Cargo.lock

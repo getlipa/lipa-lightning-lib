@@ -232,32 +232,13 @@ mod test {
 
     use crate::keys_manager::init_keys_manager;
 
-    use std::cell::RefCell;
-    use std::collections::HashMap;
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::Arc;
-    use std::sync::Mutex;
-
-    #[derive(Debug)]
-    pub struct Storage {
-        // Put the map into RefCell to allow mutation by immutable ref in StorageMock::put_object().
-        pub objects: Mutex<RefCell<HashMap<(String, String), Vec<u8>>>>,
-        pub health: Mutex<HashMap<String, bool>>,
-    }
+    use storage_mock::Storage;
 
     #[derive(Debug)]
     pub struct StorageMock {
         storage: Arc<Storage>,
-    }
-
-    impl Storage {
-        pub fn new() -> Self {
-            Self {
-                objects: Mutex::new(RefCell::new(HashMap::new())),
-                health: Mutex::new(HashMap::new()),
-            }
-        }
     }
 
     impl StorageMock {
@@ -268,49 +249,23 @@ mod test {
 
     impl RedundantStorageCallback for StorageMock {
         fn object_exists(&self, bucket: String, key: String) -> bool {
-            self.storage
-                .objects
-                .lock()
-                .unwrap()
-                .borrow()
-                .contains_key(&(bucket, key))
+            self.storage.object_exists(bucket, key)
         }
 
         fn get_object(&self, bucket: String, key: String) -> Vec<u8> {
-            self.storage
-                .objects
-                .lock()
-                .unwrap()
-                .borrow()
-                .get(&(bucket, key))
-                .unwrap()
-                .clone()
+            self.storage.get_object(bucket, key)
         }
 
         fn check_health(&self, bucket: String) -> bool {
-            *self.storage.health.lock().unwrap().get(&bucket).unwrap()
+            self.storage.check_health(bucket)
         }
 
         fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> bool {
-            self.storage
-                .objects
-                .lock()
-                .unwrap()
-                .borrow_mut()
-                .insert((bucket, key), value);
-            true
+            self.storage.put_object(bucket, key, value)
         }
 
         fn list_objects(&self, bucket: String) -> Vec<String> {
-            self.storage
-                .objects
-                .lock()
-                .unwrap()
-                .borrow()
-                .keys()
-                .filter(|(b, _)| &bucket == b)
-                .map(|(_, k)| k.clone())
-                .collect()
+            self.storage.list_objects(bucket)
         }
     }
 
