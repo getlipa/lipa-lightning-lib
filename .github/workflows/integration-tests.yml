@@ -25,4 +25,4 @@ jobs:
           echo "LSP_NODE_ADDRESS=$(hostname -I | awk '{print $1}'):9735" >> $GITHUB_ENV
       - name: Run integration tests
         run: |
-          cargo test --test '*' # runs integration tests only
+          cargo test --test '*' -- --test-threads 1 # runs integration tests only and sequentially

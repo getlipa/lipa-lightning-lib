@@ -2,12 +2,16 @@ use bitcoin::Network;
 use log::debug;
 use simplelog::SimpleLogger;
 use std::env;
+use std::sync::Once;
 use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
 use uniffi_lipalightninglib::config::{Config, NodeAddress};
 use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
 
 use storage_mock::Storage;
+use uniffi_lipalightninglib::errors::InitializationError;
+
+static START_LOGGER_ONCE: Once = Once::new();
 
 #[derive(Debug)]
 pub struct StorageMock {
@@ -44,8 +48,10 @@ impl RedundantStorageCallback for StorageMock {
     }
 }
 
-pub fn setup() -> LightningNode {
-    SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default()).unwrap();
+pub fn setup() -> Result<LightningNode, InitializationError> {
+    START_LOGGER_ONCE.call_once(|| {
+        SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default()).unwrap();
+    });
 
     if env::var("LSP_NODE_PUB_KEY").is_err() {
         // Assume not running in CI. Load .env from example node instead.
@@ -73,5 +79,5 @@ pub fn setup() -> LightningNode {
         },
     };
 
-    LightningNode::new(&config, storage).unwrap()
+    LightningNode::new(&config, storage)
 }
