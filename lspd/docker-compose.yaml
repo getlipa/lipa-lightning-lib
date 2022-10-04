@@ -1,0 +1,32 @@
+version: '3'
+
+services:
+  db:
+    image: 'postgres:14.5-alpine'
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: lipauser
+      POSTGRES_PASSWORD: lipapassword
+      POSTGRES_DB: lipadb
+    volumes:
+      - ./migrations/:/docker-entrypoint-initdb.d/
+
+  lspd:
+    build: .
+    ports:
+      - '6666:6666'
+    depends_on:
+      - db
+    env_file:
+      - lnd.env
+    environment:
+      DATABASE_URL: postgresql://lipauser:lipapassword@db:5432/lipadb
+      LISTEN_ADDRESS: 0.0.0.0:6666
+      LND_ADDRESS: lnd:10009
+      TOKEN: iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l
+
+networks:
+  default:
+    name: nigiri
+    external: true
