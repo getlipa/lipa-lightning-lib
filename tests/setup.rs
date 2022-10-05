@@ -29,6 +29,12 @@ impl StorageMock {
     }
 }
 
+impl Default for StorageMock {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RedundantStorageCallback for StorageMock {
     fn object_exists(&self, bucket: String, key: String) -> bool {
         self.storage.object_exists(bucket, key)
