@@ -34,7 +34,6 @@ mod p2p_connection_tests {
         }
 
         // Cleanup: Fix env variable for other tests
-        println!("Restoring LSP_NODE_ADDRESS to {}", lsp_node_address);
         env::set_var("LSP_NODE_ADDRESS", lsp_node_address);
     }
 
