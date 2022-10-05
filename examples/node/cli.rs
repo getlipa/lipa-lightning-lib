@@ -26,7 +26,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
             match word {
                 "help" => help(),
                 "nodeinfo" => {
-                    node_info(&node);
+                    node_info(node);
                 }
                 "stop" => {
                     break;

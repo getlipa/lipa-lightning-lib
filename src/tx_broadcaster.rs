@@ -33,7 +33,6 @@ mod test {
     use bitcoin::consensus::deserialize;
     use bitcoin_hashes::hex::FromHex;
     use esplora_client::Builder;
-    use simplelog;
 
     #[test]
     // Run the test `cargo test test_broadcast_failure -- --nocapture` to see logs.

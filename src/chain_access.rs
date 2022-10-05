@@ -74,7 +74,7 @@ mod tests {
         // See https://en.wikipedia.org/wiki/Port_(computer_networking)
         let builder = Builder::new("http://localhost:9");
         let esplora_client = Arc::new(builder.build_blocking().unwrap());
-        LipaChainAccess::new(esplora_client.clone())
+        LipaChainAccess::new(esplora_client)
     }
 
     fn build_sample_tx() -> Transaction {
