@@ -2,7 +2,10 @@ use bitcoin::Network;
 use log::debug;
 use simplelog::SimpleLogger;
 use std::env;
+use std::process::{Command, Stdio};
 use std::sync::Once;
+use std::thread::sleep;
+use std::time::Duration;
 use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
 use uniffi_lipalightninglib::config::{Config, NodeAddress};
 use uniffi_lipalightninglib::keys_manager::generate_secret;
@@ -53,6 +56,8 @@ pub fn setup() -> Result<LightningNode, InitializationError> {
         SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default()).unwrap();
     });
 
+    start_nigiri();
+
     if env::var("LSP_NODE_PUB_KEY").is_err() {
         // Assume not running in CI. Load .env from example node instead.
         dotenv::from_path("examples/node/.env").unwrap();
@@ -80,4 +85,48 @@ pub fn setup() -> Result<LightningNode, InitializationError> {
     };
 
     LightningNode::new(&config, storage)
+}
+
+pub fn start_nigiri() {
+    // only start if nigiri is not yet running
+    if !is_nigiri_lnd_synced_to_chain() {
+        Command::new("nigiri")
+            .arg("start")
+            .arg("--ln")
+            .output()
+            .expect("Failed to start Nigiri");
+
+        block_until_nigiri_ready();
+    }
+}
+
+pub fn shutdown_nigiri() {
+    Command::new("nigiri")
+        .arg("stop")
+        .output()
+        .expect("Failed to shutdown Nigiri");
+}
+
+fn block_until_nigiri_ready() {
+    while !is_nigiri_lnd_synced_to_chain() {
+        sleep(Duration::from_millis(100));
+    }
+}
+
+fn is_nigiri_lnd_synced_to_chain() -> bool {
+    let lnd_getinfo_cmd = Command::new("nigiri")
+        .arg("lnd")
+        .arg("getinfo")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+
+    let output = Command::new("jq")
+        .arg(".synced_to_chain")
+        .stdin(lnd_getinfo_cmd.stdout.unwrap())
+        .output()
+        .unwrap();
+
+    output.stdout == b"true\n"
 }
