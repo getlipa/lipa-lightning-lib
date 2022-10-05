@@ -1,7 +1,9 @@
 mod setup;
 
 use std::env;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::thread::sleep;
+use std::time::Duration;
 
 // Caution: Run this test sequentially,
 // otherwise they will corrupt eachother, because they're manipulating their environment:
@@ -9,9 +11,6 @@ use std::process::Command;
 #[cfg(test)]
 mod p2p_connection_tests {
     use super::*;
-
-    use std::thread::sleep;
-    use std::time::Duration;
 
     #[test]
     fn test_successful_p2p_connection() {
@@ -48,7 +47,15 @@ mod p2p_connection_tests {
 
         // Todo test reconnecting (not implemented yet)
         start_nigiri();
-        sleep(Duration::from_secs(10)); // wait for nigiri to start
+        block_until_nigiri_ready();
+    }
+
+    fn start_nigiri() {
+        Command::new("nigiri")
+            .arg("start")
+            .arg("--ln")
+            .output()
+            .expect("Failed to start Nigiri");
     }
 
     fn shutdown_nigiri() {
@@ -58,11 +65,27 @@ mod p2p_connection_tests {
             .expect("Failed to shutdown Nigiri");
     }
 
-    fn start_nigiri() {
-        Command::new("nigiri")
-            .arg("start")
-            .arg("--ln")
+    fn block_until_nigiri_ready() {
+        while !is_nigiri_lnd_synced_to_chain() {
+            sleep(Duration::from_millis(100));
+        }
+    }
+
+    fn is_nigiri_lnd_synced_to_chain() -> bool {
+        let lnd_getinfo_cmd = Command::new("nigiri")
+            .arg("lnd")
+            .arg("getinfo")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+
+        let output = Command::new("jq")
+            .arg(".synced_to_chain")
+            .stdin(lnd_getinfo_cmd.stdout.unwrap())
             .output()
-            .expect("Failed to start Nigiri");
+            .unwrap();
+
+        output.stdout == b"true\n"
     }
 }
