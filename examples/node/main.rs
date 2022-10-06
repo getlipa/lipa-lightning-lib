@@ -67,7 +67,7 @@ fn init_logger() {
     .unwrap();
 }
 
-fn read_or_generate_seed(storage: &Box<FileStorage>) -> Vec<u8> {
+fn read_or_generate_seed(storage: &FileStorage) -> Vec<u8> {
     let seed_file_name = "seed";
     if storage.object_exists(".".to_string(), seed_file_name.to_string()) {
         return storage.get_object(".".to_string(), seed_file_name.to_string());
