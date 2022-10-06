@@ -2,12 +2,19 @@ use bitcoin::Network;
 use log::debug;
 use simplelog::SimpleLogger;
 use std::env;
+use std::process::{Command, Stdio};
+use std::sync::Once;
+use std::thread::sleep;
+use std::time::Duration;
 use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
 use uniffi_lipalightninglib::config::{Config, NodeAddress};
 use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
 
 use storage_mock::Storage;
+use uniffi_lipalightninglib::errors::InitializationError;
+
+static START_LOGGER_ONCE: Once = Once::new();
 
 #[derive(Debug)]
 pub struct StorageMock {
@@ -19,6 +26,12 @@ impl StorageMock {
         Self {
             storage: Storage::new(),
         }
+    }
+}
+
+impl Default for StorageMock {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -44,8 +57,12 @@ impl RedundantStorageCallback for StorageMock {
     }
 }
 
-pub fn setup() -> LightningNode {
-    SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default()).unwrap();
+pub fn setup() -> Result<LightningNode, InitializationError> {
+    START_LOGGER_ONCE.call_once(|| {
+        SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default()).unwrap();
+    });
+
+    start_nigiri();
 
     if env::var("LSP_NODE_PUB_KEY").is_err() {
         // Assume not running in CI. Load .env from example node instead.
@@ -73,5 +90,68 @@ pub fn setup() -> LightningNode {
         },
     };
 
-    LightningNode::new(&config, storage).unwrap()
+    LightningNode::new(&config, storage)
+}
+
+pub fn start_nigiri() {
+    // todo
+    // In the GitHub Workflow VM calling is_nigiri_lnd_synced_to_chain() causes the following error:
+    // Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }'
+    // As long as this is not being fixed, it is being circumvented by the following if let statement
+    if let Ok(running_on_ci) = env::var("RUNNING_ON_CI") {
+        if running_on_ci == "true".to_string() {
+            let cmd_result = Command::new("nigiri").arg("start").arg("--ln").output();
+
+            // Waiting for Nigiri to start in the background
+            // Assuming a negative result means that Nigiri is already running.
+            // Therefore errors are not being handled and instead just ignored in this temporary fix.
+            if cmd_result.is_ok() {
+                sleep(Duration::from_secs(10));
+            }
+
+            return;
+        }
+    }
+
+    // only start if nigiri is not yet running
+    if !is_nigiri_lnd_synced_to_chain() {
+        Command::new("nigiri")
+            .arg("start")
+            .arg("--ln")
+            .output()
+            .expect("Failed to start Nigiri");
+
+        block_until_nigiri_ready();
+    }
+}
+
+pub fn shutdown_nigiri() {
+    Command::new("nigiri")
+        .arg("stop")
+        .output()
+        .expect("Failed to shutdown Nigiri");
+}
+
+fn block_until_nigiri_ready() {
+    while !is_nigiri_lnd_synced_to_chain() {
+        sleep(Duration::from_millis(100));
+    }
+}
+
+fn is_nigiri_lnd_synced_to_chain() -> bool {
+    let lnd_getinfo_cmd = Command::new("nigiri")
+        .arg("lnd")
+        .arg("getinfo")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+
+    let output = Command::new("jq")
+        .arg(".synced_to_chain")
+        .stdin(lnd_getinfo_cmd.stdout.unwrap())
+        .output()
+        .expect("Could not run 'nigiri lnd getinfo | jq .synced_to_chain'");
+
+    output.stdout == b"true\n"
 }
