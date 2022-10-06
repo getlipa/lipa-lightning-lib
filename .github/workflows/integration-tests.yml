@@ -23,6 +23,9 @@ jobs:
           nigiri faucet lnd
           echo "LSP_NODE_PUB_KEY=$(nigiri lnd getinfo | jq -r .identity_pubkey)" >> $GITHUB_ENV
           echo "LSP_NODE_ADDRESS=$(hostname -I | awk '{print $1}'):9735" >> $GITHUB_ENV
+      - name: Prepare integration tests
+        run: |
+          echo "RUNNING_ON_CI=true" >> $GITHUB_ENV
       - name: Run integration tests
         run: |
           cargo test --test '*' -- --test-threads 1 # runs integration tests only and sequentially
