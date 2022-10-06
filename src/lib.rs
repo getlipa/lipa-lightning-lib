@@ -203,6 +203,8 @@ impl LightningNode {
         // Step 13. Initialize Networking
         let peer_manager_clone = Arc::clone(&peer_manager);
 
+        // todo this should be moved out of the node initialization.
+        //      Instead the connection needs to be established and maintained as part of the sending and receiving funds functionality
         rt.handle().block_on(async move {
             P2pConnections::connect_peer(&config.lsp_node, Arc::clone(&peer_manager_clone))
                 .await
