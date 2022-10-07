@@ -28,4 +28,4 @@ jobs:
           echo "RUNNING_ON_CI=true" >> $GITHUB_ENV
       - name: Run integration tests
         run: |
-          cargo test --test '*' -- --test-threads 1 # runs integration tests only and sequentially
+          cargo test --features nigiri_test --test '*' -- --test-threads 1 # runs integration tests only and sequentially

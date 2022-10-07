@@ -7,6 +7,9 @@ edition = "2021"
 crate-type = ["lib", "staticlib", "cdylib"]
 name = "uniffi_lipalightninglib"
 
+[features]
+nigiri_test = []
+
 [dependencies]
 bdk = { version = "0.22.0", features = ["keys-bip39"] }
 bitcoin = "0.28.1"

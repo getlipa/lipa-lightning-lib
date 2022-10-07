@@ -2,11 +2,11 @@ mod setup;
 
 use std::env;
 
-// Caution: Run this test sequentially,
-// otherwise they will corrupt eachother, because they're manipulating their environment:
-// cargo test --test '*' -- --test-threads 1
-#[cfg(test)]
-mod p2p_connection_tests {
+// Caution: Run these tests sequentially, otherwise they will corrupt each other,
+// because they are manipulating their environment:
+// cargo test --features nigiri_test -- --test-threads 1
+#[cfg(feature = "nigiri_test")]
+mod p2p_connection_test {
     use super::*;
 
     #[test]
