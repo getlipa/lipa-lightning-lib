@@ -99,7 +99,7 @@ pub fn start_nigiri() {
     // Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }'
     // As long as this is not being fixed, it is being circumvented by the following if let statement
     if let Ok(running_on_ci) = env::var("RUNNING_ON_CI") {
-        if running_on_ci == "true".to_string() {
+        if running_on_ci == *"true" {
             let cmd_result = Command::new("nigiri").arg("start").arg("--ln").output();
 
             // Waiting for Nigiri to start in the background
@@ -125,6 +125,7 @@ pub fn start_nigiri() {
     }
 }
 
+#[allow(dead_code)] // not used by all tests
 pub fn shutdown_nigiri() {
     Command::new("nigiri")
         .arg("stop")
