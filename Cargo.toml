@@ -8,7 +8,7 @@ crate-type = ["lib", "staticlib", "cdylib"]
 name = "uniffi_lipalightninglib"
 
 [features]
-nigiri_test = []
+nigiri = []
 
 [dependencies]
 bdk = { version = "0.22.0", features = ["keys-bip39"] }
@@ -29,6 +29,7 @@ esplora-client = { git = "https://github.com/bitcoindevkit/rust-esplora-client",
 [dev-dependencies]
 bitcoin_hashes = "0.11.0"
 dotenv = "0.15.0"
+serde_json = "1.0"
 simplelog = { version ="0.12.0", features = ["test"] }
 storage-mock = { path = "util/storage-mock" }
 
