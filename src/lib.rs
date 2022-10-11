@@ -17,6 +17,7 @@ mod logger;
 mod native_logger;
 mod storage_persister;
 mod tx_broadcaster;
+mod types;
 
 use crate::async_runtime::AsyncRuntime;
 use crate::callbacks::RedundantStorageCallback;
@@ -28,26 +29,24 @@ use crate::fee_estimator::FeeEstimator;
 use crate::keys_manager::{generate_random_bytes, generate_secret, init_keys_manager};
 use crate::logger::LightningLogger;
 use crate::native_logger::init_native_logger_once;
+use crate::p2p_networking::P2pConnections;
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
+use crate::types::{ChainMonitor, ChannelManager, PeerManager};
 
-use crate::p2p_networking::P2pConnections;
 use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::Network;
 use esplora_client::blocking::BlockingClient as EsploraClient;
 use esplora_client::Builder;
-use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Recipient};
 use lightning::chain::{BestBlock, Watch};
-use lightning::ln::channelmanager::{ChainParameters, SimpleArcChannelManager};
-use lightning::ln::peer_handler::IgnoringMessageHandler;
+use lightning::ln::channelmanager::ChainParameters;
 use lightning::routing::gossip::NetworkGraph;
 use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringParameters};
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
-use lightning_net_tokio::SocketDescriptor;
 use lightning_rapid_gossip_sync::RapidGossipSync;
 use log::{warn, Level as LogLevel};
 use std::sync::{Arc, Mutex};
@@ -63,26 +62,6 @@ pub struct LightningNode {
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
 }
-
-type ChainMonitor = LdkChainMonitor<
-    InMemorySigner,
-    Arc<LipaChainAccess>,
-    Arc<TxBroadcaster>,
-    Arc<FeeEstimator>,
-    Arc<LightningLogger>,
-    Arc<StoragePersister>,
->;
-
-type ChannelManager =
-    SimpleArcChannelManager<ChainMonitor, TxBroadcaster, FeeEstimator, LightningLogger>;
-
-pub(crate) type PeerManager = lightning::ln::peer_handler::PeerManager<
-    SocketDescriptor,
-    Arc<ChannelManager>,
-    IgnoringMessageHandler,
-    Arc<LightningLogger>,
-    IgnoringMessageHandler,
->;
 
 impl LightningNode {
     pub fn new(
