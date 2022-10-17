@@ -1,14 +1,21 @@
 mod setup;
 
-use bitcoin::secp256k1::PublicKey;
-
-#[cfg(test)]
-mod node_info_tests {
+#[cfg(feature = "nigiri")]
+mod node_info_test {
     use super::*;
+
+    use bitcoin::secp256k1::PublicKey;
+    use uniffi_lipalightninglib::config::NodeAddress;
 
     #[test]
     fn test_get_node_info() {
-        let node = setup::setup().unwrap();
+        setup::nigiri::start();
+        let lsp_info = setup::nigiri::query_lnd_info().unwrap();
+        let lsp_node = NodeAddress {
+            pub_key: lsp_info.pub_key,
+            address: "127.0.0.1:9735".to_string(),
+        };
+        let node = setup::setup(lsp_node).unwrap();
         let node_info = node.get_node_info();
 
         assert!(
