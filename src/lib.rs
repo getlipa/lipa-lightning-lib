@@ -11,8 +11,10 @@ pub mod secret;
 
 mod async_runtime;
 mod chain_access;
+mod confirm;
 mod event_handler;
 mod fee_estimator;
+mod filter;
 mod logger;
 mod native_logger;
 mod storage_persister;
