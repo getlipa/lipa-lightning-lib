@@ -81,7 +81,7 @@ pub mod nigiri {
     use std::time::Duration;
 
     #[derive(Debug)]
-    pub struct NodeInfo {
+    pub struct RemoteNodeInfo {
         pub pub_key: String,
         pub synced: bool,
     }
@@ -92,9 +92,11 @@ pub mod nigiri {
                 .unwrap();
         });
 
+        // TODO: Optimization, do not restart nigiri if
+        // `jq -r .ci  ~/.nigiri/nigiri.config.json` is true.
         if env::var("RUNNING_ON_CI").is_err() {
             debug!("NIGIRI stopping ...");
-            exec(vec!["nigiri", "stop"]);
+            stop();
         }
 
         debug!("NIGIRI starting ...");
@@ -102,7 +104,6 @@ pub mod nigiri {
         wait_for_sync();
     }
 
-    #[allow(dead_code)] // not used by all tests
     pub fn stop() {
         exec(vec!["nigiri", "stop"]);
     }
@@ -120,22 +121,20 @@ pub mod nigiri {
         debug!("NIGIRI is synced");
     }
 
-    pub fn query_lnd_info() -> Result<NodeInfo, String> {
+    pub fn query_lnd_info() -> Result<RemoteNodeInfo, String> {
         let output = exec(vec!["nigiri", "lnd", "getinfo"]);
         if !output.status.success() {
             return Err("Command `lnd getinfo` failed".to_string());
         }
         let json: serde_json::Value =
             serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let pub_key = json["identity_pubkey"].as_str().unwrap().to_string();
         let synced = json["synced_to_chain"].as_bool().unwrap();
-        Ok(NodeInfo {
-            pub_key: json["identity_pubkey"].as_str().unwrap().to_string(),
-            synced,
-        })
+        Ok(RemoteNodeInfo { synced, pub_key })
     }
 
-    fn exec(commands: Vec<&str>) -> Output {
-        let (command, args) = commands.split_first().expect("At least one command needed");
+    fn exec(params: Vec<&str>) -> Output {
+        let (command, args) = params.split_first().expect("At least one param is needed");
         Command::new(command)
             .args(args)
             .output()
