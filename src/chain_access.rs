@@ -14,6 +14,7 @@ pub(crate) struct LipaChainAccess {
 }
 
 impl LipaChainAccess {
+    #[allow(dead_code)]
     pub(crate) fn new(esplora_client: Arc<BlockingClient>) -> Self {
         let queued_txs = Mutex::new(Vec::new());
         let watched_txs = Mutex::new(Vec::new());
@@ -60,7 +61,7 @@ impl Filter for LipaChainAccess {
 
 #[cfg(test)]
 mod tests {
-    use crate::LipaChainAccess;
+    use super::LipaChainAccess;
     use bitcoin::consensus::deserialize;
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::Transaction;

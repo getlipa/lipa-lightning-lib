@@ -24,11 +24,23 @@ impl<'a> Confirm for ConfirmWrapper<'a> {
         }
     }
 
-    fn transaction_unconfirmed(&self, txid: &Txid) {}
+    fn transaction_unconfirmed(&self, txid: &Txid) {
+        for member in &self.members {
+            member.transaction_unconfirmed(txid);
+        }
+    }
 
-    fn best_block_updated(&self, header: &BlockHeader, height: u32) {}
+    fn best_block_updated(&self, header: &BlockHeader, height: u32) {
+        for member in &self.members {
+            member.best_block_updated(header, height);
+        }
+    }
 
     fn get_relevant_txids(&self) -> Vec<Txid> {
-        Vec::new()
+        let mut joined = Vec::new();
+        for member in &self.members {
+            joined.extend_from_slice(&member.get_relevant_txids());
+        }
+        joined
     }
 }
