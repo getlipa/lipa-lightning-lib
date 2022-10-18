@@ -48,6 +48,7 @@ use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Recipient};
 use lightning::chain::{BestBlock, Watch};
 use lightning::ln::channelmanager::ChainParameters;
+use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::routing::gossip::NetworkGraph;
 use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringParameters};
 use lightning::util::config::UserConfig;
@@ -55,6 +56,7 @@ use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_rapid_gossip_sync::RapidGossipSync;
 use log::{debug, error, warn, Level as LogLevel};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
 
@@ -333,7 +335,12 @@ fn init_peer_manager(
         })?;
     Ok(PeerManager::new_channel_only(
         channel_manager,
+        IgnoringMessageHandler {},
         our_node_secret,
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
         &ephemeral_bytes,
         logger,
     ))

@@ -13,14 +13,14 @@ nigiri = []
 [dependencies]
 aes = "0.8.1"
 bdk = { version = "0.23.0", features = ["keys-bip39"] }
-bitcoin = "0.28.1"
+bitcoin = "0.29.1"
 cbc = "0.1.2"
 cipher = { version = "0.4.3", features = ["block-padding", "alloc"] }
 futures = "0.3.24"
-lightning = { version = "0.0.110", features = ["max_level_trace"] }
-lightning-background-processor = "0.0.110"
-lightning-net-tokio = "0.0.110"
-lightning-rapid-gossip-sync = "0.0.110"
+lightning = { version = "0.0.111", features = ["max_level_trace"] }
+lightning-background-processor = "0.0.111"
+lightning-net-tokio = "0.0.111"
+lightning-rapid-gossip-sync = "0.0.111"
 log = "0.4.17"
 rand = "0.8.5"
 thiserror = "1.0.34"

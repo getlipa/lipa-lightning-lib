@@ -1,4 +1,4 @@
-use bitcoin::{Script, Transaction, Txid};
+use bitcoin::{Script, Txid};
 use lightning::chain::{Filter, WatchedOutput};
 use std::sync::Mutex;
 
@@ -43,13 +43,8 @@ impl Filter for FilterImpl {
             .push((*txid, script_pubkey.clone()));
     }
 
-    fn register_output(&self, output: WatchedOutput) -> Option<(usize, Transaction)> {
+    fn register_output(&self, output: WatchedOutput) {
         self.data.lock().unwrap().outputs.push(output);
-        // The Filter::register_output return value has been removed, as it was very difficult to
-        // correctly implement (i.e., without blocking). Users previously using it should instead
-        // pass dependent transactions in via additional chain::Confirm::transactions_confirmed
-        // calls (#1663).
-        None
     }
 }
 

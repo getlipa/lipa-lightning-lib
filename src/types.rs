@@ -27,6 +27,7 @@ pub(crate) type PeerManager = lightning::ln::peer_handler::PeerManager<
     SocketDescriptor,
     Arc<ChannelManager>,
     IgnoringMessageHandler,
+    IgnoringMessageHandler,
     Arc<LightningLogger>,
     IgnoringMessageHandler,
 >;
