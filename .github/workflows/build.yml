@@ -76,10 +76,6 @@ jobs:
           profile: minimal
           override: true
           target: ${{ matrix.target }}
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v1
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build target
         uses: actions-rs/cargo@v1
         with:

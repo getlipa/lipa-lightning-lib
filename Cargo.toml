@@ -40,6 +40,9 @@ oslog = "0.2.0"
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.11"
 
+[package.metadata.cross.build]
+pre-build = ["apt update --no-show-upgraded && apt install --yes protobuf-compiler"]
+
 [build-dependencies]
 camino = "1.1.1"
 tonic-build = "0.8.2"
