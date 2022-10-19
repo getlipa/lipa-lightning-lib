@@ -1,15 +1,23 @@
 mod cli;
 mod file_storage;
+mod lsp_client;
+
+pub mod lspd {
+    tonic::include_proto!("lspd");
+}
 
 use file_storage::FileStorage;
+use lsp_client::LspClient;
 
 use bitcoin::Network;
+use bitcoin_hashes::hex::ToHex;
 use log::info;
-use std::env;
+use lspd::ChannelInformationReply;
+use prost::Message;
 use std::fs;
 use std::thread::sleep;
 use std::time::Duration;
-use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
+use uniffi_lipalightninglib::callbacks::{LspCallback, RedundantStorageCallback};
 use uniffi_lipalightninglib::config::{Config, NodeAddress};
 use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
@@ -18,13 +26,25 @@ static BASE_DIR: &str = ".ldk";
 static LOG_FILE: &str = "logs.txt";
 
 fn main() {
-    dotenv::from_path("examples/node/.env").unwrap();
-
     // Create dir for node data persistence.
     fs::create_dir_all(BASE_DIR).unwrap();
 
     init_logger();
     info!("Logger initialized");
+
+    let lsp_address = "http://127.0.0.1:6666".to_string();
+    info!("Contacting lsp at {} ...", lsp_address);
+    let lsp_auth_token =
+        "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();
+    let lsp_client = LspClient::connect(lsp_address, lsp_auth_token);
+    let lsp_info = lsp_client.channel_information().unwrap();
+    let lsp_info = ChannelInformationReply::decode(&*lsp_info).unwrap();
+    let ln_node_address = NodeAddress {
+        pub_key: lsp_info.pubkey,
+        address: lsp_info.host,
+    };
+    info!("Lsp pubkey: {}", lsp_info.lsp_pubkey.to_hex());
+    info!("LN node {:?}", ln_node_address);
 
     let storage = Box::new(FileStorage::new(BASE_DIR));
     let seed = read_or_generate_seed(&storage);
@@ -32,10 +52,7 @@ fn main() {
         network: Network::Regtest,
         seed,
         esplora_api_url: "http://localhost:30000".to_string(),
-        lsp_node: NodeAddress {
-            pub_key: env::var("LSP_NODE_PUB_KEY").unwrap(),
-            address: env::var("LSP_NODE_ADDRESS").unwrap(),
-        },
+        lsp_node: ln_node_address,
     };
 
     let node = LightningNode::new(&config, storage).unwrap();

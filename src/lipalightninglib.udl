@@ -59,6 +59,20 @@ dictionary NodeInfo {
     u16 num_peers;
 };
 
+[Error]
+enum LspError {
+    "Grpc",
+    "Network",
+    "UnexpectedUniFFI",
+};
+
+callback interface LspCallback {
+    [Throws=LspError]
+    sequence<u8> channel_information();
+    [Throws=LspError]
+    void register_payment(sequence<u8> bytes);
+};
+
 enum LogLevel {
     "Error",
     "Warn",

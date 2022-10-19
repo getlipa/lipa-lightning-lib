@@ -1,3 +1,5 @@
+use uniffi::ffi::foreigncallbacks::UnexpectedUniFFICallbackError;
+
 #[derive(Debug, thiserror::Error)]
 pub enum InitializationError {
     #[error("Failed to start async runtime: {message}")]
@@ -39,4 +41,21 @@ pub enum RuntimeError {
 
     #[error("Could not connect to peer: {message}")]
     PeerConnection { message: String },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum LspError {
+    #[error("Grpc error")]
+    Grpc,
+
+    #[error("Network error")]
+    Network,
+
+    #[error("UnexpectedUniFFICallbackError")]
+    UnexpectedUniFFI,
+}
+impl From<UnexpectedUniFFICallbackError> for LspError {
+    fn from(_error: UnexpectedUniFFICallbackError) -> Self {
+        LspError::UnexpectedUniFFI
+    }
 }

@@ -1,1 +1,0 @@
-CREATE INDEX probe_payment_hash ON public.payments (sha256('probing-01:' || payment_hash));

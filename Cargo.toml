@@ -28,10 +28,11 @@ esplora-client = { git = "https://github.com/bitcoindevkit/rust-esplora-client",
 
 [dev-dependencies]
 bitcoin_hashes = "0.11.0"
-dotenv = "0.15.0"
+prost = "0.11.0"
 serde_json = "1.0"
 simplelog = { version ="0.12.0", features = ["test"] }
 storage-mock = { path = "util/storage-mock" }
+tonic = "0.8.2"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 oslog = "0.2.0"
@@ -39,6 +40,10 @@ oslog = "0.2.0"
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.11"
 
+[package.metadata.cross.build]
+pre-build = ["apt update --no-show-upgraded && apt install --yes protobuf-compiler"]
+
 [build-dependencies]
 camino = "1.1.1"
+tonic-build = "0.8.2"
 uniffi_bindgen = "0.21.0"

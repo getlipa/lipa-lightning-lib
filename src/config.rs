@@ -14,6 +14,7 @@ pub struct Config {
     pub lsp_node: NodeAddress,
 }
 
+#[derive(Debug)]
 pub struct NodeAddress {
     pub pub_key: String,
     pub address: String,
