@@ -26,7 +26,7 @@ use crate::callbacks::{LspCallback, RedundantStorageCallback};
 use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, NodeAddress};
 use crate::confirm::ConfirmWrapper;
-use crate::errors::{InitializationError, RuntimeError};
+use crate::errors::{InitializationError, LspError, RuntimeError};
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;

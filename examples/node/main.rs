@@ -26,6 +26,9 @@ static BASE_DIR: &str = ".ldk";
 static LOG_FILE: &str = "logs.txt";
 
 fn main() {
+    // Create dir for node data persistence.
+    fs::create_dir_all(BASE_DIR).unwrap();
+
     init_logger();
     info!("Logger initialized");
 
@@ -34,7 +37,7 @@ fn main() {
     let lsp_auth_token =
         "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();
     let lsp_client = LspClient::connect(lsp_address, lsp_auth_token);
-    let lsp_info = lsp_client.channel_information();
+    let lsp_info = lsp_client.channel_information().unwrap();
     let lsp_info = ChannelInformationReply::decode(&*lsp_info).unwrap();
     let ln_node_address = NodeAddress {
         pub_key: lsp_info.pubkey,
@@ -42,9 +45,6 @@ fn main() {
     };
     info!("Lsp pubkey: {}", lsp_info.lsp_pubkey.to_hex());
     info!("LN node {:?}", ln_node_address);
-
-    // Create dir for node data persistence.
-    fs::create_dir_all(BASE_DIR).unwrap();
 
     let storage = Box::new(FileStorage::new(BASE_DIR));
     let seed = read_or_generate_seed(&storage);

@@ -11,6 +11,7 @@ use tokio::runtime::{Builder, Runtime};
 use tonic::metadata::{Ascii, MetadataValue};
 use tonic::Request;
 use uniffi_lipalightninglib::callbacks::LspCallback;
+use uniffi_lipalightninglib::errors::LspError;
 
 pub(crate) struct LspClient {
     bearer: MetadataValue<Ascii>,
@@ -37,11 +38,12 @@ impl LspClient {
 }
 
 impl LspCallback for LspClient {
-    fn channel_information(&self) -> Vec<u8> {
+    fn channel_information(&self) -> Result<Vec<u8>, LspError> {
         let request = self.wrap_request(ChannelInformationRequest {
             pubkey: "".to_string(),
         });
-        self.rt
+        Ok(self
+            .rt
             .block_on(
                 self.client
                     .lock()
@@ -52,10 +54,10 @@ impl LspCallback for LspClient {
             .map_err(|e| e.to_string())
             .unwrap()
             .into_inner()
-            .encode_to_vec()
+            .encode_to_vec())
     }
 
-    fn register_payment(&self, blob: Vec<u8>) -> String {
+    fn register_payment(&self, blob: Vec<u8>) -> Result<(), LspError> {
         let request = self.wrap_request(RegisterPaymentRequest { blob });
         self.rt
             .block_on(
@@ -65,8 +67,7 @@ impl LspCallback for LspClient {
                     .borrow_mut()
                     .register_payment(request),
             )
-            .map_err(|e| e.to_string())
-            .err()
-            .unwrap_or_default()
+            .unwrap();
+        Ok(())
     }
 }
