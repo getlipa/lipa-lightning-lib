@@ -22,7 +22,7 @@ mod tx_broadcaster;
 mod types;
 
 use crate::async_runtime::AsyncRuntime;
-use crate::callbacks::RedundantStorageCallback;
+use crate::callbacks::{LspCallback, RedundantStorageCallback};
 use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, NodeAddress};
 use crate::confirm::ConfirmWrapper;

@@ -1,0 +1,3 @@
+[submodule "submodules/lspd"]
+	path = submodules/lspd
+	url = https://github.com/breez/lspd.git

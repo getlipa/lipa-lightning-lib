@@ -19,6 +19,8 @@ jobs:
         uses: actions-rs/toolchain@v1.0.6
         with:
           toolchain: stable
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
       - name: Build
         run: cargo build --verbose
       - name: Run unit tests
@@ -39,6 +41,8 @@ jobs:
           profile: minimal
           override: true
           target: ${{ matrix.target }}
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
@@ -61,6 +65,8 @@ jobs:
           profile: minimal
           override: true
           target: ${{ matrix.target }}
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
       - name: Build target
         uses: actions-rs/cargo@v1
         with:

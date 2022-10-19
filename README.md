@@ -5,35 +5,34 @@
 
 # Build
 
+ - install protobuf
+
 # Test locally with Nigiri
-### Step 1: Environment
-Start [Nigiri Bitcoin](https://github.com/vulpemventures/nigiri):
+
+## Step 1: Setup Environment
+Start [Nigiri Bitcoin](https://github.com/vulpemventures/nigiri)
+at least **v0.4.4**:
 ```sh
 nigiri start --ln
 ```
-*The `--ln` flag is not strictly required, but it starts an LND and a CLN node
-which you are likely going to use to test the library.*
 
-### Step 2: Configuration
-Create a .env file:
-```sh
-cp examples/node/.env.example examples/node/.env
-```
+Start LSPD
+ 1. Go to `./lspd`
+ 2. Run `make` to generate `lnd.env` file with LND TLS certificate and macaroons
+ 3. Run `docker-compose up lspd` to start LSPD.
+ Mind that `lspd` container depends on `db` container which takes time to start.
 
-Then, configure a Nigiri Lightning node as your LSP.
+Note: make assumes that nigiri data is in `~/.nigiri`,
+but you can customize it by `NIGIRI_DATA=./nigiri-data make clean all`.
 
-The get the port for the `LSP_NODE_ADDRESS` it helps to look at the output your `nigiri start` command.
-
-To get the `LSP_NODE_PUBKEY` you can run the following command for example:
-```sh
-nigiri lnd getinfo | jq -r .identity_pubkey
-```
-
-### Step 3: Fire it up!
+## Step 2: Fire it up!
 Start the example node:
 ```sh
 cargo run --example node
 ```
+
+The example node will connect to LSPD and get information about lightning node
+pubkey and fees.
 
 ### Logs
 View logs in `./.ldk/logs.txt`.

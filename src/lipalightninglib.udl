@@ -59,6 +59,11 @@ dictionary NodeInfo {
     u16 num_peers;
 };
 
+callback interface LspCallback {
+    sequence<u8> channel_information();
+    string register_payment(sequence<u8> bytes);
+};
+
 enum LogLevel {
     "Error",
     "Warn",
