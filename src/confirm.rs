@@ -36,11 +36,18 @@ impl<'a> Confirm for ConfirmWrapper<'a> {
         }
     }
 
+    /// Returns relevant tx ids of all members joined and deduplicated.
     fn get_relevant_txids(&self) -> Vec<Txid> {
         let mut joined = Vec::new();
         for member in &self.members {
             joined.extend_from_slice(&member.get_relevant_txids());
         }
-        joined
+        unique(joined)
     }
+}
+
+fn unique(mut vec: Vec<Txid>) -> Vec<Txid> {
+    vec.sort_unstable();
+    vec.dedup();
+    vec
 }
