@@ -22,7 +22,6 @@ impl FilterImpl {
     }
 
     /// Returns `FilterData` if non empty, clean the local state.
-    #[allow(dead_code)]
     pub fn drain(&self) -> Option<FilterData> {
         let mut data = self.data.lock().unwrap();
         if !data.txs.is_empty() || !data.outputs.is_empty() {
@@ -79,6 +78,7 @@ mod tests {
     fn test_drain_empty_filter() {
         let filter = FilterImpl::new();
         assert!(filter.drain().is_none());
+        // The filter is still empty.
         assert!(filter.drain().is_none());
     }
 

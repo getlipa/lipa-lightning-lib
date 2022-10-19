@@ -23,6 +23,7 @@ mod types;
 
 use crate::async_runtime::AsyncRuntime;
 use crate::callbacks::RedundantStorageCallback;
+use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, NodeAddress};
 use crate::confirm::ConfirmWrapper;
 use crate::errors::{InitializationError, RuntimeError};
@@ -160,7 +161,9 @@ impl LightningNode {
         }
 
         // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
-        let _confirm = ConfirmWrapper::new(vec![&*channel_manager, &*chain_monitor]);
+        let confirm = ConfirmWrapper::new(vec![&*channel_manager, &*chain_monitor]);
+        let chain_access = LipaChainAccess::new(Arc::clone(&esplora_client), filter);
+        chain_access.sync(&confirm).unwrap();
 
         // Step 10. Give ChannelMonitors to ChainMonitor
         for (_, channel_monitor) in channel_monitors {
