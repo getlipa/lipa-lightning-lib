@@ -11,8 +11,10 @@ pub mod secret;
 
 mod async_runtime;
 mod chain_access;
+mod confirm;
 mod event_handler;
 mod fee_estimator;
+mod filter;
 mod logger;
 mod native_logger;
 mod storage_persister;
@@ -23,9 +25,11 @@ use crate::async_runtime::AsyncRuntime;
 use crate::callbacks::RedundantStorageCallback;
 use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, NodeAddress};
+use crate::confirm::ConfirmWrapper;
 use crate::errors::{InitializationError, RuntimeError};
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
+use crate::filter::FilterImpl;
 use crate::keys_manager::{generate_random_bytes, generate_secret, init_keys_manager};
 use crate::logger::LightningLogger;
 use crate::native_logger::init_native_logger_once;
@@ -99,7 +103,7 @@ impl LightningNode {
         }
 
         // Step x. Initialize the Transaction Filter
-        let filter = Arc::new(LipaChainAccess::new(Arc::clone(&esplora_client)));
+        let filter = Arc::new(FilterImpl::new());
 
         // Step 5. Initialize the ChainMonitor
         let chain_monitor = Arc::new(ChainMonitor::new(
@@ -157,6 +161,9 @@ impl LightningNode {
         }
 
         // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
+        let confirm = ConfirmWrapper::new(vec![&*channel_manager, &*chain_monitor]);
+        let chain_access = LipaChainAccess::new(Arc::clone(&esplora_client), filter);
+        chain_access.sync(&confirm).unwrap();
 
         // Step 10. Give ChannelMonitors to ChainMonitor
         for (_, channel_monitor) in channel_monitors {

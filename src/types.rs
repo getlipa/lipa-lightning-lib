@@ -1,5 +1,5 @@
-use crate::chain_access::LipaChainAccess;
 use crate::fee_estimator::FeeEstimator;
+use crate::filter::FilterImpl;
 use crate::logger::LightningLogger;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 pub(crate) type ChainMonitor = LdkChainMonitor<
     InMemorySigner,
-    Arc<LipaChainAccess>,
+    Arc<FilterImpl>,
     Arc<TxBroadcaster>,
     Arc<FeeEstimator>,
     Arc<LightningLogger>,
