@@ -54,6 +54,7 @@ use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_rapid_gossip_sync::RapidGossipSync;
 use log::{debug, error, warn, Level as LogLevel};
 use std::sync::{Arc, Mutex};
+use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
 
 static ESPLORA_TIMEOUT_SECS: u64 = 30;
@@ -66,6 +67,7 @@ pub struct LightningNode {
     background_processor: BackgroundProcessor,
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
+    sync_handle: JoinHandle<()>,
 }
 
 impl LightningNode {
@@ -205,7 +207,8 @@ impl LightningNode {
         // LDKLite syncs every 5 seconds. Let's try 5 seconds first and change if needed
         let channel_manager_regular_sync = Arc::clone(&channel_manager);
         let chain_monitor_regular_sync = Arc::clone(&chain_monitor);
-        rt.handle()
+        let sync_handle = rt
+            .handle()
             .spawn_repeating_task(Duration::from_secs(5), move || {
                 let chain_access_regular_sync = Arc::clone(&chain_access);
                 let channel_manager_regular_sync = Arc::clone(&channel_manager_regular_sync);
@@ -267,6 +270,7 @@ impl LightningNode {
             background_processor,
             channel_manager: Arc::clone(&channel_manager),
             peer_manager,
+            sync_handle,
         })
     }
 
@@ -285,6 +289,8 @@ impl LightningNode {
 
 impl Drop for LightningNode {
     fn drop(&mut self) {
+        self.sync_handle.abort();
+
         // TODO: Stop reconnecting to peers
         self.peer_manager.disconnect_all_peers();
 
