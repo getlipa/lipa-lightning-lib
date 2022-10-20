@@ -124,14 +124,27 @@ mod test {
             let data = Arc::clone(&data_in_f);
             async move {
                 data.fetch_add(1, Ordering::SeqCst);
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                data.fetch_add(1, Ordering::SeqCst);
             }
         };
 
-        let _handle = handle.spawn_repeating_task(Duration::from_millis(1), inc);
+        let handle = handle.spawn_repeating_task(Duration::from_millis(1), inc);
 
         while data.load(Ordering::SeqCst) < 10 {
             yield_now();
         }
         assert!(data.load(Ordering::SeqCst) >= 10);
+
+        // Test abort task.
+        handle.abort();
+        let mut counter = 0;
+        while counter < 10 && !handle.is_finished() {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            counter += 1;
+        }
+        assert!(handle.is_finished());
+        // The task iteration is always complete, we cannot observe an odd number.
+        assert_eq!(data.load(Ordering::SeqCst) % 2, 0);
     }
 }
