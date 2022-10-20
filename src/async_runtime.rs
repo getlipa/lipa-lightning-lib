@@ -1,10 +1,10 @@
 use crate::errors::InitializationError;
 
 use core::future::Future;
-use core::time::Duration;
 use tokio::runtime::{Builder, Runtime};
 use tokio::task::JoinHandle;
 use tokio::time;
+use tokio::time::Duration;
 
 #[allow(dead_code)]
 pub struct AsyncRuntime {

@@ -52,8 +52,9 @@ use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringParam
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_rapid_gossip_sync::RapidGossipSync;
-use log::{warn, Level as LogLevel};
+use log::{debug, error, warn, Level as LogLevel};
 use std::sync::{Arc, Mutex};
+use tokio::time::{Duration, Instant};
 
 static ESPLORA_TIMEOUT_SECS: u64 = 30;
 
@@ -162,7 +163,7 @@ impl LightningNode {
 
         // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
         let confirm = ConfirmWrapper::new(vec![&*channel_manager, &*chain_monitor]);
-        let chain_access = LipaChainAccess::new(Arc::clone(&esplora_client), filter);
+        let chain_access = Arc::new(LipaChainAccess::new(Arc::clone(&esplora_client), filter));
         chain_access.sync(&confirm).unwrap();
 
         // Step 10. Give ChannelMonitors to ChainMonitor
@@ -200,6 +201,30 @@ impl LightningNode {
         })?;
 
         // Step 14. Keep LDK Up-to-date with Chain Info
+        // TODO: optimize how often we want to run sync. LDK-sample syncs every second and
+        // LDKLite syncs every 5 seconds. Let's try 5 seconds first and change if needed
+        let channel_manager_regular_sync = Arc::clone(&channel_manager);
+        let chain_monitor_regular_sync = Arc::clone(&chain_monitor);
+        rt.handle()
+            .spawn_repeating_task(Duration::from_secs(5), move || {
+                let chain_access_regular_sync = Arc::clone(&chain_access);
+                let channel_manager_regular_sync = Arc::clone(&channel_manager_regular_sync);
+                let chain_monitor_regular_sync = Arc::clone(&chain_monitor_regular_sync);
+                async move {
+                    let confirm_regular_sync = ConfirmWrapper::new(vec![
+                        &*channel_manager_regular_sync,
+                        &*chain_monitor_regular_sync,
+                    ]);
+                    let now = Instant::now();
+                    match chain_access_regular_sync.sync(&confirm_regular_sync) {
+                        Ok(_) => debug!(
+                            "Sync to blockchain finished in {}ms",
+                            now.elapsed().as_millis()
+                        ),
+                        Err(e) => error!("Sync to blockchain failed: {:?}", e),
+                    }
+                }
+            });
 
         // Step 15. Initialize an EventHandler
         let event_handler = Arc::new(LipaEventHandler {});
