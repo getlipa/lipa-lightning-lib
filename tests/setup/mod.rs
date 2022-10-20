@@ -133,7 +133,7 @@ pub mod nigiri {
         Ok(RemoteNodeInfo { synced, pub_key })
     }
 
-    fn exec(params: Vec<&str>) -> Output {
+    pub fn exec(params: Vec<&str>) -> Output {
         let (command, args) = params.split_first().expect("At least one param is needed");
         Command::new(command)
             .args(args)
