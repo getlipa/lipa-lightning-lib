@@ -39,6 +39,9 @@ pub enum RuntimeError {
     #[error("Pub key could not be parsed: {message}")]
     InvalidPubKey { message: String },
 
+    #[error("Logic error: {message}")]
+    Logic { message: String },
+
     #[error("Could not connect to peer: {message}")]
     PeerConnection { message: String },
 }
