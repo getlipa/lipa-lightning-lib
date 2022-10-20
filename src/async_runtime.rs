@@ -54,9 +54,10 @@ impl Handle {
         self.handle.spawn(async move {
             let mut interval = time::interval(interval);
             interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+            interval.tick().await;
             loop {
-                interval.tick().await;
                 func().await;
+                interval.tick().await;
             }
         })
     }
@@ -139,7 +140,7 @@ mod test {
         // Test abort task.
         handle.abort();
         let mut counter = 0;
-        while counter < 10 && !handle.is_finished() {
+        while counter < 20 && !handle.is_finished() {
             std::thread::sleep(std::time::Duration::from_millis(100));
             counter += 1;
         }
