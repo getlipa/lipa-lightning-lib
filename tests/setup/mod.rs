@@ -179,24 +179,23 @@ pub mod nigiri {
     pub fn try_function_multiple_times<T>(
         f: fn(T) -> Result<(), String>,
         param: T,
-        retry_times: u8,
+        mut retry_times: u8,
         interval: Duration,
     ) -> Result<(), String>
     where
         T: Copy,
     {
-        for i in 0..(retry_times + 1) {
-            match f(param) {
-                Ok(_) => break,
-                Err(_) => {
-                    if i < retry_times {
-                        sleep(interval);
-                        continue;
-                    }
-                }
+        while let Err(e) = f(param) {
+            retry_times -= 1;
+
+            if retry_times == 0 {
+                return Err(e);
             }
-            return f(param);
+            sleep(interval);
         }
+
+        Ok(())
+    }
         Ok(())
     }
 
