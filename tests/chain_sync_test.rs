@@ -14,7 +14,7 @@ mod chain_sync_test {
     use uniffi_lipalightninglib::config::NodeAddress;
 
     #[test]
-    fn test_channel_is_confirmed_chain_after_6_confirmations() {
+    fn test_channel_is_confirmed_chain_only_after_6_confirmations() {
         setup::nigiri::start();
         let lsp_info = setup::nigiri::query_lnd_info().unwrap();
         let lsp_node = NodeAddress {
@@ -40,7 +40,15 @@ mod chain_sync_test {
         assert_eq!(node.get_node_info().num_channels, 1);
         assert_eq!(node.get_node_info().num_usable_channels, 0);
 
-        nigiri::try_function_multiple_times(nigiri::mine_blocks, 6, 10, Duration::from_millis(200))
+        nigiri::try_function_multiple_times(nigiri::mine_blocks, 5, 10, Duration::from_millis(200))
+            .unwrap();
+
+        sleep(Duration::from_secs(10));
+
+        assert_eq!(node.get_node_info().num_channels, 1);
+        assert_eq!(node.get_node_info().num_usable_channels, 0);
+
+        nigiri::try_function_multiple_times(nigiri::mine_blocks, 1, 10, Duration::from_millis(200))
             .unwrap();
 
         sleep(Duration::from_secs(10));
