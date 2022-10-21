@@ -129,17 +129,14 @@ pub mod nigiri {
             .build_blocking()
             .unwrap();
 
-        for i in 0..16 {
-            match esplora_client.get_height() {
-                Ok(_) => break,
-                Err(_) => {
-                    if i < 15 {
-                        sleep(Duration::from_secs(1));
-                        continue;
-                    }
-                }
+        let mut i = 0u8;
+        while let Err(e) = esplora_client.get_height() {
+            if i == 15 {
+                panic!("Failed to start NIGIRI: {}", e);
             }
-            esplora_client.get_height().unwrap();
+            i += 1;
+            sleep(Duration::from_secs(1));
+        }
         }
     }
 
