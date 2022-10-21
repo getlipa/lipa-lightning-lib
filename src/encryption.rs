@@ -41,8 +41,8 @@ fn encrypt_with_randomness(
     randomness: &Randomness,
 ) -> Result<Vec<u8>, RuntimeError> {
     let shared_secret = generate_shared_secret(&randomness.ephemeral, pubkey)?;
-    let key_e = &shared_secret[..32];
-    let key_m = &shared_secret[32..];
+    let key_encrypt = &shared_secret[..32];
+    let key_mac = &shared_secret[32..];
 
     // IV + Curve params/X/Y + padded ciphertext + HMAC-256
     let mut result = Vec::new();
@@ -55,15 +55,16 @@ fn encrypt_with_randomness(
     result.extend_from_slice(&CIPH_COORD_LEN);
     result.extend_from_slice(&ephemeral_pubkey[33..]);
 
-    let cipher = Aes256CbcEnc::new_from_slices(key_e, &randomness.init_vector).map_err(|_| {
-        RuntimeError::Logic {
-            message: "Invalid key or nonce lenght in encrypt()".to_string(),
-        }
-    })?;
+    let cipher =
+        Aes256CbcEnc::new_from_slices(key_encrypt, &randomness.init_vector).map_err(|_| {
+            RuntimeError::Logic {
+                message: "Invalid key or nonce lenght in encrypt()".to_string(),
+            }
+        })?;
     let mut ciphertext = cipher.encrypt_padded_vec_mut::<Pkcs7>(data);
     result.append(&mut ciphertext);
 
-    let mut hmac = hmac256(key_m, &result);
+    let mut hmac = hmac256(key_mac, &result);
     result.append(&mut hmac);
 
     Ok(result)
@@ -102,8 +103,7 @@ fn hmac256(key: &[u8], data: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use bitcoin_hashes::hex::FromHex;
-    use bitcoin_hashes::hex::ToHex;
+    use bitcoin_hashes::hex::{FromHex, ToHex};
 
     #[test]
     fn test_generate_shared_secret() {
