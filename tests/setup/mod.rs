@@ -71,6 +71,7 @@ pub fn setup(lsp_node: NodeAddress) -> Result<LightningNode, InitializationError
 }
 
 #[cfg(feature = "nigiri")]
+#[allow(dead_code)]
 pub mod nigiri {
     use super::*;
 
@@ -102,10 +103,11 @@ pub mod nigiri {
         debug!("NIGIRI starting ...");
         exec(vec!["nigiri", "start", "--ci", "--ln"]);
         wait_for_sync();
+        wait_for_esplora();
     }
 
     pub fn stop() {
-        exec(vec!["nigiri", "stop"]);
+        exec(vec!["nigiri", "stop", "--delete"]);
     }
 
     fn wait_for_sync() {
@@ -121,6 +123,26 @@ pub mod nigiri {
         debug!("NIGIRI is synced");
     }
 
+    fn wait_for_esplora() {
+        let esplora_client = esplora_client::Builder::new("http://localhost:30000")
+            .timeout(30)
+            .build_blocking()
+            .unwrap();
+
+        for i in 0..16 {
+            match esplora_client.get_height() {
+                Ok(_) => break,
+                Err(_) => {
+                    if i < 15 {
+                        sleep(Duration::from_secs(1));
+                        continue;
+                    }
+                }
+            }
+            esplora_client.get_height().unwrap();
+        }
+    }
+
     pub fn query_lnd_info() -> Result<RemoteNodeInfo, String> {
         let output = exec(vec!["nigiri", "lnd", "getinfo"]);
         if !output.status.success() {
@@ -131,6 +153,72 @@ pub mod nigiri {
         let pub_key = json["identity_pubkey"].as_str().unwrap().to_string();
         let synced = json["synced_to_chain"].as_bool().unwrap();
         Ok(RemoteNodeInfo { synced, pub_key })
+    }
+
+    pub fn mine_blocks(block_amount: u32) -> Result<(), String> {
+        let output = exec(vec![
+            "nigiri",
+            "rpc",
+            "-generate",
+            &block_amount.to_string(),
+        ]);
+        if !output.status.success() {
+            return Err(format!("Command `rpc -generate {}` failed", block_amount));
+        }
+        Ok(())
+    }
+
+    pub fn fund_lnd_node(amount_btc: f32) -> Result<(), String> {
+        let output = exec(vec!["nigiri", "faucet", "lnd", &amount_btc.to_string()]);
+        if !output.status.success() {
+            return Err(format!("Command `faucet lnd {}` failed", amount_btc));
+        }
+        Ok(())
+    }
+
+    pub fn try_function_multiple_times<T>(
+        f: fn(T) -> Result<(), String>,
+        param: T,
+        retry_times: u8,
+        interval: Duration,
+    ) -> Result<(), String>
+    where
+        T: Copy,
+    {
+        for i in 0..(retry_times + 1) {
+            match f(param) {
+                Ok(_) => break,
+                Err(_) => {
+                    if i < retry_times {
+                        sleep(interval);
+                        continue;
+                    }
+                }
+            }
+            return f(param);
+        }
+        Ok(())
+    }
+
+    pub fn lnd_open_channel(node_id: &str) -> Result<(), String> {
+        let output = exec(vec![
+            "nigiri",
+            "lnd",
+            "openchannel",
+            "--private",
+            node_id,
+            "1000000",
+        ]);
+        if !output.status.success() {
+            return Err(format!(
+                "Command `lnd openchannel --private {} 1000000` failed",
+                node_id
+            ));
+        }
+        let _json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+
+        Ok(())
     }
 
     pub fn exec(params: Vec<&str>) -> Output {
