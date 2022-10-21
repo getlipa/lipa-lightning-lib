@@ -42,6 +42,7 @@ enum RuntimeError {
     "ChainSync",
     "InvalidAddress",
     "InvalidPubKey",
+    "Logic",
     "PeerConnection",
 };
 

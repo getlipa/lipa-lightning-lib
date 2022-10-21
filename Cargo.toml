@@ -11,8 +11,11 @@ name = "uniffi_lipalightninglib"
 nigiri = []
 
 [dependencies]
+aes = "0.8.1"
 bdk = { version = "0.23.0", features = ["keys-bip39"] }
 bitcoin = "0.28.1"
+cbc = "0.1.2"
+cipher = { version = "0.4.3", features = ["block-padding", "alloc"] }
 futures = "0.3.24"
 lightning = { version = "0.0.110", features = ["max_level_trace"] }
 lightning-background-processor = "0.0.110"

@@ -12,6 +12,7 @@ pub mod secret;
 mod async_runtime;
 mod chain_access;
 mod confirm;
+mod encryption;
 mod event_handler;
 mod fee_estimator;
 mod filter;
