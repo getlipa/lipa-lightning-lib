@@ -137,7 +137,6 @@ pub mod nigiri {
             i += 1;
             sleep(Duration::from_secs(1));
         }
-        }
     }
 
     pub fn query_lnd_info() -> Result<RemoteNodeInfo, String> {
@@ -173,7 +172,7 @@ pub mod nigiri {
         Ok(())
     }
 
-    pub fn try_function_multiple_times<T>(
+    pub fn try_cmd_repeatedly<T>(
         f: fn(T) -> Result<(), String>,
         param: T,
         mut retry_times: u8,
@@ -193,10 +192,8 @@ pub mod nigiri {
 
         Ok(())
     }
-        Ok(())
-    }
 
-    pub fn lnd_open_channel(node_id: &str) -> Result<(), String> {
+    pub fn lnd_open_channel(node_id: &str) -> Result<String, String> {
         let output = exec(vec![
             "nigiri",
             "lnd",
@@ -211,8 +208,47 @@ pub mod nigiri {
                 node_id
             ));
         }
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let funding_txid = json["funding_txid"].as_str().unwrap().to_string();
+
+        Ok(funding_txid)
+    }
+
+    pub fn lnd_disconnect_peer(node_id: String) -> Result<(), String> {
+        let output = exec(vec!["nigiri", "lnd", "disconnect", &node_id]);
+        if !output.status.success() {
+            return Err(format!("Command `lnd disconnect {}` failed", node_id));
+        }
+
+        Ok(())
+    }
+
+    pub fn lnd_force_close_channel(funding_txid: String) -> Result<(), String> {
+        let output = exec(vec![
+            "nigiri",
+            "lnd",
+            "closechannel",
+            "--force",
+            &funding_txid,
+        ]);
+        if !output.status.success() {
+            return Err(format!(
+                "Command `lnd closechannel --force {}` failed",
+                funding_txid
+            ));
+        }
         let _json: serde_json::Value =
             serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+
+        Ok(())
+    }
+
+    pub fn lnd_stop() -> Result<(), String> {
+        let output = exec(vec!["nigiri", "lnd", "stop"]);
+        if !output.status.success() {
+            return Err(String::from("Command `lnd stop` failed"));
+        }
 
         Ok(())
     }
