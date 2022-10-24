@@ -27,7 +27,7 @@ thiserror = "1.0.34"
 tokio = { version = "1.21.1", features = ["rt-multi-thread", "time"] }
 uniffi = "0.21.0"
 
-esplora-client = { git = "https://github.com/gcomte/rust-esplora-client", branch = "feature/get_block_status", default-features = false, features = ["blocking"] }
+esplora-client = { git = "https://github.com/bitcoindevkit/rust-esplora-client", branch = "master", default-features = false, features = ["blocking"] }
 
 [dev-dependencies]
 bitcoin_hashes = "0.11.0"
