@@ -60,6 +60,8 @@ impl LipaChainAccess {
         //       which would make corrupt the order of the confirmed transactions as required by the Confirm trait:
         //       https://github.com/lightningdevkit/rust-lightning/blob/d6321e6e11b3e1b11e26617d3bab0b8c21da0b5b/lightning/src/chain/mod.rs#L128
 
+        // The rationale behind looping here is that confirming or unconfirming transactions itself
+        // might lead LDK to register additional transactions/outputs to watch.
         loop {
             self.sync_relevant_txs_for_reorgs(confirm)?;
 
