@@ -1,9 +1,9 @@
 use crate::errors::RuntimeError;
 
 use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, BlockSizeUser, KeyIvInit};
+use bdk::bitcoin::secp256k1::rand::thread_rng;
+use bdk::bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use bitcoin::hashes::{sha256, sha512, Hash, HashEngine, Hmac, HmacEngine};
-use bitcoin::secp256k1::rand::thread_rng;
-use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use rand::rngs::OsRng;
 use rand::RngCore;
 
@@ -108,7 +108,7 @@ mod test {
     #[test]
     fn test_generate_shared_secret() {
         let secp = Secp256k1::new();
-        let ephemeral = bitcoin::secp256k1::ONE_KEY;
+        let ephemeral = bdk::bitcoin::secp256k1::ONE_KEY;
         let ephemeral_pubkey = PublicKey::from_secret_key(&secp, &ephemeral);
         let privkey =
             Vec::from_hex("6afa9046a9579cad143a384c1b564b9a250d27d6f6a63f9f20bf3a7594c9e2c6")
@@ -169,7 +169,7 @@ mod test {
         // Tested against Decrypt() from btcsuite/btcd
         // https://github.com/btcsuite/btcd/blob/v0.22/btcec/ciphering.go#L121
         let secp = Secp256k1::new();
-        let ephemeral = bitcoin::secp256k1::ONE_KEY;
+        let ephemeral = bdk::bitcoin::secp256k1::ONE_KEY;
         let ephemeral_pubkey = PublicKey::from_secret_key(&secp, &ephemeral);
         let init_vector = Vec::from_hex("6afa9046a9579cad143a384c1b564b9a").unwrap();
         let randomness = Randomness {
