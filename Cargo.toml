@@ -12,7 +12,7 @@ nigiri = []
 
 [dependencies]
 aes = "0.8.1"
-bdk = { version = "0.23.0", features = ["keys-bip39"] }
+bdk = { version = "0.23.0", default-features = false, features = ["keys-bip39"] }
 bitcoin = "0.29.1"
 cbc = "0.1.2"
 cipher = { version = "0.4.3", features = ["block-padding", "alloc"] }
@@ -23,6 +23,7 @@ lightning-net-tokio = "0.0.111"
 lightning-rapid-gossip-sync = "0.0.111"
 log = "0.4.17"
 rand = "0.8.5"
+secp256k1 = { version = "0.24.0", features = [ "rand" ] }
 thiserror = "1.0.34"
 tokio = { version = "1.21.1", features = ["rt-multi-thread", "time"] }
 uniffi = "0.21.0"

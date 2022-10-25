@@ -200,8 +200,8 @@ mod tests {
     use crate::esplora_client::ConfirmedTransaction;
     use bitcoin::consensus::deserialize;
     use bitcoin::hashes::hex::FromHex;
+    use bitcoin::hashes::Hash;
     use bitcoin::{BlockHash, BlockHeader, Transaction, TxMerkleNode};
-    use bitcoin_hashes::Hash;
 
     fn build_sample_tx() -> Transaction {
         let tx_bytes = Vec::from_hex(
