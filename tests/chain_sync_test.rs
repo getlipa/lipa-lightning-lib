@@ -15,21 +15,6 @@ mod chain_sync_test {
 
     const HALF_SEC: Duration = Duration::from_millis(500);
 
-    fn setup() -> NodeHandle {
-        setup::nigiri::start();
-        let lsp_info = setup::nigiri::query_lnd_info().unwrap();
-        let lsp_node = NodeAddress {
-            pub_key: lsp_info.pub_key,
-            address: "127.0.0.1:9735".to_string(),
-        };
-
-        let node_handle = NodeHandle::new(lsp_node);
-
-        nigiri::try_cmd_repeatedly(nigiri::fund_lnd_node, 0.5, 10, HALF_SEC).unwrap();
-
-        node_handle
-    }
-
     #[test]
     fn test_channel_is_confirmed_chain_only_after_6_confirmations() {
         let node_handle = setup();
@@ -88,37 +73,6 @@ mod chain_sync_test {
         assert_eq!(node.get_node_info().num_channels, 0);
     }
 
-    fn start_node_open_confirm_channel_stop_node(node_handle: &NodeHandle) -> String {
-        let node = node_handle.start().unwrap();
-        let node_id = node.get_node_info().node_pubkey.to_hex();
-
-        let tx_id = nigiri::lnd_open_channel(&node_id).unwrap();
-
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 0);
-
-        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 6, 10, HALF_SEC).unwrap();
-
-        sleep(Duration::from_secs(10));
-
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 1);
-
-        tx_id
-    }
-
-    fn start_node_open_channel_without_confirm_stop_node(node_handle: &NodeHandle) -> String {
-        let node = node_handle.start().unwrap();
-        let node_id = node.get_node_info().node_pubkey.to_hex();
-
-        let tx_id = nigiri::lnd_open_channel(&node_id).unwrap();
-
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 0);
-
-        tx_id
-    }
-
     #[test]
     fn test_channel_remains_usable_after_restart() {
         let node_handle = setup();
@@ -138,6 +92,7 @@ mod chain_sync_test {
         start_node_open_channel_without_confirm_stop_node(&node_handle);
 
         nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 6, 10, HALF_SEC).unwrap();
+        // TODO: figure out why the following sleep is needed
         sleep(Duration::from_secs(5));
 
         let node = node_handle.start().unwrap();
@@ -168,7 +123,7 @@ mod chain_sync_test {
     }
 
     #[test]
-    fn test_confirmation_and_force_close_are_detected_offline_node() {
+    fn test_force_close_is_detected_offline_node_unconfirmed_channel() {
         let node_handle = setup();
 
         let tx_id = start_node_open_channel_without_confirm_stop_node(&node_handle);
@@ -186,5 +141,51 @@ mod chain_sync_test {
 
         // This only passes with the sleep that precedes it. TODO: confirm that's not a problem
         assert_eq!(node.get_node_info().num_channels, 0);
+    }
+
+    fn setup() -> NodeHandle {
+        setup::nigiri::start();
+        let lsp_info = setup::nigiri::query_lnd_info().unwrap();
+        let lsp_node = NodeAddress {
+            pub_key: lsp_info.pub_key,
+            address: "127.0.0.1:9735".to_string(),
+        };
+
+        let node_handle = NodeHandle::new(lsp_node);
+
+        nigiri::try_cmd_repeatedly(nigiri::fund_lnd_node, 0.5, 10, HALF_SEC).unwrap();
+
+        node_handle
+    }
+
+    fn start_node_open_confirm_channel_stop_node(node_handle: &NodeHandle) -> String {
+        let node = node_handle.start().unwrap();
+        let node_id = node.get_node_info().node_pubkey.to_hex();
+
+        let tx_id = nigiri::lnd_open_channel(&node_id).unwrap();
+
+        assert_eq!(node.get_node_info().num_channels, 1);
+        assert_eq!(node.get_node_info().num_usable_channels, 0);
+
+        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 6, 10, HALF_SEC).unwrap();
+
+        sleep(Duration::from_secs(10));
+
+        assert_eq!(node.get_node_info().num_channels, 1);
+        assert_eq!(node.get_node_info().num_usable_channels, 1);
+
+        tx_id
+    }
+
+    fn start_node_open_channel_without_confirm_stop_node(node_handle: &NodeHandle) -> String {
+        let node = node_handle.start().unwrap();
+        let node_id = node.get_node_info().node_pubkey.to_hex();
+
+        let tx_id = nigiri::lnd_open_channel(&node_id).unwrap();
+
+        assert_eq!(node.get_node_info().num_channels, 1);
+        assert_eq!(node.get_node_info().num_usable_channels, 0);
+
+        tx_id
     }
 }

@@ -124,12 +124,12 @@ impl StoragePersister {
                 channel_manager.list_channels().len()
             );
             debug!(
-                "List of channels known to the read ChannelManager: {}",
+                "List of channels known to the read ChannelManager: {:?}",
                 channel_manager
                     .list_channels()
                     .iter()
                     .map(|details| details.channel_id.to_hex())
-                    .collect::<String>()
+                    .collect::<Vec<String>>()
             );
             Ok((Some(block_hash), channel_manager))
         } else {
