@@ -103,7 +103,7 @@ fn hmac256(key: &[u8], data: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use bitcoin_hashes::hex::{FromHex, ToHex};
+    use bitcoin::hashes::hex::{FromHex, ToHex};
 
     #[test]
     fn test_generate_shared_secret() {

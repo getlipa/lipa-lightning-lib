@@ -9,8 +9,8 @@ pub mod lspd {
 use file_storage::FileStorage;
 use lsp_client::LspClient;
 
+use bitcoin::hashes::hex::ToHex;
 use bitcoin::Network;
-use bitcoin_hashes::hex::ToHex;
 use log::info;
 use lspd::ChannelInformationReply;
 use prost::Message;

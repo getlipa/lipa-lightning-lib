@@ -31,7 +31,7 @@ mod test {
     use super::*;
 
     use bitcoin::consensus::deserialize;
-    use bitcoin_hashes::hex::FromHex;
+    use bitcoin::hashes::hex::FromHex;
 
     #[test]
     // Run the test `cargo test test_broadcast_failure -- --nocapture` to see logs.
