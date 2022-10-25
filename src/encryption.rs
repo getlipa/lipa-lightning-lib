@@ -1,9 +1,9 @@
 use crate::errors::RuntimeError;
 
 use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, BlockSizeUser, KeyIvInit};
-use bdk::bitcoin::secp256k1::rand::thread_rng;
-use bdk::bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use bitcoin::hashes::{sha256, sha512, Hash, HashEngine, Hmac, HmacEngine};
+use bitcoin::secp256k1::scalar::Scalar;
+use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use rand::rngs::OsRng;
 use rand::RngCore;
 
@@ -16,9 +16,9 @@ type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 // https://pkg.go.dev/github.com/btcsuite/btcd/btcec#Encrypt
 // https://github.com/btcsuite/btcd/blob/v0.22.1/btcec/ciphering.go#L70
 #[allow(dead_code)]
-pub(crate) fn encrypt(pubkey: PublicKey, data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
-    let secp = Secp256k1::new();
-    let (ephemeral, ephemeral_pubkey) = secp.generate_keypair(&mut thread_rng());
+pub(crate) fn encrypt(pubkey: &PublicKey, data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
+    let secp = secp256k1::Secp256k1::new();
+    let (ephemeral, ephemeral_pubkey) = secp.generate_keypair(&mut rand::thread_rng());
     let mut init_vector = vec![0u8; Aes256CbcEnc::block_size()];
     OsRng.fill_bytes(&mut init_vector);
     let randomness = Randomness {
@@ -36,11 +36,11 @@ struct Randomness {
 }
 
 fn encrypt_with_randomness(
-    pubkey: PublicKey,
+    pubkey: &PublicKey,
     data: &[u8],
     randomness: &Randomness,
 ) -> Result<Vec<u8>, RuntimeError> {
-    let shared_secret = generate_shared_secret(&randomness.ephemeral, pubkey)?;
+    let shared_secret = generate_shared_secret(randomness.ephemeral, pubkey)?;
     let key_encrypt = &shared_secret[..32];
     let key_mac = &shared_secret[32..];
 
@@ -71,22 +71,22 @@ fn encrypt_with_randomness(
 }
 
 fn generate_shared_secret(
-    privkey: &SecretKey,
-    mut pubkey: PublicKey,
+    privkey: SecretKey,
+    pubkey: &PublicKey,
 ) -> Result<[u8; 64], RuntimeError> {
     // Unfortunately we cannot use secp256k1::ecdh::SharedSecret, because it uses
     // sha256, but we need sha512.
 
     let secp = Secp256k1::new();
-    let scalar = privkey.secret_bytes();
-    pubkey
-        .mul_assign(&secp, &scalar)
+    let scalar = Scalar::from(privkey);
+    let tweaked_pubkey = pubkey
+        .mul_tweak(&secp, &scalar)
         .map_err(|_| RuntimeError::Logic {
             message: "Multiplication should never fail with a verified seckey and valid pubkey"
                 .to_string(),
         })?;
     // https://github.com/bitcoin-core/secp256k1/blob/master/src/eckey_impl.h#L43
-    let x_coordinate = &pubkey.serialize()[1..33];
+    let x_coordinate = &tweaked_pubkey.serialize()[1..33];
     sha512::Hash::hash(x_coordinate)[..]
         .try_into()
         .map_err(|_| RuntimeError::Logic {
@@ -103,12 +103,12 @@ fn hmac256(key: &[u8], data: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use bitcoin_hashes::hex::{FromHex, ToHex};
+    use bitcoin::hashes::hex::{FromHex, ToHex};
 
     #[test]
     fn test_generate_shared_secret() {
         let secp = Secp256k1::new();
-        let ephemeral = bdk::bitcoin::secp256k1::ONE_KEY;
+        let ephemeral = bitcoin::secp256k1::ONE_KEY;
         let ephemeral_pubkey = PublicKey::from_secret_key(&secp, &ephemeral);
         let privkey =
             Vec::from_hex("6afa9046a9579cad143a384c1b564b9a250d27d6f6a63f9f20bf3a7594c9e2c6")
@@ -121,7 +121,7 @@ mod test {
             ephemeral_pubkey,
             init_vector,
         };
-        let shared_secret = generate_shared_secret(&randomness.ephemeral, pubkey)
+        let shared_secret = generate_shared_secret(randomness.ephemeral, &pubkey)
             .unwrap()
             .to_hex();
         assert_eq!(
@@ -169,7 +169,7 @@ mod test {
         // Tested against Decrypt() from btcsuite/btcd
         // https://github.com/btcsuite/btcd/blob/v0.22/btcec/ciphering.go#L121
         let secp = Secp256k1::new();
-        let ephemeral = bdk::bitcoin::secp256k1::ONE_KEY;
+        let ephemeral = bitcoin::secp256k1::ONE_KEY;
         let ephemeral_pubkey = PublicKey::from_secret_key(&secp, &ephemeral);
         let init_vector = Vec::from_hex("6afa9046a9579cad143a384c1b564b9a").unwrap();
         let randomness = Randomness {
@@ -184,7 +184,7 @@ mod test {
         let pubkey = PublicKey::from_secret_key(&secp, &privkey);
 
         let data = "just test".as_bytes();
-        let encrypted_data = encrypt_with_randomness(pubkey, data, &randomness)
+        let encrypted_data = encrypt_with_randomness(&pubkey, data, &randomness)
             .unwrap()
             .to_hex();
         assert_eq!(
@@ -198,7 +198,7 @@ mod test {
 
         let data = "just test long xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
             .as_bytes();
-        let encrypted_data = encrypt_with_randomness(pubkey, data, &randomness)
+        let encrypted_data = encrypt_with_randomness(&pubkey, data, &randomness)
             .unwrap()
             .to_hex();
         assert_eq!(
