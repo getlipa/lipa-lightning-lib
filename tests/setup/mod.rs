@@ -71,6 +71,7 @@ pub fn setup(lsp_node: NodeAddress) -> Result<LightningNode, InitializationError
 }
 
 #[cfg(feature = "nigiri")]
+#[allow(dead_code)]
 pub mod nigiri {
     use super::*;
 
@@ -102,10 +103,11 @@ pub mod nigiri {
         debug!("NIGIRI starting ...");
         exec(vec!["nigiri", "start", "--ci", "--ln"]);
         wait_for_sync();
+        wait_for_esplora();
     }
 
     pub fn stop() {
-        exec(vec!["nigiri", "stop"]);
+        exec(vec!["nigiri", "stop", "--delete"]);
     }
 
     fn wait_for_sync() {
@@ -121,6 +123,22 @@ pub mod nigiri {
         debug!("NIGIRI is synced");
     }
 
+    fn wait_for_esplora() {
+        let esplora_client = esplora_client::Builder::new("http://localhost:30000")
+            .timeout(30)
+            .build_blocking()
+            .unwrap();
+
+        let mut i = 0u8;
+        while let Err(e) = esplora_client.get_height() {
+            if i == 15 {
+                panic!("Failed to start NIGIRI: {}", e);
+            }
+            i += 1;
+            sleep(Duration::from_secs(1));
+        }
+    }
+
     pub fn query_lnd_info() -> Result<RemoteNodeInfo, String> {
         let output = exec(vec!["nigiri", "lnd", "getinfo"]);
         if !output.status.success() {
@@ -133,7 +151,109 @@ pub mod nigiri {
         Ok(RemoteNodeInfo { synced, pub_key })
     }
 
-    fn exec(params: Vec<&str>) -> Output {
+    pub fn mine_blocks(block_amount: u32) -> Result<(), String> {
+        let output = exec(vec![
+            "nigiri",
+            "rpc",
+            "-generate",
+            &block_amount.to_string(),
+        ]);
+        if !output.status.success() {
+            return Err(format!("Command `rpc -generate {}` failed", block_amount));
+        }
+        Ok(())
+    }
+
+    pub fn fund_lnd_node(amount_btc: f32) -> Result<(), String> {
+        let output = exec(vec!["nigiri", "faucet", "lnd", &amount_btc.to_string()]);
+        if !output.status.success() {
+            return Err(format!("Command `faucet lnd {}` failed", amount_btc));
+        }
+        Ok(())
+    }
+
+    pub fn try_cmd_repeatedly<T>(
+        f: fn(T) -> Result<(), String>,
+        param: T,
+        mut retry_times: u8,
+        interval: Duration,
+    ) -> Result<(), String>
+    where
+        T: Copy,
+    {
+        while let Err(e) = f(param) {
+            retry_times -= 1;
+
+            if retry_times == 0 {
+                return Err(e);
+            }
+            sleep(interval);
+        }
+
+        Ok(())
+    }
+
+    pub fn lnd_open_channel(node_id: &str) -> Result<String, String> {
+        let output = exec(vec![
+            "nigiri",
+            "lnd",
+            "openchannel",
+            "--private",
+            node_id,
+            "1000000",
+        ]);
+        if !output.status.success() {
+            return Err(format!(
+                "Command `lnd openchannel --private {} 1000000` failed",
+                node_id
+            ));
+        }
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let funding_txid = json["funding_txid"].as_str().unwrap().to_string();
+
+        Ok(funding_txid)
+    }
+
+    pub fn lnd_disconnect_peer(node_id: String) -> Result<(), String> {
+        let output = exec(vec!["nigiri", "lnd", "disconnect", &node_id]);
+        if !output.status.success() {
+            return Err(format!("Command `lnd disconnect {}` failed", node_id));
+        }
+
+        Ok(())
+    }
+
+    pub fn lnd_force_close_channel(funding_txid: String) -> Result<(), String> {
+        let output = exec(vec![
+            "nigiri",
+            "lnd",
+            "closechannel",
+            "--force",
+            &funding_txid,
+        ]);
+        if !output.status.success() {
+            return Err(format!(
+                "Command `lnd closechannel --force {}` failed",
+                funding_txid
+            ));
+        }
+        let _json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+
+        Ok(())
+    }
+
+    pub fn lnd_stop() -> Result<(), String> {
+        let output = exec(vec!["nigiri", "lnd", "stop"]);
+        if !output.status.success() {
+            return Err(String::from("Command `lnd stop` failed"));
+        }
+
+        Ok(())
+    }
+
+    pub fn exec(params: Vec<&str>) -> Output {
         let (command, args) = params.split_first().expect("At least one param is needed");
         Command::new(command)
             .args(args)
