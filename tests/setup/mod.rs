@@ -1,7 +1,7 @@
 use bitcoin::Network;
 use simplelog::SimpleLogger;
 
-use std::sync::Once;
+use std::sync::{Arc, Once};
 use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
 use uniffi_lipalightninglib::config::{Config, NodeAddress};
 use uniffi_lipalightninglib::keys_manager::generate_secret;
@@ -12,22 +12,20 @@ use uniffi_lipalightninglib::errors::InitializationError;
 
 static START_LOGGER_ONCE: Once = Once::new();
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StorageMock {
-    storage: Storage,
+    storage: Arc<Storage>,
 }
 
 impl StorageMock {
-    pub fn new() -> Self {
-        Self {
-            storage: Storage::new(),
-        }
+    pub fn new(storage: Arc<Storage>) -> Self {
+        Self { storage }
     }
 }
 
 impl Default for StorageMock {
     fn default() -> Self {
-        Self::new()
+        Self::new(Arc::new(Storage::new()))
     }
 }
 
@@ -53,21 +51,34 @@ impl RedundantStorageCallback for StorageMock {
     }
 }
 
-#[allow(dead_code)] // not used by all tests
-pub fn setup(lsp_node: NodeAddress) -> Result<LightningNode, InitializationError> {
-    START_LOGGER_ONCE.call_once(|| {
-        SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default()).unwrap();
-    });
-    let storage = Box::new(StorageMock::new());
+#[allow(dead_code)]
+pub struct NodeHandle {
+    config: Config,
+    storage: StorageMock,
+}
 
-    let config = Config {
-        network: Network::Regtest,
-        seed: generate_secret("".to_string()).unwrap().seed,
-        esplora_api_url: "http://localhost:30000".to_string(),
-        lsp_node,
-    };
+#[allow(dead_code)]
+impl NodeHandle {
+    pub fn new(lsp_node: NodeAddress) -> Self {
+        START_LOGGER_ONCE.call_once(|| {
+            SimpleLogger::init(simplelog::LevelFilter::Trace, simplelog::Config::default())
+                .unwrap();
+        });
+        let storage = StorageMock::new(Arc::new(Storage::new()));
 
-    LightningNode::new(&config, storage)
+        let config = Config {
+            network: Network::Regtest,
+            seed: generate_secret("".to_string()).unwrap().seed,
+            esplora_api_url: "http://localhost:30000".to_string(),
+            lsp_node,
+        };
+
+        NodeHandle { config, storage }
+    }
+
+    pub fn start(&self) -> Result<LightningNode, InitializationError> {
+        LightningNode::new(&self.config, Box::new(self.storage.clone()))
+    }
 }
 
 #[cfg(feature = "nigiri")]
