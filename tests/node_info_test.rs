@@ -4,6 +4,7 @@ mod setup;
 mod node_info_test {
     use super::*;
 
+    use crate::setup::NodeHandle;
     use bitcoin::secp256k1::PublicKey;
     use uniffi_lipalightninglib::config::NodeAddress;
 
@@ -15,7 +16,7 @@ mod node_info_test {
             pub_key: lsp_info.pub_key,
             address: "127.0.0.1:9735".to_string(),
         };
-        let node = setup::setup(lsp_node).unwrap();
+        let node = NodeHandle::new(lsp_node).start().unwrap();
         let node_info = node.get_node_info();
 
         assert!(

@@ -7,6 +7,7 @@ mod setup;
 mod p2p_connection_test {
     use super::*;
 
+    use crate::setup::NodeHandle;
     use uniffi_lipalightninglib::config::NodeAddress;
 
     #[test]
@@ -18,7 +19,7 @@ mod p2p_connection_test {
             address: "127.0.0.1:9735".to_string(),
         };
 
-        let node = setup::setup(lsp_node).unwrap();
+        let node = NodeHandle::new(lsp_node).start().unwrap();
         assert_eq!(node.get_node_info().num_peers, 1)
     }
 
@@ -29,7 +30,7 @@ mod p2p_connection_test {
             pub_key: lsp_info.pub_key,
             address: "127.0.0.1:9".to_string(),
         };
-        assert!(setup::setup(lsp_node).is_err());
+        assert!(NodeHandle::new(lsp_node).start().is_err());
     }
 
     #[test]
@@ -39,7 +40,7 @@ mod p2p_connection_test {
             pub_key: lsp_info.pub_key,
             address: "127.0.0.1:9735".to_string(),
         };
-        let node = setup::setup(lsp_node).unwrap();
+        let node = NodeHandle::new(lsp_node).start().unwrap();
         assert_eq!(node.get_node_info().num_peers, 1);
 
         setup::nigiri::stop();

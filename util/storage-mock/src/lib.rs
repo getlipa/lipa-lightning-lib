@@ -43,6 +43,7 @@ impl Storage {
     }
 
     pub fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> bool {
+        self.health.lock().unwrap().insert(bucket.clone(), true);
         self.objects
             .lock()
             .unwrap()
@@ -71,7 +72,19 @@ mod tests {
 
     #[test]
     fn it_works() {
-        // let result = add(2, 2);
-        // assert_eq!(result, 4);
+        let storage = Storage::new();
+
+        storage.put_object("bucket".to_string(), "key".to_string(), vec![1, 2, 3]);
+
+        assert!(storage.check_health("bucket".to_string()));
+        assert_eq!(
+            storage.list_objects("bucket".to_string()),
+            vec!["key".to_string()]
+        );
+        assert!(storage.object_exists("bucket".to_string(), "key".to_string()));
+        assert_eq!(
+            storage.get_object("bucket".to_string(), "key".to_string()),
+            vec![1, 2, 3]
+        );
     }
 }

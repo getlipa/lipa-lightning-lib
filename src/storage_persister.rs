@@ -19,7 +19,7 @@ use lightning::util::config::UserConfig;
 use lightning::util::logger::Logger;
 use lightning::util::persist::Persister;
 use lightning::util::ser::{ReadableArgs, Writeable};
-use log::error;
+use log::{debug, error};
 use std::io;
 use std::io::{Cursor, Error};
 use std::ops::Deref;
@@ -29,7 +29,6 @@ static MONITORS_BUCKET: &str = "monitors";
 static OBJECTS_BUCKET: &str = "objects";
 
 static MANAGER_KEY: &str = "manager";
-static MONITOR_KEY: &str = "monitor";
 static GRAPH_KEY: &str = "graph";
 static SCORER_KEY: &str = "scorer";
 
@@ -65,6 +64,10 @@ impl StoragePersister {
             let mut buffer = Cursor::new(&data);
             match <(BlockHash, ChannelMonitor<Signer>)>::read(&mut buffer, &*keys_manager) {
                 Ok((blockhash, channel_monitor)) => {
+                    debug!(
+                        "Successfully read ChannelMonitor {} from storage",
+                        channel_monitor.get_funding_txo().0.to_channel_id().to_hex()
+                    );
                     result.push((blockhash, channel_monitor));
                 }
                 Err(e) => {
@@ -96,11 +99,11 @@ impl StoragePersister {
     {
         if self
             .storage
-            .object_exists(OBJECTS_BUCKET.to_string(), MONITOR_KEY.to_string())
+            .object_exists(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
         {
             let data = self
                 .storage
-                .get_object(OBJECTS_BUCKET.to_string(), MONITOR_KEY.to_string());
+                .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string());
             let read_args = ChannelManagerReadArgs::new(
                 keys_manager,
                 fee_estimator,
@@ -116,6 +119,18 @@ impl StoragePersister {
                     .map_err(|e| InitializationError::ChannelMonitorBackup {
                         message: e.to_string(),
                     })?;
+            debug!(
+                "Successfully read the ChannelManager from storage. It knows of {} channels",
+                channel_manager.list_channels().len()
+            );
+            debug!(
+                "List of channels known to the read ChannelManager: {:?}",
+                channel_manager
+                    .list_channels()
+                    .iter()
+                    .map(|details| details.channel_id.to_hex())
+                    .collect::<Vec<String>>()
+            );
             Ok((Some(block_hash), channel_manager))
         } else {
             let channel_manager = SimpleArcChannelManager::new(
