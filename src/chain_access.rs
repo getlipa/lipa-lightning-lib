@@ -200,7 +200,8 @@ mod tests {
     use crate::esplora_client::ConfirmedTransaction;
     use bitcoin::consensus::deserialize;
     use bitcoin::hashes::hex::FromHex;
-    use bitcoin::{BlockHeader, Transaction};
+    use bitcoin::{BlockHash, BlockHeader, Transaction, TxMerkleNode};
+    use bitcoin_hashes::Hash;
 
     fn build_sample_tx() -> Transaction {
         let tx_bytes = Vec::from_hex(
@@ -217,8 +218,8 @@ mod tests {
     fn build_default_block_header() -> BlockHeader {
         BlockHeader {
             version: 0,
-            prev_blockhash: Default::default(),
-            merkle_root: Default::default(),
+            prev_blockhash: BlockHash::all_zeros(),
+            merkle_root: TxMerkleNode::all_zeros(),
             time: 0,
             bits: 0,
             nonce: 0,
