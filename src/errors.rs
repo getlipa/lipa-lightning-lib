@@ -1,7 +1,7 @@
 use uniffi::ffi::foreigncallbacks::UnexpectedUniFFICallbackError;
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
-pub enum Error {
+pub enum LipaError {
     /// Invalid input.
     /// Consider fixing the input and retrying the request.
     #[error("InvalidInput: {message}")]
@@ -16,48 +16,77 @@ pub enum Error {
     PermanentFailure { message: String },
 }
 
-pub fn invalid_input<T: ToString>(e: T) -> Error {
-    Error::InvalidInput {
+pub fn invalid_input<E: ToString>(e: E) -> LipaError {
+    LipaError::InvalidInput {
         message: e.to_string(),
     }
 }
 
-pub fn invalid_input_with<T: ToString>(message: String) -> Box<dyn FnOnce(T) -> Error> {
-    Box::new(move |e: T| Error::InvalidInput {
-        message: format!("{}: {}", message, e.to_string()),
+pub fn invalid_input_with<M: ToString + 'static, E: ToString>(
+    message: M,
+) -> Box<dyn FnOnce(E) -> LipaError> {
+    Box::new(move |e: E| LipaError::InvalidInput {
+        message: format!("{}: {}", message.to_string(), e.to_string()),
     })
 }
 
-pub fn runtime_error<T: ToString>(e: T) -> Error {
-    Error::RuntimeError {
+pub fn runtime_error<E: ToString>(e: E) -> LipaError {
+    LipaError::RuntimeError {
         message: e.to_string(),
     }
 }
 
-pub fn runtime_error_with<T: ToString>(message: String) -> Box<dyn FnOnce(T) -> Error> {
-    Box::new(move |e: T| Error::RuntimeError {
-        message: format!("{}: {}", message, e.to_string()),
+pub fn runtime_error_with<M: ToString + 'static, E: ToString>(
+    message: M,
+) -> Box<dyn FnOnce(E) -> LipaError> {
+    Box::new(move |e: E| LipaError::RuntimeError {
+        message: format!("{}: {}", message.to_string(), e.to_string()),
     })
 }
 
-pub fn permanent_failure<T: ToString>(e: T) -> Error {
-    Error::PermanentFailure {
+pub fn permanent_failure<E: ToString>(e: E) -> LipaError {
+    LipaError::PermanentFailure {
         message: e.to_string(),
     }
 }
 
-pub fn permanent_failure_with<T: ToString>(message: String) -> Box<dyn FnOnce(T) -> Error> {
-    Box::new(move |e: T| Error::PermanentFailure {
-        message: format!("{}: {}", message, e.to_string()),
+pub fn permanent_failure_with<M: ToString + 'static, E: ToString>(
+    message: M,
+) -> Box<dyn FnOnce(E) -> LipaError> {
+    Box::new(move |e: E| LipaError::PermanentFailure {
+        message: format!("{}: {}", message.to_string(), e.to_string()),
     })
 }
 
-pub fn lift_invalid_input(e: Error) -> Error {
-    match e {
-        Error::InvalidInput { message } => Error::PermanentFailure {
-            message: "InvalidInput: ".to_string() + &message,
-        },
-        another_error => another_error,
+pub type LipaResult<T> = Result<T, LipaError>;
+
+pub trait LipaResultTrait<T> {
+    fn lift_invalid_input(self) -> LipaResult<T>;
+    fn prefix_error<M: ToString + 'static>(self, message: M) -> LipaResult<T>;
+}
+
+impl<T> LipaResultTrait<T> for LipaResult<T> {
+    fn lift_invalid_input(self) -> LipaResult<T> {
+        self.map_err(|e| match e {
+            LipaError::InvalidInput { message } => LipaError::PermanentFailure {
+                message: format!("InvalidInput: {}", message),
+            },
+            another_error => another_error,
+        })
+    }
+
+    fn prefix_error<M: ToString + 'static>(self, prefix: M) -> LipaResult<T> {
+        self.map_err(|e| match e {
+            LipaError::InvalidInput { message } => LipaError::InvalidInput {
+                message: format!("{}: {}", prefix.to_string(), message),
+            },
+            LipaError::RuntimeError { message } => LipaError::RuntimeError {
+                message: format!("{}: {}", prefix.to_string(), message),
+            },
+            LipaError::PermanentFailure { message } => LipaError::PermanentFailure {
+                message: format!("{}: {}", prefix.to_string(), message),
+            },
+        })
     }
 }
 
@@ -74,7 +103,7 @@ mod test {
 
         let io_error: Result<()> = Err(Error::new(ErrorKind::Other, "File not found"));
         let our_error = io_error
-            .map_err(runtime_error_with("No backup".to_string()))
+            .map_err(runtime_error_with("No backup"))
             .unwrap_err();
         assert_eq!(
             our_error.to_string(),
@@ -84,17 +113,34 @@ mod test {
 
     #[test]
     fn test_lift_invalid_input() {
+        let result: LipaResult<()> =
+            Err(invalid_input("Number must be positive")).lift_invalid_input();
         assert_eq!(
-            lift_invalid_input(invalid_input("Number must be positive")),
-            permanent_failure("InvalidInput: Number must be positive")
+            result.unwrap_err().to_string(),
+            "PermanentFailure: InvalidInput: Number must be positive"
         );
+
+        let result: LipaResult<()> = Err(runtime_error("Socket timeout")).lift_invalid_input();
         assert_eq!(
-            lift_invalid_input(runtime_error("Socket timeout")),
-            runtime_error("Socket timeout")
+            result.unwrap_err().to_string(),
+            "RuntimeError: Socket timeout"
         );
+
+        let result: LipaResult<()> =
+            Err(permanent_failure("Devision by zero")).lift_invalid_input();
         assert_eq!(
-            lift_invalid_input(permanent_failure("Devision by zero")),
-            permanent_failure("Devision by zero")
+            result.unwrap_err().to_string(),
+            "PermanentFailure: Devision by zero"
+        );
+    }
+
+    #[test]
+    fn test_prefix_error() {
+        let result: LipaResult<()> =
+            Err(invalid_input("Number must be positive")).prefix_error("Invalid amount");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "InvalidInput: Invalid amount: Number must be positive"
         );
     }
 }

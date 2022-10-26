@@ -47,6 +47,13 @@ enum RuntimeError {
     "PeerConnection",
 };
 
+[Error]
+enum LipaError {
+    "InvalidInput",
+    "RuntimeError",
+    "PermanentFailure",
+};
+
 interface LightningNode {
     [Throws=InitializationError]
     constructor([ByRef] Config config, RedundantStorageCallback redundant_storage_callback);

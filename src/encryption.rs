@@ -1,4 +1,4 @@
-use crate::errors::RuntimeError;
+use crate::errors::*;
 
 use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, BlockSizeUser, KeyIvInit};
 use bitcoin::hashes::{sha256, sha512, Hash, HashEngine, Hmac, HmacEngine};
@@ -16,7 +16,7 @@ type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 // https://pkg.go.dev/github.com/btcsuite/btcd/btcec#Encrypt
 // https://github.com/btcsuite/btcd/blob/v0.22.1/btcec/ciphering.go#L70
 #[allow(dead_code)]
-pub(crate) fn encrypt(pubkey: &PublicKey, data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
+pub(crate) fn encrypt(pubkey: &PublicKey, data: &[u8]) -> LipaResult<Vec<u8>> {
     let secp = secp256k1::Secp256k1::new();
     let (ephemeral, ephemeral_pubkey) = secp.generate_keypair(&mut rand::thread_rng());
     let mut init_vector = vec![0u8; Aes256CbcEnc::block_size()];
@@ -39,8 +39,9 @@ fn encrypt_with_randomness(
     pubkey: &PublicKey,
     data: &[u8],
     randomness: &Randomness,
-) -> Result<Vec<u8>, RuntimeError> {
-    let shared_secret = generate_shared_secret(randomness.ephemeral, pubkey)?;
+) -> LipaResult<Vec<u8>> {
+    let shared_secret = generate_shared_secret(randomness.ephemeral, pubkey)
+        .prefix_error("Shared secret generation failed")?;
     let key_encrypt = &shared_secret[..32];
     let key_mac = &shared_secret[32..];
 
@@ -55,12 +56,8 @@ fn encrypt_with_randomness(
     result.extend_from_slice(&CIPH_COORD_LEN);
     result.extend_from_slice(&ephemeral_pubkey[33..]);
 
-    let cipher =
-        Aes256CbcEnc::new_from_slices(key_encrypt, &randomness.init_vector).map_err(|_| {
-            RuntimeError::Logic {
-                message: "Invalid key or nonce lenght in encrypt()".to_string(),
-            }
-        })?;
+    let cipher = Aes256CbcEnc::new_from_slices(key_encrypt, &randomness.init_vector)
+        .map_err(permanent_failure_with("Invalid key or nonce lenght"))?;
     let mut ciphertext = cipher.encrypt_padded_vec_mut::<Pkcs7>(data);
     result.append(&mut ciphertext);
 
@@ -70,10 +67,7 @@ fn encrypt_with_randomness(
     Ok(result)
 }
 
-fn generate_shared_secret(
-    privkey: SecretKey,
-    pubkey: &PublicKey,
-) -> Result<[u8; 64], RuntimeError> {
+fn generate_shared_secret(privkey: SecretKey, pubkey: &PublicKey) -> LipaResult<[u8; 64]> {
     // Unfortunately we cannot use secp256k1::ecdh::SharedSecret, because it uses
     // sha256, but we need sha512.
 
@@ -81,17 +75,13 @@ fn generate_shared_secret(
     let scalar = Scalar::from(privkey);
     let tweaked_pubkey = pubkey
         .mul_tweak(&secp, &scalar)
-        .map_err(|_| RuntimeError::Logic {
-            message: "Multiplication should never fail with a verified seckey and valid pubkey"
-                .to_string(),
-        })?;
+        // Should never fail with a verified seckey and valid pubkey.
+        .map_err(permanent_failure_with("Multiplication failed"))?;
     // https://github.com/bitcoin-core/secp256k1/blob/master/src/eckey_impl.h#L43
     let x_coordinate = &tweaked_pubkey.serialize()[1..33];
     sha512::Hash::hash(x_coordinate)[..]
         .try_into()
-        .map_err(|_| RuntimeError::Logic {
-            message: "Sha512 returns less than 64 bytes".to_string(),
-        })
+        .map_err(permanent_failure_with("Sha512 returned less than 64 bytes"))
 }
 
 fn hmac256(key: &[u8], data: &[u8]) -> Vec<u8> {
