@@ -10,7 +10,7 @@ use uniffi_lipalightninglib::LightningNode;
 use storage_mock::Storage;
 use uniffi_lipalightninglib::errors::InitializationError;
 
-static START_LOGGER_ONCE: Once = Once::new();
+static INIT_SETUP_ONCE: Once = Once::new();
 
 #[derive(Debug, Clone)]
 pub struct StorageMock {
@@ -60,7 +60,7 @@ pub struct NodeHandle {
 #[allow(dead_code)]
 impl NodeHandle {
     pub fn new(lsp_node: NodeAddress) -> Self {
-        START_LOGGER_ONCE.call_once(|| {
+        INIT_SETUP_ONCE.call_once(|| {
             SimpleLogger::init(simplelog::LevelFilter::Trace, simplelog::Config::default())
                 .unwrap();
         });
@@ -99,17 +99,17 @@ pub mod nigiri {
     }
 
     pub fn start() {
-        START_LOGGER_ONCE.call_once(|| {
+        INIT_SETUP_ONCE.call_once(|| {
             SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default())
                 .unwrap();
-        });
 
-        // TODO: Optimization, do not restart nigiri if
-        // `jq -r .ci  ~/.nigiri/nigiri.config.json` is true.
-        if env::var("RUNNING_ON_CI").is_err() {
-            debug!("NIGIRI stopping ...");
-            stop();
-        }
+            // TODO: Optimization, do not restart nigiri if it is already running in --ci mode:
+            //       `jq -r .ci  ~/.nigiri/nigiri.config.json` == true.
+            if env::var("RUNNING_ON_CI").is_err() {
+                debug!("NIGIRI stopping ...");
+                stop();
+            }
+        });
 
         debug!("NIGIRI starting ...");
         exec(vec!["nigiri", "start", "--ci", "--ln"]);
