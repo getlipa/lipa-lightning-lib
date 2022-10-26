@@ -46,7 +46,7 @@ use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::Network;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Recipient};
-use lightning::chain::{BestBlock, Watch};
+use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Watch};
 use lightning::ln::channelmanager::ChainParameters;
 use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::routing::gossip::NetworkGraph;
@@ -163,9 +163,15 @@ impl LightningNode {
         // Step 10. Give ChannelMonitors to ChainMonitor
         for (_, channel_monitor) in channel_monitors {
             let funding_outpoint = channel_monitor.get_funding_txo().0;
-            chain_monitor
-                .watch_channel(funding_outpoint, channel_monitor)
-                .map_err(|_e| InitializationError::ChainMonitorWatchChannel)?
+            match chain_monitor.watch_channel(funding_outpoint, channel_monitor) {
+                ChannelMonitorUpdateStatus::Completed => {}
+                ChannelMonitorUpdateStatus::InProgress => {
+                    return Err(InitializationError::ChainMonitorWatchChannel)
+                }
+                ChannelMonitorUpdateStatus::PermanentFailure => {
+                    return Err(InitializationError::ChainMonitorWatchChannel)
+                }
+            }
         }
 
         // Step 11: Optional: Initialize the NetGraphMsgHandler
@@ -332,7 +338,7 @@ fn init_peer_manager(
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs(),
+            .as_secs() as u32,
         &ephemeral_bytes,
         logger,
     ))

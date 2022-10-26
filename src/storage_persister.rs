@@ -9,7 +9,7 @@ use lightning::chain::chainmonitor::{MonitorUpdateId, Persist};
 use lightning::chain::channelmonitor::{ChannelMonitor, ChannelMonitorUpdate};
 use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Sign};
 use lightning::chain::transaction::OutPoint;
-use lightning::chain::{ChannelMonitorUpdateErr, Watch};
+use lightning::chain::{ChannelMonitorUpdateStatus, Watch};
 use lightning::ln::channelmanager::{
     ChainParameters, ChannelManagerReadArgs, SimpleArcChannelManager,
 };
@@ -168,29 +168,29 @@ impl StoragePersister {
 impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
     fn persist_new_channel(
         &self,
-        funding_txo: OutPoint,
-        monitor: &ChannelMonitor<ChannelSigner>,
+        channel_id: OutPoint,
+        data: &ChannelMonitor<ChannelSigner>,
         _update_id: MonitorUpdateId,
-    ) -> Result<(), ChannelMonitorUpdateErr> {
-        let key = funding_txo.to_channel_id().to_hex();
-        let data = monitor.encode();
+    ) -> ChannelMonitorUpdateStatus {
+        let key = channel_id.to_channel_id().to_hex();
+        let data = data.encode();
         if !self
             .storage
             .put_object(MONITORS_BUCKET.to_string(), key, data)
         {
-            return Err(lightning::chain::ChannelMonitorUpdateErr::PermanentFailure);
+            return ChannelMonitorUpdateStatus::PermanentFailure;
         }
-        Ok(())
+        ChannelMonitorUpdateStatus::Completed
     }
 
     fn update_persisted_channel(
         &self,
-        funding_txo: OutPoint,
+        channel_id: OutPoint,
         _update: &Option<ChannelMonitorUpdate>,
-        monitor: &ChannelMonitor<ChannelSigner>,
+        data: &ChannelMonitor<ChannelSigner>,
         update_id: MonitorUpdateId,
-    ) -> Result<(), ChannelMonitorUpdateErr> {
-        self.persist_new_channel(funding_txo, monitor, update_id)
+    ) -> ChannelMonitorUpdateStatus {
+        self.persist_new_channel(channel_id, data, update_id)
     }
 }
 
