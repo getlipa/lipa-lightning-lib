@@ -10,7 +10,7 @@ use uniffi_lipalightninglib::LightningNode;
 use storage_mock::Storage;
 use uniffi_lipalightninglib::errors::InitializationError;
 
-static INIT_SETUP_ONCE: Once = Once::new();
+static INIT_LOGGER_ONCE: Once = Once::new();
 
 #[derive(Debug, Clone)]
 pub struct StorageMock {
@@ -60,7 +60,7 @@ pub struct NodeHandle {
 #[allow(dead_code)]
 impl NodeHandle {
     pub fn new(lsp_node: NodeAddress) -> Self {
-        INIT_SETUP_ONCE.call_once(|| {
+        INIT_LOGGER_ONCE.call_once(|| {
             SimpleLogger::init(simplelog::LevelFilter::Trace, simplelog::Config::default())
                 .unwrap();
         });
@@ -87,7 +87,6 @@ pub mod nigiri {
     use super::*;
 
     use log::debug;
-    use std::env;
     use std::process::{Command, Output};
     use std::thread::sleep;
     use std::time::Duration;
@@ -99,14 +98,13 @@ pub mod nigiri {
     }
 
     pub fn start() {
-        INIT_SETUP_ONCE.call_once(|| {
+        INIT_LOGGER_ONCE.call_once(|| {
             SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default())
                 .unwrap();
-
-            if nigiri_is_running_in_non_ci_mode() {
-                stop();
-            }
         });
+
+        // Reset Nigiri state to start on a blank slate
+        stop();
 
         debug!("NIGIRI starting ...");
         exec(&["nigiri", "start", "--ci", "--ln"]);
@@ -122,6 +120,7 @@ pub mod nigiri {
     }
 
     pub fn stop_lspd() {
+        // will fail on CI for now, because lspd is actually not setup yet. However this does not interrupt testing.
         exec(&["docker-compose", "-f", "./lspd/docker-compose.yml", "down"]);
     }
 
@@ -255,26 +254,6 @@ pub mod nigiri {
         }
 
         Ok(())
-    }
-
-    fn nigiri_is_running_in_non_ci_mode() -> bool {
-        nigiri_is_running() && !nigiri_runs_in_ci_mode()
-    }
-
-    fn nigiri_is_running() -> bool {
-        exec(&["jq", "-r", ".running", &get_nigiri_config_path()])
-            .stdout
-            .starts_with(b"true")
-    }
-
-    fn nigiri_runs_in_ci_mode() -> bool {
-        exec(&["jq", "-r", ".ci", &get_nigiri_config_path()])
-            .stdout
-            .starts_with(b"true")
-    }
-
-    fn get_nigiri_config_path() -> String {
-        env::var("HOME").unwrap() + "/.nigiri/nigiri.config.json"
     }
 
     pub fn exec(params: &[&str]) -> Output {
