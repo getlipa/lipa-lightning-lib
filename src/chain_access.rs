@@ -5,7 +5,7 @@ use crate::EsploraClient;
 use bitcoin::{BlockHash, Script, Txid};
 use esplora_client::Error;
 use lightning::chain::transaction::OutPoint;
-use lightning::chain::Confirm;
+use lightning::chain::{Confirm, WatchedOutput};
 use log::debug;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -14,8 +14,7 @@ pub(crate) struct LipaChainAccess {
     esplora: Arc<EsploraClient>,
     filter: Arc<FilterImpl>,
     watched_txs: HashSet<(Txid, Script)>,
-    // watched_outputs: HashSet<WatchedOutput>,
-    watched_outputs: HashSet<WatchedOutputClone>,
+    watched_outputs: HashSet<WatchedOutput>,
     synced_tip: BlockHash,
 }
 
@@ -85,14 +84,7 @@ impl LipaChainAccess {
                     filter_data.txs.iter().for_each(|tx| {
                         self.watched_txs.insert((tx.0, tx.1.clone()));
                     });
-                    filter_data.outputs.into_iter().for_each(|output| {
-                        let output = WatchedOutputClone {
-                            block_hash: output.block_hash,
-                            outpoint: output.outpoint,
-                            script_pubkey: output.script_pubkey,
-                        };
-                        self.watched_outputs.insert(output);
-                    });
+                    self.watched_outputs.extend(filter_data.outputs.into_iter())
                 }
                 None => break,
             }
@@ -270,18 +262,4 @@ mod tests {
         assert_eq!(unsorted, vec![(10, 10), (5, 5), (10, 5), (5, 10)]);
         assert_eq!(sorted, vec![(5, 5), (5, 10), (10, 5), (10, 10)]);
     }
-}
-
-// todo this is only required until an LDK version is used, that ships this PR:
-//      https://github.com/lightningdevkit/rust-lightning/pull/1763
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct WatchedOutputClone {
-    /// First block where the transaction output may have been spent.
-    pub block_hash: Option<BlockHash>,
-
-    /// Outpoint identifying the transaction output.
-    pub outpoint: OutPoint,
-
-    /// Spending condition of the transaction output.
-    pub script_pubkey: Script,
 }
