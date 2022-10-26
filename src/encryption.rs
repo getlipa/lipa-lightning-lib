@@ -16,7 +16,7 @@ type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 // https://pkg.go.dev/github.com/btcsuite/btcd/btcec#Encrypt
 // https://github.com/btcsuite/btcd/blob/v0.22.1/btcec/ciphering.go#L70
 #[allow(dead_code)]
-pub(crate) fn encrypt(pubkey: &PublicKey, data: &[u8]) -> Result<Vec<u8>> {
+pub(crate) fn encrypt(pubkey: &PublicKey, data: &[u8]) -> LipaResult<Vec<u8>> {
     let secp = secp256k1::Secp256k1::new();
     let (ephemeral, ephemeral_pubkey) = secp.generate_keypair(&mut rand::thread_rng());
     let mut init_vector = vec![0u8; Aes256CbcEnc::block_size()];
@@ -39,7 +39,7 @@ fn encrypt_with_randomness(
     pubkey: &PublicKey,
     data: &[u8],
     randomness: &Randomness,
-) -> Result<Vec<u8>> {
+) -> LipaResult<Vec<u8>> {
     let shared_secret = generate_shared_secret(randomness.ephemeral, pubkey)
         .prefix_error("Shared secret generation failed")?;
     let key_encrypt = &shared_secret[..32];
@@ -67,7 +67,7 @@ fn encrypt_with_randomness(
     Ok(result)
 }
 
-fn generate_shared_secret(privkey: SecretKey, pubkey: &PublicKey) -> Result<[u8; 64]> {
+fn generate_shared_secret(privkey: SecretKey, pubkey: &PublicKey) -> LipaResult<[u8; 64]> {
     // Unfortunately we cannot use secp256k1::ecdh::SharedSecret, because it uses
     // sha256, but we need sha512.
 

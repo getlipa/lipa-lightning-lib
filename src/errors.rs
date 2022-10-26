@@ -58,15 +58,15 @@ pub fn permanent_failure_with<M: ToString + 'static, E: ToString>(
     })
 }
 
-pub type Result<T> = std::result::Result<T, LipaError>;
+pub type LipaResult<T> = Result<T, LipaError>;
 
-pub trait LipaResult<T> {
-    fn lift_invalid_input(self) -> Result<T>;
-    fn prefix_error<M: ToString + 'static>(self, message: M) -> Result<T>;
+pub trait LipaResultTrait<T> {
+    fn lift_invalid_input(self) -> LipaResult<T>;
+    fn prefix_error<M: ToString + 'static>(self, message: M) -> LipaResult<T>;
 }
 
-impl<T> LipaResult<T> for Result<T> {
-    fn lift_invalid_input(self) -> Result<T> {
+impl<T> LipaResultTrait<T> for LipaResult<T> {
+    fn lift_invalid_input(self) -> LipaResult<T> {
         self.map_err(|e| match e {
             LipaError::InvalidInput { message } => LipaError::PermanentFailure {
                 message: format!("InvalidInput: {}", message),
@@ -75,7 +75,7 @@ impl<T> LipaResult<T> for Result<T> {
         })
     }
 
-    fn prefix_error<M: ToString + 'static>(self, prefix: M) -> Result<T> {
+    fn prefix_error<M: ToString + 'static>(self, prefix: M) -> LipaResult<T> {
         self.map_err(|e| match e {
             LipaError::InvalidInput { message } => LipaError::InvalidInput {
                 message: format!("{}: {}", prefix.to_string(), message),
@@ -113,19 +113,21 @@ mod test {
 
     #[test]
     fn test_lift_invalid_input() {
-        let result: Result<()> = Err(invalid_input("Number must be positive")).lift_invalid_input();
+        let result: LipaResult<()> =
+            Err(invalid_input("Number must be positive")).lift_invalid_input();
         assert_eq!(
             result.unwrap_err().to_string(),
             "PermanentFailure: InvalidInput: Number must be positive"
         );
 
-        let result: Result<()> = Err(runtime_error("Socket timeout")).lift_invalid_input();
+        let result: LipaResult<()> = Err(runtime_error("Socket timeout")).lift_invalid_input();
         assert_eq!(
             result.unwrap_err().to_string(),
             "RuntimeError: Socket timeout"
         );
 
-        let result: Result<()> = Err(permanent_failure("Devision by zero")).lift_invalid_input();
+        let result: LipaResult<()> =
+            Err(permanent_failure("Devision by zero")).lift_invalid_input();
         assert_eq!(
             result.unwrap_err().to_string(),
             "PermanentFailure: Devision by zero"
@@ -134,7 +136,7 @@ mod test {
 
     #[test]
     fn test_prefix_error() {
-        let result: Result<()> =
+        let result: LipaResult<()> =
             Err(invalid_input("Number must be positive")).prefix_error("Invalid amount");
         assert_eq!(
             result.unwrap_err().to_string(),
