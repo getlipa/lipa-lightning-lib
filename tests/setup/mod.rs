@@ -103,12 +103,7 @@ pub mod nigiri {
             SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default())
                 .unwrap();
 
-            // TODO: Optimization, do not restart nigiri if it is already running in --ci mode:
-            //       `jq -r .ci  ~/.nigiri/nigiri.config.json` == true.
-            if env::var("RUNNING_ON_CI").is_err() {
-                debug!("LSPD stopping ...");
-                stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
-                debug!("NIGIRI stopping ...");
+            if nigiri_is_running_in_non_ci_mode() {
                 stop();
             }
         });
@@ -120,6 +115,9 @@ pub mod nigiri {
     }
 
     pub fn stop() {
+        debug!("LSPD stopping ...");
+        stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
+        debug!("NIGIRI stopping ...");
         exec(vec!["nigiri", "stop", "--delete"]);
     }
 
@@ -273,6 +271,26 @@ pub mod nigiri {
         }
 
         Ok(())
+    }
+
+    fn nigiri_is_running_in_non_ci_mode() -> bool {
+        nigiri_is_running() && !nigiri_runs_in_ci_mode()
+    }
+
+    fn nigiri_is_running() -> bool {
+        exec(vec!["jq", "-r", ".running", &get_nigiri_config_path()])
+            .stdout
+            .starts_with(b"true")
+    }
+
+    fn nigiri_runs_in_ci_mode() -> bool {
+        exec(vec!["jq", "-r", ".ci", &get_nigiri_config_path()])
+            .stdout
+            .starts_with(b"true")
+    }
+
+    fn get_nigiri_config_path() -> String {
+        env::var("HOME").unwrap() + "/.nigiri/nigiri.config.json"
     }
 
     pub fn exec(params: Vec<&str>) -> Output {
