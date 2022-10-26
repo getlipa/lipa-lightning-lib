@@ -10,7 +10,7 @@ use uniffi_lipalightninglib::LightningNode;
 use storage_mock::Storage;
 use uniffi_lipalightninglib::errors::InitializationError;
 
-static START_LOGGER_ONCE: Once = Once::new();
+static INIT_LOGGER_ONCE: Once = Once::new();
 
 #[derive(Debug, Clone)]
 pub struct StorageMock {
@@ -60,7 +60,7 @@ pub struct NodeHandle {
 #[allow(dead_code)]
 impl NodeHandle {
     pub fn new(lsp_node: NodeAddress) -> Self {
-        START_LOGGER_ONCE.call_once(|| {
+        INIT_LOGGER_ONCE.call_once(|| {
             SimpleLogger::init(simplelog::LevelFilter::Trace, simplelog::Config::default())
                 .unwrap();
         });
@@ -87,7 +87,6 @@ pub mod nigiri {
     use super::*;
 
     use log::debug;
-    use std::env;
     use std::process::{Command, Output};
     use std::thread::sleep;
     use std::time::Duration;
@@ -99,26 +98,30 @@ pub mod nigiri {
     }
 
     pub fn start() {
-        START_LOGGER_ONCE.call_once(|| {
+        INIT_LOGGER_ONCE.call_once(|| {
             SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default())
                 .unwrap();
         });
 
-        // TODO: Optimization, do not restart nigiri if
-        // `jq -r .ci  ~/.nigiri/nigiri.config.json` is true.
-        if env::var("RUNNING_ON_CI").is_err() {
-            debug!("NIGIRI stopping ...");
-            stop();
-        }
+        // Reset Nigiri state to start on a blank slate
+        stop();
 
         debug!("NIGIRI starting ...");
-        exec(vec!["nigiri", "start", "--ci", "--ln"]);
+        exec(&["nigiri", "start", "--ci", "--ln"]);
         wait_for_sync();
         wait_for_esplora();
     }
 
     pub fn stop() {
-        exec(vec!["nigiri", "stop", "--delete"]);
+        debug!("LSPD stopping ...");
+        stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
+        debug!("NIGIRI stopping ...");
+        exec(&["nigiri", "stop", "--delete"]);
+    }
+
+    pub fn stop_lspd() {
+        // will fail on CI for now, because lspd is actually not setup yet. However this does not interrupt testing.
+        exec(&["docker-compose", "-f", "./lspd/docker-compose.yml", "down"]);
     }
 
     fn wait_for_sync() {
@@ -151,7 +154,7 @@ pub mod nigiri {
     }
 
     pub fn query_lnd_info() -> Result<RemoteNodeInfo, String> {
-        let output = exec(vec!["nigiri", "lnd", "getinfo"]);
+        let output = exec(&["nigiri", "lnd", "getinfo"]);
         if !output.status.success() {
             return Err("Command `lnd getinfo` failed".to_string());
         }
@@ -163,12 +166,7 @@ pub mod nigiri {
     }
 
     pub fn mine_blocks(block_amount: u32) -> Result<(), String> {
-        let output = exec(vec![
-            "nigiri",
-            "rpc",
-            "-generate",
-            &block_amount.to_string(),
-        ]);
+        let output = exec(&["nigiri", "rpc", "-generate", &block_amount.to_string()]);
         if !output.status.success() {
             return Err(format!("Command `rpc -generate {}` failed", block_amount));
         }
@@ -176,7 +174,7 @@ pub mod nigiri {
     }
 
     pub fn fund_lnd_node(amount_btc: f32) -> Result<(), String> {
-        let output = exec(vec!["nigiri", "faucet", "lnd", &amount_btc.to_string()]);
+        let output = exec(&["nigiri", "faucet", "lnd", &amount_btc.to_string()]);
         if !output.status.success() {
             return Err(format!("Command `faucet lnd {}` failed", amount_btc));
         }
@@ -205,7 +203,7 @@ pub mod nigiri {
     }
 
     pub fn lnd_open_channel(node_id: &str) -> Result<String, String> {
-        let output = exec(vec![
+        let output = exec(&[
             "nigiri",
             "lnd",
             "openchannel",
@@ -227,7 +225,7 @@ pub mod nigiri {
     }
 
     pub fn lnd_disconnect_peer(node_id: String) -> Result<(), String> {
-        let output = exec(vec!["nigiri", "lnd", "disconnect", &node_id]);
+        let output = exec(&["nigiri", "lnd", "disconnect", &node_id]);
         if !output.status.success() {
             return Err(format!("Command `lnd disconnect {}` failed", node_id));
         }
@@ -236,13 +234,7 @@ pub mod nigiri {
     }
 
     pub fn lnd_force_close_channel(funding_txid: String) -> Result<(), String> {
-        let output = exec(vec![
-            "nigiri",
-            "lnd",
-            "closechannel",
-            "--force",
-            &funding_txid,
-        ]);
+        let output = exec(&["nigiri", "lnd", "closechannel", "--force", &funding_txid]);
         if !output.status.success() {
             return Err(format!(
                 "Command `lnd closechannel --force {}` failed",
@@ -256,7 +248,7 @@ pub mod nigiri {
     }
 
     pub fn lnd_stop() -> Result<(), String> {
-        let output = exec(vec!["nigiri", "lnd", "stop"]);
+        let output = exec(&["nigiri", "lnd", "stop"]);
         if !output.status.success() {
             return Err(String::from("Command `lnd stop` failed"));
         }
@@ -264,7 +256,7 @@ pub mod nigiri {
         Ok(())
     }
 
-    pub fn exec(params: Vec<&str>) -> Output {
+    pub fn exec(params: &[&str]) -> Output {
         let (command, args) = params.split_first().expect("At least one param is needed");
         Command::new(command)
             .args(args)

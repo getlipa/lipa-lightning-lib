@@ -144,7 +144,7 @@ mod chain_sync_test {
     }
 
     fn setup() -> NodeHandle {
-        setup::nigiri::start();
+        nigiri::start();
         let lsp_info = setup::nigiri::query_lnd_info().unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
