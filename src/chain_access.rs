@@ -84,9 +84,7 @@ impl LipaChainAccess {
                     filter_data.txs.iter().for_each(|tx| {
                         self.watched_txs.insert((tx.0, tx.1.clone()));
                     });
-                    filter_data.outputs.into_iter().for_each(|output| {
-                        self.watched_outputs.insert(output);
-                    });
+                    self.watched_outputs.extend(filter_data.outputs.into_iter())
                 }
                 None => break,
             }
