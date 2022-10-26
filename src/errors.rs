@@ -2,9 +2,9 @@
 //!
 //! # Examples
 //!
-//! ```
+//! ```ignore
 //! fn foo(x: u32) -> LipaResult<String> {
-//!     if x < 10 {
+//!     if x <= 10 {
 //!         return Err(invalid_input("x must be greater than 10"));
 //!     }
 //!     foreign_function().map_to_runtime_error("Foreign code failed")?;
@@ -28,7 +28,7 @@ pub enum LipaError {
     RuntimeError { message: String },
 
     /// Unrecoverable problem (e.g. internal invariant broken).
-    /// Consider reporting.
+    /// Consider suggesting the user to report the issue to the developers.
     #[error("PermanentFailure: {message}")]
     PermanentFailure { message: String },
 }
@@ -54,7 +54,15 @@ pub fn permanent_failure<E: ToString>(e: E) -> LipaError {
 pub type LipaResult<T> = Result<T, LipaError>;
 
 pub trait LipaResultTrait<T> {
+    /// Lift `InvalidInput` error into `PermanentFailure`.
+    ///
+    /// Use the method when you want to propagate an error from an internal
+    /// function to the caller.
+    /// Reasoning is that if you got `InvalidInput` it means you failed to
+    /// validate the input for the internal function yourself, so for you it
+    /// becomes `PermanentFailure`.
     fn lift_invalid_input(self) -> LipaResult<T>;
+
     fn prefix_error<M: ToString + 'static>(self, message: M) -> LipaResult<T>;
 }
 
