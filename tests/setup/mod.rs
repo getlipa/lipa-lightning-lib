@@ -106,6 +106,8 @@ pub mod nigiri {
             // TODO: Optimization, do not restart nigiri if it is already running in --ci mode:
             //       `jq -r .ci  ~/.nigiri/nigiri.config.json` == true.
             if env::var("RUNNING_ON_CI").is_err() {
+                debug!("LSPD stopping ...");
+                stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
                 debug!("NIGIRI stopping ...");
                 stop();
             }
@@ -119,6 +121,15 @@ pub mod nigiri {
 
     pub fn stop() {
         exec(vec!["nigiri", "stop", "--delete"]);
+    }
+
+    pub fn stop_lspd() {
+        exec(vec![
+            "docker-compose",
+            "-f",
+            "./lspd/docker-compose.yml",
+            "down",
+        ]);
     }
 
     fn wait_for_sync() {
