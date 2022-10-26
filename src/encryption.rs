@@ -6,6 +6,7 @@ use bitcoin::secp256k1::scalar::Scalar;
 use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use rand::rngs::OsRng;
 use rand::RngCore;
+use std::array::TryFromSliceError;
 
 const CIPH_CURVE_BYTES: [u8; 2] = [0x02, 0xCA]; // 0x02CA = 714
 const CIPH_COORD_LEN: [u8; 2] = [0x00, 0x20]; // 0x20 = 32
@@ -57,7 +58,7 @@ fn encrypt_with_randomness(
     result.extend_from_slice(&ephemeral_pubkey[33..]);
 
     let cipher = Aes256CbcEnc::new_from_slices(key_encrypt, &randomness.init_vector)
-        .map_err(permanent_failure_with("Invalid key or nonce lenght"))?;
+        .map_to_permanent_failure("Invalid key or nonce lenght")?;
     let mut ciphertext = cipher.encrypt_padded_vec_mut::<Pkcs7>(data);
     result.append(&mut ciphertext);
 
@@ -76,12 +77,11 @@ fn generate_shared_secret(privkey: SecretKey, pubkey: &PublicKey) -> LipaResult<
     let tweaked_pubkey = pubkey
         .mul_tweak(&secp, &scalar)
         // Should never fail with a verified seckey and valid pubkey.
-        .map_err(permanent_failure_with("Multiplication failed"))?;
+        .map_to_permanent_failure("Multiplication failed")?;
     // https://github.com/bitcoin-core/secp256k1/blob/master/src/eckey_impl.h#L43
     let x_coordinate = &tweaked_pubkey.serialize()[1..33];
-    sha512::Hash::hash(x_coordinate)[..]
-        .try_into()
-        .map_err(permanent_failure_with("Sha512 returned less than 64 bytes"))
+    let hash: Result<[u8; 64], TryFromSliceError> = sha512::Hash::hash(x_coordinate)[..].try_into();
+    hash.map_to_permanent_failure("Sha512 returned less than 64 bytes")
 }
 
 fn hmac256(key: &[u8], data: &[u8]) -> Vec<u8> {
