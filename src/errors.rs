@@ -1,3 +1,18 @@
+//! LipaError enum with helper functions.
+//!
+//! # Examples
+//!
+//! ```ignore
+//! fn foo(x: u32) -> LipaResult<String> {
+//!     if x <= 10 {
+//!         return Err(invalid_input("x must be greater than 10"));
+//!     }
+//!     foreign_function().map_to_runtime_error("Foreign code failed")?;
+//!     internal_function().prefix_error("Internal function failed")?;
+//!     another_internal_function().lift_invalid_input("Another failure")?;
+//! }
+//! ```
+
 use uniffi::ffi::foreigncallbacks::UnexpectedUniFFICallbackError;
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
@@ -6,12 +21,14 @@ pub enum LipaError {
     /// Consider fixing the input and retrying the request.
     #[error("InvalidInput: {message}")]
     InvalidInput { message: String },
+
     /// Recoverable problem (e.g. network issue, problem with en external service).
     /// Consider retrying the request.
     #[error("RuntimeError: {message}")]
     RuntimeError { message: String },
+
     /// Unrecoverable problem (e.g. internal invariant broken).
-    /// Consider reporting.
+    /// Consider suggesting the user to report the issue to the developers.
     #[error("PermanentFailure: {message}")]
     PermanentFailure { message: String },
 }
@@ -22,26 +39,10 @@ pub fn invalid_input<E: ToString>(e: E) -> LipaError {
     }
 }
 
-pub fn invalid_input_with<M: ToString + 'static, E: ToString>(
-    message: M,
-) -> Box<dyn FnOnce(E) -> LipaError> {
-    Box::new(move |e: E| LipaError::InvalidInput {
-        message: format!("{}: {}", message.to_string(), e.to_string()),
-    })
-}
-
 pub fn runtime_error<E: ToString>(e: E) -> LipaError {
     LipaError::RuntimeError {
         message: e.to_string(),
     }
-}
-
-pub fn runtime_error_with<M: ToString + 'static, E: ToString>(
-    message: M,
-) -> Box<dyn FnOnce(E) -> LipaError> {
-    Box::new(move |e: E| LipaError::RuntimeError {
-        message: format!("{}: {}", message.to_string(), e.to_string()),
-    })
 }
 
 pub fn permanent_failure<E: ToString>(e: E) -> LipaError {
@@ -50,18 +51,18 @@ pub fn permanent_failure<E: ToString>(e: E) -> LipaError {
     }
 }
 
-pub fn permanent_failure_with<M: ToString + 'static, E: ToString>(
-    message: M,
-) -> Box<dyn FnOnce(E) -> LipaError> {
-    Box::new(move |e: E| LipaError::PermanentFailure {
-        message: format!("{}: {}", message.to_string(), e.to_string()),
-    })
-}
-
 pub type LipaResult<T> = Result<T, LipaError>;
 
 pub trait LipaResultTrait<T> {
+    /// Lift `InvalidInput` error into `PermanentFailure`.
+    ///
+    /// Use the method when you want to propagate an error from an internal
+    /// function to the caller.
+    /// Reasoning is that if you got `InvalidInput` it means you failed to
+    /// validate the input for the internal function yourself, so for you it
+    /// becomes `PermanentFailure`.
     fn lift_invalid_input(self) -> LipaResult<T>;
+
     fn prefix_error<M: ToString + 'static>(self, message: M) -> LipaResult<T>;
 }
 
@@ -90,25 +91,76 @@ impl<T> LipaResultTrait<T> for LipaResult<T> {
     }
 }
 
+pub trait MapToLipaError<T, E: ToString> {
+    fn map_to_invalid_input<M: ToString>(self, message: M) -> LipaResult<T>;
+    fn map_to_runtime_error<M: ToString>(self, message: M) -> LipaResult<T>;
+    fn map_to_permanent_failure<M: ToString>(self, message: M) -> LipaResult<T>;
+}
+
+impl<T, E: ToString> MapToLipaError<T, E> for Result<T, E> {
+    fn map_to_invalid_input<M: ToString>(self, message: M) -> LipaResult<T> {
+        self.map_err(move |e| LipaError::InvalidInput {
+            message: format!("{}: {}", message.to_string(), e.to_string()),
+        })
+    }
+
+    fn map_to_runtime_error<M: ToString>(self, message: M) -> LipaResult<T> {
+        self.map_err(move |e| LipaError::RuntimeError {
+            message: format!("{}: {}", message.to_string(), e.to_string()),
+        })
+    }
+
+    fn map_to_permanent_failure<M: ToString>(self, message: M) -> LipaResult<T> {
+        self.map_err(move |e| LipaError::PermanentFailure {
+            message: format!("{}: {}", message.to_string(), e.to_string()),
+        })
+    }
+}
+
+pub trait MapToLipaErrorForUnitType<T> {
+    fn map_to_invalid_input<M: ToString>(self, message: M) -> LipaResult<T>;
+    fn map_to_runtime_error<M: ToString>(self, message: M) -> LipaResult<T>;
+    fn map_to_permanent_failure<M: ToString>(self, message: M) -> LipaResult<T>;
+}
+
+impl<T> MapToLipaErrorForUnitType<T> for Result<T, ()> {
+    fn map_to_invalid_input<M: ToString>(self, message: M) -> LipaResult<T> {
+        self.map_err(move |()| LipaError::InvalidInput {
+            message: message.to_string(),
+        })
+    }
+
+    fn map_to_runtime_error<M: ToString>(self, message: M) -> LipaResult<T> {
+        self.map_err(move |()| LipaError::RuntimeError {
+            message: message.to_string(),
+        })
+    }
+
+    fn map_to_permanent_failure<M: ToString>(self, message: M) -> LipaResult<T> {
+        self.map_err(move |()| LipaError::PermanentFailure {
+            message: message.to_string(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn test_map_err() {
+    fn test_map_to_lipa_errors() {
         use std::io::{Error, ErrorKind, Result};
-        let io_error: Result<()> = Err(Error::new(ErrorKind::Other, "File not found"));
-        let our_error = io_error.map_err(runtime_error).unwrap_err();
-        assert_eq!(our_error.to_string(), "RuntimeError: File not found");
 
         let io_error: Result<()> = Err(Error::new(ErrorKind::Other, "File not found"));
-        let our_error = io_error
-            .map_err(runtime_error_with("No backup"))
-            .unwrap_err();
+        let lipa_error = io_error.map_to_runtime_error("No backup").unwrap_err();
         assert_eq!(
-            our_error.to_string(),
+            lipa_error.to_string(),
             "RuntimeError: No backup: File not found"
         );
+
+        let error: std::result::Result<(), ()> = Err(());
+        let lipa_error = error.map_to_runtime_error("No backup").unwrap_err();
+        assert_eq!(lipa_error.to_string(), "RuntimeError: No backup");
     }
 
     #[test]
