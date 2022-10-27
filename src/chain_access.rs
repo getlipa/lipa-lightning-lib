@@ -81,9 +81,7 @@ impl LipaChainAccess {
 
             match self.filter.drain() {
                 Some(filter_data) => {
-                    filter_data.txs.iter().for_each(|tx| {
-                        self.watched_txs.insert((tx.0, tx.1.clone()));
-                    });
+                    self.watched_txs.extend(filter_data.txs.into_iter());
                     self.watched_outputs.extend(filter_data.outputs.into_iter())
                 }
                 None => break,
