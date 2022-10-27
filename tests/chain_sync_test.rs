@@ -153,7 +153,10 @@ mod chain_sync_test {
 
         let node_handle = NodeHandle::new(lsp_node);
 
-        nigiri::try_cmd_repeatedly(nigiri::fund_lnd_node, 0.5, 10, HALF_SEC).unwrap();
+        // to open multiple channels in the same block multiple UTXOs are required in LND
+        for _ in 0..20 {
+            nigiri::try_cmd_repeatedly(nigiri::fund_lnd_node, 0.5, 10, HALF_SEC).unwrap();
+        }
 
         node_handle
     }
