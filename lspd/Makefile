@@ -1,5 +1,6 @@
-NIGIRI_DATA ?= ~/.nigiri
-LND_DATA = ${NIGIRI_DATA}/volumes/lnd
+#NIGIRI_DATA ?= ~/.nigiri
+#LND_DATA = ${NIGIRI_DATA}/volumes/lnd
+LND_DATA = ./lnd
 
 all: lnd.env
 
