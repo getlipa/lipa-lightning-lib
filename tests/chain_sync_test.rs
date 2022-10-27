@@ -143,6 +143,26 @@ mod chain_sync_test {
         assert_eq!(node.get_node_info().num_channels, 0);
     }
 
+    #[test]
+    fn test_multiple_txs_simultaneously() {
+        let node_handle = setup();
+        let node = node_handle.start().unwrap();
+        let node_id = node.get_node_info().node_pubkey.to_hex();
+
+        // open 5 channels and force-close 3 of them right away
+        let mut open_channels = open_5_chans_close_2(&node_id);
+
+        // mine a block and do the same again and remove 1 of the previously opened channels
+        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 1, 10, HALF_SEC).unwrap();
+        let _ = open_5_chans_close_2(&node_id);
+        nigiri::lnd_force_close_channel(open_channels.pop().unwrap()).unwrap();
+
+        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 10, 10, HALF_SEC).unwrap();
+        sleep(Duration::from_secs(10));
+
+        assert_eq!(node.get_node_info().num_channels, 3);
+    }
+
     fn setup() -> NodeHandle {
         nigiri::start();
         let lsp_info = nigiri::query_lnd_info().unwrap();
@@ -190,5 +210,20 @@ mod chain_sync_test {
         assert_eq!(node.get_node_info().num_usable_channels, 0);
 
         tx_id
+    }
+
+    fn open_5_chans_close_2(node_id: &str) -> Vec<String> {
+        let mut open_channels = Vec::new();
+
+        for i in 0..5 {
+            let tx_id = nigiri::lnd_open_channel(&node_id).unwrap();
+            if i % 2 == 0 {
+                nigiri::lnd_force_close_channel(tx_id).unwrap();
+            } else {
+                open_channels.push(tx_id);
+            }
+        }
+
+        open_channels
     }
 }
