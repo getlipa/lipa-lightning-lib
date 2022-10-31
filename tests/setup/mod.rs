@@ -213,8 +213,9 @@ pub mod nigiri {
         ]);
         if !output.status.success() {
             return Err(format!(
-                "Command `lnd openchannel --private {} 1000000` failed",
-                node_id
+                "Command `lnd openchannel --private {} 1000000` failed: {}",
+                node_id,
+                String::from_utf8(output.stderr).unwrap()
             ));
         }
         let json: serde_json::Value =
