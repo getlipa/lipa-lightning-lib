@@ -161,6 +161,7 @@ mod chain_sync_test {
         sleep(Duration::from_secs(10));
 
         assert_eq!(node.get_node_info().num_channels, 3);
+        assert_eq!(node.get_node_info().num_usable_channels, 3);
     }
 
     fn setup() -> NodeHandle {
