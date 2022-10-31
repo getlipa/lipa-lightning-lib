@@ -2,6 +2,7 @@ use crate::errors::RuntimeError;
 use crate::{NodeAddress, PeerManager};
 use bitcoin::secp256k1::PublicKey;
 use log::debug;
+use std::fmt;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -89,5 +90,35 @@ impl TryFrom<&NodeAddress> for LnPeer {
         })?;
 
         Ok(Self { pub_key, address })
+    }
+}
+
+impl fmt::Display for LnPeer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}@{}", self.pub_key, self.address)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::config::NodeAddress;
+    use crate::p2p_networking::LnPeer;
+
+    #[test]
+    fn test_conversion_from_strings() {
+        let sample_pubkey = "03beb9d00217e9cf9d485e47ffc6e6842c79d8941a755e261a796fe0c2e7ba2e53";
+        let sample_address = "1.2.3.4:9735";
+
+        let sample_node = NodeAddress {
+            pub_key: sample_pubkey.to_string(),
+            address: sample_address.to_string(),
+        };
+
+        let ln_peer = LnPeer::try_from(&sample_node).unwrap();
+
+        assert_eq!(
+            ln_peer.to_string(),
+            format!("{}@{}", sample_pubkey, sample_address)
+        );
     }
 }
