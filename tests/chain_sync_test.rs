@@ -5,7 +5,6 @@ mod setup;
 // cargo test --features nigiri -- --test-threads 1
 #[cfg(feature = "nigiri")]
 mod chain_sync_test {
-    use super::*;
     use bitcoin::hashes::hex::ToHex;
     use std::thread::sleep;
     use std::time::Duration;
