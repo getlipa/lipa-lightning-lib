@@ -204,7 +204,7 @@ impl LightningNode {
 
         // Step 14. Keep LDK Up-to-date with Chain Info
         // TODO: optimize how often we want to run sync. LDK-sample syncs every second and
-        // LDKLite syncs every 5 seconds. Let's try 5 seconds first and change if needed
+        //       LDKLite syncs every 5 seconds. Let's try 5 seconds first and change if needed
         let channel_manager_regular_sync = Arc::clone(&channel_manager);
         let chain_monitor_regular_sync = Arc::clone(&chain_monitor);
         let sync_handle = rt
