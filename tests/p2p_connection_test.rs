@@ -10,13 +10,16 @@ mod p2p_connection_test {
     use crate::setup::NodeHandle;
     use uniffi_lipalightninglib::config::NodeAddress;
 
+    const NIGIRI_LND_ADDR: &str = "127.0.0.1:9735";
+    const FAULTY_ADDR: &str = "127.0.0.1:9";
+
     #[test]
     fn test_successful_p2p_connection() {
         setup::nigiri::start();
         let lsp_info = setup::nigiri::query_lnd_info().unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
-            address: "127.0.0.1:9735".to_string(),
+            address: NIGIRI_LND_ADDR.to_string(),
         };
 
         let node = NodeHandle::new(lsp_node).start().unwrap();
@@ -28,7 +31,7 @@ mod p2p_connection_test {
         let lsp_info = setup::nigiri::query_lnd_info().unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
-            address: "127.0.0.1:9".to_string(),
+            address: FAULTY_ADDR.to_string(),
         };
         assert!(NodeHandle::new(lsp_node).start().is_err());
     }
@@ -38,7 +41,7 @@ mod p2p_connection_test {
         let lsp_info = setup::nigiri::query_lnd_info().unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
-            address: "127.0.0.1:9735".to_string(),
+            address: NIGIRI_LND_ADDR.to_string(),
         };
         let node = NodeHandle::new(lsp_node).start().unwrap();
         assert_eq!(node.get_node_info().num_peers, 1);
