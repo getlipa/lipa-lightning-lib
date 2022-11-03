@@ -74,6 +74,7 @@ pub struct LightningNode {
 }
 
 impl LightningNode {
+    #[allow(clippy::result_large_err)]
     pub fn new(
         config: &Config,
         redundant_storage_callback: Box<dyn RedundantStorageCallback>,
@@ -322,6 +323,7 @@ fn build_mobile_node_user_config() -> UserConfig {
     user_config
 }
 
+#[allow(clippy::result_large_err)]
 fn init_peer_manager(
     channel_manager: Arc<ChannelManager>,
     keys_manager: &KeysManager,

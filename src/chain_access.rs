@@ -33,6 +33,7 @@ impl LipaChainAccess {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub(crate) fn sync(&mut self, confirm: &ConfirmWrapper) -> Result<(), Error> {
         let mut cur_tip = self.esplora.get_tip_hash()?;
 
@@ -51,6 +52,7 @@ impl LipaChainAccess {
         Ok(())
     }
 
+    #[allow(clippy::result_large_err)]
     fn sync_to_tip(&mut self, confirm: &ConfirmWrapper, cur_tip: &BlockHash) -> Result<(), Error> {
         self.inform_about_new_block(confirm, cur_tip)?;
 
@@ -91,6 +93,7 @@ impl LipaChainAccess {
         Ok(())
     }
 
+    #[allow(clippy::result_large_err)]
     fn sync_relevant_txs_for_reorgs(&self, confirm: &ConfirmWrapper) -> Result<(), Error> {
         for txid in confirm.get_relevant_txids().iter() {
             if !self.esplora.is_tx_confirmed(txid)? {
@@ -102,6 +105,7 @@ impl LipaChainAccess {
         Ok(())
     }
 
+    #[allow(clippy::result_large_err)]
     fn inform_about_new_block(
         &self,
         confirm: &ConfirmWrapper,
@@ -118,6 +122,7 @@ impl LipaChainAccess {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn sync_txs(&mut self) -> Result<Vec<ConfirmedTransaction>, Error> {
         let mut confirmed_txs = Vec::new();
         let mut not_yet_confirmed_txs = HashSet::new();
@@ -145,6 +150,7 @@ impl LipaChainAccess {
         Ok(confirmed_txs)
     }
 
+    #[allow(clippy::result_large_err)]
     fn sync_spending_txs(&mut self) -> Result<Vec<ConfirmedTransaction>, Error> {
         let mut confirmed_txs = Vec::new();
         let mut unspent_registered_outputs = HashSet::new();

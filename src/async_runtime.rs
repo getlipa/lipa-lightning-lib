@@ -18,6 +18,7 @@ pub struct Handle {
 
 #[allow(dead_code)]
 impl AsyncRuntime {
+    #[allow(clippy::result_large_err)]
     pub fn new() -> Result<Self, InitializationError> {
         let rt = Builder::new_multi_thread()
             .worker_threads(4)

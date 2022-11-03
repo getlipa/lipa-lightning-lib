@@ -20,6 +20,7 @@ pub fn init_keys_manager(seed: &Vec<u8>) -> Result<KeysManager, &str> {
     Ok(KeysManager::new(&array, now.as_secs(), now.subsec_nanos()))
 }
 
+#[allow(clippy::result_large_err)]
 pub fn generate_random_bytes() -> Result<[u8; 32], InitializationError> {
     let mut bytes = [0u8; 32];
     OsRng
@@ -30,6 +31,7 @@ pub fn generate_random_bytes() -> Result<[u8; 32], InitializationError> {
     Ok(bytes)
 }
 
+#[allow(clippy::result_large_err)]
 pub fn generate_secret(passphrase: String) -> Result<Secret, InitializationError> {
     let entropy = generate_random_bytes()?;
     let mnemonic =
@@ -46,6 +48,7 @@ pub fn generate_secret(passphrase: String) -> Result<Secret, InitializationError
     })
 }
 
+#[allow(clippy::result_large_err)]
 pub fn mnemonic_to_secret(
     mnemonic_string: Vec<String>,
     passphrase: String,
