@@ -128,9 +128,7 @@ mod chain_sync_test {
         let tx_id = start_node_open_channel_without_confirm_stop_node(&node_handle);
 
         nigiri::lnd_force_close_channel(tx_id).unwrap();
-        // TODO: as soon as we regularly reconnect to peers, we can uncomment the following line
-        //      as then we'll be able to handle not being connected to our peers
-        // nigiri::lnd_stop().unwrap();
+        nigiri::lnd_stop().unwrap();
 
         nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 1, 10, HALF_SEC).unwrap();
 

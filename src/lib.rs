@@ -38,7 +38,7 @@ use crate::keys_manager::{
 };
 use crate::logger::LightningLogger;
 use crate::native_logger::init_native_logger_once;
-use crate::p2p_networking::P2pConnections;
+use crate::p2p_networking::{LnPeer, P2pConnections};
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
@@ -70,6 +70,7 @@ pub struct LightningNode {
     background_processor: BackgroundProcessor,
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
+    peer_conn_handle: JoinHandle<()>,
     sync_handle: JoinHandle<()>,
 }
 
@@ -190,17 +191,8 @@ impl LightningNode {
         )?);
 
         // Step 13. Initialize Networking
-        let peer_manager_clone = Arc::clone(&peer_manager);
-
-        // todo this should be moved out of the node initialization.
-        //      Instead the connection needs to be established and maintained as part of the sending and receiving funds functionality
-        rt.handle().block_on(async move {
-            P2pConnections::connect_peer(&config.lsp_node, Arc::clone(&peer_manager_clone))
-                .await
-                .map_err(|e| InitializationError::PeerConnection {
-                    message: e.to_string(),
-                })
-        })?;
+        let peer_conn_handle =
+            P2pConnections::run_bg_connector(&config.lsp_node, rt.handle(), &peer_manager).unwrap(); // todo proper error handling instead of unwrap()
 
         // Step 14. Keep LDK Up-to-date with Chain Info
         // TODO: optimize how often we want to run sync. LDK-sample syncs every second and
@@ -274,6 +266,7 @@ impl LightningNode {
             background_processor,
             channel_manager: Arc::clone(&channel_manager),
             peer_manager,
+            peer_conn_handle,
             sync_handle,
         })
     }
@@ -289,10 +282,18 @@ impl LightningNode {
             num_peers: self.peer_manager.get_peer_node_ids().len() as u16,
         }
     }
+
+    pub fn connected_to_node(&self, lsp_node: &NodeAddress) -> bool {
+        let peer = Arc::new(LnPeer::try_from(lsp_node).unwrap()); // todo proper error handling instead of unwrap()
+        self.peer_manager
+            .get_peer_node_ids()
+            .contains(&peer.pub_key)
+    }
 }
 
 impl Drop for LightningNode {
     fn drop(&mut self) {
+        self.peer_conn_handle.abort();
         self.sync_handle.abort();
 
         // TODO: Stop reconnecting to peers

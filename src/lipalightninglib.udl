@@ -58,6 +58,7 @@ interface LightningNode {
     [Throws=InitializationError]
     constructor([ByRef] Config config, RedundantStorageCallback redundant_storage_callback);
     NodeInfo get_node_info();
+    boolean connected_to_node([ByRef] NodeAddress node);
 };
 
 dictionary NodeInfo {
