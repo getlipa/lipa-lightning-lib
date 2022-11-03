@@ -33,7 +33,9 @@ use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;
-use crate::keys_manager::{generate_random_bytes, generate_secret, init_keys_manager};
+use crate::keys_manager::{
+    generate_random_bytes, generate_secret, init_keys_manager, mnemonic_to_secret,
+};
 use crate::logger::LightningLogger;
 use crate::native_logger::init_native_logger_once;
 use crate::p2p_networking::P2pConnections;

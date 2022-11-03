@@ -1,5 +1,6 @@
 use crate::errors::InitializationError;
 use crate::secret::Secret;
+use std::str::FromStr;
 
 use bdk::keys::bip39::Mnemonic;
 use lightning::chain::keysinterface::KeysManager;
@@ -45,6 +46,25 @@ pub fn generate_secret(passphrase: String) -> Result<Secret, InitializationError
     })
 }
 
+pub fn mnemonic_to_secret(
+    mnemonic_string: Vec<String>,
+    passphrase: String,
+) -> Result<Secret, InitializationError> {
+    let mnemonic = Mnemonic::from_str(mnemonic_string.join(" ").as_str()).map_err(|e| {
+        InitializationError::SecretGeneration {
+            message: e.to_string(),
+        }
+    })?;
+
+    let seed = mnemonic.to_seed(passphrase.clone())[0..32].to_vec();
+
+    Ok(Secret {
+        mnemonic: mnemonic_string,
+        passphrase,
+        seed,
+    })
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -63,5 +83,15 @@ mod test {
         assert_eq!(secret.mnemonic.len(), 24);
         assert_eq!(secret.passphrase, "hodl");
         assert_eq!(secret.seed.len(), 32);
+    }
+
+    #[test]
+    fn test_mnemonic_to_secret() {
+        let secret = generate_secret("hodl".to_string()).unwrap();
+
+        let secret_from_mnemonic =
+            mnemonic_to_secret(secret.mnemonic.clone(), secret.passphrase.clone()).unwrap();
+
+        assert_eq!(secret, secret_from_mnemonic);
     }
 }
