@@ -6,8 +6,8 @@ services:
     build:
       context: ./
       dockerfile: lnd-zero-conf/Dockerfile
-    volumes:
-      - ./lnd:/root/.lnd
+    #volumes:
+    #  - ./lnd:/root/.lnd
     ports:
       - '9739:9739'
       - '10013:10013'

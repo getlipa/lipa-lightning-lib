@@ -137,6 +137,7 @@ pub mod nigiri {
         stop();
 
         start_nigiri();
+        start_lspd();
     }
 
     pub fn stop() {
@@ -164,8 +165,13 @@ pub mod nigiri {
     }
 
     pub fn stop_lspd() {
-        // will fail on CI for now, because lspd is actually not setup yet. However this does not interrupt testing.
-        exec(&["docker-compose", "-f", "./lspd/docker-compose.yml", "down"]);
+        exec_in_dir(&["docker-compose", "down"], "lspd");
+    }
+
+    pub fn start_lspd() {
+        debug!("LSP starting ...");
+        exec_in_dir(&["docker-compose", "up", "-d", "lspd"], "lspd");
+        wait_for_sync_lsp();
     }
 
     fn start_nigiri() {
@@ -177,7 +183,7 @@ pub mod nigiri {
 
     fn wait_for_sync() {
         let mut counter = 0;
-        while !query_lnd_info().is_ok() {
+        while query_lnd_info().is_err() {
             counter += 1;
             if counter > 10 {
                 panic!("Failed to start nigiri");
@@ -186,6 +192,19 @@ pub mod nigiri {
             sleep(Duration::from_millis(500));
         }
         debug!("NIGIRI is synced");
+    }
+
+    fn wait_for_sync_lsp() {
+        let mut counter = 0;
+        while query_lspd_lnd_info().is_err() {
+            counter += 1;
+            if counter > 10 {
+                panic!("Failed to start LSP");
+            }
+            debug!("LSP is NOT synced");
+            sleep(Duration::from_millis(500));
+        }
+        debug!("LSP is synced");
     }
 
     fn wait_for_esplora() {
@@ -216,6 +235,28 @@ pub mod nigiri {
         Ok(RemoteNodeInfo { synced, pub_key })
     }
 
+    pub fn query_lspd_lnd_info() -> Result<RemoteNodeInfo, String> {
+        let output = exec(&[
+            "docker",
+            "exec",
+            "lspd-lnd",
+            "./lnd/lncli",
+            "--rpcserver",
+            "127.0.0.1:10013",
+            "--network",
+            "regtest",
+            "getinfo",
+        ]);
+        if !output.status.success() {
+            return Err("Command `lnd getinfo` failed".to_string());
+        }
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let pub_key = json["identity_pubkey"].as_str().unwrap().to_string();
+        let synced = json["synced_to_chain"].as_bool().unwrap();
+        Ok(RemoteNodeInfo { synced, pub_key })
+    }
+
     pub fn mine_blocks(block_amount: u32) -> Result<(), String> {
         let output = exec(&["nigiri", "rpc", "-generate", &block_amount.to_string()]);
         if !output.status.success() {
@@ -230,6 +271,39 @@ pub mod nigiri {
             return Err(format!("Command `faucet lnd {}` failed", amount_btc));
         }
         Ok(())
+    }
+
+    pub fn fund_lspd_lnd_node(amount_btc: f32, address: String) -> Result<(), String> {
+        let output = exec(&["nigiri", "faucet", &address, &amount_btc.to_string()]);
+        if !output.status.success() {
+            return Err(format!(
+                "Command `faucet {} {}` failed",
+                address, amount_btc
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn get_lspd_lnd_address() -> Result<String, String> {
+        let output = exec(&[
+            "docker",
+            "exec",
+            "lspd-lnd",
+            "./lnd/lncli",
+            "--rpcserver",
+            "127.0.0.1:10013",
+            "--network",
+            "regtest",
+            "newaddress",
+            "p2wkh",
+        ]);
+        if !output.status.success() {
+            return Err("Command `lnd newaddress p2wkh` failed".to_string());
+        }
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let address = json["address"].as_str().unwrap().to_string();
+        Ok(address)
     }
 
     pub fn try_cmd_repeatedly<T>(
@@ -276,6 +350,36 @@ pub mod nigiri {
         Ok(funding_txid)
     }
 
+    pub fn lspd_lnd_open_zero_conf_channel(node_id: &str) -> Result<String, String> {
+        let output = exec(&[
+            "docker",
+            "exec",
+            "lspd-lnd",
+            "./lnd/lncli",
+            "--rpcserver",
+            "127.0.0.1:10013",
+            "--network",
+            "regtest",
+            "openchannel",
+            "--private",
+            "--zero_conf",
+            node_id,
+            "1000000",
+        ]);
+        if !output.status.success() {
+            return Err(format!(
+                "Command `lnd openchannel --private {} 1000000` failed. Output: {}",
+                node_id,
+                String::from_utf8(output.stderr).unwrap()
+            ));
+        }
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let funding_txid = json["funding_txid"].as_str().unwrap().to_string();
+
+        Ok(funding_txid)
+    }
+
     pub fn lnd_disconnect_peer(node_id: String) -> Result<(), String> {
         let output = exec(&["nigiri", "lnd", "disconnect", &node_id]);
         if !output.status.success() {
@@ -309,8 +413,13 @@ pub mod nigiri {
     }
 
     pub fn exec(params: &[&str]) -> Output {
+        exec_in_dir(params, ".")
+    }
+
+    fn exec_in_dir(params: &[&str], dir: &str) -> Output {
         let (command, args) = params.split_first().expect("At least one param is needed");
         Command::new(command)
+            .current_dir(dir)
             .args(args)
             .output()
             .expect("Failed to run command")
