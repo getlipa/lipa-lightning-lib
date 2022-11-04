@@ -38,7 +38,7 @@ pub fn generate_secret(passphrase: String) -> Result<Secret, InitializationError
         Mnemonic::from_entropy(&entropy).map_err(|e| InitializationError::SecretGeneration {
             message: e.to_string(),
         })?;
-    let seed = mnemonic.to_seed(passphrase.clone())[0..32].to_vec();
+    let seed = mnemonic.to_seed(&passphrase)[0..32].to_vec();
     let mnemonic: Vec<String> = mnemonic.word_iter().map(|s| s.to_string()).collect();
 
     Ok(Secret {
@@ -59,7 +59,7 @@ pub fn mnemonic_to_secret(
         }
     })?;
 
-    let seed = mnemonic.to_seed(passphrase.clone())[0..32].to_vec();
+    let seed = mnemonic.to_seed(&passphrase)[0..32].to_vec();
 
     Ok(Secret {
         mnemonic: mnemonic_string,
