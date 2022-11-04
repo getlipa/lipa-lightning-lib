@@ -17,15 +17,15 @@ pub(crate) struct P2pConnections {}
 impl P2pConnections {
     pub fn run_bg_connector(
         peer: &NodeAddress,
-        handle1: Handle,
-        peer_mgr: &Arc<PeerManager>,
+        runtime_handle: Handle,
+        peer_manager: &Arc<PeerManager>,
     ) -> LipaResult<JoinHandle<()>> {
         let peer = Arc::new(LnPeer::try_from(peer)?);
-        let peer_mgr_clone = peer_mgr.clone();
+        let peer_manager_clone = Arc::clone(peer_manager);
 
-        let handle = handle1.spawn_repeating_task(Duration::from_secs(1), move || {
+        let join_handle = runtime_handle.spawn_repeating_task(Duration::from_secs(1), move || {
             let peer_clone = Arc::clone(&peer);
-            let peer_manager = Arc::clone(&peer_mgr_clone);
+            let peer_manager = Arc::clone(&peer_manager_clone);
             async move {
                 if let Err(e) = P2pConnections::connect_peer(&peer_clone, peer_manager).await {
                     error!(
@@ -36,7 +36,7 @@ impl P2pConnections {
             }
         });
 
-        Ok(handle)
+        Ok(join_handle)
     }
 
     async fn connect_peer(
