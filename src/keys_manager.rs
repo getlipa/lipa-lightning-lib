@@ -41,7 +41,11 @@ pub fn generate_secret(passphrase: String) -> Result<Secret, InitializationError
 
     let mnemonic_string: Vec<String> = mnemonic.word_iter().map(|s| s.to_string()).collect();
 
-    derive_secret_from_mnemonic(mnemonic, mnemonic_string, passphrase)
+    Ok(derive_secret_from_mnemonic(
+        mnemonic,
+        mnemonic_string,
+        passphrase,
+    ))
 }
 
 #[allow(clippy::result_large_err)]
@@ -55,7 +59,11 @@ pub fn mnemonic_to_secret(
         }
     })?;
 
-    derive_secret_from_mnemonic(mnemonic, mnemonic_string, passphrase)
+    Ok(derive_secret_from_mnemonic(
+        mnemonic,
+        mnemonic_string,
+        passphrase,
+    ))
 }
 
 #[allow(clippy::result_large_err)]
@@ -63,14 +71,14 @@ fn derive_secret_from_mnemonic(
     mnemonic: Mnemonic,
     mnemonic_string: Vec<String>,
     passphrase: String,
-) -> Result<Secret, InitializationError> {
+) -> Secret {
     let seed = mnemonic.to_seed(&passphrase)[0..32].to_vec();
 
-    Ok(Secret {
+    Secret {
         mnemonic: mnemonic_string,
         passphrase,
         seed,
-    })
+    }
 }
 
 #[cfg(test)]
