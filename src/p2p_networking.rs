@@ -1,25 +1,50 @@
-use crate::errors::RuntimeError;
+use crate::async_runtime::Handle;
+use crate::errors::{LipaError, LipaResult, MapToLipaError, RuntimeError};
 use crate::{NodeAddress, PeerManager};
 use bitcoin::secp256k1::PublicKey;
-use log::debug;
+use log::{debug, error, trace};
+use std::fmt;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
+use tokio::task::JoinHandle;
 use tokio::time::sleep;
 
-pub(crate) struct P2pConnections {}
+pub(crate) struct P2pConnection {}
 
-impl P2pConnections {
-    pub async fn connect_peer(
+impl P2pConnection {
+    pub fn init_background_task(
         peer: &NodeAddress,
+        runtime_handle: Handle,
+        peer_manager: &Arc<PeerManager>,
+    ) -> LipaResult<JoinHandle<()>> {
+        let peer = Arc::new(LnPeer::try_from(peer)?);
+        let peer_manager_clone = Arc::clone(peer_manager);
+
+        let join_handle = runtime_handle.spawn_repeating_task(Duration::from_secs(1), move || {
+            let peer_clone = Arc::clone(&peer);
+            let peer_manager = Arc::clone(&peer_manager_clone);
+            async move {
+                if let Err(e) = P2pConnection::connect_peer(&peer_clone, peer_manager).await {
+                    error!(
+                        "Connecting to peer {} failed with error: {:?}",
+                        peer_clone, e
+                    )
+                }
+            }
+        });
+
+        Ok(join_handle)
+    }
+
+    async fn connect_peer(
+        peer: &LnPeer,
         peer_manager: Arc<PeerManager>,
     ) -> Result<(), RuntimeError> {
-        let peer = LnPeer::try_from(peer)?;
-
-        if Self::is_connected(&peer, Arc::clone(&peer_manager)) {
-            debug!("Peer {} is already connected", peer.pub_key);
+        if Self::is_connected(peer, Arc::clone(&peer_manager)) {
+            trace!("Peer {} is already connected", peer.pub_key);
             return Ok(());
         }
 
@@ -46,7 +71,7 @@ impl P2pConnections {
                 }
 
                 // Wait for the handshake to complete.
-                if Self::is_connected(&peer, Arc::clone(&peer_manager)) {
+                if Self::is_connected(peer, Arc::clone(&peer_manager)) {
                     debug!("Peer connection to {} established", peer.pub_key);
                     return Ok(());
                 } else {
@@ -68,26 +93,50 @@ impl P2pConnections {
     }
 }
 
-struct LnPeer {
-    pub_key: PublicKey,
-    address: SocketAddr,
+pub struct LnPeer {
+    pub pub_key: PublicKey,
+    pub address: SocketAddr,
 }
 
 impl TryFrom<&NodeAddress> for LnPeer {
-    type Error = RuntimeError;
+    type Error = LipaError;
 
-    fn try_from(node_address: &NodeAddress) -> Result<Self, Self::Error> {
-        let pub_key = PublicKey::from_str(&node_address.pub_key).map_err(|e| {
-            RuntimeError::InvalidPubKey {
-                message: e.to_string(),
-            }
-        })?;
-        let address = SocketAddr::from_str(&node_address.address).map_err(|e| {
-            RuntimeError::InvalidAddress {
-                message: e.to_string(),
-            }
-        })?;
+    fn try_from(node_address: &NodeAddress) -> LipaResult<Self> {
+        let pub_key = PublicKey::from_str(&node_address.pub_key)
+            .map_to_invalid_input("Could not parse node public key")?;
+        let address = SocketAddr::from_str(&node_address.address)
+            .map_to_invalid_input("Could not parse node address")?;
 
         Ok(Self { pub_key, address })
+    }
+}
+
+impl fmt::Display for LnPeer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}@{}", self.pub_key, self.address)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::config::NodeAddress;
+    use crate::p2p_networking::LnPeer;
+
+    #[test]
+    fn test_conversion_from_strings() {
+        let sample_pubkey = "03beb9d00217e9cf9d485e47ffc6e6842c79d8941a755e261a796fe0c2e7ba2e53";
+        let sample_address = "1.2.3.4:9735";
+
+        let sample_node = NodeAddress {
+            pub_key: sample_pubkey.to_string(),
+            address: sample_address.to_string(),
+        };
+
+        let ln_peer = LnPeer::try_from(&sample_node).unwrap();
+
+        assert_eq!(
+            ln_peer.to_string(),
+            format!("{}@{}", sample_pubkey, sample_address)
+        );
     }
 }

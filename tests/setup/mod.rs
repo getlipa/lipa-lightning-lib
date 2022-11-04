@@ -2,6 +2,8 @@ use bitcoin::Network;
 use simplelog::SimpleLogger;
 
 use std::sync::{Arc, Once};
+use std::thread::sleep;
+use std::time::Duration;
 use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
 use uniffi_lipalightninglib::config::{Config, NodeAddress};
 use uniffi_lipalightninglib::keys_manager::generate_secret;
@@ -77,7 +79,12 @@ impl NodeHandle {
     }
 
     pub fn start(&self) -> Result<LightningNode, InitializationError> {
-        LightningNode::new(&self.config, Box::new(self.storage.clone()))
+        let node = LightningNode::new(&self.config, Box::new(self.storage.clone()));
+
+        // Wait for the the P2P background task to connect to the LSP
+        sleep(Duration::from_millis(1500));
+
+        node
     }
 }
 
@@ -106,10 +113,7 @@ pub mod nigiri {
         // Reset Nigiri state to start on a blank slate
         stop();
 
-        debug!("NIGIRI starting ...");
-        exec(&["nigiri", "start", "--ci", "--ln"]);
-        wait_for_sync();
-        wait_for_esplora();
+        start_nigiri();
     }
 
     pub fn stop() {
@@ -119,9 +123,33 @@ pub mod nigiri {
         exec(&["nigiri", "stop", "--delete"]);
     }
 
+    pub fn pause() {
+        debug!("LSPD stopping ...");
+        stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
+        debug!("NIGIRI pausing (stopping without resetting)...");
+        exec(&["nigiri", "stop"]);
+    }
+
+    pub fn resume() {
+        start_nigiri();
+    }
+
+    pub fn resume_without_ln() {
+        debug!("NIGIRI starting without LN...");
+        exec(&["nigiri", "start", "--ci"]);
+        wait_for_esplora();
+    }
+
     pub fn stop_lspd() {
         // will fail on CI for now, because lspd is actually not setup yet. However this does not interrupt testing.
         exec(&["docker-compose", "-f", "./lspd/docker-compose.yml", "down"]);
+    }
+
+    fn start_nigiri() {
+        debug!("NIGIRI starting ...");
+        exec(&["nigiri", "start", "--ci", "--ln"]);
+        wait_for_sync();
+        wait_for_esplora();
     }
 
     fn wait_for_sync() {
