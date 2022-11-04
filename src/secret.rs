@@ -12,6 +12,7 @@
 /// the end user for backup or recover a wallet.
 /// The user of the library may want to *securely* persist `seed` or derive it
 /// every time `seed` is needed, but it will have performance implications.
+#[derive(PartialEq, Eq, Debug)]
 pub struct Secret {
     pub mnemonic: Vec<String>,
     pub passphrase: String,

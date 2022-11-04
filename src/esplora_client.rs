@@ -19,6 +19,7 @@ pub(crate) struct ConfirmedTransaction {
 }
 
 impl EsploraClient {
+    #[allow(clippy::result_large_err)]
     pub fn new(url: &str) -> Result<Self, Error> {
         let builder = Builder::new(url).timeout(ESPLORA_TIMEOUT_SECS);
         Ok(Self {
@@ -26,10 +27,12 @@ impl EsploraClient {
         })
     }
 
+    #[allow(clippy::result_large_err)]
     fn get_height_by_hash(&self, hash: &BlockHash) -> Result<Option<u32>, Error> {
         Ok(self.client.get_block_status(hash)?.height)
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn is_tx_confirmed(&self, txid: &Txid) -> Result<bool, Error> {
         Ok(self
             .client
@@ -37,6 +40,7 @@ impl EsploraClient {
             .map_or(false, |status| status.confirmed))
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn get_header_with_height(
         &self,
         block_hash: &BlockHash,
@@ -50,6 +54,7 @@ impl EsploraClient {
         Ok(None)
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn get_confirmed_tx_by_id(
         &self,
         txid: &Txid,
@@ -61,6 +66,7 @@ impl EsploraClient {
         Ok(None)
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn get_confirmed_spending_tx(
         &self,
         txid: &Txid,
@@ -81,6 +87,7 @@ impl EsploraClient {
         Ok(None)
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn get_confirmed_tx(
         &self,
         txid: &Txid,
@@ -116,10 +123,12 @@ impl EsploraClient {
         Ok(None)
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn get_tip_hash(&self) -> Result<BlockHash, Error> {
         self.client.get_tip_hash()
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn broadcast(&self, tx: &Transaction) -> Result<(), Error> {
         self.client.broadcast(tx)
     }

@@ -33,7 +33,9 @@ use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;
-use crate::keys_manager::{generate_random_bytes, generate_secret, init_keys_manager};
+use crate::keys_manager::{
+    generate_random_bytes, generate_secret, init_keys_manager, mnemonic_to_secret,
+};
 use crate::logger::LightningLogger;
 use crate::native_logger::init_native_logger_once;
 use crate::p2p_networking::P2pConnections;
@@ -72,6 +74,7 @@ pub struct LightningNode {
 }
 
 impl LightningNode {
+    #[allow(clippy::result_large_err)]
     pub fn new(
         config: &Config,
         redundant_storage_callback: Box<dyn RedundantStorageCallback>,
@@ -320,6 +323,7 @@ fn build_mobile_node_user_config() -> UserConfig {
     user_config
 }
 
+#[allow(clippy::result_large_err)]
 fn init_peer_manager(
     channel_manager: Arc<ChannelManager>,
     keys_manager: &KeysManager,

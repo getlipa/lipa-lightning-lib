@@ -80,6 +80,7 @@ impl StoragePersister {
     }
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    #[allow(clippy::result_large_err)]
     pub fn read_or_init_channel_manager<M, T, F, L>(
         &self,
         chain_monitor: Arc<M>,
