@@ -1,6 +1,7 @@
 use crate::callbacks::RedundantStorageCallback;
-use crate::errors::InitializationError;
+use crate::errors::{InitializationError, LipaResult, MapToLipaError};
 
+use crate::LightningLogger;
 use bitcoin::hash_types::BlockHash;
 use bitcoin::hashes::hex::ToHex;
 use lightning::chain;
@@ -147,8 +148,33 @@ impl StoragePersister {
         }
     }
 
-    pub fn read_graph(&self) {
-        // TODO: Implement
+    pub fn read_or_init_graph(
+        &self,
+        genesis_hash: BlockHash,
+        logger: Arc<LightningLogger>,
+    ) -> LipaResult<NetworkGraph<Arc<LightningLogger>>> {
+        if self
+            .storage
+            .object_exists(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string())
+        {
+            let data = self
+                .storage
+                .get_object(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string());
+            let mut buffer = Cursor::new(&data);
+            let network_graph = NetworkGraph::read(&mut buffer, logger).map_to_permanent_failure(
+                "Error parsing network graph data (tip: delete network graph data and try again)",
+            )?;
+            debug!(
+                "Successfully read the NetworkGraph from storage. Last sync made at timestamp {}",
+                network_graph
+                    .get_last_rapid_gossip_sync_timestamp()
+                    .unwrap_or(0)
+            );
+            Ok(network_graph)
+        } else {
+            let network_graph = NetworkGraph::new(genesis_hash, Arc::clone(&logger));
+            Ok(network_graph)
+        }
     }
 
     pub fn read_scorer(&self) {

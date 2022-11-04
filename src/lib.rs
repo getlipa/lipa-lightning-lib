@@ -64,7 +64,6 @@ use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager
 use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Watch};
 use lightning::ln::channelmanager::ChainParameters;
 use lightning::ln::peer_handler::IgnoringMessageHandler;
-use lightning::routing::gossip::NetworkGraph;
 use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringParameters};
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
@@ -205,23 +204,36 @@ impl LightningNode {
         }
 
         // Step 11: Optional: Initialize rapid sync
-        let _graph = persister.read_graph();
-        let graph = Arc::new(NetworkGraph::new(genesis_hash, Arc::clone(&logger)));
-        let rapid_gossip = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
-
-        let snapshot_contents =
-            reqwest::blocking::get("https://rapidsync.lightningdevkit.org/snapshot/0")
-                .unwrap()
-                .bytes()
-                .unwrap()
-                .to_vec();
-
-        let new_last_sync_timestamp = rapid_gossip
-            .update_network_graph(&snapshot_contents)
-            .unwrap();
-
+        let graph = Arc::new(
+            persister
+                .read_or_init_graph(genesis_hash, Arc::clone(&logger))
+                .unwrap(),
+        );
+        let rapid_sync = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
+        let last_sync_timestamp = graph.get_last_rapid_gossip_sync_timestamp().unwrap_or(0);
         info!(
-            "Rapid gossip sync timestamp result = {}",
+            "Starting rapid sync from timestamp: {}",
+            last_sync_timestamp
+        );
+
+        let snapshot_contents = reqwest::blocking::get(format!(
+            "{}{}",
+            "https://rapidsync.lightningdevkit.org/snapshot/", last_sync_timestamp
+        ))
+        .unwrap()
+        .bytes()
+        .unwrap()
+        .to_vec();
+
+        let new_last_sync_timestamp = match rapid_sync.update_network_graph(&snapshot_contents) {
+            Ok(timestamp) => timestamp,
+            Err(e) => {
+                error!("Error updating network graph: {:?}", e);
+                last_sync_timestamp
+            }
+        };
+        info!(
+            "Finished rapid gossip sync up to timestamp: {}",
             new_last_sync_timestamp
         );
 
@@ -309,7 +321,7 @@ impl LightningNode {
             event_handler,
             chain_monitor,
             Arc::clone(&channel_manager),
-            GossipSync::rapid(rapid_gossip),
+            GossipSync::rapid(rapid_sync),
             Arc::clone(&peer_manager),
             logger,
             Some(scorer),
