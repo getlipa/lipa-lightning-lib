@@ -12,10 +12,10 @@ use std::time::Duration;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 
-pub(crate) struct P2pConnections {}
+pub(crate) struct P2pConnection {}
 
-impl P2pConnections {
-    pub fn run_bg_connector(
+impl P2pConnection {
+    pub fn init_background_task(
         peer: &NodeAddress,
         runtime_handle: Handle,
         peer_manager: &Arc<PeerManager>,
@@ -27,7 +27,7 @@ impl P2pConnections {
             let peer_clone = Arc::clone(&peer);
             let peer_manager = Arc::clone(&peer_manager_clone);
             async move {
-                if let Err(e) = P2pConnections::connect_peer(&peer_clone, peer_manager).await {
+                if let Err(e) = P2pConnection::connect_peer(&peer_clone, peer_manager).await {
                     error!(
                         "Connecting to peer {} failed with error: {:?}",
                         peer_clone, e

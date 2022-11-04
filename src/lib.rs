@@ -38,7 +38,7 @@ use crate::keys_manager::{
 };
 use crate::logger::LightningLogger;
 use crate::native_logger::init_native_logger_once;
-use crate::p2p_networking::{LnPeer, P2pConnections};
+use crate::p2p_networking::{LnPeer, P2pConnection};
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
@@ -70,7 +70,7 @@ pub struct LightningNode {
     background_processor: BackgroundProcessor,
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
-    peer_conn_handle: JoinHandle<()>,
+    p2p_connector_handle: JoinHandle<()>,
     sync_handle: JoinHandle<()>,
 }
 
@@ -191,8 +191,9 @@ impl LightningNode {
         )?);
 
         // Step 13. Initialize Networking
-        let peer_conn_handle =
-            P2pConnections::run_bg_connector(&config.lsp_node, rt.handle(), &peer_manager).unwrap(); // todo proper error handling instead of unwrap()
+        let p2p_connector_handle =
+            P2pConnection::init_background_task(&config.lsp_node, rt.handle(), &peer_manager)
+                .unwrap(); // todo proper error handling instead of unwrap()
 
         // Step 14. Keep LDK Up-to-date with Chain Info
         // TODO: optimize how often we want to run sync. LDK-sample syncs every second and
@@ -266,7 +267,7 @@ impl LightningNode {
             background_processor,
             channel_manager: Arc::clone(&channel_manager),
             peer_manager,
-            peer_conn_handle,
+            p2p_connector_handle,
             sync_handle,
         })
     }
@@ -293,7 +294,7 @@ impl LightningNode {
 
 impl Drop for LightningNode {
     fn drop(&mut self) {
-        self.peer_conn_handle.abort();
+        self.p2p_connector_handle.abort();
         self.sync_handle.abort();
 
         // TODO: Stop reconnecting to peers
