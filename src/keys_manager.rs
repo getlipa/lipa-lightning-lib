@@ -87,10 +87,9 @@ mod test {
     use bitcoin::hashes::hex::FromHex;
 
     // The following constants were obtained from https://iancoleman.io/bip39/
-    const MNEMONIC_STR: &str = "main peasant found egg inner adapt kangaroo pretty woman amazing match depend visual deposit shrug about mule route much camera trash job glimpse light";
-    const PASSPHRASE_STR: &str = "hodl";
-    const _SEED_STR: &str = "70f872e1a59e781e9c01f6328808baa774202f36281d7e74751b54693bc9c270b34c8c6d03e7c305189c84e15a641354ea79d7b76a9f062136be95ad4c1ae587";
-    const SEED_STR_32: &str = "70f872e1a59e781e9c01f6328808baa774202f36281d7e74751b54693bc9c270";
+    const MNEMONIC: &str = "main peasant found egg inner adapt kangaroo pretty woman amazing match depend visual deposit shrug about mule route much camera trash job glimpse light";
+    const PASSPHRASE: &str = "hodl";
+    const SEED: &str = "70f872e1a59e781e9c01f6328808baa774202f36281d7e74751b54693bc9c270";
 
     #[test]
     fn test_init() {
@@ -120,19 +119,16 @@ mod test {
 
     #[test]
     fn test_mnemonic_to_secret_hardcoded_values() {
-        let mnemonic_vec: Vec<String> = MNEMONIC_STR
-            .split_whitespace()
-            .map(|s| s.to_string())
-            .collect();
+        let mnemonic: Vec<String> = MNEMONIC.split_whitespace().map(|s| s.to_string()).collect();
 
-        let passphrase_string = String::from(PASSPHRASE_STR);
+        let passphrase = String::from(PASSPHRASE);
 
-        let seed_golden = Vec::from_hex(SEED_STR_32).unwrap();
+        let seed_expected = Vec::from_hex(SEED).unwrap();
 
-        let secret = mnemonic_to_secret(mnemonic_vec.clone(), passphrase_string.clone()).unwrap();
+        let secret = mnemonic_to_secret(mnemonic.clone(), passphrase.clone()).unwrap();
 
-        assert_eq!(secret.mnemonic, mnemonic_vec);
-        assert_eq!(secret.passphrase, passphrase_string);
-        assert_eq!(secret.seed, seed_golden);
+        assert_eq!(secret.mnemonic, mnemonic);
+        assert_eq!(secret.passphrase, passphrase);
+        assert_eq!(secret.seed, seed_expected);
     }
 }
