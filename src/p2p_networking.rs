@@ -1,5 +1,5 @@
 use crate::async_runtime::Handle;
-use crate::errors::{LipaError, MapToLipaError, RuntimeError};
+use crate::errors::{LipaError, LipaResult, MapToLipaError, RuntimeError};
 use crate::{NodeAddress, PeerManager};
 use bitcoin::secp256k1::PublicKey;
 use log::{debug, error, trace};
@@ -19,7 +19,7 @@ impl P2pConnections {
         peer: &NodeAddress,
         handle1: Handle,
         peer_mgr: &Arc<PeerManager>,
-    ) -> Result<JoinHandle<()>, LipaError> {
+    ) -> LipaResult<JoinHandle<()>> {
         let peer = Arc::new(LnPeer::try_from(peer)?);
         let peer_mgr_clone = peer_mgr.clone();
 
@@ -101,7 +101,7 @@ pub struct LnPeer {
 impl TryFrom<&NodeAddress> for LnPeer {
     type Error = LipaError;
 
-    fn try_from(node_address: &NodeAddress) -> Result<Self, Self::Error> {
+    fn try_from(node_address: &NodeAddress) -> LipaResult<Self> {
         let pub_key = PublicKey::from_str(&node_address.pub_key)
             .map_to_invalid_input("Could not parse node public key")?;
         let address = SocketAddr::from_str(&node_address.address)
