@@ -70,7 +70,7 @@ use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_invoice::Currency;
 use lightning_rapid_gossip_sync::RapidGossipSync;
-use log::{debug, error, warn, Level as LogLevel};
+use log::{debug, error, info, warn, Level as LogLevel};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::{Duration, Instant};
@@ -204,10 +204,26 @@ impl LightningNode {
             }
         }
 
-        // Step 11: Optional: Initialize the NetGraphMsgHandler
+        // Step 11: Optional: Initialize rapid sync
         let _graph = persister.read_graph();
         let graph = Arc::new(NetworkGraph::new(genesis_hash, Arc::clone(&logger)));
         let rapid_gossip = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
+
+        let snapshot_contents =
+            reqwest::blocking::get("https://rapidsync.lightningdevkit.org/snapshot/0")
+                .unwrap()
+                .bytes()
+                .unwrap()
+                .to_vec();
+
+        let new_last_sync_timestamp = rapid_gossip
+            .update_network_graph(&snapshot_contents)
+            .unwrap();
+
+        info!(
+            "Rapid gossip sync timestamp result = {}",
+            new_last_sync_timestamp
+        );
 
         // Step 12. Initialize the PeerManager
         let peer_manager = Arc::new(init_peer_manager(
