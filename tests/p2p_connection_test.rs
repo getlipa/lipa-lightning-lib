@@ -59,9 +59,6 @@ mod p2p_connection_test {
 
         let node = NodeHandle::new(lsp_node.clone()).start().unwrap();
 
-        // Wait for the LDK to connect to the LSP (which should fail)
-        sleep(Duration::from_millis(1500));
-
         assert_eq!(node.get_node_info().num_peers, 0);
         assert!(!node.connected_to_node(&lsp_node));
 
