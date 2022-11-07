@@ -60,7 +60,7 @@ impl LspClient {
         let response = self
             .lsp
             .channel_information()
-            .map_err(runtime_error_with("Error contacting LSP"))?;
+            .map_to_runtime_error("Error contacting LSP")?;
         parse_lsp_info(&response).prefix_error("Invalid LSP response")
     }
 
@@ -87,7 +87,7 @@ impl LspClient {
             .prefix_error("Failed to encrypt payment request")?;
         self.lsp
             .register_payment(encrypted_payment_info)
-            .map_err(runtime_error_with("Error on contacting LSP"))?;
+            .map_to_runtime_error("Error on contacting LSP")?;
 
         Ok(RouteHintHop {
             src_node_id: lsp_info.node_info.pubkey,
@@ -102,15 +102,14 @@ impl LspClient {
 
 fn parse_lsp_info(bytes: &[u8]) -> LipaResult<LspInfo> {
     let info = ChannelInformationReply::decode(bytes)
-        .map_err(invalid_input_with("Invalid ChannelInformationReply"))?;
+        .map_to_invalid_input("Invalid ChannelInformationReply")?;
 
-    let pubkey = PublicKey::from_slice(&info.lsp_pubkey)
-        .map_err(invalid_input_with("Invalid LSP pubkey"))?;
+    let pubkey =
+        PublicKey::from_slice(&info.lsp_pubkey).map_to_invalid_input("Invalid LSP pubkey")?;
 
+    let ln_pubkey = Vec::from_hex(&info.pubkey).map_to_invalid_input("Invalid LN node pubkey")?;
     let ln_pubkey =
-        Vec::from_hex(&info.pubkey).map_err(invalid_input_with("Invalid LN node pubkey"))?;
-    let ln_pubkey =
-        PublicKey::from_slice(&ln_pubkey).map_err(invalid_input_with("Invalid LN node pubkey"))?;
+        PublicKey::from_slice(&ln_pubkey).map_to_invalid_input("Invalid LN node pubkey")?;
 
     let fee = Fee {
         min_msat: info.channel_minimum_fee_msat as u64,

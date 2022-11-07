@@ -312,7 +312,7 @@ impl LightningNode {
         let (payment_hash, payment_secret) = self
             .channel_manager
             .create_inbound_payment(Some(amount_msat), 1000)
-            .map_err(|()| invalid_input("Amount is greater than total bitcoin supply"))?;
+            .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
         let payee_pubkey = self.channel_manager.get_our_node_id();
 
         // TODO: Figure it out.
@@ -324,7 +324,11 @@ impl LightningNode {
                 payee_pubkey,
                 amount_msat,
             };
-            let lsp_info = self.lsp_client.query_info().unwrap();
+            let lsp_info = self
+                .lsp_client
+                .query_info()
+                .lift_invalid_input()
+                .prefix_error("Failed to query LSPD")?;
             let hint_hop = self
                 .lsp_client
                 .register_payment(&payment_request, &lsp_info)
@@ -337,7 +341,8 @@ impl LightningNode {
 
         // TODO: Report it to LDK.
         // Ugly conversion from lightning::ln::PaymentHash to bitcoin::hashes::sha256::Hash.
-        let payment_hash = sha256::Hash::from_hex(&payment_hash.0.to_hex()).unwrap();
+        let payment_hash = sha256::Hash::from_hex(&payment_hash.0.to_hex())
+            .map_to_permanent_failure("Failed to convert payment hash")?;
         let currency = match self.network {
             Network::Bitcoin => Currency::Bitcoin,
             Network::Testnet => Currency::BitcoinTestnet,
@@ -354,7 +359,7 @@ impl LightningNode {
             .min_final_cltv_expiry(144)
             .private_route(RouteHint(routing_hint))
             .build_raw()
-            .unwrap();
+            .map_to_permanent_failure("Failed to construct invoice")?;
         let signature = self
             .keys_manager
             .sign_invoice(
@@ -362,10 +367,10 @@ impl LightningNode {
                 &raw_invoice.data.to_base32(),
                 Recipient::Node,
             )
-            .unwrap();
+            .map_to_permanent_failure("Failed to sign invoice")?;
         let signed_invoice = raw_invoice
             .sign(|_| Ok::<RecoverableSignature, ()>(signature))
-            .unwrap();
+            .map_to_permanent_failure("Failed to sign invoice")?;
         Ok(signed_invoice.to_string())
     }
 }

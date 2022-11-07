@@ -102,7 +102,7 @@ impl NodeHandle {
             &self.config,
             Box::new(self.storage.clone()),
             Box::new(LspMock::default()),
-        )
+        );
 
         // Wait for the the P2P background task to connect to the LSP
         sleep(Duration::from_millis(1500));

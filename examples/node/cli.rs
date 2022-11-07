@@ -43,6 +43,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
 }
 
 fn help() {
+    println!("invoice <amount in millisats> [description]");
     println!("nodeinfo");
     println!("stop");
 }
@@ -68,10 +69,10 @@ fn issue_invoice<'a>(
 ) -> Result<(), String> {
     let amount = words
         .next()
-        .ok_or("amount in sats is required".to_string())?;
+        .ok_or("amount in millisats is required".to_string())?;
     let amount: u64 = amount
         .parse()
-        .map_err(|_| "amount shoule be an integer number".to_string())?;
+        .map_err(|_| "amount should be an integer number".to_string())?;
     let description = words.collect::<Vec<_>>().join(" ");
     let invoice = node
         .issue_invoice(amount, description)
