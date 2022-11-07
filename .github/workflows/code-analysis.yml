@@ -11,35 +11,31 @@ jobs:
     name: Security audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
       - name: rust-toolchain
         uses: actions-rs/toolchain@v1.0.6
         with:
           toolchain: stable
       - name: Install security audit
         run: cargo install cargo-audit
+      - uses: actions/checkout@v3
       - name: Run security audit
         run: cargo audit
   fmt_check:
     name: Check code formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
       - name: rust-toolchain
         uses: actions-rs/toolchain@v1.0.6
         with:
           toolchain: stable
           components: rustfmt
+      - uses: actions/checkout@v3
       - name: Check code formatting
         run: cargo fmt -- --check
   clippy_check:
     name: Clippy check
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: true
       - name: rust-toolchain
         uses: actions-rs/toolchain@v1.0.6
         with:
@@ -49,16 +45,16 @@ jobs:
         uses: arduino/setup-protoc@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
       - name: Clippy
         run: cargo clippy -- -D warnings
   unused_dependencies:
     name: Look for unused dependencies
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: true
       - name: rust-toolchain
         uses: actions-rs/toolchain@v1.0.6
         with:
@@ -70,5 +66,9 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install unused dependency checker
         run: cargo install cargo-udeps --locked
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
       - name: Run unused dependency checker
         run: cargo +nightly udeps --all-targets
