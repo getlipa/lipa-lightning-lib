@@ -200,7 +200,7 @@ pub mod nigiri {
         wait_for_esplora();
     }
 
-    fn wait_for_sync(node: NodeInstance) {
+    pub fn wait_for_sync(node: NodeInstance) {
         let mut counter = 0;
         while query_lnd_node_info(node).is_err() {
             counter += 1;

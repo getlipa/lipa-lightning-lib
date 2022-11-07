@@ -9,7 +9,7 @@ mod chain_sync_test {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use crate::setup::nigiri::NodeInstance;
+    use crate::setup::nigiri::{wait_for_sync, NodeInstance};
     use crate::setup::{nigiri, NodeHandle};
     use uniffi_lipalightninglib::config::NodeAddress;
 
@@ -152,6 +152,7 @@ mod chain_sync_test {
 
         // mine a block and do the same again and remove 1 of the previously opened channels
         nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 1, 10, HALF_SEC).unwrap();
+        wait_for_sync(NodeInstance::NigiriLnd);
         let _ = open_5_chans_close_2(&node_id);
         nigiri::lnd_node_force_close_channel(NodeInstance::NigiriLnd, open_channels.pop().unwrap())
             .unwrap();

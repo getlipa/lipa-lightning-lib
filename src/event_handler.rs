@@ -1,5 +1,6 @@
 use crate::types::ChannelManager;
 
+use crate::PeerManager;
 use bitcoin::secp256k1::PublicKey;
 use lightning::util::events::{Event, EventHandler};
 use log::info;
@@ -8,13 +9,19 @@ use std::sync::Arc;
 pub(crate) struct LipaEventHandler {
     lsp_pubkey: PublicKey,
     channel_manager: Arc<ChannelManager>,
+    peer_manager: Arc<PeerManager>,
 }
 
 impl LipaEventHandler {
-    pub fn new(lsp_pubkey: PublicKey, channel_manager: Arc<ChannelManager>) -> Self {
+    pub fn new(
+        lsp_pubkey: PublicKey,
+        channel_manager: Arc<ChannelManager>,
+        peer_manager: Arc<PeerManager>,
+    ) -> Self {
         Self {
             lsp_pubkey,
             channel_manager,
+            peer_manager,
         }
     }
 }
@@ -54,6 +61,12 @@ impl EventHandler for LipaEventHandler {
                             0u64,
                         )
                         .unwrap();
+                } else if channel_type.requires_zero_conf() {
+                    self.channel_manager
+                        .close_channel(temporary_channel_id, counterparty_node_id)
+                        .unwrap();
+                    self.peer_manager
+                        .disconnect_by_node_id(*counterparty_node_id, false);
                 } else {
                     self.channel_manager
                         .accept_inbound_channel(temporary_channel_id, counterparty_node_id, 0u64)

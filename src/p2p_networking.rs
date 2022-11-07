@@ -39,7 +39,7 @@ impl P2pConnection {
         Ok(join_handle)
     }
 
-    async fn connect_peer(
+    pub(crate) async fn connect_peer(
         peer: &LnPeer,
         peer_manager: Arc<PeerManager>,
     ) -> Result<(), RuntimeError> {
