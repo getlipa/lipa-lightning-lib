@@ -36,7 +36,7 @@ fn main() {
     info!("Contacting lsp at {} ...", lsp_address);
     let lsp_auth_token =
         "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();
-    let lsp_client = LspClient::connect(lsp_address, lsp_auth_token);
+    let lsp_client = Box::new(LspClient::connect(lsp_address, lsp_auth_token));
     let lsp_info = lsp_client.channel_information().unwrap();
     let lsp_info = ChannelInformationReply::decode(&*lsp_info).unwrap();
     let ln_node_address = NodeAddress {
@@ -55,7 +55,7 @@ fn main() {
         lsp_node: ln_node_address,
     };
 
-    let node = LightningNode::new(&config, storage).unwrap();
+    let node = LightningNode::new(&config, storage, lsp_client).unwrap();
 
     // Lauch CLI
     sleep(Duration::from_secs(1));

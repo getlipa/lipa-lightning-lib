@@ -18,6 +18,7 @@ mod event_handler;
 mod fee_estimator;
 mod filter;
 mod logger;
+mod lsp;
 mod native_logger;
 mod storage_persister;
 mod tx_broadcaster;
@@ -28,6 +29,7 @@ use crate::callbacks::{LspCallback, RedundantStorageCallback};
 use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, NodeAddress};
 use crate::confirm::ConfirmWrapper;
+use crate::errors::*;
 use crate::errors::{InitializationError, LipaError, LspError, RuntimeError};
 use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
@@ -37,6 +39,7 @@ use crate::keys_manager::{
     generate_random_bytes, generate_secret, init_keys_manager, mnemonic_to_secret,
 };
 use crate::logger::LightningLogger;
+use crate::lsp::{LspClient, PaymentRequest};
 use crate::native_logger::init_native_logger_once;
 use crate::p2p_networking::{LnPeer, P2pConnection};
 use crate::secret::Secret;
@@ -44,7 +47,11 @@ use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager};
 
+use bitcoin::bech32::ToBase32;
 use bitcoin::blockdata::constants::genesis_block;
+use bitcoin::hashes::hex::{FromHex, ToHex};
+use bitcoin::hashes::sha256;
+use bitcoin::secp256k1::ecdsa::RecoverableSignature;
 use bitcoin::Network;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Recipient};
@@ -52,9 +59,11 @@ use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Watch};
 use lightning::ln::channelmanager::ChainParameters;
 use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::routing::gossip::NetworkGraph;
+use lightning::routing::router::RouteHint;
 use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringParameters};
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
+use lightning_invoice::{Currency, InvoiceBuilder};
 use lightning_rapid_gossip_sync::RapidGossipSync;
 use log::{debug, error, warn, Level as LogLevel};
 use std::sync::{Arc, Mutex};
@@ -64,9 +73,11 @@ use tokio::time::{Duration, Instant};
 
 #[allow(dead_code)]
 pub struct LightningNode {
-    #[allow(dead_code)]
+    network: Network,
     rt: AsyncRuntime,
     esplora_client: Arc<EsploraClient>,
+    lsp_client: Arc<LspClient>,
+    keys_manager: Arc<KeysManager>,
     background_processor: BackgroundProcessor,
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
@@ -79,6 +90,7 @@ impl LightningNode {
     pub fn new(
         config: &Config,
         redundant_storage_callback: Box<dyn RedundantStorageCallback>,
+        lsp_callback: Box<dyn LspCallback>,
     ) -> Result<Self, InitializationError> {
         let rt = AsyncRuntime::new()?;
         let genesis_hash = genesis_block(config.network).header.block_hash();
@@ -261,9 +273,14 @@ impl LightningNode {
             Some(scorer),
         );
 
+        let lsp_client = Arc::new(LspClient::new(lsp_callback));
+
         Ok(Self {
+            network: config.network,
             rt,
             esplora_client,
+            lsp_client,
+            keys_manager,
             background_processor,
             channel_manager: Arc::clone(&channel_manager),
             peer_manager,
@@ -289,6 +306,72 @@ impl LightningNode {
         self.peer_manager
             .get_peer_node_ids()
             .contains(&peer.pub_key)
+    }
+
+    pub fn issue_invoice(&self, amount_msat: u64, description: String) -> LipaResult<String> {
+        let (payment_hash, payment_secret) = self
+            .channel_manager
+            .create_inbound_payment(Some(amount_msat), 1000)
+            .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
+        let payee_pubkey = self.channel_manager.get_our_node_id();
+
+        // TODO: Figure it out.
+        let needs_channel_opening = true;
+        let routing_hint = if needs_channel_opening {
+            let payment_request = PaymentRequest {
+                payment_hash,
+                payment_secret,
+                payee_pubkey,
+                amount_msat,
+            };
+            let lsp_info = self
+                .lsp_client
+                .query_info()
+                .lift_invalid_input()
+                .prefix_error("Failed to query LSPD")?;
+            let hint_hop = self
+                .lsp_client
+                .register_payment(&payment_request, &lsp_info)
+                .lift_invalid_input()
+                .prefix_error("Failed to register payment")?;
+            vec![hint_hop]
+        } else {
+            Vec::new()
+        };
+
+        // TODO: Report it to LDK.
+        // Ugly conversion from lightning::ln::PaymentHash to bitcoin::hashes::sha256::Hash.
+        let payment_hash = sha256::Hash::from_hex(&payment_hash.0.to_hex())
+            .map_to_permanent_failure("Failed to convert payment hash")?;
+        let currency = match self.network {
+            Network::Bitcoin => Currency::Bitcoin,
+            Network::Testnet => Currency::BitcoinTestnet,
+            Network::Regtest => Currency::Regtest,
+            Network::Signet => Currency::Signet,
+        };
+        let raw_invoice = InvoiceBuilder::new(currency)
+            .description(description)
+            .payment_hash(payment_hash)
+            .payment_secret(payment_secret)
+            .payee_pub_key(payee_pubkey)
+            .amount_milli_satoshis(amount_msat)
+            .current_timestamp()
+            .min_final_cltv_expiry(144)
+            .private_route(RouteHint(routing_hint))
+            .build_raw()
+            .map_to_permanent_failure("Failed to construct invoice")?;
+        let signature = self
+            .keys_manager
+            .sign_invoice(
+                raw_invoice.hrp.to_string().as_bytes(),
+                &raw_invoice.data.to_base32(),
+                Recipient::Node,
+            )
+            .map_to_permanent_failure("Failed to sign invoice")?;
+        let signed_invoice = raw_invoice
+            .sign(|_| Ok::<RecoverableSignature, ()>(signature))
+            .map_to_permanent_failure("Failed to sign invoice")?;
+        Ok(signed_invoice.to_string())
     }
 }
 
