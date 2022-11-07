@@ -6,6 +6,7 @@ services:
     build:
       context: ./
       dockerfile: lnd-zero-conf/Dockerfile
+    # The following can be uncommented to generate new certificates and macaroons
     #volumes:
     #  - ./lnd:/root/.lnd
     ports:

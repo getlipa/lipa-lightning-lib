@@ -9,6 +9,7 @@ mod chain_sync_test {
     use std::thread::sleep;
     use std::time::Duration;
 
+    use crate::setup::nigiri::NodeInstance;
     use crate::setup::{nigiri, NodeHandle};
     use uniffi_lipalightninglib::config::NodeAddress;
 
@@ -21,7 +22,7 @@ mod chain_sync_test {
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
-        nigiri::lnd_open_channel(&node_id).unwrap();
+        nigiri::nigiri_lnd_open_channel(&node_id).unwrap();
 
         assert_eq!(node.get_node_info().num_channels, 1);
         assert_eq!(node.get_node_info().num_usable_channels, 0);
@@ -48,7 +49,7 @@ mod chain_sync_test {
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
-        let tx_id = nigiri::lnd_open_channel(&node_id).unwrap();
+        let tx_id = nigiri::nigiri_lnd_open_channel(&node_id).unwrap();
 
         nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 50, 10, HALF_SEC).unwrap();
 
@@ -57,9 +58,9 @@ mod chain_sync_test {
         assert_eq!(node.get_node_info().num_channels, 1);
         assert_eq!(node.get_node_info().num_usable_channels, 1);
 
-        nigiri::lnd_disconnect_peer(node_id).unwrap();
-        nigiri::lnd_force_close_channel(tx_id).unwrap();
-        nigiri::lnd_stop().unwrap();
+        nigiri::lnd_node_disconnect_peer(NodeInstance::NigiriLnd, node_id).unwrap();
+        nigiri::lnd_node_force_close_channel(NodeInstance::NigiriLnd, tx_id).unwrap();
+        nigiri::lnd_node_stop(NodeInstance::NigiriLnd).unwrap();
 
         sleep(Duration::from_secs(10));
 
@@ -106,7 +107,7 @@ mod chain_sync_test {
 
         let tx_id = start_node_open_confirm_channel_stop_node(&node_handle);
 
-        nigiri::lnd_force_close_channel(tx_id).unwrap();
+        nigiri::lnd_node_force_close_channel(NodeInstance::NigiriLnd, tx_id).unwrap();
         // TODO: as soon as we regularly reconnect to peers, we can uncomment the following line
         //      as then we'll be able to handle not being connected to our peers
         // nigiri::lnd_stop().unwrap();
@@ -127,8 +128,8 @@ mod chain_sync_test {
 
         let tx_id = start_node_open_channel_without_confirm_stop_node(&node_handle);
 
-        nigiri::lnd_force_close_channel(tx_id).unwrap();
-        nigiri::lnd_stop().unwrap();
+        nigiri::lnd_node_force_close_channel(NodeInstance::NigiriLnd, tx_id).unwrap();
+        nigiri::lnd_node_stop(NodeInstance::NigiriLnd).unwrap();
 
         nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 1, 10, HALF_SEC).unwrap();
 
@@ -152,7 +153,8 @@ mod chain_sync_test {
         // mine a block and do the same again and remove 1 of the previously opened channels
         nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 1, 10, HALF_SEC).unwrap();
         let _ = open_5_chans_close_2(&node_id);
-        nigiri::lnd_force_close_channel(open_channels.pop().unwrap()).unwrap();
+        nigiri::lnd_node_force_close_channel(NodeInstance::NigiriLnd, open_channels.pop().unwrap())
+            .unwrap();
 
         nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 10, 10, HALF_SEC).unwrap();
         sleep(Duration::from_secs(10));
@@ -163,7 +165,7 @@ mod chain_sync_test {
 
     fn setup() -> NodeHandle {
         nigiri::start();
-        let lsp_info = nigiri::query_lnd_info().unwrap();
+        let lsp_info = nigiri::query_lnd_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
             address: "127.0.0.1:9735".to_string(),
@@ -173,7 +175,7 @@ mod chain_sync_test {
 
         // to open multiple channels in the same block multiple UTXOs are required in LND
         for _ in 0..20 {
-            nigiri::try_cmd_repeatedly(nigiri::fund_lnd_node, 0.5, 10, HALF_SEC).unwrap();
+            nigiri::try_cmd_repeatedly(nigiri::fund_nigiri_lnd_node, 0.5, 10, HALF_SEC).unwrap();
         }
 
         node_handle
@@ -183,7 +185,7 @@ mod chain_sync_test {
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
-        let tx_id = nigiri::lnd_open_channel(&node_id).unwrap();
+        let tx_id = nigiri::nigiri_lnd_open_channel(&node_id).unwrap();
 
         assert_eq!(node.get_node_info().num_channels, 1);
         assert_eq!(node.get_node_info().num_usable_channels, 0);
@@ -202,7 +204,7 @@ mod chain_sync_test {
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
-        let tx_id = nigiri::lnd_open_channel(&node_id).unwrap();
+        let tx_id = nigiri::nigiri_lnd_open_channel(&node_id).unwrap();
 
         assert_eq!(node.get_node_info().num_channels, 1);
         assert_eq!(node.get_node_info().num_usable_channels, 0);
@@ -214,9 +216,9 @@ mod chain_sync_test {
         let mut open_channels = Vec::new();
 
         for i in 0..5 {
-            let tx_id = nigiri::lnd_open_channel(&node_id).unwrap();
+            let tx_id = nigiri::nigiri_lnd_open_channel(&node_id).unwrap();
             if i % 2 == 0 {
-                nigiri::lnd_force_close_channel(tx_id).unwrap();
+                nigiri::lnd_node_force_close_channel(NodeInstance::NigiriLnd, tx_id).unwrap();
             } else {
                 open_channels.push(tx_id);
             }

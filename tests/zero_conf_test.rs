@@ -9,6 +9,7 @@ mod chain_sync_test {
     use bitcoin::hashes::hex::ToHex;
     use std::time::Duration;
 
+    use crate::setup::nigiri::NodeInstance;
     use crate::setup::{nigiri, NodeHandle};
     use uniffi_lipalightninglib::config::NodeAddress;
 
@@ -23,7 +24,7 @@ mod chain_sync_test {
 
         assert_eq!(node.get_node_info().num_peers, 1);
 
-        let address = nigiri::get_lspd_lnd_address().unwrap();
+        let address = nigiri::get_lnd_node_address(NodeInstance::LspdLnd).unwrap();
         nigiri::fund_lspd_lnd_node(0.5, address).unwrap();
 
         nigiri::lspd_lnd_open_zero_conf_channel(&node_id).unwrap();
@@ -34,7 +35,7 @@ mod chain_sync_test {
 
     fn setup() -> NodeHandle {
         setup::nigiri::start();
-        let lsp_info = setup::nigiri::query_lspd_lnd_info().unwrap();
+        let lsp_info = setup::nigiri::query_lnd_node_info(NodeInstance::LspdLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
             address: "127.0.0.1:9739".to_string(),
@@ -42,7 +43,7 @@ mod chain_sync_test {
 
         let node_handle = NodeHandle::new(lsp_node);
 
-        nigiri::try_cmd_repeatedly(nigiri::fund_lnd_node, 0.5, 10, HALF_SEC).unwrap();
+        nigiri::try_cmd_repeatedly(nigiri::fund_nigiri_lnd_node, 0.5, 10, HALF_SEC).unwrap();
 
         node_handle
     }
