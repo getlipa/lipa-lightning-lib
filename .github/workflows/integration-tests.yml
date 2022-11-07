@@ -11,14 +11,14 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: true
       - name: Install Protoc
         uses: arduino/setup-protoc@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
       - name: Run Nigiri
         uses: vulpemventures/nigiri-github-action@master
         with:

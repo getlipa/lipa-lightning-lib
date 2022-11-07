@@ -14,10 +14,6 @@ jobs:
     name: Build and test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: true
       - name: rust-toolchain
         uses: actions-rs/toolchain@v1.0.6
         with:
@@ -26,6 +22,10 @@ jobs:
         uses: arduino/setup-protoc@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
       - name: Build
         run: cargo build --verbose
       - name: Run unit tests
@@ -37,10 +37,6 @@ jobs:
       matrix:
         target: [ x86_64-apple-ios, aarch64-apple-ios, aarch64-apple-ios-sim ]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: true
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -52,6 +48,10 @@ jobs:
         uses: arduino/setup-protoc@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
@@ -65,10 +65,6 @@ jobs:
       matrix:
         target: [ aarch64-linux-android, armv7-linux-androideabi, i686-linux-android ]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: true
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -76,6 +72,10 @@ jobs:
           profile: minimal
           override: true
           target: ${{ matrix.target }}
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
