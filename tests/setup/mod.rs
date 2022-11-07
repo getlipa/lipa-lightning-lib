@@ -4,8 +4,9 @@ use simplelog::SimpleLogger;
 use std::sync::{Arc, Once};
 use std::thread::sleep;
 use std::time::Duration;
-use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
+use uniffi_lipalightninglib::callbacks::{LspCallback, RedundantStorageCallback};
 use uniffi_lipalightninglib::config::{Config, NodeAddress};
+use uniffi_lipalightninglib::errors::LspError;
 use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
 
@@ -13,6 +14,24 @@ use storage_mock::Storage;
 use uniffi_lipalightninglib::errors::InitializationError;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
+
+pub struct LspMock {}
+
+impl Default for LspMock {
+    fn default() -> Self {
+        Self {}
+    }
+}
+
+impl LspCallback for LspMock {
+    fn channel_information(&self) -> Result<Vec<u8>, LspError> {
+        Err(LspError::Grpc)
+    }
+
+    fn register_payment(&self, _bytes: Vec<u8>) -> Result<(), LspError> {
+        Err(LspError::Grpc)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct StorageMock {
@@ -79,7 +98,11 @@ impl NodeHandle {
     }
 
     pub fn start(&self) -> Result<LightningNode, InitializationError> {
-        let node = LightningNode::new(&self.config, Box::new(self.storage.clone()));
+        let node = LightningNode::new(
+            &self.config,
+            Box::new(self.storage.clone()),
+            Box::new(LspMock::default()),
+        )
 
         // Wait for the the P2P background task to connect to the LSP
         sleep(Duration::from_millis(1500));

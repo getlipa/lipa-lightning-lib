@@ -56,9 +56,11 @@ enum LipaError {
 
 interface LightningNode {
     [Throws=InitializationError]
-    constructor([ByRef] Config config, RedundantStorageCallback redundant_storage_callback);
+    constructor([ByRef] Config config, RedundantStorageCallback redundant_storage_callback, LspCallback lsp_callback);
     NodeInfo get_node_info();
     boolean connected_to_node([ByRef] NodeAddress node);
+    [Throws=LipaError]
+    string issue_invoice(u64 amount_msat, string description);
 };
 
 dictionary NodeInfo {

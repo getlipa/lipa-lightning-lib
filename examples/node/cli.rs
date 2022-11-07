@@ -28,6 +28,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 "nodeinfo" => {
                     node_info(node);
                 }
+                "invoice" => {
+                    if let Err(message) = issue_invoice(node, &mut words) {
+                        println!("Error: {}", message);
+                    }
+                }
                 "stop" => {
                     break;
                 }
@@ -55,4 +60,22 @@ fn node_info(node: &LightningNode) {
     );
     println!("Local balance in msat: {}", node_info.local_balance_msat);
     println!("Number of connected peers: {}", node_info.num_peers);
+}
+
+fn issue_invoice<'a>(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &'a str>,
+) -> Result<(), String> {
+    let amount = words
+        .next()
+        .ok_or("amount in sats is required".to_string())?;
+    let amount: u64 = amount
+        .parse()
+        .map_err(|_| "amount shoule be an integer number".to_string())?;
+    let description = words.collect::<Vec<_>>().join(" ");
+    let invoice = node
+        .issue_invoice(amount, description)
+        .map_err(|e| e.to_string())?;
+    println!("{}", invoice);
+    Ok(())
 }

@@ -16,7 +16,6 @@ type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 // Implements Encrypt() from btcsuite/btcd
 // https://pkg.go.dev/github.com/btcsuite/btcd/btcec#Encrypt
 // https://github.com/btcsuite/btcd/blob/v0.22.1/btcec/ciphering.go#L70
-#[allow(dead_code)]
 pub(crate) fn encrypt(pubkey: &PublicKey, data: &[u8]) -> LipaResult<Vec<u8>> {
     let secp = secp256k1::Secp256k1::new();
     let (ephemeral, ephemeral_pubkey) = secp.generate_keypair(&mut rand::thread_rng());
