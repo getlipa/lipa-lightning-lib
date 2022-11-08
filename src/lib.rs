@@ -414,7 +414,10 @@ fn init_peer_manager(
     keys_manager: &KeysManager,
     logger: Arc<LightningLogger>,
 ) -> Result<PeerManager, InitializationError> {
-    let ephemeral_bytes = generate_random_bytes()?;
+    let ephemeral_bytes =
+        generate_random_bytes::<32>().map_err(|e| InitializationError::PeerConnection {
+            message: e.to_string(),
+        })?;
     let our_node_secret = keys_manager
         .get_node_secret(Recipient::Node)
         .map_err(|()| InitializationError::Logic {
