@@ -1,44 +1,37 @@
-use crate::errors::InitializationError;
+use crate::errors::*;
 use crate::secret::Secret;
-use std::str::FromStr;
 
 use bdk::keys::bip39::Mnemonic;
 use lightning::chain::keysinterface::KeysManager;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use std::str::FromStr;
 use std::time::SystemTime;
 
-pub fn init_keys_manager(seed: &Vec<u8>) -> Result<KeysManager, &str> {
+pub(crate) fn init_keys_manager(seed: &Vec<u8>) -> LipaResult<KeysManager> {
     if seed.len() != 32 {
-        return Err("Seed must have 32 bytes");
+        return Err(invalid_input("Seed must have 32 bytes"));
     }
     let mut array = [0; 32];
     array.copy_from_slice(&seed[0..32]);
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(|_| "System time before Unix epoch")?;
+        .map_to_permanent_failure("System time before Unix epoch")?;
     Ok(KeysManager::new(&array, now.as_secs(), now.subsec_nanos()))
 }
 
-#[allow(clippy::result_large_err)]
-pub fn generate_random_bytes() -> Result<[u8; 32], InitializationError> {
-    let mut bytes = [0u8; 32];
+pub(crate) fn generate_random_bytes<const N: usize>() -> LipaResult<[u8; N]> {
+    let mut bytes = [0u8; N];
     OsRng
         .try_fill_bytes(&mut bytes)
-        .map_err(|e| InitializationError::SecretGeneration {
-            message: e.to_string(),
-        })?;
+        .map_to_permanent_failure("Failed to generate random bytes")?;
     Ok(bytes)
 }
 
-#[allow(clippy::result_large_err)]
-pub fn generate_secret(passphrase: String) -> Result<Secret, InitializationError> {
-    let entropy = generate_random_bytes()?;
+pub fn generate_secret(passphrase: String) -> LipaResult<Secret> {
+    let entropy = generate_random_bytes::<32>()?;
     let mnemonic =
-        Mnemonic::from_entropy(&entropy).map_err(|e| InitializationError::SecretGeneration {
-            message: e.to_string(),
-        })?;
-
+        Mnemonic::from_entropy(&entropy).map_to_permanent_failure("Failed to mnemonic")?;
     let mnemonic_string: Vec<String> = mnemonic.word_iter().map(|s| s.to_string()).collect();
 
     Ok(derive_secret_from_mnemonic(
@@ -48,16 +41,9 @@ pub fn generate_secret(passphrase: String) -> Result<Secret, InitializationError
     ))
 }
 
-#[allow(clippy::result_large_err)]
-pub fn mnemonic_to_secret(
-    mnemonic_string: Vec<String>,
-    passphrase: String,
-) -> Result<Secret, InitializationError> {
-    let mnemonic = Mnemonic::from_str(&mnemonic_string.join(" ")).map_err(|e| {
-        InitializationError::SecretGeneration {
-            message: e.to_string(),
-        }
-    })?;
+pub fn mnemonic_to_secret(mnemonic_string: Vec<String>, passphrase: String) -> LipaResult<Secret> {
+    let mnemonic =
+        Mnemonic::from_str(&mnemonic_string.join(" ")).map_to_invalid_input("Invalid mnemonic")?;
 
     Ok(derive_secret_from_mnemonic(
         mnemonic,
@@ -66,7 +52,6 @@ pub fn mnemonic_to_secret(
     ))
 }
 
-#[allow(clippy::result_large_err)]
 fn derive_secret_from_mnemonic(
     mnemonic: Mnemonic,
     mnemonic_string: Vec<String>,

@@ -1,11 +1,10 @@
 use crate::errors::*;
+use crate::keys_manager::generate_random_bytes;
 
 use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, BlockSizeUser, KeyIvInit};
 use bitcoin::hashes::{sha256, sha512, Hash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::scalar::Scalar;
 use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::array::TryFromSliceError;
 
 const CIPH_CURVE_BYTES: [u8; 2] = [0x02, 0xCA]; // 0x02CA = 714
@@ -19,8 +18,8 @@ type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 pub(crate) fn encrypt(pubkey: &PublicKey, data: &[u8]) -> LipaResult<Vec<u8>> {
     let secp = secp256k1::Secp256k1::new();
     let (ephemeral, ephemeral_pubkey) = secp.generate_keypair(&mut rand::thread_rng());
-    let mut init_vector = vec![0u8; Aes256CbcEnc::block_size()];
-    OsRng.fill_bytes(&mut init_vector);
+    let init_vector = generate_random_bytes::<16>()?.to_vec();
+    assert_eq!(init_vector.len(), Aes256CbcEnc::block_size());
     let randomness = Randomness {
         ephemeral,
         ephemeral_pubkey,
