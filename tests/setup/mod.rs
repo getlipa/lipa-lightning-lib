@@ -15,13 +15,8 @@ use uniffi_lipalightninglib::errors::InitializationError;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
 
+#[derive(Default)]
 pub struct LspMock {}
-
-impl Default for LspMock {
-    fn default() -> Self {
-        Self {}
-    }
-}
 
 impl LspCallback for LspMock {
     fn channel_information(&self) -> Result<Vec<u8>, LspError> {
