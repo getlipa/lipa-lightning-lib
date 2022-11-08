@@ -15,13 +15,8 @@ use uniffi_lipalightninglib::errors::InitializationError;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
 
+#[derive(Default)]
 pub struct LspMock {}
-
-impl Default for LspMock {
-    fn default() -> Self {
-        Self {}
-    }
-}
 
 impl LspCallback for LspMock {
     fn channel_information(&self) -> Result<Vec<u8>, LspError> {
@@ -116,10 +111,30 @@ impl NodeHandle {
 pub mod nigiri {
     use super::*;
 
+    use crate::try_cmd_repeatedly;
     use log::debug;
     use std::process::{Command, Output};
     use std::thread::sleep;
     use std::time::Duration;
+
+    #[derive(Clone, Copy, Debug)]
+    pub enum NodeInstance {
+        NigiriLnd,
+        LspdLnd,
+    }
+
+    const LSPD_LND_CMD_PREFIX: &[&str] = &[
+        "docker",
+        "exec",
+        "lspd-lnd",
+        "/go/lnd/lncli",
+        "--rpcserver",
+        "127.0.0.1:10013",
+        "--network",
+        "regtest",
+    ];
+
+    const NIGIRI_LND_CMD_PREFIX: &[&str] = &["nigiri", "lnd"];
 
     #[derive(Debug)]
     pub struct RemoteNodeInfo {
@@ -137,6 +152,7 @@ pub mod nigiri {
         stop();
 
         start_nigiri();
+        start_lspd();
     }
 
     pub fn stop() {
@@ -164,28 +180,33 @@ pub mod nigiri {
     }
 
     pub fn stop_lspd() {
-        // will fail on CI for now, because lspd is actually not setup yet. However this does not interrupt testing.
-        exec(&["docker-compose", "-f", "./lspd/docker-compose.yml", "down"]);
+        exec_in_dir(&["docker-compose", "down"], "lspd");
+    }
+
+    pub fn start_lspd() {
+        debug!("LSP starting ...");
+        exec_in_dir(&["docker-compose", "up", "-d", "lspd"], "lspd");
+        wait_for_sync(NodeInstance::LspdLnd);
     }
 
     fn start_nigiri() {
         debug!("NIGIRI starting ...");
         exec(&["nigiri", "start", "--ci", "--ln"]);
-        wait_for_sync();
+        wait_for_sync(NodeInstance::NigiriLnd);
         wait_for_esplora();
     }
 
-    fn wait_for_sync() {
+    pub fn wait_for_sync(node: NodeInstance) {
         let mut counter = 0;
-        while !query_lnd_info().is_ok() {
+        while query_lnd_node_info(node).is_err() {
             counter += 1;
             if counter > 10 {
-                panic!("Failed to start nigiri");
+                panic!("Failed to start {:?}", node);
             }
-            debug!("NIGIRI is NOT synced");
+            debug!("{:?} is NOT synced", node);
             sleep(Duration::from_millis(500));
         }
-        debug!("NIGIRI is synced");
+        debug!("{:?} is synced", node);
     }
 
     fn wait_for_esplora() {
@@ -204,8 +225,12 @@ pub mod nigiri {
         }
     }
 
-    pub fn query_lnd_info() -> Result<RemoteNodeInfo, String> {
-        let output = exec(&["nigiri", "lnd", "getinfo"]);
+    pub fn query_lnd_node_info(node: NodeInstance) -> Result<RemoteNodeInfo, String> {
+        let output = exec(
+            [get_lnd_node_prefix(node), &["getinfo"]]
+                .concat()
+                .as_slice(),
+        );
         if !output.status.success() {
             return Err("Command `lnd getinfo` failed".to_string());
         }
@@ -224,48 +249,62 @@ pub mod nigiri {
         Ok(())
     }
 
-    pub fn fund_lnd_node(amount_btc: f32) -> Result<(), String> {
-        let output = exec(&["nigiri", "faucet", "lnd", &amount_btc.to_string()]);
-        if !output.status.success() {
-            return Err(format!("Command `faucet lnd {}` failed", amount_btc));
-        }
-        Ok(())
+    pub fn fund_lnd_node(node: NodeInstance, amount_btc: f32) {
+        let address = get_lnd_node_address(node).unwrap();
+        try_cmd_repeatedly!(
+            fund_address,
+            10,
+            Duration::from_millis(500),
+            amount_btc,
+            &address
+        );
     }
 
-    pub fn try_cmd_repeatedly<T>(
-        f: fn(T) -> Result<(), String>,
-        param: T,
-        mut retry_times: u8,
-        interval: Duration,
-    ) -> Result<(), String>
-    where
-        T: Copy,
-    {
-        while let Err(e) = f(param) {
-            retry_times -= 1;
-
-            if retry_times == 0 {
-                return Err(e);
-            }
-            sleep(interval);
-        }
-
-        Ok(())
-    }
-
-    pub fn lnd_open_channel(node_id: &str) -> Result<String, String> {
-        let output = exec(&[
-            "nigiri",
-            "lnd",
-            "openchannel",
-            "--private",
-            node_id,
-            "1000000",
-        ]);
+    fn fund_address(amount_btc: f32, address: &str) -> Result<(), String> {
+        let output = exec(&["nigiri", "faucet", &address, &amount_btc.to_string()]);
         if !output.status.success() {
             return Err(format!(
-                "Command `lnd openchannel --private {} 1000000` failed: {}",
-                node_id,
+                "Command `faucet {} {}` failed",
+                address, amount_btc
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn get_lnd_node_address(node: NodeInstance) -> Result<String, String> {
+        let output = exec(
+            [get_lnd_node_prefix(node), &["newaddress", "p2wkh"]]
+                .concat()
+                .as_slice(),
+        );
+        if !output.status.success() {
+            return Err("Command `lnd newaddress p2wkh` failed".to_string());
+        }
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let address = json["address"].as_str().unwrap().to_string();
+        Ok(address)
+    }
+
+    pub fn lnd_node_open_channel(
+        node: NodeInstance,
+        target_node_id: &str,
+        zero_conf: bool,
+    ) -> Result<String, String> {
+        let mut cmd = vec!["openchannel", "--private", target_node_id, "1000000"];
+        if zero_conf {
+            cmd.insert(2, "--zero_conf");
+        }
+        let output = exec(
+            [get_lnd_node_prefix(node), cmd.as_slice()]
+                .concat()
+                .as_slice(),
+        );
+        if !output.status.success() {
+            return Err(format!(
+                "Command `lnd openchannel --private {} {} 1000000` failed. Output: {}",
+                zero_conf,
+                target_node_id,
                 String::from_utf8(output.stderr).unwrap()
             ));
         }
@@ -276,8 +315,12 @@ pub mod nigiri {
         Ok(funding_txid)
     }
 
-    pub fn lnd_disconnect_peer(node_id: String) -> Result<(), String> {
-        let output = exec(&["nigiri", "lnd", "disconnect", &node_id]);
+    pub fn lnd_node_disconnect_peer(node: NodeInstance, node_id: String) -> Result<(), String> {
+        let output = exec(
+            [get_lnd_node_prefix(node), &["disconnect", &node_id]]
+                .concat()
+                .as_slice(),
+        );
         if !output.status.success() {
             return Err(format!("Command `lnd disconnect {}` failed", node_id));
         }
@@ -285,8 +328,18 @@ pub mod nigiri {
         Ok(())
     }
 
-    pub fn lnd_force_close_channel(funding_txid: String) -> Result<(), String> {
-        let output = exec(&["nigiri", "lnd", "closechannel", "--force", &funding_txid]);
+    pub fn lnd_node_force_close_channel(
+        node: NodeInstance,
+        funding_txid: String,
+    ) -> Result<(), String> {
+        let output = exec(
+            [
+                get_lnd_node_prefix(node),
+                &["closechannel", "--force", &funding_txid],
+            ]
+            .concat()
+            .as_slice(),
+        );
         if !output.status.success() {
             return Err(format!(
                 "Command `lnd closechannel --force {}` failed",
@@ -299,8 +352,8 @@ pub mod nigiri {
         Ok(())
     }
 
-    pub fn lnd_stop() -> Result<(), String> {
-        let output = exec(&["nigiri", "lnd", "stop"]);
+    pub fn lnd_node_stop(node: NodeInstance) -> Result<(), String> {
+        let output = exec([get_lnd_node_prefix(node), &["stop"]].concat().as_slice());
         if !output.status.success() {
             return Err(String::from("Command `lnd stop` failed"));
         }
@@ -309,10 +362,38 @@ pub mod nigiri {
     }
 
     pub fn exec(params: &[&str]) -> Output {
+        exec_in_dir(params, ".")
+    }
+
+    fn exec_in_dir(params: &[&str], dir: &str) -> Output {
         let (command, args) = params.split_first().expect("At least one param is needed");
         Command::new(command)
+            .current_dir(dir)
             .args(args)
             .output()
             .expect("Failed to run command")
+    }
+
+    fn get_lnd_node_prefix(node: NodeInstance) -> &'static [&'static str] {
+        match node {
+            NodeInstance::NigiriLnd => NIGIRI_LND_CMD_PREFIX,
+            NodeInstance::LspdLnd => LSPD_LND_CMD_PREFIX,
+        }
+    }
+
+    #[macro_export]
+    macro_rules! try_cmd_repeatedly {
+        ($func:path, $retry_times:expr, $interval:expr, $($arg:expr),*) => {{
+            let mut retry_times = $retry_times;
+
+            while let Err(e) = $func($($arg),*) {
+                retry_times -= 1;
+
+                if retry_times == 0 {
+                    panic!("Failed to execute {} after {} tries: {}", stringify!($func), $retry_times, e);
+                }
+                sleep($interval);
+            }
+        }};
     }
 }

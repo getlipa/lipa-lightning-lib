@@ -52,6 +52,7 @@ use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::hashes::hex::{FromHex, ToHex};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::ecdsa::RecoverableSignature;
+use bitcoin::secp256k1::PublicKey;
 use bitcoin::Network;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Recipient};
@@ -239,7 +240,19 @@ impl LightningNode {
             });
 
         // Step 15. Initialize an EventHandler
-        let event_handler = Arc::new(LipaEventHandler {});
+        let lsp_pubkey =
+            PublicKey::from_slice(&Vec::from_hex(&config.lsp_node.pub_key).map_err(|e| {
+                InitializationError::PublicKey {
+                    message: e.to_string(),
+                }
+            })?)
+            .map_err(|e| InitializationError::PublicKey {
+                message: e.to_string(),
+            })?;
+        let event_handler = Arc::new(LipaEventHandler::new(
+            lsp_pubkey,
+            Arc::clone(&channel_manager),
+        ));
 
         // Step 16. Initialize the ProbabilisticScorer
         let _scorer = persister.read_scorer();
@@ -400,6 +413,10 @@ fn build_mobile_node_user_config() -> UserConfig {
 
     // Do not announce the channel publicly.
     user_config.channel_handshake_config.announced_channel = false;
+
+    // Manually accept inbound requests to open a new channel to support
+    // zero-conf channels.
+    user_config.manually_accept_inbound_channels = true;
 
     // Force an incoming channel to match our announced channel preference.
     user_config

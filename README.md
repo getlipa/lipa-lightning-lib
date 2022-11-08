@@ -16,13 +16,9 @@ at least **v0.4.4**:
 nigiri start --ln
 ```
 
-Start LSPD
+Start LSPD + Custom LND
  1. Go to `./lspd`
- 2. Run `make` to generate `lnd.env` file with LND TLS certificate and macaroons
- 3. Run `docker-compose up lspd` to start LSPD.
-
-Note: make assumes that nigiri data is in `~/.nigiri`,
-but you can customize it by `NIGIRI_DATA=./nigiri-data make clean all`.
+ 3. Run `docker-compose up lspd` to start LSPD and the LSP node.
 
 ## Step 2: Fire it up!
 Start the example node:

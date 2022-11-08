@@ -224,6 +224,9 @@ pub enum InitializationError {
     #[error("Could not connect to peer: {message}")]
     PeerConnection { message: String },
 
+    #[error("Invalid public key: {message}")]
+    PublicKey { message: String },
+
     #[error("Failed to generate random entropy: {message}")]
     SecretGeneration { message: String },
 }
