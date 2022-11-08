@@ -29,7 +29,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     node_info(node);
                 }
                 "invoice" => {
-                    if let Err(message) = issue_invoice(node, &mut words) {
+                    if let Err(message) = create_invoice(node, &mut words) {
                         println!("Error: {}", message);
                     }
                 }
@@ -63,7 +63,7 @@ fn node_info(node: &LightningNode) {
     println!("Number of connected peers: {}", node_info.num_peers);
 }
 
-fn issue_invoice<'a>(
+fn create_invoice<'a>(
     node: &LightningNode,
     words: &mut dyn Iterator<Item = &'a str>,
 ) -> Result<(), String> {
@@ -75,7 +75,7 @@ fn issue_invoice<'a>(
         .map_err(|_| "amount should be an integer number".to_string())?;
     let description = words.collect::<Vec<_>>().join(" ");
     let invoice = node
-        .issue_invoice(amount, description)
+        .create_invoice(amount, description)
         .map_err(|e| e.to_string())?;
     println!("{}", invoice);
     Ok(())

@@ -17,6 +17,7 @@ mod esplora_client;
 mod event_handler;
 mod fee_estimator;
 mod filter;
+mod invoice;
 mod logger;
 mod lsp;
 mod native_logger;
@@ -35,11 +36,12 @@ use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;
+use crate::invoice::create_raw_invoice;
 use crate::keys_manager::{
     generate_random_bytes, generate_secret, init_keys_manager, mnemonic_to_secret,
 };
 use crate::logger::LightningLogger;
-use crate::lsp::{LspClient, PaymentRequest};
+use crate::lsp::LspClient;
 use crate::native_logger::init_native_logger_once;
 use crate::p2p_networking::{LnPeer, P2pConnection};
 use crate::secret::Secret;
@@ -49,8 +51,7 @@ use crate::types::{ChainMonitor, ChannelManager, PeerManager};
 
 use bitcoin::bech32::ToBase32;
 use bitcoin::blockdata::constants::genesis_block;
-use bitcoin::hashes::hex::{FromHex, ToHex};
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::hex::FromHex;
 use bitcoin::secp256k1::ecdsa::RecoverableSignature;
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::Network;
@@ -60,11 +61,10 @@ use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Watch};
 use lightning::ln::channelmanager::ChainParameters;
 use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::routing::gossip::NetworkGraph;
-use lightning::routing::router::RouteHint;
 use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringParameters};
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
-use lightning_invoice::{Currency, InvoiceBuilder};
+use lightning_invoice::Currency;
 use lightning_rapid_gossip_sync::RapidGossipSync;
 use log::{debug, error, warn, Level as LogLevel};
 use std::sync::{Arc, Mutex};
@@ -321,58 +321,20 @@ impl LightningNode {
             .contains(&peer.pub_key)
     }
 
-    pub fn issue_invoice(&self, amount_msat: u64, description: String) -> LipaResult<String> {
-        let (payment_hash, payment_secret) = self
-            .channel_manager
-            .create_inbound_payment(Some(amount_msat), 1000)
-            .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
-        let payee_pubkey = self.channel_manager.get_our_node_id();
-
-        // TODO: Figure it out.
-        let needs_channel_opening = true;
-        let routing_hint = if needs_channel_opening {
-            let payment_request = PaymentRequest {
-                payment_hash,
-                payment_secret,
-                payee_pubkey,
-                amount_msat,
-            };
-            let lsp_info = self
-                .lsp_client
-                .query_info()
-                .lift_invalid_input()
-                .prefix_error("Failed to query LSPD")?;
-            let hint_hop = self
-                .lsp_client
-                .register_payment(&payment_request, &lsp_info)
-                .lift_invalid_input()
-                .prefix_error("Failed to register payment")?;
-            vec![hint_hop]
-        } else {
-            Vec::new()
-        };
-
-        // TODO: Report it to LDK.
-        // Ugly conversion from lightning::ln::PaymentHash to bitcoin::hashes::sha256::Hash.
-        let payment_hash = sha256::Hash::from_hex(&payment_hash.0.to_hex())
-            .map_to_permanent_failure("Failed to convert payment hash")?;
+    pub fn create_invoice(&self, amount_msat: u64, description: String) -> LipaResult<String> {
         let currency = match self.network {
             Network::Bitcoin => Currency::Bitcoin,
             Network::Testnet => Currency::BitcoinTestnet,
             Network::Regtest => Currency::Regtest,
             Network::Signet => Currency::Signet,
         };
-        let raw_invoice = InvoiceBuilder::new(currency)
-            .description(description)
-            .payment_hash(payment_hash)
-            .payment_secret(payment_secret)
-            .payee_pub_key(payee_pubkey)
-            .amount_milli_satoshis(amount_msat)
-            .current_timestamp()
-            .min_final_cltv_expiry(144)
-            .private_route(RouteHint(routing_hint))
-            .build_raw()
-            .map_to_permanent_failure("Failed to construct invoice")?;
+        let raw_invoice = create_raw_invoice(
+            amount_msat,
+            currency,
+            description,
+            &self.channel_manager,
+            &self.lsp_client,
+        )?;
         let signature = self
             .keys_manager
             .sign_invoice(
