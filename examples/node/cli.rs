@@ -69,7 +69,7 @@ fn issue_invoice<'a>(
 ) -> Result<(), String> {
     let amount = words
         .next()
-        .ok_or("amount in millisats is required".to_string())?;
+        .ok_or_else(|| "amount in millisats is required".to_string())?;
     let amount: u64 = amount
         .parse()
         .map_err(|_| "amount should be an integer number".to_string())?;
