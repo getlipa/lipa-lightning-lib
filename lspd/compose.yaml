@@ -1,5 +1,6 @@
 services:
   lspd-lnd:
+    container_name: lspd-lnd
     build: ./lnd-zero-conf
     ports:
       - '9739:9739'

@@ -131,7 +131,7 @@ pub mod nigiri {
         "docker",
         "exec",
         "lspd-lnd",
-        "./lnd/lncli",
+        "/go/lnd/lncli",
         "--rpcserver",
         "127.0.0.1:10013",
         "--network",
