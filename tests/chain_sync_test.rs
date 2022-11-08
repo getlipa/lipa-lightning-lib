@@ -11,9 +11,11 @@ mod chain_sync_test {
 
     use crate::setup::nigiri::{wait_for_sync, NodeInstance};
     use crate::setup::{nigiri, NodeHandle};
+    use crate::try_cmd_repeatedly;
     use uniffi_lipalightninglib::config::NodeAddress;
 
     const HALF_SEC: Duration = Duration::from_millis(500);
+    const N_RETRIES: u8 = 10;
 
     #[test]
     fn test_channel_is_confirmed_chain_only_after_6_confirmations() {
@@ -22,19 +24,19 @@ mod chain_sync_test {
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
-        nigiri::nigiri_lnd_open_channel(&node_id).unwrap();
+        nigiri::lnd_node_open_channel(NodeInstance::NigiriLnd, &node_id, false).unwrap();
 
         assert_eq!(node.get_node_info().num_channels, 1);
         assert_eq!(node.get_node_info().num_usable_channels, 0);
 
-        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 5, 10, HALF_SEC).unwrap();
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 5);
 
         sleep(Duration::from_secs(10));
 
         assert_eq!(node.get_node_info().num_channels, 1);
         assert_eq!(node.get_node_info().num_usable_channels, 0);
 
-        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 1, 10, HALF_SEC).unwrap();
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
         sleep(Duration::from_secs(10));
 
@@ -49,9 +51,10 @@ mod chain_sync_test {
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
-        let tx_id = nigiri::nigiri_lnd_open_channel(&node_id).unwrap();
+        let tx_id =
+            nigiri::lnd_node_open_channel(NodeInstance::NigiriLnd, &node_id, false).unwrap();
 
-        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 50, 10, HALF_SEC).unwrap();
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 50);
 
         sleep(Duration::from_secs(10));
 
@@ -66,7 +69,7 @@ mod chain_sync_test {
 
         assert_eq!(node.get_node_info().num_channels, 1);
 
-        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 1, 10, HALF_SEC).unwrap();
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
         sleep(Duration::from_secs(10));
 
@@ -91,7 +94,7 @@ mod chain_sync_test {
 
         start_node_open_channel_without_confirm_stop_node(&node_handle);
 
-        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 6, 10, HALF_SEC).unwrap();
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 6);
         // TODO: figure out why the following sleep is needed
         sleep(Duration::from_secs(5));
 
@@ -112,7 +115,7 @@ mod chain_sync_test {
         //      as then we'll be able to handle not being connected to our peers
         // nigiri::lnd_stop().unwrap();
 
-        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 1, 10, HALF_SEC).unwrap();
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
         let node = node_handle.start().unwrap();
 
@@ -131,7 +134,7 @@ mod chain_sync_test {
         nigiri::lnd_node_force_close_channel(NodeInstance::NigiriLnd, tx_id).unwrap();
         nigiri::lnd_node_stop(NodeInstance::NigiriLnd).unwrap();
 
-        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 1, 10, HALF_SEC).unwrap();
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
         let node = node_handle.start().unwrap();
 
@@ -151,13 +154,13 @@ mod chain_sync_test {
         let mut open_channels = open_5_chans_close_2(&node_id);
 
         // mine a block and do the same again and remove 1 of the previously opened channels
-        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 1, 10, HALF_SEC).unwrap();
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
         wait_for_sync(NodeInstance::NigiriLnd);
         let _ = open_5_chans_close_2(&node_id);
         nigiri::lnd_node_force_close_channel(NodeInstance::NigiriLnd, open_channels.pop().unwrap())
             .unwrap();
 
-        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 10, 10, HALF_SEC).unwrap();
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
         sleep(Duration::from_secs(10));
 
         assert_eq!(node.get_node_info().num_channels, 3);
@@ -176,7 +179,7 @@ mod chain_sync_test {
 
         // to open multiple channels in the same block multiple UTXOs are required in LND
         for _ in 0..20 {
-            nigiri::try_cmd_repeatedly(nigiri::fund_nigiri_lnd_node, 0.5, 10, HALF_SEC).unwrap();
+            nigiri::fund_lnd_node(NodeInstance::NigiriLnd, 0.5)
         }
 
         node_handle
@@ -186,12 +189,13 @@ mod chain_sync_test {
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
-        let tx_id = nigiri::nigiri_lnd_open_channel(&node_id).unwrap();
+        let tx_id =
+            nigiri::lnd_node_open_channel(NodeInstance::NigiriLnd, &node_id, false).unwrap();
 
         assert_eq!(node.get_node_info().num_channels, 1);
         assert_eq!(node.get_node_info().num_usable_channels, 0);
 
-        nigiri::try_cmd_repeatedly(nigiri::mine_blocks, 6, 10, HALF_SEC).unwrap();
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 6);
 
         sleep(Duration::from_secs(10));
 
@@ -205,7 +209,8 @@ mod chain_sync_test {
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
-        let tx_id = nigiri::nigiri_lnd_open_channel(&node_id).unwrap();
+        let tx_id =
+            nigiri::lnd_node_open_channel(NodeInstance::NigiriLnd, &node_id, false).unwrap();
 
         assert_eq!(node.get_node_info().num_channels, 1);
         assert_eq!(node.get_node_info().num_usable_channels, 0);
@@ -217,7 +222,8 @@ mod chain_sync_test {
         let mut open_channels = Vec::new();
 
         for i in 0..5 {
-            let tx_id = nigiri::nigiri_lnd_open_channel(&node_id).unwrap();
+            let tx_id =
+                nigiri::lnd_node_open_channel(NodeInstance::NigiriLnd, &node_id, false).unwrap();
             if i % 2 == 0 {
                 nigiri::lnd_node_force_close_channel(NodeInstance::NigiriLnd, tx_id).unwrap();
             } else {

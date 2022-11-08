@@ -15,13 +15,8 @@ use uniffi_lipalightninglib::errors::InitializationError;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
 
+#[derive(Default)]
 pub struct LspMock {}
-
-impl Default for LspMock {
-    fn default() -> Self {
-        Self {}
-    }
-}
 
 impl LspCallback for LspMock {
     fn channel_information(&self) -> Result<Vec<u8>, LspError> {
@@ -116,18 +111,19 @@ impl NodeHandle {
 pub mod nigiri {
     use super::*;
 
+    use crate::try_cmd_repeatedly;
     use log::debug;
     use std::process::{Command, Output};
     use std::thread::sleep;
     use std::time::Duration;
 
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Debug)]
     pub enum NodeInstance {
         NigiriLnd,
         LspdLnd,
     }
 
-    const CUSTOM_LND_CMD_PREFIX: &[&str] = &[
+    const LSPD_LND_CMD_PREFIX: &[&str] = &[
         "docker",
         "exec",
         "lspd-lnd",
@@ -205,12 +201,12 @@ pub mod nigiri {
         while query_lnd_node_info(node).is_err() {
             counter += 1;
             if counter > 10 {
-                panic!("Failed to start nigiri");
+                panic!("Failed to start {:?}", node);
             }
-            debug!("NIGIRI is NOT synced");
+            debug!("{:?} is NOT synced", node);
             sleep(Duration::from_millis(500));
         }
-        debug!("NIGIRI is synced");
+        debug!("{:?} is synced", node);
     }
 
     fn wait_for_esplora() {
@@ -253,15 +249,18 @@ pub mod nigiri {
         Ok(())
     }
 
-    pub fn fund_nigiri_lnd_node(amount_btc: f32) -> Result<(), String> {
-        let output = exec(&["nigiri", "faucet", "lnd", &amount_btc.to_string()]);
-        if !output.status.success() {
-            return Err(format!("Command `faucet lnd {}` failed", amount_btc));
-        }
-        Ok(())
+    pub fn fund_lnd_node(node: NodeInstance, amount_btc: f32) {
+        let address = get_lnd_node_address(node).unwrap();
+        try_cmd_repeatedly!(
+            fund_address,
+            10,
+            Duration::from_millis(500),
+            amount_btc,
+            &address
+        );
     }
 
-    pub fn fund_lspd_lnd_node(amount_btc: f32, address: String) -> Result<(), String> {
+    fn fund_address(amount_btc: f32, address: &str) -> Result<(), String> {
         let output = exec(&["nigiri", "faucet", &address, &amount_btc.to_string()]);
         if !output.status.success() {
             return Err(format!(
@@ -287,70 +286,25 @@ pub mod nigiri {
         Ok(address)
     }
 
-    pub fn try_cmd_repeatedly<T>(
-        f: fn(T) -> Result<(), String>,
-        param: T,
-        mut retry_times: u8,
-        interval: Duration,
-    ) -> Result<(), String>
-    where
-        T: Copy,
-    {
-        while let Err(e) = f(param) {
-            retry_times -= 1;
-
-            if retry_times == 0 {
-                return Err(e);
-            }
-            sleep(interval);
+    pub fn lnd_node_open_channel(
+        node: NodeInstance,
+        target_node_id: &str,
+        zero_conf: bool,
+    ) -> Result<String, String> {
+        let mut cmd = vec!["openchannel", "--private", target_node_id, "1000000"];
+        if zero_conf {
+            cmd.insert(2, "--zero_conf");
         }
-
-        Ok(())
-    }
-
-    pub fn nigiri_lnd_open_channel(node_id: &str) -> Result<String, String> {
-        let output = exec(&[
-            "nigiri",
-            "lnd",
-            "openchannel",
-            "--private",
-            node_id,
-            "1000000",
-        ]);
+        let output = exec(
+            [get_lnd_node_prefix(node), cmd.as_slice()]
+                .concat()
+                .as_slice(),
+        );
         if !output.status.success() {
             return Err(format!(
-                "Command `lnd openchannel --private {} 1000000` failed: {}",
-                node_id,
-                String::from_utf8(output.stderr).unwrap()
-            ));
-        }
-        let json: serde_json::Value =
-            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
-        let funding_txid = json["funding_txid"].as_str().unwrap().to_string();
-
-        Ok(funding_txid)
-    }
-
-    pub fn lspd_lnd_open_zero_conf_channel(node_id: &str) -> Result<String, String> {
-        let output = exec(&[
-            "docker",
-            "exec",
-            "lspd-lnd",
-            "./lnd/lncli",
-            "--rpcserver",
-            "127.0.0.1:10013",
-            "--network",
-            "regtest",
-            "openchannel",
-            "--private",
-            "--zero_conf",
-            node_id,
-            "1000000",
-        ]);
-        if !output.status.success() {
-            return Err(format!(
-                "Command `lnd openchannel --private {} 1000000` failed. Output: {}",
-                node_id,
+                "Command `lnd openchannel --private {} {} 1000000` failed. Output: {}",
+                zero_conf,
+                target_node_id,
                 String::from_utf8(output.stderr).unwrap()
             ));
         }
@@ -423,7 +377,23 @@ pub mod nigiri {
     fn get_lnd_node_prefix(node: NodeInstance) -> &'static [&'static str] {
         match node {
             NodeInstance::NigiriLnd => NIGIRI_LND_CMD_PREFIX,
-            NodeInstance::LspdLnd => CUSTOM_LND_CMD_PREFIX,
+            NodeInstance::LspdLnd => LSPD_LND_CMD_PREFIX,
         }
+    }
+
+    #[macro_export]
+    macro_rules! try_cmd_repeatedly {
+        ($func:path, $retry_times:expr, $interval:expr, $($arg:expr),*) => {{
+            let mut retry_times = $retry_times;
+
+            while let Err(e) = $func($($arg),*) {
+                retry_times -= 1;
+
+                if retry_times == 0 {
+                    panic!("Failed to execute {} after {} tries: {}", stringify!($func), $retry_times, e);
+                }
+                sleep($interval);
+            }
+        }};
     }
 }

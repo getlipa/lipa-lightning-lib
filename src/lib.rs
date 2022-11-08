@@ -252,7 +252,6 @@ impl LightningNode {
         let event_handler = Arc::new(LipaEventHandler::new(
             lsp_pubkey,
             Arc::clone(&channel_manager),
-            Arc::clone(&peer_manager),
         ));
 
         // Step 16. Initialize the ProbabilisticScorer
@@ -320,19 +319,6 @@ impl LightningNode {
         self.peer_manager
             .get_peer_node_ids()
             .contains(&peer.pub_key)
-    }
-
-    // For now this is only used for testing
-    pub fn connect(&self, node: &NodeAddress) -> LipaResult<()> {
-        let peer = LnPeer::try_from(node).unwrap();
-        self.rt
-            .handle()
-            .block_on(P2pConnection::connect_peer(
-                &peer,
-                Arc::clone(&self.peer_manager),
-            ))
-            .unwrap();
-        Ok(())
     }
 
     pub fn issue_invoice(&self, amount_msat: u64, description: String) -> LipaResult<String> {
