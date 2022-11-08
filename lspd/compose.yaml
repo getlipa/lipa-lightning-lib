@@ -1,14 +1,6 @@
-#version: '3'
-
 services:
   lspd-lnd:
-    container_name: "lspd-lnd"
-    build:
-      context: ./
-      dockerfile: lnd-zero-conf/Dockerfile
-    # The following can be uncommented to generate new certificates and macaroons
-    #volumes:
-    #  - ./lnd:/root/.lnd
+    build: ./lnd-zero-conf
     ports:
       - '9739:9739'
       - '10013:10013'
