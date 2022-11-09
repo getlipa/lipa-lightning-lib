@@ -1,5 +1,6 @@
 mod cli;
 mod file_storage;
+#[path = "../../tests/lsp_client/mod.rs"]
 mod lsp_client;
 
 pub mod lspd {

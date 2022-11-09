@@ -1,32 +1,21 @@
-use bitcoin::Network;
-use simplelog::SimpleLogger;
+#[path = "../lsp_client/mod.rs"]
+mod lsp_client;
 
-use std::sync::{Arc, Once};
-use std::thread::sleep;
-use std::time::Duration;
-use uniffi_lipalightninglib::callbacks::{LspCallback, RedundantStorageCallback};
+use lsp_client::LspClient;
+use storage_mock::Storage;
+use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
 use uniffi_lipalightninglib::config::{Config, NodeAddress};
-use uniffi_lipalightninglib::errors::LspError;
+use uniffi_lipalightninglib::errors::InitializationError;
 use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
 
-use storage_mock::Storage;
-use uniffi_lipalightninglib::errors::InitializationError;
+use bitcoin::Network;
+use simplelog::SimpleLogger;
+use std::sync::{Arc, Once};
+use std::thread::sleep;
+use std::time::Duration;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
-
-#[derive(Default)]
-pub struct LspMock {}
-
-impl LspCallback for LspMock {
-    fn channel_information(&self) -> Result<Vec<u8>, LspError> {
-        Err(LspError::Grpc)
-    }
-
-    fn register_payment(&self, _bytes: Vec<u8>) -> Result<(), LspError> {
-        Err(LspError::Grpc)
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct StorageMock {
@@ -93,10 +82,14 @@ impl NodeHandle {
     }
 
     pub fn start(&self) -> Result<LightningNode, InitializationError> {
+        let lsp_auth_token =
+            "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();
+        let lsp_address = "http://127.0.0.1:6666".to_string();
+        let lsp_client = LspClient::connect(lsp_address, lsp_auth_token);
         let node = LightningNode::new(
             &self.config,
             Box::new(self.storage.clone()),
-            Box::new(LspMock::default()),
+            Box::new(lsp_client),
         );
 
         // Wait for the the P2P background task to connect to the LSP
