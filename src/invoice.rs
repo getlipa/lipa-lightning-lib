@@ -107,14 +107,116 @@ fn get_inbound_capacity_msat(channels: &[ChannelDetails]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lightning::ln::channelmanager::ChannelCounterparty;
+    use lightning::ln::features::InitFeatures;
+    use lightning::util::config::ChannelConfig;
+    use secp256k1::{PublicKey, Secp256k1, ONE_KEY};
+
+    fn channel() -> ChannelDetails {
+        let secp = Secp256k1::new();
+        let node_id = PublicKey::from_secret_key(&secp, &ONE_KEY);
+        let counterparty = ChannelCounterparty {
+            node_id,
+            features: InitFeatures::empty(),
+            unspendable_punishment_reserve: 0u64,
+            forwarding_info: None,
+            outbound_htlc_minimum_msat: None,
+            outbound_htlc_maximum_msat: None,
+        };
+        let config = ChannelConfig {
+            forwarding_fee_proportional_millionths: 0u32,
+            forwarding_fee_base_msat: 0u32,
+            cltv_expiry_delta: 0u16,
+            max_dust_htlc_exposure_msat: 0u64,
+            force_close_avoidance_max_fee_satoshis: 0u64,
+        };
+        ChannelDetails {
+            channel_id: [0u8; 32],
+            counterparty,
+            funding_txo: None,
+            channel_type: None,
+            short_channel_id: Some(0u64),
+            outbound_scid_alias: None,
+            inbound_scid_alias: None,
+            channel_value_satoshis: 0u64,
+            unspendable_punishment_reserve: None,
+            user_channel_id: 0u64,
+            balance_msat: 0u64,
+            outbound_capacity_msat: 0u64,
+            next_outbound_htlc_limit_msat: 0u64,
+            inbound_capacity_msat: 0u64,
+            confirmations_required: None,
+            force_close_spend_delay: None,
+            is_outbound: false,
+            is_channel_ready: false,
+            is_usable: false,
+            is_public: false,
+            inbound_htlc_minimum_msat: None,
+            inbound_htlc_maximum_msat: None,
+            config: Some(config),
+        }
+    }
 
     #[test]
     fn test_construct_private_routes() {
         assert_eq!(construct_private_routes(&Vec::new()), Vec::new());
+
+        let mut channel1 = channel();
+        channel1.is_usable = true;
+        assert_eq!(construct_private_routes(&vec![channel1.clone()]).len(), 1);
+
+        let mut public_channel = channel();
+        public_channel.is_usable = true;
+        public_channel.is_public = true;
+        assert_eq!(
+            construct_private_routes(&vec![public_channel.clone()]).len(),
+            0
+        );
+
+        let mut channel2 = channel();
+        channel2.is_usable = true;
+        assert_eq!(
+            construct_private_routes(&vec![
+                public_channel.clone(),
+                channel1.clone(),
+                channel2.clone()
+            ])
+            .len(),
+            2
+        );
     }
 
     #[test]
-    fn no_capacity() {
+    fn test_get_inbound_capacity() {
         assert_eq!(get_inbound_capacity_msat(&Vec::new()), 0);
+
+        let mut channel1 = channel();
+        channel1.is_usable = true;
+        channel1.inbound_capacity_msat = 1_234;
+        assert_eq!(get_inbound_capacity_msat(&vec![channel1.clone()]), 1_234);
+
+        let mut channel2 = channel();
+        channel2.is_usable = true;
+        channel2.inbound_capacity_msat = 90_000;
+        assert_eq!(get_inbound_capacity_msat(&vec![channel2.clone()]), 90_000);
+        assert_eq!(
+            get_inbound_capacity_msat(&vec![channel1.clone(), channel2.clone()]),
+            91_234
+        );
+
+        let mut not_usable_channel = channel();
+        not_usable_channel.inbound_capacity_msat = 777_777;
+        assert_eq!(
+            get_inbound_capacity_msat(&vec![not_usable_channel.clone()]),
+            0
+        );
+        assert_eq!(
+            get_inbound_capacity_msat(&vec![
+                channel1.clone(),
+                channel2.clone(),
+                not_usable_channel.clone()
+            ]),
+            91_234
+        );
     }
 }
