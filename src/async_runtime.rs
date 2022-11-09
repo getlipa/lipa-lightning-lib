@@ -17,7 +17,7 @@ pub(crate) struct Handle {
 
 impl AsyncRuntime {
     #[allow(clippy::result_large_err)]
-    pub(crate) fn new() -> Result<Self, InitializationError> {
+    pub fn new() -> Result<Self, InitializationError> {
         let rt = Builder::new_multi_thread()
             .worker_threads(4)
             .thread_name("3l-async-runtime")
@@ -30,7 +30,7 @@ impl AsyncRuntime {
         Ok(Self { rt })
     }
 
-    pub(crate) fn handle(&self) -> Handle {
+    pub fn handle(&self) -> Handle {
         let handle = self.rt.handle().clone();
         Handle { handle }
     }
@@ -38,7 +38,7 @@ impl AsyncRuntime {
 
 #[allow(dead_code)]
 impl Handle {
-    pub(crate) fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
+    pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
@@ -46,7 +46,7 @@ impl Handle {
         self.handle.spawn(future)
     }
 
-    pub(crate) fn spawn_repeating_task<Func, F>(
+    pub fn spawn_repeating_task<Func, F>(
         &self,
         interval: Duration,
         func: Func,
@@ -61,7 +61,6 @@ impl Handle {
         let handle = self.handle.spawn(async move {
             let mut interval = time::interval(interval);
             interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
-            interval.tick().await;
             loop {
                 func().await;
                 tokio::select! {
@@ -80,7 +79,7 @@ impl Handle {
         }
     }
 
-    pub(crate) fn block_on<F: Future>(&self, future: F) -> F::Output {
+    pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         self.handle.block_on(future)
     }
 }
@@ -92,16 +91,16 @@ pub(crate) struct RepeatingTaskHandle {
 }
 
 impl RepeatingTaskHandle {
-    pub(crate) fn safe_abort(&self) {
+    pub fn request_shutdown(&self) {
         self.stop_sender.blocking_send(()).unwrap();
     }
 
-    pub(crate) fn safe_abort_blocking(&mut self) {
-        self.safe_abort();
-        self.block_until_finished();
+    pub fn blocking_shutdown(&mut self) {
+        self.request_shutdown();
+        self.join();
     }
 
-    pub(crate) fn block_until_finished(&mut self) {
+    pub fn join(&mut self) {
         self.status_receiver.blocking_recv();
     }
 
@@ -183,7 +182,7 @@ mod test {
         assert!(data.load(Ordering::SeqCst) >= 10);
 
         // Test abort task.
-        handle.safe_abort_blocking();
+        handle.blocking_shutdown();
 
         assert!(handle.is_finished());
         // The task iteration is always complete, we cannot observe an odd number.
