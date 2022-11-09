@@ -25,7 +25,7 @@ mod storage_persister;
 mod tx_broadcaster;
 mod types;
 
-use crate::async_runtime::AsyncRuntime;
+use crate::async_runtime::{AsyncRuntime, RepeatingTaskHandle};
 use crate::callbacks::{LspCallback, RedundantStorageCallback};
 use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, NodeAddress};
@@ -69,7 +69,6 @@ use lightning_rapid_gossip_sync::RapidGossipSync;
 use log::{debug, error, warn, Level as LogLevel};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
 
 #[allow(dead_code)]
@@ -82,8 +81,8 @@ pub struct LightningNode {
     background_processor: BackgroundProcessor,
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
-    p2p_connector_handle: JoinHandle<()>,
-    sync_handle: JoinHandle<()>,
+    p2p_connector_handle: RepeatingTaskHandle,
+    sync_handle: RepeatingTaskHandle,
 }
 
 impl LightningNode {
@@ -352,8 +351,8 @@ impl LightningNode {
 
 impl Drop for LightningNode {
     fn drop(&mut self) {
-        self.p2p_connector_handle.abort();
-        self.sync_handle.abort();
+        self.p2p_connector_handle.blocking_shutdown();
+        self.sync_handle.blocking_shutdown();
 
         // TODO: Stop reconnecting to peers
         self.peer_manager.disconnect_all_peers();

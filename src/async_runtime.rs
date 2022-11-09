@@ -2,15 +2,16 @@ use crate::errors::InitializationError;
 
 use core::future::Future;
 use tokio::runtime::{Builder, Runtime};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time;
 use tokio::time::Duration;
 
-pub struct AsyncRuntime {
+pub(crate) struct AsyncRuntime {
     rt: Runtime,
 }
 
-pub struct Handle {
+pub(crate) struct Handle {
     handle: tokio::runtime::Handle,
 }
 
@@ -45,24 +46,68 @@ impl Handle {
         self.handle.spawn(future)
     }
 
-    pub fn spawn_repeating_task<Func, F>(&self, interval: Duration, func: Func) -> JoinHandle<()>
+    pub fn spawn_repeating_task<Func, F>(
+        &self,
+        interval: Duration,
+        func: Func,
+    ) -> RepeatingTaskHandle
     where
         Func: Fn() -> F + Send + Sync + 'static,
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.handle.spawn(async move {
+        let (stop_sender, mut stop_receiver) = mpsc::channel(1);
+        let (status_sender, status_receiver) = mpsc::channel(1);
+        let handle = self.handle.spawn(async move {
             let mut interval = time::interval(interval);
             interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
             loop {
-                interval.tick().await;
                 func().await;
+                tokio::select! {
+                    _ = stop_receiver.recv() => {
+                        break;
+                    },
+                    _ = interval.tick() => {},
+                }
             }
-        })
+            drop(status_sender);
+        });
+        RepeatingTaskHandle {
+            handle,
+            stop_sender,
+            status_receiver,
+        }
     }
 
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         self.handle.block_on(future)
+    }
+}
+
+pub(crate) struct RepeatingTaskHandle {
+    handle: JoinHandle<()>,
+    stop_sender: mpsc::Sender<()>,
+    status_receiver: mpsc::Receiver<()>,
+}
+
+impl RepeatingTaskHandle {
+    pub fn request_shutdown(&self) {
+        self.stop_sender.blocking_send(()).unwrap();
+    }
+
+    pub fn blocking_shutdown(&mut self) {
+        self.request_shutdown();
+        self.join();
+    }
+
+    pub fn join(&mut self) {
+        self.status_receiver.blocking_recv();
+    }
+
+    // Currently only used in tests
+    #[allow(dead_code)]
+    fn is_finished(&self) -> bool {
+        self.handle.is_finished()
     }
 }
 
@@ -124,14 +169,23 @@ mod test {
             let data = Arc::clone(&data_in_f);
             async move {
                 data.fetch_add(1, Ordering::SeqCst);
+                sleep(std::time::Duration::from_millis(100)).await;
+                data.fetch_add(1, Ordering::SeqCst);
             }
         };
 
-        let _handle = handle.spawn_repeating_task(Duration::from_millis(1), inc);
+        let mut handle = handle.spawn_repeating_task(Duration::from_millis(1), inc);
 
         while data.load(Ordering::SeqCst) < 10 {
             yield_now();
         }
         assert!(data.load(Ordering::SeqCst) >= 10);
+
+        // Test abort task.
+        handle.blocking_shutdown();
+
+        assert!(handle.is_finished());
+        // The task iteration is always complete, we cannot observe an odd number.
+        assert_eq!(data.load(Ordering::SeqCst) % 2, 0);
     }
 }
