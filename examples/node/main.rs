@@ -37,7 +37,7 @@ fn main() {
     info!("Contacting lsp at {} ...", lsp_address);
     let lsp_auth_token =
         "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();
-    let lsp_client = Box::new(LspClient::connect(lsp_address, lsp_auth_token));
+    let lsp_client = Box::new(LspClient::build(lsp_address, lsp_auth_token));
     let lsp_info = lsp_client.channel_information().unwrap();
     let lsp_info = ChannelInformationReply::decode(&*lsp_info).unwrap();
     let ln_node_address = NodeAddress {

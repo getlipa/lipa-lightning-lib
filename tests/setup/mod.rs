@@ -82,10 +82,10 @@ impl NodeHandle {
     }
 
     pub fn start(&self) -> Result<LightningNode, InitializationError> {
+        let lsp_address = "http://127.0.0.1:6666".to_string();
         let lsp_auth_token =
             "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();
-        let lsp_address = "http://127.0.0.1:6666".to_string();
-        let lsp_client = LspClient::connect(lsp_address, lsp_auth_token);
+        let lsp_client = LspClient::build(lsp_address, lsp_auth_token);
         let node = LightningNode::new(
             &self.config,
             Box::new(self.storage.clone()),
