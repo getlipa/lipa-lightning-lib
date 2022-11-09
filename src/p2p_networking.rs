@@ -1,6 +1,6 @@
 use crate::async_runtime::Handle;
 use crate::errors::{LipaError, LipaResult, MapToLipaError, RuntimeError};
-use crate::{NodeAddress, PeerManager};
+use crate::{NodeAddress, PeerManager, RepeatingTaskHandle};
 use bitcoin::secp256k1::PublicKey;
 use log::{debug, error, trace};
 use std::fmt;
@@ -9,7 +9,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
-use tokio::task::JoinHandle;
 use tokio::time::sleep;
 
 pub(crate) struct P2pConnection {}
@@ -19,7 +18,7 @@ impl P2pConnection {
         peer: &NodeAddress,
         runtime_handle: Handle,
         peer_manager: &Arc<PeerManager>,
-    ) -> LipaResult<JoinHandle<()>> {
+    ) -> LipaResult<RepeatingTaskHandle> {
         let peer = Arc::new(LnPeer::try_from(peer)?);
         let peer_manager_clone = Arc::clone(peer_manager);
 
