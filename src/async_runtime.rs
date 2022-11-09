@@ -96,6 +96,11 @@ impl RepeatingTaskHandle {
         self.stop_sender.blocking_send(()).unwrap();
     }
 
+    pub(crate) fn safe_abort_blocking(&mut self) {
+        self.safe_abort();
+        self.block_until_finished();
+    }
+
     pub(crate) fn block_until_finished(&mut self) {
         self.status_receiver.blocking_recv();
     }
@@ -178,8 +183,7 @@ mod test {
         assert!(data.load(Ordering::SeqCst) >= 10);
 
         // Test abort task.
-        handle.safe_abort();
-        handle.block_until_finished();
+        handle.safe_abort_blocking();
 
         assert!(handle.is_finished());
         // The task iteration is always complete, we cannot observe an odd number.

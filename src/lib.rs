@@ -389,10 +389,8 @@ impl LightningNode {
 
 impl Drop for LightningNode {
     fn drop(&mut self) {
-        self.p2p_connector_handle.safe_abort();
-        self.p2p_connector_handle.block_until_finished();
-        self.sync_handle.safe_abort();
-        self.sync_handle.block_until_finished();
+        self.p2p_connector_handle.safe_abort_blocking();
+        self.sync_handle.safe_abort_blocking();
 
         // TODO: Stop reconnecting to peers
         self.peer_manager.disconnect_all_peers();
