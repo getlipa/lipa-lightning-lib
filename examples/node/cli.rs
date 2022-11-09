@@ -10,7 +10,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("To stop the LDK node, please type \"stop\" for a graceful shutdown.");
     println!(
         "Local Node ID is: {}",
-        PublicKey::from_slice(&*node.get_node_info().node_pubkey).unwrap()
+        PublicKey::from_slice(&node.get_node_info().node_pubkey).unwrap()
     );
     let stdin = io::stdin();
     let mut line_reader = stdin.lock().lines();
@@ -52,7 +52,7 @@ fn node_info(node: &LightningNode) {
     let node_info = node.get_node_info();
     println!(
         "Node PubKey: {}",
-        PublicKey::from_slice(&*node_info.node_pubkey).unwrap()
+        PublicKey::from_slice(&node_info.node_pubkey).unwrap()
     );
     println!("Number of channels: {}", node_info.num_channels);
     println!(
@@ -69,7 +69,7 @@ fn issue_invoice<'a>(
 ) -> Result<(), String> {
     let amount = words
         .next()
-        .ok_or("amount in millisats is required".to_string())?;
+        .ok_or_else(|| "amount in millisats is required".to_string())?;
     let amount: u64 = amount
         .parse()
         .map_err(|_| "amount should be an integer number".to_string())?;

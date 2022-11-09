@@ -6,9 +6,7 @@ use tokio::task::JoinHandle;
 use tokio::time;
 use tokio::time::Duration;
 
-#[allow(dead_code)]
 pub struct AsyncRuntime {
-    #[allow(dead_code)]
     rt: Runtime,
 }
 
@@ -16,7 +14,6 @@ pub struct Handle {
     handle: tokio::runtime::Handle,
 }
 
-#[allow(dead_code)]
 impl AsyncRuntime {
     #[allow(clippy::result_large_err)]
     pub fn new() -> Result<Self, InitializationError> {
@@ -32,7 +29,6 @@ impl AsyncRuntime {
         Ok(Self { rt })
     }
 
-    #[allow(dead_code)]
     pub fn handle(&self) -> Handle {
         let handle = self.rt.handle().clone();
         Handle { handle }
@@ -49,7 +45,6 @@ impl Handle {
         self.handle.spawn(future)
     }
 
-    #[allow(dead_code)]
     pub fn spawn_repeating_task<Func, F>(&self, interval: Duration, func: Func) -> JoinHandle<()>
     where
         Func: Fn() -> F + Send + Sync + 'static,
@@ -66,7 +61,6 @@ impl Handle {
         })
     }
 
-    #[allow(dead_code)]
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         self.handle.block_on(future)
     }
