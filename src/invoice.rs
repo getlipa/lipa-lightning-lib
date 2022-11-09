@@ -22,8 +22,8 @@ pub(crate) fn create_raw_invoice(
         .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
     let payee_pubkey = channel_manager.get_our_node_id();
 
-    let inbound_capacity_msat = get_inbound_capacity_msat(&channel_manager.list_usable_channels());
-    let needs_channel_opening = inbound_capacity_msat < amount_msat;
+    let capacity = calculate_capacity(&channel_manager.list_usable_channels());
+    let needs_channel_opening = capacity.inbound_msat < amount_msat;
     let private_routes = if needs_channel_opening {
         info!(
             "Not enough inbound capacity for {} msat, needs channel opening",
@@ -73,35 +73,53 @@ fn construct_private_routes(channels: &Vec<ChannelDetails>) -> Vec<RouteHint> {
     let mut route_hints = Vec::new();
     for channel in channels {
         if channel.is_usable && !channel.is_public {
-            if let Some(channel_config) = channel.config {
-                if let Some(short_channel_id) = channel.get_inbound_payment_scid() {
-                    let fees = RoutingFees {
-                        base_msat: channel_config.forwarding_fee_base_msat,
-                        proportional_millionths: channel_config
-                            .forwarding_fee_proportional_millionths,
-                    };
-                    let hint_hop = RouteHintHop {
-                        src_node_id: channel.counterparty.node_id,
-                        short_channel_id,
-                        fees,
-                        cltv_expiry_delta: channel_config.cltv_expiry_delta,
-                        htlc_minimum_msat: channel.inbound_htlc_minimum_msat,
-                        htlc_maximum_msat: channel.inbound_htlc_maximum_msat,
-                    };
-                    route_hints.push(RouteHint(vec![hint_hop]));
-                }
+            if let (Some(channel_config), Some(short_channel_id)) =
+                (channel.config, channel.get_inbound_payment_scid())
+            {
+                let fees = RoutingFees {
+                    base_msat: channel_config.forwarding_fee_base_msat,
+                    proportional_millionths: channel_config.forwarding_fee_proportional_millionths,
+                };
+                let hint_hop = RouteHintHop {
+                    src_node_id: channel.counterparty.node_id,
+                    short_channel_id,
+                    fees,
+                    cltv_expiry_delta: channel_config.cltv_expiry_delta,
+                    htlc_minimum_msat: channel.inbound_htlc_minimum_msat,
+                    htlc_maximum_msat: channel.inbound_htlc_maximum_msat,
+                };
+                route_hints.push(RouteHint(vec![hint_hop]));
             }
         }
     }
     route_hints
 }
 
-fn get_inbound_capacity_msat(channels: &[ChannelDetails]) -> u64 {
-    channels
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Capacity {
+    pub inbound_msat: u64,
+    pub outbound_msat: u64,
+}
+
+/// Returns total inbound/outbound capacity the node can actually receive/send.
+/// It excludes non usable channels, pending htlcs, channels reserves, etc.
+pub(crate) fn calculate_capacity(channels: &[ChannelDetails]) -> Capacity {
+    let (inbound_msat, outbound_msat) = channels
         .iter()
         .filter(|channel| channel.is_usable)
-        .map(|channel| channel.inbound_capacity_msat)
-        .sum()
+        .map(|channel| {
+            (
+                channel.inbound_capacity_msat,
+                channel.outbound_capacity_msat,
+            )
+        })
+        .fold((0u64, 0u64), |(in1, out1), (in2, out2)| {
+            (in1 + in2, out1 + out2)
+        });
+    Capacity {
+        inbound_msat,
+        outbound_msat,
+    }
 }
 
 #[cfg(test)]
@@ -187,36 +205,73 @@ mod tests {
     }
 
     #[test]
-    fn test_get_inbound_capacity() {
-        assert_eq!(get_inbound_capacity_msat(&Vec::new()), 0);
+    fn test_calculate_capacity() {
+        assert_eq!(
+            calculate_capacity(&Vec::new()),
+            Capacity {
+                inbound_msat: 0u64,
+                outbound_msat: 0u64,
+            }
+        );
 
         let mut channel1 = channel();
         channel1.is_usable = true;
-        channel1.inbound_capacity_msat = 1_234;
-        assert_eq!(get_inbound_capacity_msat(&vec![channel1.clone()]), 1_234);
+        channel1.inbound_capacity_msat = 1_111;
+        channel1.outbound_capacity_msat = 1_222;
+        assert_eq!(
+            calculate_capacity(&vec![channel1.clone()]),
+            Capacity {
+                inbound_msat: 1_111u64,
+                outbound_msat: 1_222u64,
+            }
+        );
 
         let mut channel2 = channel();
         channel2.is_usable = true;
         channel2.inbound_capacity_msat = 90_000;
-        assert_eq!(get_inbound_capacity_msat(&vec![channel2.clone()]), 90_000);
+        channel2.outbound_capacity_msat = 90_111;
         assert_eq!(
-            get_inbound_capacity_msat(&vec![channel1.clone(), channel2.clone()]),
-            91_234
+            calculate_capacity(&vec![channel2.clone()]),
+            Capacity {
+                inbound_msat: 90_000u64,
+                outbound_msat: 90_111u64,
+            }
+        );
+        assert_eq!(
+            calculate_capacity(&vec![channel1.clone(), channel2.clone()]),
+            Capacity {
+                inbound_msat: 91_111u64,
+                outbound_msat: 91_333u64,
+            }
         );
 
         let mut not_usable_channel = channel();
         not_usable_channel.inbound_capacity_msat = 777_777;
+        not_usable_channel.outbound_capacity_msat = 888_888;
         assert_eq!(
-            get_inbound_capacity_msat(&vec![not_usable_channel.clone()]),
-            0
+            calculate_capacity(&vec![not_usable_channel.clone()]),
+            Capacity {
+                inbound_msat: 0u64,
+                outbound_msat: 0u64,
+            }
         );
         assert_eq!(
-            get_inbound_capacity_msat(&vec![
+            calculate_capacity(&vec![
                 channel1.clone(),
                 channel2.clone(),
                 not_usable_channel.clone()
             ]),
-            91_234
+            Capacity {
+                inbound_msat: 91_111u64,
+                outbound_msat: 91_333u64,
+            }
+        );
+        assert_eq!(
+            calculate_capacity(&vec![channel1.clone(), channel2.clone()]),
+            Capacity {
+                inbound_msat: 91_111u64,
+                outbound_msat: 91_333u64,
+            }
         );
     }
 }

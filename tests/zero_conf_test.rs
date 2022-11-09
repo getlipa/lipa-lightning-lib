@@ -23,6 +23,7 @@ mod zero_conf_test {
         assert_eq!(node.get_node_info().num_peers, 1);
 
         const TEN_SATS: u64 = 10_000;
+        const TWENTY_K_SATS: u64 = 20_000_000;
 
         // With no channels, 10 sats invoice is to small to cover channel
         // opening fees.
@@ -30,7 +31,7 @@ mod zero_conf_test {
         assert_eq!(
 	    invoice.unwrap_err().to_string(),
 	    "PermanentFailure: Failed to register payment: InvalidInput: Payment amount must be bigger than fees");
-        let invoice = node.create_invoice(20_000_000, "test".to_string());
+        let invoice = node.create_invoice(TWENTY_K_SATS, "test".to_string());
         assert!(invoice.unwrap().starts_with("lnbc"));
 
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, true).unwrap();
