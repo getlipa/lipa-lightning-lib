@@ -33,7 +33,7 @@ fn main() {
     init_logger();
     info!("Logger initialized");
 
-    let lsp_address = "http://127.0.0.1:6666".to_string();
+    let lsp_address = "http://127.0.0.1:7777".to_string();
     info!("Contacting lsp at {} ...", lsp_address);
     let lsp_auth_token =
         "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();

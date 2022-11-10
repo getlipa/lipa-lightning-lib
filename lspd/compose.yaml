@@ -52,6 +52,57 @@ services:
       NODE_HOST: 127.0.0.1:9739
       TOKEN: iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l
 
+  db2:
+    build: ./db2
+    ports:
+      - '5532:5432'
+    environment:
+      POSTGRES_USER: lipauser
+      POSTGRES_PASSWORD: lipapassword
+      POSTGRES_DB: lipadb
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready --username=lipauser --dbname=lipadb" ]
+      interval: 3s
+      timeout: 10s
+      retries: 5
+      start_period: 3s
+    volumes:
+      - ./db-init.sh:/docker-entrypoint-initdb.d/db-init.sh
+
+  lspd-cln:
+    container_name: lspd-cln
+    build: ./lspd-cln
+    environment:
+      EXPOSE_TCP: "true"
+      LIGHTNINGD_RPC_PORT: 9832
+      LIGHTNINGD_PORT: 9932
+
+      RUN_CLN: "true"
+      DATABASE_URL: postgresql://lipauser:lipapassword@db2:5432/lipadb
+      LISTEN_ADDRESS_CLN: 0.0.0.0:7777
+      CLN_NODE_NAME: lspd-cln
+      CLN_NODE_PUBKEY: 0309690a2a7880185ad23a5f997298037af48d60ca71d3e099163a9675754340d1
+      LSPD_PRIVATE_KEY_CLN: 6ca37dfd24b41046ff3bb904cd36710176352b71dbeaf8fbfaa162043e3cbd6b
+      CLN_NODE_HOST: 127.0.0.1:9932
+      CLN_TOKEN: iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l
+    command:
+      - --network=regtest
+      - --bind-addr=0.0.0.0:9932
+      - --bitcoin-rpcconnect=bitcoin:18443
+      - --bitcoin-rpcuser=admin1
+      - --bitcoin-rpcpassword=123
+      - --log-level=debug
+      - --alias=lspd-cln
+      - --plugin=/lspd
+    ports:
+      - 9932:9932 # p2p
+      - 9832:9832 # rpc
+      - 7777:7777
+    restart: unless-stopped
+    depends_on:
+      db2:
+        condition: service_healthy
+
 networks:
   default:
     name: nigiri
