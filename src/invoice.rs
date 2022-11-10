@@ -1,5 +1,6 @@
 use crate::errors::*;
 use crate::lsp::{LspClient, PaymentRequest};
+use crate::node_info::get_channels_info;
 use crate::types::ChannelManager;
 
 use bitcoin::hashes::hex::{FromHex, ToHex};
@@ -22,8 +23,8 @@ pub(crate) fn create_raw_invoice(
         .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
     let payee_pubkey = channel_manager.get_our_node_id();
 
-    let capacity = calculate_capacity(&channel_manager.list_usable_channels());
-    let needs_channel_opening = capacity.inbound_msat < amount_msat;
+    let channels_info = get_channels_info(&channel_manager.list_channels());
+    let needs_channel_opening = channels_info.inbound_capacity_msat < amount_msat;
     let private_routes = if needs_channel_opening {
         info!(
             "Not enough inbound capacity for {} msat, needs channel opening",
@@ -95,85 +96,10 @@ fn construct_private_routes(channels: &Vec<ChannelDetails>) -> Vec<RouteHint> {
     route_hints
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct Capacity {
-    pub inbound_msat: u64,
-    pub outbound_msat: u64,
-}
-
-/// Returns total inbound/outbound capacity the node can actually receive/send.
-/// It excludes non usable channels, pending htlcs, channels reserves, etc.
-pub(crate) fn calculate_capacity(channels: &[ChannelDetails]) -> Capacity {
-    let (inbound_msat, outbound_msat) = channels
-        .iter()
-        .filter(|channel| channel.is_usable)
-        .map(|channel| {
-            (
-                channel.inbound_capacity_msat,
-                channel.outbound_capacity_msat,
-            )
-        })
-        .fold((0u64, 0u64), |(in1, out1), (in2, out2)| {
-            (in1 + in2, out1 + out2)
-        });
-    Capacity {
-        inbound_msat,
-        outbound_msat,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lightning::ln::channelmanager::ChannelCounterparty;
-    use lightning::ln::features::InitFeatures;
-    use lightning::util::config::ChannelConfig;
-    use secp256k1::{PublicKey, Secp256k1, ONE_KEY};
-
-    fn channel() -> ChannelDetails {
-        let secp = Secp256k1::new();
-        let node_id = PublicKey::from_secret_key(&secp, &ONE_KEY);
-        let counterparty = ChannelCounterparty {
-            node_id,
-            features: InitFeatures::empty(),
-            unspendable_punishment_reserve: 0u64,
-            forwarding_info: None,
-            outbound_htlc_minimum_msat: None,
-            outbound_htlc_maximum_msat: None,
-        };
-        let config = ChannelConfig {
-            forwarding_fee_proportional_millionths: 0u32,
-            forwarding_fee_base_msat: 0u32,
-            cltv_expiry_delta: 0u16,
-            max_dust_htlc_exposure_msat: 0u64,
-            force_close_avoidance_max_fee_satoshis: 0u64,
-        };
-        ChannelDetails {
-            channel_id: [0u8; 32],
-            counterparty,
-            funding_txo: None,
-            channel_type: None,
-            short_channel_id: Some(0u64),
-            outbound_scid_alias: None,
-            inbound_scid_alias: None,
-            channel_value_satoshis: 0u64,
-            unspendable_punishment_reserve: None,
-            user_channel_id: 0u64,
-            balance_msat: 0u64,
-            outbound_capacity_msat: 0u64,
-            next_outbound_htlc_limit_msat: 0u64,
-            inbound_capacity_msat: 0u64,
-            confirmations_required: None,
-            force_close_spend_delay: None,
-            is_outbound: false,
-            is_channel_ready: false,
-            is_usable: false,
-            is_public: false,
-            inbound_htlc_minimum_msat: None,
-            inbound_htlc_maximum_msat: None,
-            config: Some(config),
-        }
-    }
+    use crate::test_utils::channels::channel;
 
     #[test]
     fn test_construct_private_routes() {
@@ -201,77 +127,6 @@ mod tests {
             ])
             .len(),
             2
-        );
-    }
-
-    #[test]
-    fn test_calculate_capacity() {
-        assert_eq!(
-            calculate_capacity(&Vec::new()),
-            Capacity {
-                inbound_msat: 0u64,
-                outbound_msat: 0u64,
-            }
-        );
-
-        let mut channel1 = channel();
-        channel1.is_usable = true;
-        channel1.inbound_capacity_msat = 1_111;
-        channel1.outbound_capacity_msat = 1_222;
-        assert_eq!(
-            calculate_capacity(&vec![channel1.clone()]),
-            Capacity {
-                inbound_msat: 1_111u64,
-                outbound_msat: 1_222u64,
-            }
-        );
-
-        let mut channel2 = channel();
-        channel2.is_usable = true;
-        channel2.inbound_capacity_msat = 90_000;
-        channel2.outbound_capacity_msat = 90_111;
-        assert_eq!(
-            calculate_capacity(&vec![channel2.clone()]),
-            Capacity {
-                inbound_msat: 90_000u64,
-                outbound_msat: 90_111u64,
-            }
-        );
-        assert_eq!(
-            calculate_capacity(&vec![channel1.clone(), channel2.clone()]),
-            Capacity {
-                inbound_msat: 91_111u64,
-                outbound_msat: 91_333u64,
-            }
-        );
-
-        let mut not_usable_channel = channel();
-        not_usable_channel.inbound_capacity_msat = 777_777;
-        not_usable_channel.outbound_capacity_msat = 888_888;
-        assert_eq!(
-            calculate_capacity(&vec![not_usable_channel.clone()]),
-            Capacity {
-                inbound_msat: 0u64,
-                outbound_msat: 0u64,
-            }
-        );
-        assert_eq!(
-            calculate_capacity(&vec![
-                channel1.clone(),
-                channel2.clone(),
-                not_usable_channel.clone()
-            ]),
-            Capacity {
-                inbound_msat: 91_111u64,
-                outbound_msat: 91_333u64,
-            }
-        );
-        assert_eq!(
-            calculate_capacity(&vec![channel1.clone(), channel2.clone()]),
-            Capacity {
-                inbound_msat: 91_111u64,
-                outbound_msat: 91_333u64,
-            }
         );
     }
 }

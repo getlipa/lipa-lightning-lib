@@ -6,6 +6,7 @@ pub mod callbacks;
 pub mod config;
 pub mod errors;
 pub mod keys_manager;
+pub mod node_info;
 pub mod p2p_networking;
 pub mod secret;
 
@@ -22,6 +23,7 @@ mod logger;
 mod lsp;
 mod native_logger;
 mod storage_persister;
+mod test_utils;
 mod tx_broadcaster;
 mod types;
 
@@ -43,6 +45,7 @@ use crate::keys_manager::{
 use crate::logger::LightningLogger;
 use crate::lsp::LspClient;
 use crate::native_logger::init_native_logger_once;
+use crate::node_info::{get_channels_info, ChannelsInfo, NodeInfo};
 use crate::p2p_networking::{LnPeer, P2pConnection};
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
@@ -302,14 +305,11 @@ impl LightningNode {
     }
 
     pub fn get_node_info(&self) -> NodeInfo {
-        let chans = self.channel_manager.list_channels();
-        let local_balance_msat = chans.iter().map(|c| c.balance_msat).sum::<u64>();
+        let channels_info = get_channels_info(&self.channel_manager.list_channels());
         NodeInfo {
             node_pubkey: self.channel_manager.get_our_node_id().serialize().to_vec(),
-            num_channels: chans.len() as u16,
-            num_usable_channels: chans.iter().filter(|c| c.is_usable).count() as u16,
-            local_balance_msat,
             num_peers: self.peer_manager.get_peer_node_ids().len() as u16,
+            channels_info,
         }
     }
 
@@ -412,14 +412,6 @@ fn init_peer_manager(
         &ephemeral_bytes,
         logger,
     ))
-}
-
-pub struct NodeInfo {
-    pub node_pubkey: Vec<u8>,
-    pub num_channels: u16,
-    pub num_usable_channels: u16,
-    pub local_balance_msat: u64,
-    pub num_peers: u16,
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));

@@ -42,8 +42,8 @@ mod zero_conf_test {
         let invoice = node.create_invoice(TEN_SATS, "test".to_string());
         assert!(invoice.unwrap().starts_with("lnbc"));
 
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
     }
 
     fn setup() -> NodeHandle {

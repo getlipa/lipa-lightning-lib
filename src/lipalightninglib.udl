@@ -64,12 +64,24 @@ interface LightningNode {
     string create_invoice(u64 amount_msat, string description);
 };
 
-dictionary NodeInfo {
-    sequence<u8> node_pubkey;
+dictionary ChannelsInfo {
     u16 num_channels;
     u16 num_usable_channels;
     u64 local_balance_msat;
+
+    // Capacity the node can actually receive.
+    // It excludes non usable channels, pending htlcs, channels reserves, etc.
+    u64 inbound_capacity_msat;
+
+    // Capacity the node can actually send.
+    // It excludes non usable channels, pending htlcs, channels reserves, etc.
+    u64 outbound_capacity_msat;
+};
+
+dictionary NodeInfo {
+    sequence<u8> node_pubkey;
     u16 num_peers;
+    ChannelsInfo channels_info;
 };
 
 [Error]
