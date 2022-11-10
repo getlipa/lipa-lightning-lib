@@ -28,6 +28,9 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 "nodeinfo" => {
                     node_info(node);
                 }
+                "lspfee" => {
+                    lsp_fee(node);
+                }
                 "invoice" => {
                     if let Err(message) = create_invoice(node, &mut words) {
                         println!("Error: {}", message);
@@ -45,7 +48,14 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
 fn help() {
     println!("invoice <amount in millisats> [description]");
     println!("nodeinfo");
+    println!("lspfee");
     println!("stop");
+}
+
+fn lsp_fee(node: &LightningNode) {
+    let lsp_fee = node.query_lsp_fee().unwrap();
+    println!(" Min fee: {} sats", lsp_fee.min_msat as f64 / 1_000f64);
+    println!("Fee rate: {}%", lsp_fee.rate_ppm as f64 / 10_000f64);
 }
 
 fn node_info(node: &LightningNode) {

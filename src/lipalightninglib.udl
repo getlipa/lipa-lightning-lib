@@ -58,8 +58,14 @@ enum LipaError {
 interface LightningNode {
     [Throws=InitializationError]
     constructor([ByRef] Config config, RedundantStorageCallback redundant_storage_callback, LspCallback lsp_callback);
+
     NodeInfo get_node_info();
+
+    [Throws=LipaError]
+    LspFee query_lsp_fee();
+
     boolean connected_to_node([ByRef] NodeAddress node);
+
     [Throws=LipaError]
     string create_invoice(u64 amount_msat, string description);
 };
@@ -82,6 +88,12 @@ dictionary NodeInfo {
     sequence<u8> node_pubkey;
     u16 num_peers;
     ChannelsInfo channels_info;
+};
+
+dictionary LspFee {
+  u64 min_msat;
+  // 1_000_000 is 100%
+  u64 rate_ppm;
 };
 
 [Error]
