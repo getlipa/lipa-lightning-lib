@@ -26,22 +26,22 @@ mod chain_sync_test {
 
         nigiri::lnd_node_open_channel(NodeInstance::NigiriLnd, &node_id, false).unwrap();
 
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 0);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 0);
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 5);
 
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 0);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 0);
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
     }
 
     #[test]
@@ -58,8 +58,8 @@ mod chain_sync_test {
 
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
 
         nigiri::lnd_node_disconnect_peer(NodeInstance::NigiriLnd, node_id).unwrap();
         nigiri::lnd_node_force_close_channel(NodeInstance::NigiriLnd, tx_id).unwrap();
@@ -67,13 +67,13 @@ mod chain_sync_test {
 
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().num_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().num_channels, 0);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 0);
     }
 
     #[test]
@@ -84,8 +84,8 @@ mod chain_sync_test {
 
         let node = node_handle.start().unwrap();
 
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
     }
 
     #[test]
@@ -100,8 +100,8 @@ mod chain_sync_test {
 
         let node = node_handle.start().unwrap();
 
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
     }
 
     #[test]
@@ -122,7 +122,7 @@ mod chain_sync_test {
         sleep(Duration::from_secs(10));
 
         // This only passes with the sleep that precedes it. TODO: confirm that's not a problem
-        assert_eq!(node.get_node_info().num_channels, 0);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 0);
     }
 
     #[test]
@@ -141,7 +141,7 @@ mod chain_sync_test {
         sleep(Duration::from_secs(10));
 
         // This only passes with the sleep that precedes it. TODO: confirm that's not a problem
-        assert_eq!(node.get_node_info().num_channels, 0);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 0);
     }
 
     #[test]
@@ -163,8 +163,8 @@ mod chain_sync_test {
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().num_channels, 3);
-        assert_eq!(node.get_node_info().num_usable_channels, 3);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 3);
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 3);
     }
 
     fn setup() -> NodeHandle {
@@ -192,15 +192,15 @@ mod chain_sync_test {
         let tx_id =
             nigiri::lnd_node_open_channel(NodeInstance::NigiriLnd, &node_id, false).unwrap();
 
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 0);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 0);
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 6);
 
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
 
         tx_id
     }
@@ -212,8 +212,8 @@ mod chain_sync_test {
         let tx_id =
             nigiri::lnd_node_open_channel(NodeInstance::NigiriLnd, &node_id, false).unwrap();
 
-        assert_eq!(node.get_node_info().num_channels, 1);
-        assert_eq!(node.get_node_info().num_usable_channels, 0);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 0);
 
         tx_id
     }

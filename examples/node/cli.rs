@@ -54,13 +54,27 @@ fn node_info(node: &LightningNode) {
         "Node PubKey: {}",
         PublicKey::from_slice(&node_info.node_pubkey).unwrap()
     );
-    println!("Number of channels: {}", node_info.num_channels);
+    println!("Number of connected peers: {}", node_info.num_peers);
+    println!(
+        "       Number of channels: {}",
+        node_info.channels_info.num_channels
+    );
     println!(
         "Number of usable channels: {}",
-        node_info.num_usable_channels
+        node_info.channels_info.num_usable_channels
     );
-    println!("Local balance in msat: {}", node_info.local_balance_msat);
-    println!("Number of connected peers: {}", node_info.num_peers);
+    println!(
+        "    Local balance in msat: {}",
+        node_info.channels_info.local_balance_msat
+    );
+    println!(
+        " Inbound capacity in msat: {}",
+        node_info.channels_info.inbound_capacity_msat
+    );
+    println!(
+        "Outbound capacity in msat: {}",
+        node_info.channels_info.outbound_capacity_msat
+    );
 }
 
 fn create_invoice<'a>(
