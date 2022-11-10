@@ -7,5 +7,6 @@ RUN cd lnd \
     && go build -tags=signrpc,walletrpc,chainrpc,invoicesrpc,peersrpc ./cmd/lncli/
 
 COPY ./ /root/.lnd
+COPY ./lncli /bin/
 
 ENTRYPOINT ["/go/lnd/lnd"]

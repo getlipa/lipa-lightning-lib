@@ -116,16 +116,7 @@ pub mod nigiri {
         LspdLnd,
     }
 
-    const LSPD_LND_CMD_PREFIX: &[&str] = &[
-        "docker",
-        "exec",
-        "lspd-lnd",
-        "/go/lnd/lncli",
-        "--rpcserver",
-        "127.0.0.1:10013",
-        "--network",
-        "regtest",
-    ];
+    const LSPD_LND_CMD_PREFIX: &[&str] = &["docker", "exec", "lspd-lnd", "lncli"];
 
     const NIGIRI_LND_CMD_PREFIX: &[&str] = &["nigiri", "lnd"];
 
