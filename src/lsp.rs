@@ -17,7 +17,7 @@ use prost::Message;
 use std::cmp::max;
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) struct Fee {
+pub struct LspFee {
     pub min_msat: u64,
     pub rate_ppm: u64, // 1_000_000 is 100%
 }
@@ -25,7 +25,7 @@ pub(crate) struct Fee {
 #[derive(Debug)]
 pub(crate) struct LspInfo {
     pub pubkey: PublicKey,
-    pub fee: Fee,
+    pub fee: LspFee,
     pub node_info: NodeInfo,
 }
 
@@ -111,7 +111,7 @@ fn parse_lsp_info(bytes: &[u8]) -> LipaResult<LspInfo> {
     let ln_pubkey =
         PublicKey::from_slice(&ln_pubkey).map_to_invalid_input("Invalid LN node pubkey")?;
 
-    let fee = Fee {
+    let fee = LspFee {
         min_msat: info.channel_minimum_fee_msat as u64,
         rate_ppm: info.channel_fee_permyriad as u64 * 100,
     };
@@ -135,7 +135,7 @@ fn parse_lsp_info(bytes: &[u8]) -> LipaResult<LspInfo> {
     })
 }
 
-pub(crate) fn calculate_fee(value_msat: u64, fee: &Fee) -> u64 {
+pub(crate) fn calculate_fee(value_msat: u64, fee: &LspFee) -> u64 {
     const MILLION: u64 = 1_000_000;
     let mut fee_value = (value_msat * fee.rate_ppm) / MILLION;
     // Round up the result.
@@ -169,7 +169,7 @@ mod test {
             lsp_info.pubkey.serialize().to_hex(),
             "03ca7819d982a95b29bcdbf00a06d99639b523da40e5f43402027097965f578806"
         );
-        let fee = Fee {
+        let fee = LspFee {
             min_msat: 2_000_000,
             rate_ppm: 4_000,
         };
@@ -192,7 +192,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     pub fn test_calculate_fee() {
-        let fee = Fee {
+        let fee = LspFee {
             min_msat: 2_000_000,
             rate_ppm: 4_000,
         };
@@ -209,14 +209,14 @@ mod test {
         assert_eq!(calculate_fee( 2_000_000_000, &fee),  8_000_000);
         assert_eq!(calculate_fee(20_000_000_000, &fee), 80_000_000);
 
-        let zero_fee = Fee {
+        let zero_fee = LspFee {
             min_msat: 0,
             rate_ppm: 0,
         };
         assert_eq!(calculate_fee(0, &zero_fee), 0);
         assert_eq!(calculate_fee(100_000_000, &zero_fee), 0);
 
-        let extortionate_fee = Fee {
+        let extortionate_fee = LspFee {
             min_msat: 1,
             rate_ppm: 1_000_000, // 100% !!!
         };

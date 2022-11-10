@@ -44,6 +44,7 @@ use crate::keys_manager::{
 };
 use crate::logger::LightningLogger;
 use crate::lsp::LspClient;
+use crate::lsp::LspFee;
 use crate::native_logger::init_native_logger_once;
 use crate::node_info::{get_channels_info, ChannelsInfo, NodeInfo};
 use crate::p2p_networking::{LnPeer, P2pConnection};
@@ -311,6 +312,15 @@ impl LightningNode {
             num_peers: self.peer_manager.get_peer_node_ids().len() as u16,
             channels_info,
         }
+    }
+
+    pub fn query_lsp_fee(&self) -> LipaResult<LspFee> {
+        let lsp_info = self
+            .lsp_client
+            .query_info()
+            .lift_invalid_input()
+            .prefix_error("Failed to query LSPD")?;
+        Ok(lsp_info.fee)
     }
 
     pub fn connected_to_node(&self, lsp_node: &NodeAddress) -> bool {
