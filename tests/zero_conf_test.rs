@@ -25,7 +25,7 @@ mod zero_conf_test {
         const TEN_SATS: u64 = 10_000;
         const TWENTY_K_SATS: u64 = 20_000_000;
 
-        // With no channels, 10 sats invoice is to small to cover channel
+        // With no channels, 10 sats invoice is too small to cover channel
         // opening fees.
         let invoice = node.create_invoice(TEN_SATS, "test".to_string());
         assert_eq!(
