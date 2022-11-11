@@ -32,33 +32,20 @@ pub fn generate_secret(passphrase: String) -> LipaResult<Secret> {
     let entropy = generate_random_bytes::<32>()?;
     let mnemonic =
         Mnemonic::from_entropy(&entropy).map_to_permanent_failure("Failed to mnemonic")?;
-    let mnemonic_string: Vec<String> = mnemonic.word_iter().map(|s| s.to_string()).collect();
 
-    Ok(derive_secret_from_mnemonic(
-        mnemonic,
-        mnemonic_string,
-        passphrase,
-    ))
+    Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
 }
 
 pub fn mnemonic_to_secret(mnemonic_string: Vec<String>, passphrase: String) -> LipaResult<Secret> {
     let mnemonic =
         Mnemonic::from_str(&mnemonic_string.join(" ")).map_to_invalid_input("Invalid mnemonic")?;
 
-    Ok(derive_secret_from_mnemonic(
-        mnemonic,
-        mnemonic_string,
-        passphrase,
-    ))
+    Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
 }
 
-fn derive_secret_from_mnemonic(
-    mnemonic: Mnemonic,
-    mnemonic_string: Vec<String>,
-    passphrase: String,
-) -> Secret {
+fn derive_secret_from_mnemonic(mnemonic: Mnemonic, passphrase: String) -> Secret {
     let seed = mnemonic.to_seed(&passphrase)[0..32].to_vec();
-
+    let mnemonic_string: Vec<String> = mnemonic.word_iter().map(|s| s.to_string()).collect();
     Secret {
         mnemonic: mnemonic_string,
         passphrase,
