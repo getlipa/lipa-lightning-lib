@@ -126,10 +126,10 @@ dictionary Secret {
 
 namespace lipalightninglib {
     void init_native_logger_once(LogLevel min_level);
+
     [Throws=LipaError]
     Secret generate_secret(string passphrase);
+
     [Throws=LipaError]
     Secret mnemonic_to_secret(sequence<string> mnemonic_string, string passphrase);
-    // TODO: Implement.
-    // sequence<u8> mnemonic_to_seed(sequence<string> mnemonic, string passphrase);
 };
