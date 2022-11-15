@@ -93,7 +93,7 @@ fn read_or_generate_seed(storage: &FileStorage) -> Vec<u8> {
     info!("No existent seed found, generating a new one.");
     let passphrase = "".to_string();
     let mnemonic = "kid rent scatter hire lonely deal simple olympic stool juice ketchup situate crouch taste stone badge act minute borrow mail venue lunar walk empower".to_string();
-    let mnemonic = mnemonic.split(' ').map(String::from).collect();
+    let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
     let secret = mnemonic_to_secret(mnemonic, passphrase).unwrap();
     storage.put_object(
         ".".to_string(),
