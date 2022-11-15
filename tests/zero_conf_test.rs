@@ -27,6 +27,7 @@ mod zero_conf_test {
 
         // With no channels, 10 sats invoice is too small to cover channel
         // opening fees.
+        assert!(node.get_node_info().channels_info.inbound_capacity_msat < TEN_SATS);
         let invoice = node.create_invoice(TEN_SATS, "test".to_string());
         assert_eq!(
 	    invoice.unwrap_err().to_string(),
@@ -39,6 +40,7 @@ mod zero_conf_test {
         sleep(Duration::from_secs(5));
 
         // With a channel, 10 sats invoice is perfectly fine.
+        assert!(node.get_node_info().channels_info.inbound_capacity_msat > TEN_SATS);
         let invoice = node.create_invoice(TEN_SATS, "test".to_string());
         assert!(invoice.unwrap().starts_with("lnbc"));
 
