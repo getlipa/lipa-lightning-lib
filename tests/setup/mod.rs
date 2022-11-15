@@ -239,7 +239,7 @@ pub mod nigiri {
     }
 
     pub fn fund_lnd_node(node: NodeInstance, amount_btc: f32) {
-        let address = get_lnd_node_address(node).unwrap();
+        let address = get_lnd_node_funding_address(node).unwrap();
         try_cmd_repeatedly!(
             fund_address,
             10,
@@ -259,7 +259,7 @@ pub mod nigiri {
         Ok(())
     }
 
-    pub fn get_lnd_node_address(node: NodeInstance) -> Result<String, String> {
+    pub fn get_lnd_node_funding_address(node: NodeInstance) -> Result<String, String> {
         let sub_cmd = &["newaddress", "p2wkh"];
         let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
 
