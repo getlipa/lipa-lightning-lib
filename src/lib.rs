@@ -99,7 +99,13 @@ impl LightningNode {
         let rt = AsyncRuntime::new()?;
         let genesis_hash = genesis_block(config.network).header.block_hash();
 
-        let esplora_client = Arc::new(EsploraClient::new(&config.esplora_api_url.clone())?);
+        let esplora_client = Arc::new(
+            EsploraClient::new(&config.esplora_api_url.clone()).map_err(|e| {
+                InitializationError::EsploraClient {
+                    message: e.to_string(),
+                }
+            })?,
+        );
 
         // Step 1. Initialize the FeeEstimator
         let fee_estimator = Arc::new(FeeEstimator {});
@@ -178,7 +184,11 @@ impl LightningNode {
             filter,
             channel_manager_block_hash.unwrap_or(genesis_hash),
         )));
-        chain_access.lock().unwrap().sync(&confirm)?;
+        chain_access.lock().unwrap().sync(&confirm).map_err(|e| {
+            InitializationError::EsploraClient {
+                message: e.to_string(),
+            }
+        })?;
 
         // Step 10. Give ChannelMonitors to ChainMonitor
         for (_, channel_monitor) in channel_monitors {

@@ -45,7 +45,7 @@ pub fn mnemonic_to_secret(mnemonic_string: Vec<String>, passphrase: String) -> L
 
 fn derive_secret_from_mnemonic(mnemonic: Mnemonic, passphrase: String) -> Secret {
     let seed = mnemonic.to_seed(&passphrase)[0..32].to_vec();
-    let mnemonic_string: Vec<String> = mnemonic.word_iter().map(|s| s.to_string()).collect();
+    let mnemonic_string: Vec<String> = mnemonic.word_iter().map(String::from).collect();
     Secret {
         mnemonic: mnemonic_string,
         passphrase,
@@ -91,7 +91,7 @@ mod test {
 
     #[test]
     fn test_mnemonic_to_secret_hardcoded_values() {
-        let mnemonic: Vec<String> = MNEMONIC.split_whitespace().map(|s| s.to_string()).collect();
+        let mnemonic: Vec<String> = MNEMONIC.split_whitespace().map(String::from).collect();
 
         let passphrase = String::from(PASSPHRASE);
 

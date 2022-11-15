@@ -1,9 +1,10 @@
+use crate::errors::*;
 use crate::esplora_client::ConfirmedTransaction;
 use crate::filter::FilterImpl;
 use crate::ConfirmWrapper;
 use crate::EsploraClient;
+
 use bitcoin::{BlockHash, Script, Txid};
-use esplora_client::Error;
 use lightning::chain::transaction::OutPoint;
 use lightning::chain::{Confirm, WatchedOutput};
 use log::debug;
@@ -33,8 +34,7 @@ impl LipaChainAccess {
         }
     }
 
-    #[allow(clippy::result_large_err)]
-    pub(crate) fn sync(&mut self, confirm: &ConfirmWrapper) -> Result<(), Error> {
+    pub(crate) fn sync(&mut self, confirm: &ConfirmWrapper) -> LipaResult<()> {
         let mut cur_tip = self.esplora.get_tip_hash()?;
 
         while self.synced_tip != cur_tip {
@@ -52,8 +52,7 @@ impl LipaChainAccess {
         Ok(())
     }
 
-    #[allow(clippy::result_large_err)]
-    fn sync_to_tip(&mut self, confirm: &ConfirmWrapper, cur_tip: &BlockHash) -> Result<(), Error> {
+    fn sync_to_tip(&mut self, confirm: &ConfirmWrapper, cur_tip: &BlockHash) -> LipaResult<()> {
         self.inform_about_new_block(confirm, cur_tip)?;
 
         // todo: we need to make sure that the following synchronization is only done up to cur_tip.
@@ -93,8 +92,7 @@ impl LipaChainAccess {
         Ok(())
     }
 
-    #[allow(clippy::result_large_err)]
-    fn sync_relevant_txs_for_reorgs(&self, confirm: &ConfirmWrapper) -> Result<(), Error> {
+    fn sync_relevant_txs_for_reorgs(&self, confirm: &ConfirmWrapper) -> LipaResult<()> {
         for txid in confirm.get_relevant_txids().iter() {
             if !self.esplora.is_tx_confirmed(txid)? {
                 debug!("Transactions reorged out of chain: {:?}", txid);
@@ -105,25 +103,25 @@ impl LipaChainAccess {
         Ok(())
     }
 
-    #[allow(clippy::result_large_err)]
     fn inform_about_new_block(
         &self,
         confirm: &ConfirmWrapper,
         cur_tip: &BlockHash,
-    ) -> Result<(), Error> {
+    ) -> LipaResult<()> {
         match self.esplora.get_header_with_height(cur_tip)? {
             Some((block_header, block_heigh)) => {
                 confirm.best_block_updated(&block_header, block_heigh);
 
                 Ok(())
             }
-            // Block not found in best chain. Was there a reorg?
-            None => Err(Error::HeaderHashNotFound(*cur_tip)),
+            None => Err(runtime_error(
+                "Block not found in best chain. Was there a reorg?",
+            )),
         }
     }
 
     #[allow(clippy::result_large_err)]
-    fn sync_txs(&mut self) -> Result<Vec<ConfirmedTransaction>, Error> {
+    fn sync_txs(&mut self) -> LipaResult<Vec<ConfirmedTransaction>> {
         let mut confirmed_txs = Vec::new();
         let mut not_yet_confirmed_txs = HashSet::new();
 
@@ -150,8 +148,7 @@ impl LipaChainAccess {
         Ok(confirmed_txs)
     }
 
-    #[allow(clippy::result_large_err)]
-    fn sync_spending_txs(&mut self) -> Result<Vec<ConfirmedTransaction>, Error> {
+    fn sync_spending_txs(&mut self) -> LipaResult<Vec<ConfirmedTransaction>> {
         let mut confirmed_txs = Vec::new();
         let mut unspent_registered_outputs = HashSet::new();
 

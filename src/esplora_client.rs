@@ -1,7 +1,9 @@
+use crate::errors::*;
+
 use bitcoin::{BlockHash, BlockHeader, Transaction, Txid};
 use esplora_client::blocking::BlockingClient;
 use esplora_client::Builder;
-use esplora_client::{Error, TxStatus};
+use esplora_client::TxStatus;
 use log::error;
 
 static ESPLORA_TIMEOUT_SECS: u64 = 30;
@@ -19,60 +21,69 @@ pub(crate) struct ConfirmedTransaction {
 }
 
 impl EsploraClient {
-    #[allow(clippy::result_large_err)]
-    pub fn new(url: &str) -> Result<Self, Error> {
+    pub fn new(url: &str) -> LipaResult<Self> {
         let builder = Builder::new(url).timeout(ESPLORA_TIMEOUT_SECS);
         Ok(Self {
-            client: builder.build_blocking()?,
+            client: builder
+                .build_blocking()
+                .map_to_runtime_error("Failed to build Esplora client")?,
         })
     }
 
-    #[allow(clippy::result_large_err)]
-    fn get_height_by_hash(&self, hash: &BlockHash) -> Result<Option<u32>, Error> {
-        Ok(self.client.get_block_status(hash)?.height)
-    }
-
-    #[allow(clippy::result_large_err)]
-    pub fn is_tx_confirmed(&self, txid: &Txid) -> Result<bool, Error> {
+    fn get_height_by_hash(&self, hash: &BlockHash) -> LipaResult<Option<u32>> {
+        // TODO: Shouldn't we handle `esplora_client::Error::HeaderHashNotFound`?
         Ok(self
             .client
-            .get_tx_status(txid)?
+            .get_block_status(hash)
+            .map_to_runtime_error("Esplora failed to get block status")?
+            .height)
+    }
+
+    pub fn is_tx_confirmed(&self, txid: &Txid) -> LipaResult<bool> {
+        Ok(self
+            .client
+            .get_tx_status(txid)
+            .map_to_runtime_error("Esplora failed to get tx status")?
             .map_or(false, |status| status.confirmed))
     }
 
-    #[allow(clippy::result_large_err)]
     pub fn get_header_with_height(
         &self,
         block_hash: &BlockHash,
-    ) -> Result<Option<(BlockHeader, u32)>, Error> {
+    ) -> LipaResult<Option<(BlockHeader, u32)>> {
         if let Some(height) = self.get_height_by_hash(block_hash)? {
-            let header = self.client.get_header_by_hash(block_hash)?;
-
+            let header = self
+                .client
+                .get_header_by_hash(block_hash)
+                .map_to_runtime_error("Esplora failed to get header by hash")?;
             return Ok(Some((header, height)));
         }
 
         Ok(None)
     }
 
-    #[allow(clippy::result_large_err)]
-    pub fn get_confirmed_tx_by_id(
-        &self,
-        txid: &Txid,
-    ) -> Result<Option<ConfirmedTransaction>, Error> {
-        if let Some(tx_status) = self.client.get_tx_status(txid)? {
+    pub fn get_confirmed_tx_by_id(&self, txid: &Txid) -> LipaResult<Option<ConfirmedTransaction>> {
+        if let Some(tx_status) = self
+            .client
+            .get_tx_status(txid)
+            .map_to_runtime_error("Esplora failed to get tx status")?
+        {
             return self.get_confirmed_tx(txid, &tx_status);
         }
 
         Ok(None)
     }
 
-    #[allow(clippy::result_large_err)]
     pub fn get_confirmed_spending_tx(
         &self,
         txid: &Txid,
         index: u64,
-    ) -> Result<Option<ConfirmedTransaction>, Error> {
-        if let Some(output_status) = self.client.get_output_status(txid, index)? {
+    ) -> LipaResult<Option<ConfirmedTransaction>> {
+        if let Some(output_status) = self
+            .client
+            .get_output_status(txid, index)
+            .map_to_runtime_error("Esplora failed to get output status")?
+        {
             if output_status.spent {
                 if let (Some(spending_tx_id), Some(spending_tx_status)) =
                     (output_status.txid, output_status.status)
@@ -87,19 +98,29 @@ impl EsploraClient {
         Ok(None)
     }
 
-    #[allow(clippy::result_large_err)]
     pub fn get_confirmed_tx(
         &self,
         txid: &Txid,
         tx_status: &TxStatus,
-    ) -> Result<Option<ConfirmedTransaction>, Error> {
+    ) -> LipaResult<Option<ConfirmedTransaction>> {
         if tx_status.confirmed {
             if let (Some(block_hash), Some(block_height)) =
                 (tx_status.block_hash, tx_status.block_height)
             {
-                if let Some(tx) = self.client.get_tx(txid)? {
-                    let block_header = self.client.get_header_by_hash(&block_hash)?;
-                    if let Some(merkle_proof) = self.client.get_merkle_proof(txid)? {
+                if let Some(tx) = self
+                    .client
+                    .get_tx(txid)
+                    .map_to_runtime_error("Esplora failed to get tx")?
+                {
+                    let block_header = self
+                        .client
+                        .get_header_by_hash(&block_hash)
+                        .map_to_runtime_error("Esplora failed to get header by hash")?;
+                    if let Some(merkle_proof) = self
+                        .client
+                        .get_merkle_proof(txid)
+                        .map_to_runtime_error("Esplora failed to get merkle proof")?
+                    {
                         return Ok(Some(ConfirmedTransaction {
                             tx,
                             block_height,
@@ -123,13 +144,15 @@ impl EsploraClient {
         Ok(None)
     }
 
-    #[allow(clippy::result_large_err)]
-    pub fn get_tip_hash(&self) -> Result<BlockHash, Error> {
-        self.client.get_tip_hash()
+    pub fn get_tip_hash(&self) -> LipaResult<BlockHash> {
+        self.client
+            .get_tip_hash()
+            .map_to_runtime_error("Esplora failed to get tip hash")
     }
 
-    #[allow(clippy::result_large_err)]
-    pub fn broadcast(&self, tx: &Transaction) -> Result<(), Error> {
-        self.client.broadcast(tx)
+    pub fn broadcast(&self, tx: &Transaction) -> LipaResult<()> {
+        self.client
+            .broadcast(tx)
+            .map_to_runtime_error("Esplora failed to broadcast tx")
     }
 }
