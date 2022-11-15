@@ -9,7 +9,7 @@ mod zero_conf_test {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use crate::setup::nigiri::{fund_lnd_node, NodeInstance};
+    use crate::setup::nigiri::{fund_node, NodeInstance};
     use crate::setup::{nigiri, NodeHandle};
     use uniffi_lipalightninglib::config::NodeAddress;
 
@@ -58,7 +58,7 @@ mod zero_conf_test {
 
         let node_handle = NodeHandle::new(lsp_node);
 
-        fund_lnd_node(NodeInstance::LspdLnd, 0.5);
+        fund_node(NodeInstance::LspdLnd, 0.5);
 
         node_handle
     }

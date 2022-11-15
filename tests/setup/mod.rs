@@ -117,12 +117,14 @@ pub mod nigiri {
 
     #[derive(Clone, Copy, Debug)]
     pub enum NodeInstance {
+        NigiriCln,
         NigiriLnd,
         LspdLnd,
     }
 
-    const LSPD_LND_CMD_PREFIX: &[&str] = &["docker", "exec", "lspd-lnd", "lncli"];
+    const NIGIRI_CLN_CMD_PREFIX: &[&str] = &["nigiri", "cln"];
     const NIGIRI_LND_CMD_PREFIX: &[&str] = &["nigiri", "lnd"];
+    const LSPD_LND_CMD_PREFIX: &[&str] = &["docker", "exec", "lspd-lnd", "lncli"];
 
     #[derive(Debug)]
     pub struct RemoteNodeInfo {
@@ -181,12 +183,37 @@ pub mod nigiri {
         debug!("NIGIRI starting ...");
         exec(&["nigiri", "start", "--ci", "--ln"]);
         wait_for_sync(NodeInstance::NigiriLnd);
+        wait_for_sync(NodeInstance::NigiriCln);
         wait_for_esplora();
     }
 
     pub fn wait_for_sync(node: NodeInstance) {
+        match node {
+            NodeInstance::NigiriCln => {
+                wait_for_sync_cln(node);
+            }
+            _ => {
+                wait_for_sync_lnd(node);
+            }
+        }
+    }
+
+    fn wait_for_sync_lnd(node: NodeInstance) {
         let mut counter = 0;
         while query_lnd_node_info(node).is_err() {
+            counter += 1;
+            if counter > 10 {
+                panic!("Failed to start {:?}", node);
+            }
+            debug!("{:?} is NOT synced", node);
+            sleep(Duration::from_millis(500));
+        }
+        debug!("{:?} is synced", node);
+    }
+
+    fn wait_for_sync_cln(node: NodeInstance) {
+        let mut counter = 0;
+        while query_cln_node_info(node).is_err() {
             counter += 1;
             if counter > 10 {
                 panic!("Failed to start {:?}", node);
@@ -228,6 +255,20 @@ pub mod nigiri {
         Ok(RemoteNodeInfo { synced, pub_key })
     }
 
+    pub fn query_cln_node_info(node: NodeInstance) -> Result<String, String> {
+        let sub_cmd = &["getinfo"];
+        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(&cmd, output));
+        }
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let pub_key = json["id"].as_str().unwrap().to_string();
+        Ok(pub_key)
+    }
+
     pub fn mine_blocks(block_amount: u32) -> Result<(), String> {
         let cmd = &["nigiri", "rpc", "-generate", &block_amount.to_string()];
 
@@ -238,8 +279,11 @@ pub mod nigiri {
         Ok(())
     }
 
-    pub fn fund_lnd_node(node: NodeInstance, amount_btc: f32) {
-        let address = get_lnd_node_funding_address(node).unwrap();
+    pub fn fund_node(node: NodeInstance, amount_btc: f32) {
+        let address = match node {
+            NodeInstance::NigiriCln => get_cln_node_funding_address(node).unwrap(),
+            _ => get_lnd_node_funding_address(node).unwrap(),
+        };
         try_cmd_repeatedly!(
             fund_address,
             10,
@@ -273,12 +317,49 @@ pub mod nigiri {
         Ok(address)
     }
 
-    pub fn lnd_node_open_channel(
+    pub fn get_cln_node_funding_address(node: NodeInstance) -> Result<String, String> {
+        let sub_cmd = &["newaddr"];
+        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(&cmd, output));
+        }
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let address = json["bech32"].as_str().unwrap().to_string();
+        Ok(address)
+    }
+
+    pub fn node_connect(
+        node: NodeInstance,
+        target_node_id: &str,
+        target_node_host: &str,
+        target_port: u16,
+    ) -> Result<(), String> {
+        let address = format!("{}@{}:{}", target_node_id, target_node_host, target_port);
+        let sub_cmd = vec!["connect", &address];
+        let cmd = [get_lnd_node_prefix(node), &sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(&cmd, output));
+        }
+
+        Ok(())
+    }
+
+    pub fn lnd_node_open_generic_channel(
         node: NodeInstance,
         target_node_id: &str,
         zero_conf: bool,
+        private: bool,
     ) -> Result<String, String> {
-        let mut sub_cmd = vec!["openchannel", "--private", target_node_id, "1000000"];
+        let mut sub_cmd = vec!["openchannel", target_node_id, "1000000"];
+
+        if private {
+            sub_cmd.insert(1, "--private");
+        }
 
         if zero_conf {
             sub_cmd.insert(2, "--zero_conf");
@@ -295,6 +376,64 @@ pub mod nigiri {
         let funding_txid = json["funding_txid"].as_str().unwrap().to_string();
 
         Ok(funding_txid)
+    }
+
+    pub fn lnd_node_open_channel(
+        node: NodeInstance,
+        target_node_id: &str,
+        zero_conf: bool,
+    ) -> Result<String, String> {
+        lnd_node_open_generic_channel(node, target_node_id, zero_conf, true)
+    }
+
+    pub fn lnd_node_open_pub_channel(
+        node: NodeInstance,
+        target_node_id: &str,
+        zero_conf: bool,
+    ) -> Result<String, String> {
+        lnd_node_open_generic_channel(node, target_node_id, zero_conf, false)
+    }
+
+    pub fn cln_node_open_channel(
+        node: NodeInstance,
+        target_node_id: &str,
+    ) -> Result<String, String> {
+        let sub_cmd = vec!["fundchannel", target_node_id, "1000000"];
+        let cmd = [get_lnd_node_prefix(node), &sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(&cmd, output));
+        }
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let funding_txid = json["txid"].as_str().unwrap().to_string();
+
+        Ok(funding_txid)
+    }
+
+    pub fn lnd_pay_invoice(node: NodeInstance, invoice: &str) -> Result<(), String> {
+        let sub_cmd = &["payinvoice", "--force", invoice];
+        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(cmd.as_slice(), output));
+        }
+
+        Ok(())
+    }
+
+    pub fn cln_pay_invoice(node: NodeInstance, invoice: &str) -> Result<(), String> {
+        let sub_cmd = &["pay", invoice];
+        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(cmd.as_slice(), output));
+        }
+
+        Ok(())
     }
 
     pub fn lnd_node_disconnect_peer(node: NodeInstance, node_id: String) -> Result<(), String> {
@@ -354,6 +493,7 @@ pub mod nigiri {
 
     fn get_lnd_node_prefix(node: NodeInstance) -> &'static [&'static str] {
         match node {
+            NodeInstance::NigiriCln => NIGIRI_CLN_CMD_PREFIX,
             NodeInstance::NigiriLnd => NIGIRI_LND_CMD_PREFIX,
             NodeInstance::LspdLnd => LSPD_LND_CMD_PREFIX,
         }
@@ -361,9 +501,10 @@ pub mod nigiri {
 
     fn produce_cmd_err_msg(cmd: &[&str], output: Output) -> String {
         format!(
-            "Command `{}` failed. Output: {}",
+            "Command `{}` failed.\nStderr: {}Stdout: {}",
             cmd.join(" "),
-            String::from_utf8(output.stderr).unwrap()
+            String::from_utf8(output.stderr).unwrap(),
+            String::from_utf8(output.stdout).unwrap(),
         )
     }
 

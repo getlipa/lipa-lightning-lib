@@ -179,7 +179,7 @@ mod chain_sync_test {
 
         // to open multiple channels in the same block multiple UTXOs are required in LND
         for _ in 0..20 {
-            nigiri::fund_lnd_node(NodeInstance::NigiriLnd, 0.5)
+            nigiri::fund_node(NodeInstance::NigiriLnd, 0.5)
         }
 
         node_handle

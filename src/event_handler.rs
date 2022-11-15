@@ -1,8 +1,8 @@
 use crate::types::ChannelManager;
 
 use bitcoin::secp256k1::PublicKey;
-use lightning::util::events::{Event, EventHandler};
-use log::{error, info};
+use lightning::util::events::{Event, EventHandler, PaymentPurpose};
+use log::{error, info, trace};
 use std::sync::Arc;
 
 pub(crate) struct LipaEventHandler {
@@ -21,17 +21,83 @@ impl LipaEventHandler {
 
 impl EventHandler for LipaEventHandler {
     fn handle_event(&self, event: &Event) {
+        trace!("Event occured: {:?}", event);
+
         match event {
             Event::FundingGenerationReady { .. } => {}
-            Event::PaymentReceived { .. } => {}
-            Event::PaymentClaimed { .. } => {}
+            Event::PaymentReceived {
+                payment_hash,
+                amount_msat,
+                purpose,
+            } => {
+                // Note: LDK will not stop an inbound payment from being paid multiple times,
+                //       so multiple PaymentReceived events may be generated for the same payment.
+                // Todo: This needs more research on what exactly is happening under the hood
+                //       and what the correct behaviour should be to deal with this situation.
+
+                let payment_preimage = match purpose {
+                    PaymentPurpose::InvoicePayment {
+                        payment_preimage, ..
+                    } => {
+                        info!(
+                            "Registered incoming invoice payment for {} msat with hash {:?}",
+                            amount_msat, payment_hash
+                        );
+                        *payment_preimage
+                    }
+                    PaymentPurpose::SpontaneousPayment(preimage) => {
+                        info!(
+                            "Registered incoming spontaneous payment for {} msat with hash {:?}",
+                            amount_msat, payment_hash
+                        );
+
+                        Some(*preimage)
+                    }
+                };
+
+                match payment_preimage {
+                    Some(preimage) => {
+                        self.channel_manager.claim_funds(preimage);
+                    }
+                    None => {
+                        error!("Failed to claim funds for payment with hash {:?}: No preimage. Failing HTLC backwards", payment_hash);
+                        self.channel_manager.fail_htlc_backwards(payment_hash);
+                    }
+                }
+            }
+            Event::PaymentClaimed {
+                payment_hash,
+                amount_msat,
+                purpose: _,
+            } => {
+                info!(
+                    "Claimed payment for {} msat with hash {:?}",
+                    amount_msat, payment_hash
+                );
+            }
             Event::PaymentSent { .. } => {}
             Event::PaymentFailed { .. } => {}
             Event::PaymentPathSuccessful { .. } => {}
             Event::PaymentPathFailed { .. } => {}
             Event::ProbeSuccessful { .. } => {}
             Event::ProbeFailed { .. } => {}
-            Event::PendingHTLCsForwardable { .. } => {}
+            Event::PendingHTLCsForwardable {
+                time_forwardable: _,
+            } => {
+                // The variable time_forwardable is meant to be used to obfuscate the timing
+                // of when a payment is being forwarded/accepted.
+                // For the time being (while Lipa is the only LSP for these wallets)
+                // this measure may only obfuscate for routing nodes on the payment path,
+                // whether a payment that is being routed through the Lipa-LSP
+                // is being routed towards a Lipa user or towards a third party node.
+                // Since the Lipa users don't forward payments anyways,
+                // the Lipa-LSP itself will always know the destination of the payment anyways.
+                // For this reason, we don't deem this timely obfuscation to provide
+                // any meaningful privacy advantage for our case and therefore
+                // do not delay the acceptance of HTLC using the time_forwardable variable for now.
+
+                self.channel_manager.process_pending_htlc_forwards();
+            }
             Event::SpendableOutputs { .. } => {}
             Event::PaymentForwarded { .. } => {}
             Event::ChannelClosed { .. } => {}
