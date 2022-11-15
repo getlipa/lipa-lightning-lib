@@ -117,7 +117,6 @@ pub mod nigiri {
     }
 
     const LSPD_LND_CMD_PREFIX: &[&str] = &["docker", "exec", "lspd-lnd", "lncli"];
-
     const NIGIRI_LND_CMD_PREFIX: &[&str] = &["nigiri", "lnd"];
 
     #[derive(Debug)]
@@ -210,13 +209,12 @@ pub mod nigiri {
     }
 
     pub fn query_lnd_node_info(node: NodeInstance) -> Result<RemoteNodeInfo, String> {
-        let output = exec(
-            [get_lnd_node_prefix(node), &["getinfo"]]
-                .concat()
-                .as_slice(),
-        );
+        let sub_cmd = &["getinfo"];
+        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
         if !output.status.success() {
-            return Err("Command `lnd getinfo` failed".to_string());
+            return Err(produce_cmd_err_msg(&cmd, output));
         }
         let json: serde_json::Value =
             serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
@@ -226,9 +224,11 @@ pub mod nigiri {
     }
 
     pub fn mine_blocks(block_amount: u32) -> Result<(), String> {
-        let output = exec(&["nigiri", "rpc", "-generate", &block_amount.to_string()]);
+        let cmd = &["nigiri", "rpc", "-generate", &block_amount.to_string()];
+
+        let output = exec(cmd);
         if !output.status.success() {
-            return Err(format!("Command `rpc -generate {}` failed", block_amount));
+            return Err(produce_cmd_err_msg(cmd, output));
         }
         Ok(())
     }
@@ -245,24 +245,22 @@ pub mod nigiri {
     }
 
     fn fund_address(amount_btc: f32, address: &str) -> Result<(), String> {
-        let output = exec(&["nigiri", "faucet", &address, &amount_btc.to_string()]);
+        let cmd = &["nigiri", "faucet", &address, &amount_btc.to_string()];
+
+        let output = exec(cmd);
         if !output.status.success() {
-            return Err(format!(
-                "Command `faucet {} {}` failed",
-                address, amount_btc
-            ));
+            return Err(produce_cmd_err_msg(cmd, output));
         }
         Ok(())
     }
 
     pub fn get_lnd_node_address(node: NodeInstance) -> Result<String, String> {
-        let output = exec(
-            [get_lnd_node_prefix(node), &["newaddress", "p2wkh"]]
-                .concat()
-                .as_slice(),
-        );
+        let sub_cmd = &["newaddress", "p2wkh"];
+        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
         if !output.status.success() {
-            return Err("Command `lnd newaddress p2wkh` failed".to_string());
+            return Err(produce_cmd_err_msg(&cmd, output));
         }
         let json: serde_json::Value =
             serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
@@ -275,22 +273,17 @@ pub mod nigiri {
         target_node_id: &str,
         zero_conf: bool,
     ) -> Result<String, String> {
-        let mut cmd = vec!["openchannel", "--private", target_node_id, "1000000"];
+        let mut sub_cmd = vec!["openchannel", "--private", target_node_id, "1000000"];
+
         if zero_conf {
-            cmd.insert(2, "--zero_conf");
+            sub_cmd.insert(2, "--zero_conf");
         }
-        let output = exec(
-            [get_lnd_node_prefix(node), cmd.as_slice()]
-                .concat()
-                .as_slice(),
-        );
+
+        let cmd = [get_lnd_node_prefix(node), &sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
         if !output.status.success() {
-            return Err(format!(
-                "Command `lnd openchannel --private {} {} 1000000` failed. Output: {}",
-                zero_conf,
-                target_node_id,
-                String::from_utf8(output.stderr).unwrap()
-            ));
+            return Err(produce_cmd_err_msg(&cmd, output));
         }
         let json: serde_json::Value =
             serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
@@ -300,13 +293,13 @@ pub mod nigiri {
     }
 
     pub fn lnd_node_disconnect_peer(node: NodeInstance, node_id: String) -> Result<(), String> {
-        let output = exec(
-            [get_lnd_node_prefix(node), &["disconnect", &node_id]]
-                .concat()
-                .as_slice(),
-        );
+        let sub_cmd = &["disconnect", &node_id];
+        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+
         if !output.status.success() {
-            return Err(format!("Command `lnd disconnect {}` failed", node_id));
+            return Err(produce_cmd_err_msg(cmd.as_slice(), output));
         }
 
         Ok(())
@@ -316,19 +309,12 @@ pub mod nigiri {
         node: NodeInstance,
         funding_txid: String,
     ) -> Result<(), String> {
-        let output = exec(
-            [
-                get_lnd_node_prefix(node),
-                &["closechannel", "--force", &funding_txid],
-            ]
-            .concat()
-            .as_slice(),
-        );
+        let sub_cmd = &["closechannel", "--force", &funding_txid];
+        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
         if !output.status.success() {
-            return Err(format!(
-                "Command `lnd closechannel --force {}` failed",
-                funding_txid
-            ));
+            return Err(produce_cmd_err_msg(cmd.as_slice(), output));
         }
         let _json: serde_json::Value =
             serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
@@ -337,9 +323,12 @@ pub mod nigiri {
     }
 
     pub fn lnd_node_stop(node: NodeInstance) -> Result<(), String> {
-        let output = exec([get_lnd_node_prefix(node), &["stop"]].concat().as_slice());
+        let sub_cmd = &["stop"];
+        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
         if !output.status.success() {
-            return Err(String::from("Command `lnd stop` failed"));
+            return Err(produce_cmd_err_msg(cmd.as_slice(), output));
         }
 
         Ok(())
@@ -363,6 +352,14 @@ pub mod nigiri {
             NodeInstance::NigiriLnd => NIGIRI_LND_CMD_PREFIX,
             NodeInstance::LspdLnd => LSPD_LND_CMD_PREFIX,
         }
+    }
+
+    fn produce_cmd_err_msg(cmd: &[&str], output: Output) -> String {
+        format!(
+            "Command `{}` failed. Output: {}",
+            cmd.join(" "),
+            String::from_utf8(output.stderr).unwrap()
+        )
     }
 
     #[macro_export]
