@@ -76,6 +76,7 @@ impl NodeHandle {
             seed: generate_secret("".to_string()).unwrap().seed,
             esplora_api_url: "http://localhost:30000".to_string(),
             lsp_node,
+            rgs_url: "http://localhost:8080/snapshot/".to_string(),
         };
 
         NodeHandle { config, storage }

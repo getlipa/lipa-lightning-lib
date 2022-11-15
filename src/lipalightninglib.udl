@@ -10,6 +10,7 @@ dictionary Config {
     sequence<u8> seed;
     string esplora_api_url;
     NodeAddress lsp_node;
+    string rgs_url;
 };
 
 dictionary NodeAddress {

@@ -12,6 +12,7 @@ pub struct Config {
     pub seed: Vec<u8>,
     pub esplora_api_url: String,
     pub lsp_node: NodeAddress,
+    pub rgs_url: String,
 }
 
 #[derive(Debug, Clone)]
