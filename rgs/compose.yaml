@@ -50,9 +50,8 @@ services:
       start_period: 3s
 
   db:
+    container_name: rgs-db
     image: 'postgres:14.5-alpine'
-    ports:
-      - '5432:5432'
     environment:
       POSTGRES_USER: lipauser
       POSTGRES_PASSWORD: lipapassword
@@ -76,7 +75,7 @@ services:
       cln:
         condition: service_healthy
     environment:
-      RAPID_GOSSIP_SYNC_SERVER_DB_HOST: db
+      RAPID_GOSSIP_SYNC_SERVER_DB_HOST: rgs-db
       RAPID_GOSSIP_SYNC_SERVER_DB_USER: lipauser
       RAPID_GOSSIP_SYNC_SERVER_DB_PASSWORD: lipapassword
       RAPID_GOSSIP_SYNC_SERVER_DB_NAME: lipadb
