@@ -62,6 +62,19 @@ impl Storage {
             .map(|(_, k)| k.clone())
             .collect()
     }
+
+    pub fn delete_object(&self, bucket: String, key: String) -> bool {
+        match self
+            .objects
+            .lock()
+            .unwrap()
+            .borrow_mut()
+            .remove(&(bucket, key))
+        {
+            Some(_) => true,
+            None => false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -86,5 +99,8 @@ mod tests {
             storage.get_object("bucket".to_string(), "key".to_string()),
             vec![1, 2, 3]
         );
+
+        assert!(storage.delete_object("bucket".to_string(), "key".to_string()));
+        assert!(!storage.object_exists("bucket".to_string(), "key".to_string()));
     }
 }

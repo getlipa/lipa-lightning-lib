@@ -62,4 +62,12 @@ impl RedundantStorageCallback for FileStorage {
             Vec::new()
         }
     }
+
+    fn delete_object(&self, bucket: String, key: String) -> bool {
+        debug!("delete_object({}, {})", bucket, key);
+        let mut path_buf = self.base_path_buf.clone();
+        path_buf.push(bucket);
+        path_buf.push(key);
+        fs::remove_file(path_buf).is_ok()
+    }
 }

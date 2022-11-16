@@ -51,7 +51,7 @@ use crate::p2p_networking::{LnPeer, P2pConnection};
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
-use crate::types::{ChainMonitor, ChannelManager, PeerManager};
+use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync};
 
 use bitcoin::bech32::ToBase32;
 use bitcoin::blockdata::constants::genesis_block;
@@ -64,13 +64,12 @@ use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager
 use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Watch};
 use lightning::ln::channelmanager::ChainParameters;
 use lightning::ln::peer_handler::IgnoringMessageHandler;
-use lightning::routing::gossip::NetworkGraph;
 use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringParameters};
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_invoice::Currency;
-use lightning_rapid_gossip_sync::RapidGossipSync;
-use log::{debug, error, warn, Level as LogLevel};
+use lightning_rapid_gossip_sync::GraphSyncError;
+use log::{debug, error, info, warn, Level as LogLevel};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::{Duration, Instant};
@@ -87,6 +86,8 @@ pub struct LightningNode {
     peer_manager: Arc<PeerManager>,
     p2p_connector_handle: RepeatingTaskHandle,
     sync_handle: RepeatingTaskHandle,
+    rgs_url: String,
+    rapid_sync: Arc<RapidGossipSync>,
 }
 
 impl LightningNode {
@@ -204,10 +205,13 @@ impl LightningNode {
             }
         }
 
-        // Step 11: Optional: Initialize the NetGraphMsgHandler
-        let _graph = persister.read_graph();
-        let graph = Arc::new(NetworkGraph::new(genesis_hash, Arc::clone(&logger)));
-        let rapid_gossip = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
+        // Step 11: Optional: Initialize rapid sync
+        let graph = Arc::new(
+            persister
+                .read_or_init_graph(genesis_hash, Arc::clone(&logger))
+                .unwrap(), // TODO: properly handle error
+        );
+        let rapid_sync = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
 
         // Step 12. Initialize the PeerManager
         let peer_manager = Arc::new(init_peer_manager(
@@ -271,7 +275,7 @@ impl LightningNode {
         let _scorer = persister.read_scorer();
         let scorer = Arc::new(Mutex::new(ProbabilisticScorer::new(
             ProbabilisticScoringParameters::default(),
-            Arc::clone(&graph),
+            graph,
             Arc::clone(&logger),
         )));
 
@@ -293,7 +297,7 @@ impl LightningNode {
             event_handler,
             chain_monitor,
             Arc::clone(&channel_manager),
-            GossipSync::rapid(rapid_gossip),
+            GossipSync::rapid(Arc::clone(&rapid_sync)),
             Arc::clone(&peer_manager),
             logger,
             Some(scorer),
@@ -312,6 +316,8 @@ impl LightningNode {
             peer_manager,
             p2p_connector_handle,
             sync_handle,
+            rgs_url: config.rgs_url.clone(),
+            rapid_sync,
         })
     }
 
@@ -366,6 +372,41 @@ impl LightningNode {
             .sign(|_| Ok::<RecoverableSignature, ()>(signature))
             .map_to_permanent_failure("Failed to sign invoice")?;
         Ok(signed_invoice.to_string())
+    }
+
+    pub fn sync_graph(&self) -> LipaResult<()> {
+        let last_sync_timestamp = self
+            .rapid_sync
+            .network_graph()
+            .get_last_rapid_gossip_sync_timestamp()
+            .unwrap_or(0);
+
+        let snapshot_contents =
+            reqwest::blocking::get(format!("{}{}", self.rgs_url, last_sync_timestamp))
+                .map_to_runtime_error("Failed to get response from RGS server")?
+                .error_for_status()
+                .map_to_runtime_error("The RGS server returned an error")?
+                .bytes()
+                .map_to_runtime_error("Failed to get the RGS server response as bytes")?
+                .to_vec();
+
+        match self.rapid_sync.update_network_graph(&snapshot_contents) {
+            Ok(new_timestamp) => info!(
+                "Successfully updated the network graph from timestamp {} to timestamp {}",
+                last_sync_timestamp, new_timestamp
+            ),
+            Err(e) => return match e {
+                GraphSyncError::DecodeError(e) => {
+                    Err(e).map_to_runtime_error("Failed to decode a network graph update")
+                }
+                GraphSyncError::LightningError(e) => {
+                    Err(runtime_error(
+                        format!("Failed to apply a network graph update to the local graph: {} - Recommended action: {:?}", e.err, e.action),
+                    ))
+                }
+            },
+        };
+        Ok(())
     }
 }
 

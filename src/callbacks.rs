@@ -31,6 +31,8 @@ pub trait RedundantStorageCallback: Send + Sync + Debug {
     /// # Return
     /// Returns a list of object keys present in the bucket.
     fn list_objects(&self, bucket: String) -> Vec<String>;
+
+    fn delete_object(&self, bucket: String, key: String) -> bool;
 }
 
 pub trait LspCallback: Send + Sync {

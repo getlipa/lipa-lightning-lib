@@ -31,3 +31,8 @@ pub(crate) type PeerManager = lightning::ln::peer_handler::PeerManager<
     Arc<LightningLogger>,
     IgnoringMessageHandler,
 >;
+
+pub(crate) type NetworkGraph = lightning::routing::gossip::NetworkGraph<Arc<LightningLogger>>;
+
+pub(crate) type RapidGossipSync =
+    lightning_rapid_gossip_sync::RapidGossipSync<Arc<NetworkGraph>, Arc<LightningLogger>>;

@@ -1,6 +1,7 @@
 use crate::callbacks::RedundantStorageCallback;
-use crate::errors::InitializationError;
+use crate::errors::{InitializationError, LipaResult};
 
+use crate::LightningLogger;
 use bitcoin::hash_types::BlockHash;
 use bitcoin::hashes::hex::ToHex;
 use lightning::chain;
@@ -147,8 +148,45 @@ impl StoragePersister {
         }
     }
 
-    pub fn read_graph(&self) {
-        // TODO: Implement
+    pub fn read_or_init_graph(
+        &self,
+        genesis_hash: BlockHash,
+        logger: Arc<LightningLogger>,
+    ) -> LipaResult<NetworkGraph<Arc<LightningLogger>>> {
+        if self
+            .storage
+            .object_exists(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string())
+        {
+            let data = self
+                .storage
+                .get_object(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string());
+            let mut buffer = Cursor::new(&data);
+            let network_graph = match NetworkGraph::read(&mut buffer, Arc::clone(&logger)) {
+                Ok(graph) => {
+                    debug!(
+                "Successfully read the NetworkGraph from storage. Last sync made at timestamp {}",
+                graph
+                    .get_last_rapid_gossip_sync_timestamp()
+                    .unwrap_or(0)
+            );
+                    graph
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to parse network graph data: {} - Deleting and continuing...",
+                        e
+                    );
+                    self.storage
+                        .delete_object(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string());
+                    NetworkGraph::new(genesis_hash, logger)
+                }
+            };
+
+            Ok(network_graph)
+        } else {
+            let network_graph = NetworkGraph::new(genesis_hash, Arc::clone(&logger));
+            Ok(network_graph)
+        }
     }
 
     pub fn read_scorer(&self) {
@@ -282,6 +320,10 @@ mod test {
 
         fn list_objects(&self, bucket: String) -> Vec<String> {
             self.storage.list_objects(bucket)
+        }
+
+        fn delete_object(&self, bucket: String, key: String) -> bool {
+            self.storage.delete_object(bucket, key)
         }
     }
 

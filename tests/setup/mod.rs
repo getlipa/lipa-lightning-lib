@@ -54,6 +54,10 @@ impl RedundantStorageCallback for StorageMock {
     fn list_objects(&self, bucket: String) -> Vec<String> {
         self.storage.list_objects(bucket)
     }
+
+    fn delete_object(&self, bucket: String, key: String) -> bool {
+        self.storage.delete_object(bucket, key)
+    }
 }
 
 #[allow(dead_code)]
@@ -76,6 +80,7 @@ impl NodeHandle {
             seed: generate_secret("".to_string()).unwrap().seed,
             esplora_api_url: "http://localhost:30000".to_string(),
             lsp_node,
+            rgs_url: "http://localhost:8080/snapshot/".to_string(),
         };
 
         NodeHandle { config, storage }
