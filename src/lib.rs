@@ -51,7 +51,7 @@ use crate::p2p_networking::{LnPeer, P2pConnection};
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
-use crate::types::{ChainMonitor, ChannelManager, NetworkGraph, PeerManager, RapidGossipSync};
+use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync};
 
 use bitcoin::bech32::ToBase32;
 use bitcoin::blockdata::constants::genesis_block;
@@ -88,7 +88,6 @@ pub struct LightningNode {
     sync_handle: RepeatingTaskHandle,
     rgs_url: String,
     rapid_sync: Arc<RapidGossipSync>,
-    graph: Arc<NetworkGraph>,
 }
 
 impl LightningNode {
@@ -276,7 +275,7 @@ impl LightningNode {
         let _scorer = persister.read_scorer();
         let scorer = Arc::new(Mutex::new(ProbabilisticScorer::new(
             ProbabilisticScoringParameters::default(),
-            Arc::clone(&graph),
+            graph,
             Arc::clone(&logger),
         )));
 
@@ -319,7 +318,6 @@ impl LightningNode {
             sync_handle,
             rgs_url: config.rgs_url.clone(),
             rapid_sync,
-            graph,
         })
     }
 
@@ -378,7 +376,8 @@ impl LightningNode {
 
     pub fn sync_graph(&self) -> LipaResult<()> {
         let last_sync_timestamp = self
-            .graph
+            .rapid_sync
+            .network_graph()
             .get_last_rapid_gossip_sync_timestamp()
             .unwrap_or(0);
 
