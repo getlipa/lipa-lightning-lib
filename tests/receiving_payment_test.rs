@@ -9,10 +9,9 @@ mod receiving_payments_test {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use crate::setup::nigiri::{fund_node, NodeInstance};
+    use crate::setup::nigiri::NodeInstance;
     use crate::setup::{nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
-    use uniffi_lipalightninglib::config::NodeAddress;
 
     const THOUSAND_SATS: u64 = 1_000_000;
     const TEN_K_SATS: u64 = 10_000_000;
@@ -35,7 +34,7 @@ mod receiving_payments_test {
     #[test]
     // Test receiving an invoice on a node that already has an open channel
     fn receive_payment_on_established_node() {
-        let node_handle = setup();
+        let node_handle = NodeHandle::new_with_lsp_setup();
 
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
@@ -72,7 +71,7 @@ mod receiving_payments_test {
     // is that receiving 1_000 sats creates a dust-HTLC, while receiving 20_000 sats does not.
     // A dust-HTLC is an HTLC that is too small to be worth the fees to settle it.
     fn receive_dust_htlc_payment() {
-        let node_handle = setup();
+        let node_handle = NodeHandle::new_with_lsp_setup();
 
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
@@ -112,7 +111,7 @@ mod receiving_payments_test {
     // In case the bug gets fixed as a byproduct, for example through updating dependencies,
     // this test should be removed, and the issues in the project management tools should be resolved.
     fn dust_bug_still_exists() {
-        let node_handle = setup();
+        let node_handle = NodeHandle::new_with_lsp_setup();
 
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
@@ -137,7 +136,7 @@ mod receiving_payments_test {
     #[test]
     fn receive_multiple_payments() {
         let amt_of_payments = 10;
-        let node_handle = setup();
+        let node_handle = NodeHandle::new_with_lsp_setup();
 
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
@@ -174,13 +173,11 @@ mod receiving_payments_test {
     #[test]
     // Tests correctness of the routing hint within the invoice
     fn receive_payment_from_lnd_with_hop() {
-        let node_handle = setup();
+        let node_handle = NodeHandle::new_with_lsp_setup();
 
         let node = node_handle.start().unwrap();
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
         assert_eq!(node.get_node_info().num_peers, 1);
-
-        fund_node(NodeInstance::NigiriLnd, 0.5);
 
         let lspd_node_id = nigiri::query_lnd_node_info(NodeInstance::LspdLnd)
             .unwrap()
@@ -224,13 +221,11 @@ mod receiving_payments_test {
     #[test]
     // Tests correctness of the routing hint within the invoice
     fn receive_payment_from_cln_with_hop() {
-        let node_handle = setup();
+        let node_handle = NodeHandle::new_with_lsp_setup();
 
         let node = node_handle.start().unwrap();
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
         assert_eq!(node.get_node_info().num_peers, 1);
-
-        fund_node(NodeInstance::NigiriCln, 0.5);
 
         let lspd_node_id = nigiri::query_lnd_node_info(NodeInstance::LspdLnd)
             .unwrap()
@@ -254,9 +249,7 @@ mod receiving_payments_test {
         assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
         assert!(node.get_node_info().channels_info.inbound_capacity_msat > TWENTY_K_SATS);
 
-        let invoice = node
-            .create_invoice(TWENTY_K_SATS, "test".to_string())
-            .unwrap();
+        let invoice = node.create_invoice(TWENTY_K_SATS, "test".to_string()).unwrap();
         assert!(invoice.starts_with("lnbc"));
 
         sleep(Duration::from_secs(100)); // wait for super lazy cln to consider its channels active
@@ -268,21 +261,16 @@ mod receiving_payments_test {
             TWENTY_K_SATS
         );
         assert_eq!(node.get_node_info().channels_info.outbound_capacity_msat, 0); // because of channel reserves
-        assert!(
-            node.get_node_info().channels_info.inbound_capacity_msat < MILLION_SATS - TWENTY_K_SATS
-        );
+        assert!(node.get_node_info().channels_info.inbound_capacity_msat < MILLION_SATS - TWENTY_K_SATS);
     }
 
     #[test]
     fn receive_multiple_payments_for_same_invoice() {
-        let node_handle = setup();
+        let node_handle = NodeHandle::new_with_lsp_setup();
 
         let node = node_handle.start().unwrap();
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
         assert_eq!(node.get_node_info().num_peers, 1);
-
-        fund_node(NodeInstance::NigiriLnd, 0.5);
-        fund_node(NodeInstance::NigiriCln, 0.5);
 
         let lspd_node_id = nigiri::query_lnd_node_info(NodeInstance::LspdLnd)
             .unwrap()
@@ -334,19 +322,5 @@ mod receiving_payments_test {
             node.get_node_info().channels_info.inbound_capacity_msat
                 < MILLION_SATS - TWENTY_K_SATS * 3
         ); // smaller instead of equal because of channel reserves
-    }
-
-    // todo move to setup
-    fn setup() -> NodeHandle {
-        nigiri::start();
-        fund_node(NodeInstance::LspdLnd, 0.5);
-
-        let lsp_info = nigiri::query_lnd_node_info(NodeInstance::LspdLnd).unwrap();
-        let lsp_node = NodeAddress {
-            pub_key: lsp_info.pub_key,
-            address: "127.0.0.1:9739".to_string(),
-        };
-
-        NodeHandle::new(lsp_node)
     }
 }

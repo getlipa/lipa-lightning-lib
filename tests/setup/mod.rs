@@ -10,6 +10,7 @@ use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
 
 use bitcoin::Network;
+use nigiri::NodeInstance;
 use simplelog::SimpleLogger;
 use std::sync::{Arc, Once};
 use std::thread::sleep;
@@ -84,6 +85,25 @@ impl NodeHandle {
         };
 
         NodeHandle { config, storage }
+    }
+
+    pub fn new_with_lsp_setup() -> NodeHandle {
+        nigiri::start();
+
+        // to open multiple channels in the same block multiple UTXOs are required in LND
+        for _ in 0..10 {
+            nigiri::fund_node(NodeInstance::LspdLnd, 0.5);
+            nigiri::fund_node(NodeInstance::NigiriLnd, 0.5);
+            nigiri::fund_node(NodeInstance::NigiriCln, 0.5);
+        }
+
+        let lsp_info = nigiri::query_lnd_node_info(NodeInstance::LspdLnd).unwrap();
+        let lsp_node = NodeAddress {
+            pub_key: lsp_info.pub_key,
+            address: "127.0.0.1:9739".to_string(),
+        };
+
+        Self::new(lsp_node)
     }
 
     pub fn start(&self) -> Result<LightningNode, InitializationError> {
