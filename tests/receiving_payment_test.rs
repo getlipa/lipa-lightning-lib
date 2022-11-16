@@ -339,15 +339,14 @@ mod receiving_payments_test {
     // todo move to setup
     fn setup() -> NodeHandle {
         nigiri::start();
+        fund_node(NodeInstance::LspdLnd, 0.5);
+
         let lsp_info = nigiri::query_lnd_node_info(NodeInstance::LspdLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
             address: "127.0.0.1:9739".to_string(),
         };
 
-        let node_handle = NodeHandle::new(lsp_node);
-        fund_node(NodeInstance::LspdLnd, 0.5);
-
-        node_handle
+        NodeHandle::new(lsp_node)
     }
 }
