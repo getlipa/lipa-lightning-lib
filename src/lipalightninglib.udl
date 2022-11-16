@@ -24,6 +24,7 @@ callback interface RedundantStorageCallback {
     boolean check_health(string bucket);
     boolean put_object(string bucket, string key, sequence<u8> value);
     sequence<string> list_objects(string bucket);
+    boolean delete_object(string bucket, string key);
 };
 
 [Error]

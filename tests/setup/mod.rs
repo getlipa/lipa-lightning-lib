@@ -54,6 +54,10 @@ impl RedundantStorageCallback for StorageMock {
     fn list_objects(&self, bucket: String) -> Vec<String> {
         self.storage.list_objects(bucket)
     }
+
+    fn delete_object(&self, bucket: String, key: String) -> bool {
+        self.storage.delete_object(bucket, key)
+    }
 }
 
 #[allow(dead_code)]

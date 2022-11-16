@@ -1,5 +1,5 @@
 use crate::callbacks::RedundantStorageCallback;
-use crate::errors::{InitializationError, LipaResult, MapToLipaError};
+use crate::errors::{InitializationError, LipaResult};
 
 use crate::LightningLogger;
 use bitcoin::hash_types::BlockHash;
@@ -161,15 +161,27 @@ impl StoragePersister {
                 .storage
                 .get_object(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string());
             let mut buffer = Cursor::new(&data);
-            let network_graph = NetworkGraph::read(&mut buffer, logger).map_to_permanent_failure(
-                "Error parsing network graph data (tip: delete network graph data and try again)",
-            )?;
-            debug!(
+            let network_graph = match NetworkGraph::read(&mut buffer, Arc::clone(&logger)) {
+                Ok(graph) => {
+                    debug!(
                 "Successfully read the NetworkGraph from storage. Last sync made at timestamp {}",
-                network_graph
+                graph
                     .get_last_rapid_gossip_sync_timestamp()
                     .unwrap_or(0)
             );
+                    graph
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to parse network graph data: {} - Deleting and continuing...",
+                        e
+                    );
+                    self.storage
+                        .delete_object(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string());
+                    NetworkGraph::new(genesis_hash, logger)
+                }
+            };
+
             Ok(network_graph)
         } else {
             let network_graph = NetworkGraph::new(genesis_hash, Arc::clone(&logger));
@@ -308,6 +320,10 @@ mod test {
 
         fn list_objects(&self, bucket: String) -> Vec<String> {
             self.storage.list_objects(bucket)
+        }
+
+        fn delete_object(&self, bucket: String, key: String) -> bool {
+            self.storage.delete_object(bucket, key)
         }
     }
 

@@ -400,9 +400,9 @@ impl LightningNode {
                     Err(e).map_to_runtime_error("Failed to decode a network graph update")
                 }
                 GraphSyncError::LightningError(e) => {
-                    Err(LipaError::RuntimeError {
-                        message: format!("Failed to apply a network graph update to the local graph: {} - Recommended action: {:?}", e.err, e.action),
-                    })
+                    Err(runtime_error(
+                        format!("Failed to apply a network graph update to the local graph: {} - Recommended action: {:?}", e.err, e.action),
+                    ))
                 }
             },
         };
