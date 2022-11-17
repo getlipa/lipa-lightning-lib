@@ -71,4 +71,4 @@ jobs:
         with:
           submodules: true
       - name: Run unused dependency checker
-        run: cargo +nightly udeps --all-targets
+        run: cargo +nightly udeps
