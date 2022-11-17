@@ -83,7 +83,6 @@ services:
       BITCOIN_REST_DOMAIN: rgs-bitcoin
       BITCOIN_REST_PORT: 18445
       BITCOIN_REST_PATH: /rest/
-      SNAPSHOT_CALCULATION_INTERVAL_SECS: 20
 
 networks:
   default:

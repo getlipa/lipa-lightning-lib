@@ -1,14 +1,14 @@
 FROM rust:latest as builder
 
 WORKDIR /usr/src
-#RUN git clone https://github.com/lightningdevkit/rapid-gossip-sync-server/
-RUN git clone https://github.com/danielgranhao/rapid-gossip-sync-server
+RUN git clone https://github.com/lightningdevkit/rapid-gossip-sync-server/
 WORKDIR /usr/src/rapid-gossip-sync-server
-RUN git reset --hard 80781f16e216a6d1bba33a12bf8c1c58016062bc
+RUN git reset --hard f0ef17314840b4e30d08511dfc7773b4ffc8d343
 
 RUN sed -i 's/std::net::SocketAddr;/std::net::{SocketAddr, ToSocketAddrs};/g' /usr/src/rapid-gossip-sync-server/src/config.rs
-RUN sed -i '220 i let mut cln_addrs_iter = "rgs-cln:9937".to_socket_addrs().unwrap();' /usr/src/rapid-gossip-sync-server/src/config.rs
-RUN sed -i '221 i let cln_addr = cln_addrs_iter.next().unwrap();' /usr/src/rapid-gossip-sync-server/src/config.rs
+RUN sed -i 's/SNAPSHOT_CALCULATION_INTERVAL: u32 = 3600 \* 24;/SNAPSHOT_CALCULATION_INTERVAL: u32 = 20;/g' /usr/src/rapid-gossip-sync-server/src/config.rs
+RUN sed -i '214 i let mut cln_addrs_iter = "rgs-cln:9937".to_socket_addrs().unwrap();' /usr/src/rapid-gossip-sync-server/src/config.rs
+RUN sed -i '215 i let cln_addr = cln_addrs_iter.next().unwrap();' /usr/src/rapid-gossip-sync-server/src/config.rs
 RUN sed -i 's/(hex_utils::to_compressed_pubkey("035e4ff418fc8b5554c5d9eea66396c227bd429a3251c8cbc711002ba215bfc226").unwrap(), "170.75.163.209:9735".parse().unwrap())/(hex_utils::to_compressed_pubkey("03f3bf54dd54d3cebb21665f8af405261ca8a241938254a46b1ead7b569199f607").unwrap(), cln_addr)/g' /usr/src/rapid-gossip-sync-server/src/config.rs
 
 RUN sed -i 's/Bitcoin/Regtest/g' /usr/src/rapid-gossip-sync-server/src/lib.rs
