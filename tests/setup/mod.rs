@@ -262,7 +262,7 @@ pub mod nigiri {
 
     pub fn query_lnd_node_info(node: NodeInstance) -> Result<RemoteNodeInfo, String> {
         let sub_cmd = &["getinfo"];
-        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
@@ -277,7 +277,7 @@ pub mod nigiri {
 
     pub fn query_cln_node_info(node: NodeInstance) -> Result<String, String> {
         let sub_cmd = &["getinfo"];
-        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
@@ -325,7 +325,7 @@ pub mod nigiri {
 
     pub fn get_lnd_node_funding_address(node: NodeInstance) -> Result<String, String> {
         let sub_cmd = &["newaddress", "p2wkh"];
-        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
@@ -339,7 +339,7 @@ pub mod nigiri {
 
     pub fn get_cln_node_funding_address(node: NodeInstance) -> Result<String, String> {
         let sub_cmd = &["newaddr"];
-        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
@@ -359,7 +359,7 @@ pub mod nigiri {
     ) -> Result<(), String> {
         let address = format!("{}@{}:{}", target_node_id, target_node_host, target_port);
         let sub_cmd = vec!["connect", &address];
-        let cmd = [get_lnd_node_prefix(node), &sub_cmd].concat();
+        let cmd = [get_node_prefix(node), &sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
@@ -385,7 +385,7 @@ pub mod nigiri {
             sub_cmd.insert(2, "--zero_conf");
         }
 
-        let cmd = [get_lnd_node_prefix(node), &sub_cmd].concat();
+        let cmd = [get_node_prefix(node), &sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
@@ -419,7 +419,7 @@ pub mod nigiri {
         target_node_id: &str,
     ) -> Result<String, String> {
         let sub_cmd = vec!["fundchannel", target_node_id, "1000000"];
-        let cmd = [get_lnd_node_prefix(node), &sub_cmd].concat();
+        let cmd = [get_node_prefix(node), &sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
@@ -434,7 +434,7 @@ pub mod nigiri {
 
     pub fn lnd_pay_invoice(node: NodeInstance, invoice: &str) -> Result<(), String> {
         let sub_cmd = &["payinvoice", "--force", invoice];
-        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
@@ -446,7 +446,7 @@ pub mod nigiri {
 
     pub fn cln_pay_invoice(node: NodeInstance, invoice: &str) -> Result<(), String> {
         let sub_cmd = &["pay", invoice];
-        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
@@ -458,7 +458,7 @@ pub mod nigiri {
 
     pub fn lnd_node_disconnect_peer(node: NodeInstance, node_id: String) -> Result<(), String> {
         let sub_cmd = &["disconnect", &node_id];
-        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
 
@@ -474,7 +474,7 @@ pub mod nigiri {
         funding_txid: String,
     ) -> Result<(), String> {
         let sub_cmd = &["closechannel", "--force", &funding_txid];
-        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
@@ -488,7 +488,7 @@ pub mod nigiri {
 
     pub fn lnd_node_stop(node: NodeInstance) -> Result<(), String> {
         let sub_cmd = &["stop"];
-        let cmd = [get_lnd_node_prefix(node), sub_cmd].concat();
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
@@ -511,7 +511,7 @@ pub mod nigiri {
             .expect("Failed to run command")
     }
 
-    fn get_lnd_node_prefix(node: NodeInstance) -> &'static [&'static str] {
+    fn get_node_prefix(node: NodeInstance) -> &'static [&'static str] {
         match node {
             NodeInstance::NigiriCln => NIGIRI_CLN_CMD_PREFIX,
             NodeInstance::NigiriLnd => NIGIRI_LND_CMD_PREFIX,
