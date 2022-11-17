@@ -146,7 +146,7 @@ pub(crate) fn calculate_fee(value_msat: u64, fee: &LspFee) -> u64 {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use bitcoin::hashes::hex::{FromHex, ToHex};
 

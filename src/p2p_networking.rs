@@ -117,7 +117,7 @@ impl fmt::Display for LnPeer {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::config::NodeAddress;
     use crate::p2p_networking::LnPeer;
 
