@@ -27,7 +27,7 @@ impl BroadcasterInterface for TxBroadcaster {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     use bitcoin::consensus::deserialize;

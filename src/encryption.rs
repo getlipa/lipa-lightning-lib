@@ -89,7 +89,7 @@ fn hmac256(key: &[u8], data: &[u8]) -> Vec<u8> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use bitcoin::hashes::hex::{FromHex, ToHex};
 

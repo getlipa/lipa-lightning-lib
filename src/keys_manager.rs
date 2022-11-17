@@ -54,7 +54,7 @@ fn derive_secret_from_mnemonic(mnemonic: Mnemonic, passphrase: String) -> Secret
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use bitcoin::hashes::hex::FromHex;
 
