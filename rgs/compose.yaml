@@ -10,12 +10,13 @@ services:
       - -rpcbind=0.0.0.0
       - -rpcuser=admin1
       - -rpcpassword=123
-      - -rpcport=18443
+      - -rpcport=18445
+      - -port=18446
       - -rest
       - -addnode=bitcoin:18444
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "bitcoin-cli -rpcport=18443 -rpcuser=admin1 -rpcpassword=123 getpeerinfo" ]
+      test: [ "CMD-SHELL", "bitcoin-cli -rpcport=18445 -rpcuser=admin1 -rpcpassword=123 getpeerinfo" ]
       interval: 3s
       timeout: 10s
       retries: 5
@@ -29,7 +30,7 @@ services:
     command:
       - --network=regtest
       - --bind-addr=0.0.0.0:9937
-      - --bitcoin-rpcconnect=rgs-bitcoin:18443
+      - --bitcoin-rpcconnect=rgs-bitcoin:18445
       - --bitcoin-rpcuser=admin1
       - --bitcoin-rpcpassword=123
       - --log-level=debug
@@ -80,7 +81,7 @@ services:
       RAPID_GOSSIP_SYNC_SERVER_DB_PASSWORD: lipapassword
       RAPID_GOSSIP_SYNC_SERVER_DB_NAME: lipadb
       BITCOIN_REST_DOMAIN: rgs-bitcoin
-      BITCOIN_REST_PORT: 18443
+      BITCOIN_REST_PORT: 18445
       BITCOIN_REST_PATH: /rest/
       SNAPSHOT_CALCULATION_INTERVAL_SECS: 20
 
