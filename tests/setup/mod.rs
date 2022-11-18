@@ -233,7 +233,7 @@ pub mod nigiri {
 
     fn wait_for_sync_cln(node: NodeInstance) {
         let mut counter = 0;
-        while query_cln_node_info(node).is_err() {
+        while query_cln_node_info(node).is_err() || !query_cln_node_info(node).unwrap().synced {
             counter += 1;
             if counter > 10 {
                 panic!("Failed to start {:?}", node);
@@ -275,7 +275,7 @@ pub mod nigiri {
         Ok(RemoteNodeInfo { synced, pub_key })
     }
 
-    pub fn query_cln_node_info(node: NodeInstance) -> Result<String, String> {
+    pub fn query_cln_node_info(node: NodeInstance) -> Result<RemoteNodeInfo, String> {
         let sub_cmd = &["getinfo"];
         let cmd = [get_node_prefix(node), sub_cmd].concat();
 
@@ -286,7 +286,13 @@ pub mod nigiri {
         let json: serde_json::Value =
             serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
         let pub_key = json["id"].as_str().unwrap().to_string();
-        Ok(pub_key)
+
+        let bitcoind_synced = json.get("warning_bitcoind_sync").is_none();
+        let lightningd_synced = json.get("warning_lightningd_sync").is_none();
+        Ok(RemoteNodeInfo {
+            synced: bitcoind_synced && lightningd_synced,
+            pub_key,
+        })
     }
 
     pub fn mine_blocks(block_amount: u32) -> Result<(), String> {
