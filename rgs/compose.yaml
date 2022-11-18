@@ -1,5 +1,5 @@
 services:
-  bitcoin:
+  rgs-bitcoin:
     container_name: rgs-bitcoin
     image: ruimarinho/bitcoin-core:alpine
     command:
@@ -22,7 +22,7 @@ services:
       retries: 5
       start_period: 3s
 
-  cln:
+  rgs-cln:
     container_name: rgs-cln
     image: elementsproject/lightningd:latest
     environment:
@@ -41,7 +41,7 @@ services:
       - ./cln/hsm_secret:/root/.lightning/regtest/hsm_secret
     restart: unless-stopped
     depends_on:
-      bitcoin:
+      rgs-bitcoin:
         condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "lightning-cli --network=regtest getinfo" ]
@@ -50,7 +50,7 @@ services:
       retries: 5
       start_period: 3s
 
-  db:
+  rgs-db:
     container_name: rgs-db
     image: 'postgres:14.5-alpine'
     environment:
@@ -69,11 +69,11 @@ services:
     ports:
       - '8080:8080'
     depends_on:
-      db:
+      rgs-db:
         condition: service_healthy
-      bitcoin:
+      rgs-bitcoin:
         condition: service_healthy
-      cln:
+      rgs-cln:
         condition: service_healthy
     environment:
       RAPID_GOSSIP_SYNC_SERVER_DB_HOST: rgs-db
