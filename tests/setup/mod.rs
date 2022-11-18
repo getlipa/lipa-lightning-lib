@@ -420,7 +420,7 @@ pub mod nigiri {
         lnd_node_open_generic_channel(node, target_node_id, zero_conf, false)
     }
 
-    pub fn cln_node_open_channel(
+    pub fn cln_node_open_pub_channel(
         node: NodeInstance,
         target_node_id: &str,
     ) -> Result<String, String> {
