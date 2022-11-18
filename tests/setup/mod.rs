@@ -220,7 +220,7 @@ pub mod nigiri {
 
     fn wait_for_sync_lnd(node: NodeInstance) {
         let mut counter = 0;
-        while query_lnd_node_info(node).is_err() {
+        while query_lnd_node_info(node).is_err() || !query_lnd_node_info(node).unwrap().synced {
             counter += 1;
             if counter > 10 {
                 panic!("Failed to start {:?}", node);
