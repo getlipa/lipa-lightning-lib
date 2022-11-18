@@ -97,7 +97,7 @@ impl NodeHandle {
             nigiri::fund_node(NodeInstance::NigiriCln, 0.5);
         }
 
-        let lsp_info = nigiri::query_lnd_node_info(NodeInstance::LspdLnd).unwrap();
+        let lsp_info = nigiri::query_node_info(NodeInstance::LspdLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
             address: "127.0.0.1:9739".to_string(),
@@ -208,32 +208,8 @@ pub mod nigiri {
     }
 
     pub fn wait_for_sync(node: NodeInstance) {
-        match node {
-            NodeInstance::NigiriCln => {
-                wait_for_sync_cln(node);
-            }
-            _ => {
-                wait_for_sync_lnd(node);
-            }
-        }
-    }
-
-    fn wait_for_sync_lnd(node: NodeInstance) {
         let mut counter = 0;
-        while query_lnd_node_info(node).is_err() || !query_lnd_node_info(node).unwrap().synced {
-            counter += 1;
-            if counter > 10 {
-                panic!("Failed to start {:?}", node);
-            }
-            debug!("{:?} is NOT synced", node);
-            sleep(Duration::from_millis(500));
-        }
-        debug!("{:?} is synced", node);
-    }
-
-    fn wait_for_sync_cln(node: NodeInstance) {
-        let mut counter = 0;
-        while query_cln_node_info(node).is_err() || !query_cln_node_info(node).unwrap().synced {
+        while query_node_info(node).is_err() || !query_node_info(node).unwrap().synced {
             counter += 1;
             if counter > 10 {
                 panic!("Failed to start {:?}", node);
@@ -260,7 +236,14 @@ pub mod nigiri {
         }
     }
 
-    pub fn query_lnd_node_info(node: NodeInstance) -> Result<RemoteNodeInfo, String> {
+    pub fn query_node_info(node: NodeInstance) -> Result<RemoteNodeInfo, String> {
+        match node {
+            NodeInstance::NigiriCln => query_cln_node_info(node),
+            _ => query_lnd_node_info(node),
+        }
+    }
+
+    fn query_lnd_node_info(node: NodeInstance) -> Result<RemoteNodeInfo, String> {
         let sub_cmd = &["getinfo"];
         let cmd = [get_node_prefix(node), sub_cmd].concat();
 
@@ -275,7 +258,7 @@ pub mod nigiri {
         Ok(RemoteNodeInfo { synced, pub_key })
     }
 
-    pub fn query_cln_node_info(node: NodeInstance) -> Result<RemoteNodeInfo, String> {
+    fn query_cln_node_info(node: NodeInstance) -> Result<RemoteNodeInfo, String> {
         let sub_cmd = &["getinfo"];
         let cmd = [get_node_prefix(node), sub_cmd].concat();
 

@@ -9,7 +9,7 @@ mod chain_sync_test {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use crate::setup::nigiri::{wait_for_sync, NodeInstance};
+    use crate::setup::nigiri::NodeInstance;
     use crate::setup::{nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
 
@@ -151,7 +151,7 @@ mod chain_sync_test {
 
         // mine a block and do the same again and remove 1 of the previously opened channels
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
-        wait_for_sync(NodeInstance::LspdLnd);
+        nigiri::wait_for_sync(NodeInstance::LspdLnd);
         let _ = open_5_chans_close_2(&node_id);
         nigiri::lnd_node_force_close_channel(NodeInstance::LspdLnd, open_channels.pop().unwrap())
             .unwrap();

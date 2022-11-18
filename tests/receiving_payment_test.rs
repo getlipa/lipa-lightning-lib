@@ -179,7 +179,7 @@ mod receiving_payments_test {
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
         assert_eq!(node.get_node_info().num_peers, 1);
 
-        let lspd_node_id = nigiri::query_lnd_node_info(NodeInstance::LspdLnd)
+        let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
             .unwrap()
             .pub_key;
 
@@ -227,7 +227,7 @@ mod receiving_payments_test {
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
         assert_eq!(node.get_node_info().num_peers, 1);
 
-        let lspd_node_id = nigiri::query_lnd_node_info(NodeInstance::LspdLnd)
+        let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
             .unwrap()
             .pub_key;
 
@@ -249,7 +249,9 @@ mod receiving_payments_test {
         assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
         assert!(node.get_node_info().channels_info.inbound_capacity_msat > TWENTY_K_SATS);
 
-        let invoice = node.create_invoice(TWENTY_K_SATS, "test".to_string()).unwrap();
+        let invoice = node
+            .create_invoice(TWENTY_K_SATS, "test".to_string())
+            .unwrap();
         assert!(invoice.starts_with("lnbc"));
 
         sleep(Duration::from_secs(100)); // wait for super lazy cln to consider its channels active
@@ -261,7 +263,9 @@ mod receiving_payments_test {
             TWENTY_K_SATS
         );
         assert_eq!(node.get_node_info().channels_info.outbound_capacity_msat, 0); // because of channel reserves
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat < MILLION_SATS - TWENTY_K_SATS);
+        assert!(
+            node.get_node_info().channels_info.inbound_capacity_msat < MILLION_SATS - TWENTY_K_SATS
+        );
     }
 
     #[test]
@@ -272,7 +276,7 @@ mod receiving_payments_test {
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
         assert_eq!(node.get_node_info().num_peers, 1);
 
-        let lspd_node_id = nigiri::query_lnd_node_info(NodeInstance::LspdLnd)
+        let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
             .unwrap()
             .pub_key;
 

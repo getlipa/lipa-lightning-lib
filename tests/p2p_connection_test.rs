@@ -19,7 +19,7 @@ mod p2p_connection_test {
     #[test]
     fn test_successful_p2p_connection() {
         setup::nigiri::start();
-        let lsp_info = setup::nigiri::query_lnd_node_info(NodeInstance::NigiriLnd).unwrap();
+        let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
             address: NIGIRI_LND_ADDR.to_string(),
@@ -34,7 +34,7 @@ mod p2p_connection_test {
     #[test]
     fn test_failing_p2p_connection() {
         setup::nigiri::start();
-        let lsp_info = setup::nigiri::query_lnd_node_info(NodeInstance::NigiriLnd).unwrap();
+        let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
             address: FAULTY_ADDR.to_string(),
@@ -48,7 +48,7 @@ mod p2p_connection_test {
 
     #[test]
     fn test_start_node_while_lsp_is_down() {
-        let lsp_info = setup::nigiri::query_lnd_node_info(NodeInstance::NigiriLnd).unwrap();
+        let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
             address: NIGIRI_LND_ADDR.to_string(),
@@ -77,7 +77,7 @@ mod p2p_connection_test {
     #[test]
     fn test_stop_node_while_lsp_is_down() {
         setup::nigiri::start();
-        let lsp_info = setup::nigiri::query_lnd_node_info(NodeInstance::NigiriLnd).unwrap();
+        let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
             address: NIGIRI_LND_ADDR.to_string(),
@@ -98,7 +98,7 @@ mod p2p_connection_test {
 
     #[test]
     fn test_flaky_p2p_connection() {
-        let lsp_info = setup::nigiri::query_lnd_node_info(NodeInstance::NigiriLnd).unwrap();
+        let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
             address: NIGIRI_LND_ADDR.to_string(),

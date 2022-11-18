@@ -12,7 +12,7 @@ mod node_info_test {
     #[test]
     fn test_get_node_info() {
         setup::nigiri::start();
-        let lsp_info = setup::nigiri::query_lnd_node_info(NodeInstance::NigiriLnd).unwrap();
+        let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
             address: "127.0.0.1:9735".to_string(),
