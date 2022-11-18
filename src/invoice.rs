@@ -74,18 +74,20 @@ fn construct_private_routes(channels: &Vec<ChannelDetails>) -> Vec<RouteHint> {
     let mut route_hints = Vec::new();
     for channel in channels {
         if channel.is_usable && !channel.is_public {
-            if let (Some(channel_config), Some(short_channel_id)) =
-                (channel.config, channel.get_inbound_payment_scid())
-            {
+            if let (Some(channel_counterparty_forwarding_info), Some(short_channel_id)) = (
+                channel.counterparty.forwarding_info.clone(),
+                channel.get_inbound_payment_scid(),
+            ) {
                 let fees = RoutingFees {
-                    base_msat: channel_config.forwarding_fee_base_msat,
-                    proportional_millionths: channel_config.forwarding_fee_proportional_millionths,
+                    base_msat: channel_counterparty_forwarding_info.fee_base_msat,
+                    proportional_millionths: channel_counterparty_forwarding_info
+                        .fee_proportional_millionths,
                 };
                 let hint_hop = RouteHintHop {
                     src_node_id: channel.counterparty.node_id,
                     short_channel_id,
                     fees,
-                    cltv_expiry_delta: channel_config.cltv_expiry_delta,
+                    cltv_expiry_delta: channel_counterparty_forwarding_info.cltv_expiry_delta,
                     htlc_minimum_msat: channel.inbound_htlc_minimum_msat,
                     htlc_maximum_msat: channel.inbound_htlc_maximum_msat,
                 };

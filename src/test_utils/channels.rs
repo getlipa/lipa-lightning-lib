@@ -1,7 +1,7 @@
 #![cfg(test)]
 
-use lightning::ln::channelmanager::ChannelCounterparty;
 use lightning::ln::channelmanager::ChannelDetails;
+use lightning::ln::channelmanager::{ChannelCounterparty, CounterpartyForwardingInfo};
 use lightning::ln::features::InitFeatures;
 use lightning::util::config::ChannelConfig;
 use secp256k1::{PublicKey, Secp256k1, ONE_KEY};
@@ -13,7 +13,11 @@ pub fn channel() -> ChannelDetails {
         node_id,
         features: InitFeatures::empty(),
         unspendable_punishment_reserve: 0u64,
-        forwarding_info: None,
+        forwarding_info: Some(CounterpartyForwardingInfo {
+            fee_base_msat: 0u32,
+            fee_proportional_millionths: 0u32,
+            cltv_expiry_delta: 0u16,
+        }),
         outbound_htlc_minimum_msat: None,
         outbound_htlc_maximum_msat: None,
     };
