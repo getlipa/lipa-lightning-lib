@@ -9,14 +9,18 @@ use uniffi_lipalightninglib::errors::InitializationError;
 use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
 
+use crate::setup::nigiri::NodeInstance;
 use bitcoin::Network;
-use nigiri::NodeInstance;
 use simplelog::SimpleLogger;
 use std::sync::{Arc, Once};
 use std::thread::sleep;
 use std::time::Duration;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
+
+const RGS_CLN_ID: &str = "03f3bf54dd54d3cebb21665f8af405261ca8a241938254a46b1ead7b569199f607";
+const RGS_CLN_HOST: &str = "rgs-cln";
+const RGS_CLN_PORT: u16 = 9937;
 
 #[derive(Debug, Clone)]
 pub struct StorageMock {
@@ -104,6 +108,34 @@ impl NodeHandle {
         };
 
         Self::new(lsp_node)
+    }
+
+    pub fn new_with_lsp_rgs_setup() -> NodeHandle {
+        let handle = Self::new_with_lsp_setup();
+
+        nigiri::node_connect(
+            NodeInstance::LspdLnd,
+            RGS_CLN_ID,
+            RGS_CLN_HOST,
+            RGS_CLN_PORT,
+        )
+        .unwrap();
+        nigiri::node_connect(
+            NodeInstance::NigiriLnd,
+            RGS_CLN_ID,
+            RGS_CLN_HOST,
+            RGS_CLN_PORT,
+        )
+        .unwrap();
+        nigiri::node_connect(
+            NodeInstance::NigiriCln,
+            RGS_CLN_ID,
+            RGS_CLN_HOST,
+            RGS_CLN_PORT,
+        )
+        .unwrap();
+
+        handle
     }
 
     pub fn start(&self) -> Result<LightningNode, InitializationError> {
