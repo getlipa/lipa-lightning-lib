@@ -84,6 +84,11 @@ impl EventHandler for LipaEventHandler {
             Event::PendingHTLCsForwardable {
                 time_forwardable: _,
             } => {
+                // CAUTION:
+                // The name of this event "PendingHTLCsForwardable" is a potentially misleading.
+                // It is not only triggered when the node received HTLCs to forward to another node,
+                // but also when the node receives an HTLC for itself (incoming payment).
+
                 // The variable time_forwardable is meant to be used to obfuscate the timing
                 // of when a payment is being forwarded/accepted.
                 // For the time being (while Lipa is the only LSP for these wallets)
