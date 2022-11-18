@@ -74,6 +74,8 @@ impl EventHandler for LipaEventHandler {
                     "Claimed payment for {} msat with hash {:?}",
                     amount_msat, payment_hash
                 );
+
+                // Todo: inform the consumer of this library that the payment was claimed
             }
             Event::PaymentSent { .. } => {}
             Event::PaymentFailed { .. } => {}
