@@ -208,16 +208,19 @@ pub mod nigiri {
     }
 
     pub fn wait_for_sync(node: NodeInstance) {
-        let mut counter = 0;
-        while query_node_info(node).is_err() || !query_node_info(node).unwrap().synced {
-            counter += 1;
-            if counter > 10 {
-                panic!("Failed to start {:?}", node);
-            }
-            debug!("{:?} is NOT synced", node);
+        for _ in 0..10 {
+            debug!("{:?} is NOT synced yet, waiting...", node);
             sleep(Duration::from_millis(500));
+
+            if let Ok(info) = query_node_info(node) {
+                if info.synced {
+                    debug!("{:?} is synced", node);
+                    return;
+                }
+            }
         }
-        debug!("{:?} is synced", node);
+
+        panic!("Failed to start {:?}. Not synced after 5 sec.", node);
     }
 
     fn wait_for_esplora() {
