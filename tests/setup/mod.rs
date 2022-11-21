@@ -424,6 +424,13 @@ pub mod nigiri {
         Ok(funding_txid)
     }
 
+    pub fn pay_invoice(node: NodeInstance, invoice: &str) -> Result<(), String> {
+        match node {
+            NodeInstance::NigiriCln => cln_pay_invoice(node, invoice),
+            _ => lnd_pay_invoice(node, invoice),
+        }
+    }
+
     pub fn lnd_pay_invoice(node: NodeInstance, invoice: &str) -> Result<(), String> {
         let sub_cmd = &["payinvoice", "--force", invoice];
         let cmd = [get_node_prefix(node), sub_cmd].concat();

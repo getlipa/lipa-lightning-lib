@@ -8,6 +8,7 @@ mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
     use std::thread::sleep;
     use std::time::Duration;
+    use uniffi_lipalightninglib::LightningNode;
 
     use crate::setup::nigiri::NodeInstance;
     use crate::setup::{nigiri, NodeHandle};
@@ -45,25 +46,7 @@ mod receiving_payments_test {
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
-        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat > TWENTY_K_SATS);
-
-        let invoice = node
-            .create_invoice(TWENTY_K_SATS, "test".to_string())
-            .unwrap();
-        assert!(invoice.starts_with("lnbc"));
-
-        nigiri::lnd_pay_invoice(NodeInstance::LspdLnd, &invoice).unwrap();
-
-        assert_eq!(
-            node.get_node_info().channels_info.local_balance_msat,
-            TWENTY_K_SATS
-        );
-        assert_eq!(node.get_node_info().channels_info.outbound_capacity_msat, 0); // because of channel reserves
-        assert!(
-            node.get_node_info().channels_info.inbound_capacity_msat < MILLION_SATS - TWENTY_K_SATS
-        ); // smaller instead of equal because of channel reserves
+        run_payment_flow(node, NodeInstance::LspdLnd, TWENTY_K_SATS, MILLION_SATS);
     }
 
     #[test]
@@ -82,25 +65,7 @@ mod receiving_payments_test {
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
-        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat > THOUSAND_SATS);
-
-        let invoice = node
-            .create_invoice(THOUSAND_SATS, "test".to_string())
-            .unwrap();
-        assert!(invoice.starts_with("lnbc"));
-
-        nigiri::lnd_pay_invoice(NodeInstance::LspdLnd, &invoice).unwrap();
-
-        assert_eq!(
-            node.get_node_info().channels_info.local_balance_msat,
-            THOUSAND_SATS
-        );
-        assert_eq!(node.get_node_info().channels_info.outbound_capacity_msat, 0); // because of channel reserves
-        assert!(
-            node.get_node_info().channels_info.inbound_capacity_msat < MILLION_SATS - THOUSAND_SATS
-        ); // smaller instead of equal because of channel reserves
+        run_payment_flow(node, NodeInstance::LspdLnd, THOUSAND_SATS, MILLION_SATS);
     }
 
     #[test]
@@ -197,25 +162,7 @@ mod receiving_payments_test {
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
-        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat > TWENTY_K_SATS);
-
-        let invoice = node
-            .create_invoice(TWENTY_K_SATS, "test".to_string())
-            .unwrap();
-        assert!(invoice.starts_with("lnbc"));
-
-        nigiri::lnd_pay_invoice(NodeInstance::NigiriLnd, &invoice).unwrap();
-
-        assert_eq!(
-            node.get_node_info().channels_info.local_balance_msat,
-            TWENTY_K_SATS
-        );
-        assert_eq!(node.get_node_info().channels_info.outbound_capacity_msat, 0); // because of channel reserves
-        assert!(
-            node.get_node_info().channels_info.inbound_capacity_msat < MILLION_SATS - TWENTY_K_SATS
-        ); // smaller instead of equal because of channel reserves
+        run_payment_flow(node, NodeInstance::NigiriLnd, TWENTY_K_SATS, MILLION_SATS);
     }
 
     #[test]
@@ -243,29 +190,9 @@ mod receiving_payments_test {
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
         nigiri::cln_node_open_channel(NodeInstance::NigiriCln, &lspd_node_id).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-        sleep(Duration::from_secs(10));
+        sleep(Duration::from_secs(110)); // wait for super lazy cln to consider its channels active
 
-        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
-        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat > TWENTY_K_SATS);
-
-        let invoice = node
-            .create_invoice(TWENTY_K_SATS, "test".to_string())
-            .unwrap();
-        assert!(invoice.starts_with("lnbc"));
-
-        sleep(Duration::from_secs(100)); // wait for super lazy cln to consider its channels active
-
-        nigiri::cln_pay_invoice(NodeInstance::NigiriCln, &invoice).unwrap();
-
-        assert_eq!(
-            node.get_node_info().channels_info.local_balance_msat,
-            TWENTY_K_SATS
-        );
-        assert_eq!(node.get_node_info().channels_info.outbound_capacity_msat, 0); // because of channel reserves
-        assert!(
-            node.get_node_info().channels_info.inbound_capacity_msat < MILLION_SATS - TWENTY_K_SATS
-        );
+        run_payment_flow(node, NodeInstance::NigiriCln, TWENTY_K_SATS, MILLION_SATS);
     }
 
     #[test]
@@ -325,6 +252,34 @@ mod receiving_payments_test {
         assert!(
             node.get_node_info().channels_info.inbound_capacity_msat
                 < MILLION_SATS - TWENTY_K_SATS * 3
+        ); // smaller instead of equal because of channel reserves
+    }
+
+    fn run_payment_flow(
+        node: LightningNode,
+        paying_node: NodeInstance,
+        payment_amount: u64,
+        channel_size: u64,
+    ) {
+        assert!(node.get_node_info().channels_info.num_channels > 0);
+        assert!(node.get_node_info().channels_info.num_usable_channels > 0);
+        assert!(node.get_node_info().channels_info.inbound_capacity_msat > payment_amount);
+
+        let invoice = node
+            .create_invoice(payment_amount, "test".to_string())
+            .unwrap();
+        assert!(invoice.starts_with("lnbc"));
+
+        nigiri::pay_invoice(paying_node, &invoice).unwrap();
+
+        assert_eq!(
+            node.get_node_info().channels_info.local_balance_msat,
+            payment_amount
+        );
+        assert!(node.get_node_info().channels_info.outbound_capacity_msat < payment_amount); // because of channel reserves
+        assert!(
+            node.get_node_info().channels_info.inbound_capacity_msat
+                < channel_size - payment_amount
         ); // smaller instead of equal because of channel reserves
     }
 }
