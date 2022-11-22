@@ -3,8 +3,7 @@ use crate::lsp::{LspClient, PaymentRequest};
 use crate::node_info::get_channels_info;
 use crate::types::ChannelManager;
 
-use bitcoin::hashes::hex::{FromHex, ToHex};
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{sha256, Hash};
 use lightning::ln::channelmanager::ChannelDetails;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
@@ -49,9 +48,10 @@ pub(crate) fn create_raw_invoice(
         construct_private_routes(&channel_manager.list_usable_channels())
     };
 
-    // TODO: Report it to LDK.
-    // Ugly conversion from lightning::ln::PaymentHash to bitcoin::hashes::sha256::Hash.
-    let payment_hash = sha256::Hash::from_hex(&payment_hash.0.to_hex())
+    // TODO: Watch the issue if it fixes this ugly conversion from
+    // lightning::ln::PaymentHash to bitcoin::hashes::sha256::Hash.
+    // https://github.com/lightningdevkit/rust-lightning/issues/1803
+    let payment_hash = sha256::Hash::from_slice(&payment_hash.0)
         .map_to_permanent_failure("Failed to convert payment hash")?;
     let mut builder = InvoiceBuilder::new(currency)
         .description(description)
