@@ -87,9 +87,7 @@ mod receiving_payments_test {
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
-        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat > TEN_K_SATS);
+        assert_channel_ready(&node, TEN_K_SATS);
 
         let invoice = node.create_invoice(TEN_K_SATS, "test".to_string()).unwrap();
         assert!(invoice.starts_with("lnbc"));
@@ -112,12 +110,7 @@ mod receiving_payments_test {
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
-        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
-        assert!(
-            node.get_node_info().channels_info.inbound_capacity_msat
-                > TWENTY_K_SATS * amt_of_payments
-        );
+        assert_channel_ready(&node, TWENTY_K_SATS * amt_of_payments);
 
         for i in 1..=amt_of_payments {
             let invoice = node
@@ -229,9 +222,7 @@ mod receiving_payments_test {
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
-        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat > TWENTY_K_SATS * 3);
+        assert_channel_ready(&node, TWENTY_K_SATS * 3);
 
         let invoice = node
             .create_invoice(TWENTY_K_SATS, "test".to_string())
@@ -261,9 +252,7 @@ mod receiving_payments_test {
         payment_amount: u64,
         channel_size: u64,
     ) {
-        assert!(node.get_node_info().channels_info.num_channels > 0);
-        assert!(node.get_node_info().channels_info.num_usable_channels > 0);
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat > payment_amount);
+        assert_channel_ready(&node, payment_amount);
 
         let invoice = node
             .create_invoice(payment_amount, "test".to_string())
@@ -281,5 +270,11 @@ mod receiving_payments_test {
             node.get_node_info().channels_info.inbound_capacity_msat
                 < channel_size - payment_amount
         ); // smaller instead of equal because of channel reserves
+    }
+
+    fn assert_channel_ready(node: &LightningNode, payment_amount: u64) {
+        assert!(node.get_node_info().channels_info.num_channels > 0);
+        assert!(node.get_node_info().channels_info.num_usable_channels > 0);
+        assert!(node.get_node_info().channels_info.inbound_capacity_msat > payment_amount);
     }
 }
