@@ -35,33 +35,33 @@ impl EventHandler for LipaEventHandler {
                 // Todo: This needs more research on what exactly is happening under the hood
                 //       and what the correct behaviour should be to deal with this situation.
 
-                let payment_preimage = match purpose {
+                match purpose {
                     PaymentPurpose::InvoicePayment {
-                        payment_preimage, ..
+                        payment_preimage: Some(payment_preimage),
+                        ..
                     } => {
                         info!(
                             "Registered incoming invoice payment for {} msat with hash {:?}",
                             amount_msat, payment_hash
                         );
-                        *payment_preimage
+                        self.channel_manager.claim_funds(*payment_preimage);
                     }
-                    PaymentPurpose::SpontaneousPayment(preimage) => {
+                    PaymentPurpose::InvoicePayment {
+                        payment_preimage: None,
+                        ..
+                    } => {
+                        error!(
+                            "Registered incoming invoice payment for {} msat with hash {:?}, but no preimage was found",
+                            amount_msat, payment_hash
+                        );
+                        self.channel_manager.fail_htlc_backwards(payment_hash);
+                    }
+                    PaymentPurpose::SpontaneousPayment(payment_preimage) => {
                         info!(
                             "Registered incoming spontaneous payment for {} msat with hash {:?}",
                             amount_msat, payment_hash
                         );
-
-                        Some(*preimage)
-                    }
-                };
-
-                match payment_preimage {
-                    Some(preimage) => {
-                        self.channel_manager.claim_funds(preimage);
-                    }
-                    None => {
-                        error!("Failed to claim funds for payment with hash {:?}: No preimage. Failing HTLC backwards", payment_hash);
-                        self.channel_manager.fail_htlc_backwards(payment_hash);
+                        self.channel_manager.claim_funds(*payment_preimage);
                     }
                 }
             }
