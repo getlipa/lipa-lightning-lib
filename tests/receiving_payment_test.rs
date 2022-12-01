@@ -88,9 +88,7 @@ mod receiving_payments_test {
         sleep(Duration::from_secs(10));
 
         assert_channel_ready(&node, TEN_K_SATS);
-
-        let invoice = node.create_invoice(TEN_K_SATS, "test".to_string()).unwrap();
-        assert!(invoice.starts_with("lnbc"));
+        let invoice = issue_invoice(&node, TEN_K_SATS);
 
         let result = nigiri::lnd_pay_invoice(NodeInstance::LspdLnd, &invoice);
         assert!(result.is_err());
@@ -113,10 +111,7 @@ mod receiving_payments_test {
         assert_channel_ready(&node, TWENTY_K_SATS * amt_of_payments);
 
         for i in 1..=amt_of_payments {
-            let invoice = node
-                .create_invoice(TWENTY_K_SATS, "test".to_string())
-                .unwrap();
-            assert!(invoice.starts_with("lnbc"));
+            let invoice = issue_invoice(&node, TWENTY_K_SATS);
 
             nigiri::lnd_pay_invoice(NodeInstance::LspdLnd, &invoice).unwrap();
             assert_eq!(
@@ -223,11 +218,7 @@ mod receiving_payments_test {
         sleep(Duration::from_secs(10));
 
         assert_channel_ready(&node, TWENTY_K_SATS * 3);
-
-        let invoice = node
-            .create_invoice(TWENTY_K_SATS, "test".to_string())
-            .unwrap();
-        assert!(invoice.starts_with("lnbc"));
+        let invoice = issue_invoice(&node, TWENTY_K_SATS);
 
         sleep(Duration::from_secs(100)); // wait for super lazy cln to consider its channels active
 
@@ -253,11 +244,7 @@ mod receiving_payments_test {
         channel_size: u64,
     ) {
         assert_channel_ready(&node, payment_amount);
-
-        let invoice = node
-            .create_invoice(payment_amount, "test".to_string())
-            .unwrap();
-        assert!(invoice.starts_with("lnbc"));
+        let invoice = issue_invoice(&node, payment_amount);
 
         nigiri::pay_invoice(paying_node, &invoice).unwrap();
 
@@ -276,5 +263,14 @@ mod receiving_payments_test {
         assert!(node.get_node_info().channels_info.num_channels > 0);
         assert!(node.get_node_info().channels_info.num_usable_channels > 0);
         assert!(node.get_node_info().channels_info.inbound_capacity_msat > payment_amount);
+    }
+
+    fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
+        let invoice = node
+            .create_invoice(payment_amount, "test".to_string())
+            .unwrap();
+        assert!(invoice.starts_with("lnbc"));
+
+        invoice
     }
 }
