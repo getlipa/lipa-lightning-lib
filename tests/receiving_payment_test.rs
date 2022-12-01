@@ -96,13 +96,7 @@ mod receiving_payments_test {
             .unwrap()
             .pub_key;
 
-        nigiri::node_connect(
-            NodeInstance::NigiriLnd,
-            &lspd_node_id,
-            LSPD_LND_HOST,
-            LSPD_LND_PORT,
-        )
-        .unwrap();
+        connect_node_to_lsp(NodeInstance::NigiriLnd, &lspd_node_id);
         sleep(Duration::from_secs(1));
 
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
@@ -126,13 +120,7 @@ mod receiving_payments_test {
             .unwrap()
             .pub_key;
 
-        nigiri::node_connect(
-            NodeInstance::NigiriCln,
-            &lspd_node_id,
-            LSPD_LND_HOST,
-            LSPD_LND_PORT,
-        )
-        .unwrap();
+        connect_node_to_lsp(NodeInstance::NigiriCln, &lspd_node_id);
         sleep(Duration::from_secs(20));
 
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
@@ -155,20 +143,8 @@ mod receiving_payments_test {
             .unwrap()
             .pub_key;
 
-        nigiri::node_connect(
-            NodeInstance::NigiriLnd,
-            &lspd_node_id,
-            LSPD_LND_HOST,
-            LSPD_LND_PORT,
-        )
-        .unwrap();
-        nigiri::node_connect(
-            NodeInstance::NigiriCln,
-            &lspd_node_id,
-            LSPD_LND_HOST,
-            LSPD_LND_PORT,
-        )
-        .unwrap();
+        connect_node_to_lsp(NodeInstance::NigiriLnd, &lspd_node_id);
+        connect_node_to_lsp(NodeInstance::NigiriCln, &lspd_node_id);
         sleep(Duration::from_secs(20));
 
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
@@ -245,5 +221,9 @@ mod receiving_payments_test {
         assert!(invoice.starts_with("lnbc"));
 
         invoice
+    }
+
+    fn connect_node_to_lsp(node: NodeInstance, lsp_node_id: &str) {
+        nigiri::node_connect(node, lsp_node_id, LSPD_LND_HOST, LSPD_LND_PORT).unwrap();
     }
 }
