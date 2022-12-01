@@ -80,7 +80,7 @@ mod receiving_payments_test {
             );
         }
 
-        assert!(node.get_node_info().channels_info.outbound_capacity_msat > 0);
+        assert_payment_received(&node, TWENTY_K_SATS * amt_of_payments, MILLION_SATS);
     }
 
     #[test]
@@ -160,15 +160,7 @@ mod receiving_payments_test {
         nigiri::lnd_pay_invoice(NodeInstance::NigiriLnd, &invoice).unwrap();
         nigiri::cln_pay_invoice(NodeInstance::NigiriCln, &invoice).unwrap();
 
-        assert_eq!(
-            node.get_node_info().channels_info.local_balance_msat,
-            TWENTY_K_SATS * 3
-        );
-        assert!(node.get_node_info().channels_info.outbound_capacity_msat < TWENTY_K_SATS * 3); // smaller instead of equal because of channel reserves
-        assert!(
-            node.get_node_info().channels_info.inbound_capacity_msat
-                < MILLION_SATS - TWENTY_K_SATS * 3
-        ); // smaller instead of equal because of channel reserves
+        assert_payment_received(&node, TWENTY_K_SATS * 3, MILLION_SATS);
     }
 
     fn initiate_node_with_channel(remote_node: NodeInstance) -> LightningNode {
@@ -197,6 +189,16 @@ mod receiving_payments_test {
 
         nigiri::pay_invoice(paying_node, &invoice).unwrap();
 
+        assert_payment_received(&node, payment_amount, channel_size);
+    }
+
+    fn assert_channel_ready(node: &LightningNode, payment_amount: u64) {
+        assert!(node.get_node_info().channels_info.num_channels > 0);
+        assert!(node.get_node_info().channels_info.num_usable_channels > 0);
+        assert!(node.get_node_info().channels_info.inbound_capacity_msat > payment_amount);
+    }
+
+    fn assert_payment_received(node: &LightningNode, payment_amount: u64, channel_size: u64) {
         assert_eq!(
             node.get_node_info().channels_info.local_balance_msat,
             payment_amount
@@ -206,12 +208,6 @@ mod receiving_payments_test {
             node.get_node_info().channels_info.inbound_capacity_msat
                 < channel_size - payment_amount
         ); // smaller instead of equal because of channel reserves
-    }
-
-    fn assert_channel_ready(node: &LightningNode, payment_amount: u64) {
-        assert!(node.get_node_info().channels_info.num_channels > 0);
-        assert!(node.get_node_info().channels_info.num_usable_channels > 0);
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat > payment_amount);
     }
 
     fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
