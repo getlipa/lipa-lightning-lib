@@ -485,7 +485,17 @@ pub mod nigiri {
         Ok(())
     }
 
-    pub fn lnd_node_stop(node: NodeInstance) -> Result<(), String> {
+    pub fn node_stop(node: NodeInstance) -> Result<(), String> {
+        match node {
+            NodeInstance::LspdLnd => {
+                stop_lspd();
+                Ok(())
+            }
+            _ => nigiri_node_stop(node),
+        }
+    }
+
+    pub fn nigiri_node_stop(node: NodeInstance) -> Result<(), String> {
         let sub_cmd = &["stop"];
         let cmd = [get_node_prefix(node), sub_cmd].concat();
 

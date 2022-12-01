@@ -61,7 +61,7 @@ mod chain_sync_test {
 
         nigiri::lnd_node_disconnect_peer(NodeInstance::LspdLnd, node_id).unwrap();
         nigiri::lnd_node_force_close_channel(NodeInstance::LspdLnd, tx_id).unwrap();
-        nigiri::lnd_node_stop(NodeInstance::LspdLnd).unwrap();
+        nigiri::node_stop(NodeInstance::LspdLnd).unwrap();
 
         sleep(Duration::from_secs(10));
 
@@ -109,7 +109,7 @@ mod chain_sync_test {
         let tx_id = start_node_open_confirm_channel_stop_node(&node_handle);
 
         nigiri::lnd_node_force_close_channel(NodeInstance::LspdLnd, tx_id).unwrap();
-        nigiri::lnd_node_stop(NodeInstance::LspdLnd).unwrap();
+        nigiri::node_stop(NodeInstance::LspdLnd).unwrap();
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
@@ -128,7 +128,7 @@ mod chain_sync_test {
         let tx_id = start_node_open_channel_without_confirm_stop_node(&node_handle);
 
         nigiri::lnd_node_force_close_channel(NodeInstance::LspdLnd, tx_id).unwrap();
-        nigiri::lnd_node_stop(NodeInstance::LspdLnd).unwrap();
+        nigiri::node_stop(NodeInstance::LspdLnd).unwrap();
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
