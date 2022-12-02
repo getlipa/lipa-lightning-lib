@@ -4,7 +4,7 @@ use crate::filter::FilterImpl;
 use crate::ConfirmWrapper;
 use crate::EsploraClient;
 
-use bitcoin::{BlockHash, BlockHeader, Txid};
+use bitcoin::{BlockHash, Txid};
 use lightning::chain::{Confirm, WatchedOutput};
 use log::debug;
 use std::collections::HashSet;
@@ -18,15 +18,9 @@ pub(crate) struct LipaChainAccess {
     synced_tip: BlockHash,
 }
 
-struct BlockInfo {
-    pub hash: BlockHash,
-    pub header: BlockHeader,
-    pub height: u32,
-}
-
 enum SyncResult {
     Success,
-    PossibleReorg,
+    PotentialReorg,
 }
 
 impl LipaChainAccess {
@@ -47,13 +41,14 @@ impl LipaChainAccess {
     pub(crate) fn sync(&mut self, confirm: &ConfirmWrapper) -> LipaResult<()> {
         loop {
             let tip = self.esplora.get_tip_hash()?;
-            let something_new_to_watch = if let Some(data) = self.filter.drain() {
-                self.watched_txs
-                    .extend(data.txs.into_iter().map(|(txid, _)| txid));
-                self.watched_outputs.extend(data.outputs.into_iter());
-                true
-            } else {
-                false
+            let something_new_to_watch = match self.filter.drain() {
+                Some(data) => {
+                    self.watched_txs
+                        .extend(data.txs.into_iter().map(|(txid, _)| txid));
+                    self.watched_outputs.extend(data.outputs.into_iter());
+                    true
+                }
+                None => false,
             };
 
             if tip != self.synced_tip || something_new_to_watch {
@@ -63,8 +58,8 @@ impl LipaChainAccess {
                         self.synced_tip = tip;
                         debug!("Synced to: {}", tip);
                     }
-                    SyncResult::PossibleReorg => {
-                        debug!("Possible reorg detected, sync attempt was aborted");
+                    SyncResult::PotentialReorg => {
+                        debug!("Potential reorg detected, sync attempt was aborted");
                     }
                 };
             } else {
@@ -80,12 +75,12 @@ impl LipaChainAccess {
         tip_hash: BlockHash,
         confirm: &ConfirmWrapper,
     ) -> LipaResult<SyncResult> {
-        let tip;
-        if let Some(tip_val) = self.get_block_info(tip_hash)? {
-            tip = tip_val;
-        } else {
-            return Ok(SyncResult::PossibleReorg);
-        }
+        let (tip_header, tip_height) = match self.esplora.get_header_with_height(&tip_hash)? {
+            Some(tip) => tip,
+            None => {
+                return Ok(SyncResult::PotentialReorg);
+            }
+        };
 
         // 1. Query blockchain state.
         let unconfirmed_txids = self.filter_unconfirmed(confirm.get_relevant_txids())?;
@@ -96,9 +91,9 @@ impl LipaChainAccess {
         debug!("Still pending txs: {:?}", pending_txids);
         debug!("Spent outputs: {:?}", spent_outputs.iter().map(txid));
 
-        // 2. Check if reorg could happen.
-        if tip.hash != self.esplora.get_tip_hash()? {
-            return Ok(SyncResult::PossibleReorg);
+        // 2. Check if a potential reorg has happened while syncing.
+        if tip_hash != self.esplora.get_tip_hash()? {
+            return Ok(SyncResult::PotentialReorg);
         }
 
         // 3. Inform LDK about changes.
@@ -114,7 +109,7 @@ impl LipaChainAccess {
             );
         }
 
-        confirm.best_block_updated(&tip.header, tip.height);
+        confirm.best_block_updated(&tip_header, tip_height);
 
         // 4. Update internal state.
         self.watched_txs.clear();
@@ -125,17 +120,6 @@ impl LipaChainAccess {
         //       about outputs of interest if they were unspent (unconfirmed).
 
         Ok(SyncResult::Success)
-    }
-
-    fn get_block_info(&self, hash: BlockHash) -> LipaResult<Option<BlockInfo>> {
-        if let Some((header, height)) = self.esplora.get_header_with_height(&hash)? {
-            return Ok(Some(BlockInfo {
-                hash,
-                header,
-                height,
-            }));
-        }
-        Ok(None)
     }
 
     fn filter_unconfirmed(&self, txids: Vec<Txid>) -> LipaResult<Vec<Txid>> {
@@ -156,10 +140,13 @@ impl LipaChainAccess {
         let mut pending = Vec::new();
 
         for txid in txids {
-            if let Some(tx) = self.esplora.get_confirmed_tx_by_id(&txid)? {
-                confirmed.push(tx);
-            } else {
-                pending.push(txid);
+            match self.esplora.get_confirmed_tx_by_id(&txid)? {
+                Some(tx) => {
+                    confirmed.push(tx);
+                }
+                None => {
+                    pending.push(txid);
+                }
             }
         }
 
