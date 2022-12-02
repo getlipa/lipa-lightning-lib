@@ -1,0 +1,97 @@
+* Intro
+LDK provides a way to keep itself in sync with the blockchain by tracking
+statuses of individual transactions and outputs.
+Such that the implementation does not need to provide full blocks.
+But in that case LDK needs to get information about transactions' lifetimes,
+such as confirmations, unconfirmations, reconfirmations in other blocks.
+
+* LDK Interface
+LDK provides two traits for the implementation: ~lightning::chain::Filter~ and
+~lightning::chain::Confirm~.
+** ~Confirm~ Trait
+Provides ~Confirm::get_relevant_txids~ method to learn what transactions need
+to be watched for unconfirmations (and potential reconfirmations).
+Provides methods to inform LDK about transaction confirmations, unconfirmations,
+and update to the best block known.
+** ~Filter~ Trait
+The implementation needs to implement the trait and supply itself into LDK.
+LDK will use:
+ 1. ~Filter::register_tx~ method to inform the implementation about pending
+    transactions which should be watched for confirmations
+ 2. ~Filter::register_output~ method to inform about unspent outputs which need
+    to be watched for spending
+
+* Implementation Responsibilities
+** Transactions Unconfirmations and Reconfirmations
+Load confirmed transactions from ~Confirm::get_relevant_txids~ and check if any
+of them were *unconfirmed* or *confirmed in a different block*.
+LDK ≥0.0.113 will let the implementation know what block the transaction was
+originally confirmed in the second item of the return value
+~Vec<(Txid, Option<BlockHash>)>~. Note that ~Option~ always have value only if
+LDK starts with channel monitor backups made by versions ≥0.0.113).
+
+The implementation must
+ 1. inform LDK about all of that transactions using
+    ~Confirm::transaction_unconfirmed~
+ 2. inform LDK about reconfirmed transaction using
+    ~Confirm::transactions_confirmed~
+ 3. keep unconfirmed transactions in its local state and watch for confirmations
+    (similar to transactions received from ~Filter::register_tx~)
+
+** Transactions Confirmations
+Load pending transactions received from ~Filter::register_tx~ and check if any
+of them got *confirmed*. Inform LDK about confirmations using
+~Confirm::transactions_confirmed~.
+
+** Spent Outputs
+Load unspent outputs received from ~Filter::register_output~ and check if any of
+them got *spent*. Inform LDK about spending transactions using
+~Confirm::transactions_confirmed~.
+The implementation must remember all outputs *ever* registered with
+~Filter::register_output~ since their spending transactions might become
+unconfirmed, but LDK will not let the implementation know what outputs got
+unspent (they will not be re-registered with ~Filter::register_output~).
+
+** Best Block
+The implementation must inform LDK about the best block known using
+~Confirm::best_block_updated~ method.
+
+* Implementation Considerations
+** Initialization
+On startup the implementation must load ~Filter~ with relevant transactions and
+outputs by calling ~ChannelMonitor::load_outputs_to_watch~ on every channel
+monitors.
+
+** Spent Output
+On calls to ~Confirm::transactions_confirmed~ LDK may add other outputs to watch
+into ~Filter~. These new outputs must be also checked against the block their
+spending transactions were submitted.
+Such that the implementation may consider to be synced to a specific block only
+when it submitted all relevant transactions confirmed up to the block including
+and *nothing* has been registered in ~Filter~ during this iteration.
+
+** Reorgs
+Reorgs can happen at any time even during the syncing process.
+Services like Elecrum or Esplora do not provide a way to "atomically" query the
+state of the blockchain for multiple transactions. A naïve implementation may
+give LDK wrong information about transaction lifetime.
+One of possible solutions might be:
+ 1. query the tip
+ 2. query state of relevant transactions and outputs
+ 3. query the tip again and check if it matches the tip got in the step 1
+    if it differs go to 1
+ 4. submit information to LDK
+Note that such simple solution will detect reorgs and reorgs back and ensure
+that all states are given for blocks up to the tip included.
+
+Reorgs back will also be detected because when bitcoin core will be switching
+back to the original chain the tip will be above the tip stored in the step 1.
+That is why it is not enough to check that the tip from the step 1 is still on
+the best chain.
+
+** Stateless Implementation
+The implementation might choose to be stateless without keeping local state
+for pending transactions or spent outputs.
+For that at the beginning of every sync iteration it will need to load ~Filter~
+with relevant transactions and outputs by calling
+~ChannelMonitor::load_outputs_to_watch~ on every channel monitors.
