@@ -12,7 +12,7 @@ pub(crate) struct EsploraClient {
     client: BlockingClient,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ConfirmedTransaction {
     pub tx: Transaction,
     pub block_height: u32,

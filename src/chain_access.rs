@@ -4,8 +4,7 @@ use crate::filter::FilterImpl;
 use crate::ConfirmWrapper;
 use crate::EsploraClient;
 
-use bitcoin::{BlockHash, Script, Txid};
-use lightning::chain::transaction::OutPoint;
+use bitcoin::{BlockHash, Txid};
 use lightning::chain::{Confirm, WatchedOutput};
 use log::debug;
 use std::collections::HashSet;
@@ -14,19 +13,24 @@ use std::sync::Arc;
 pub(crate) struct LipaChainAccess {
     esplora: Arc<EsploraClient>,
     filter: Arc<FilterImpl>,
-    watched_txs: HashSet<(Txid, Script)>,
+    watched_txs: HashSet<Txid>,
     watched_outputs: HashSet<WatchedOutput>,
     synced_tip: BlockHash,
 }
 
+enum SyncResult {
+    Success,
+    PotentialReorg,
+}
+
 impl LipaChainAccess {
     pub fn new(
-        esplora_client: Arc<EsploraClient>,
+        esplora: Arc<EsploraClient>,
         filter: Arc<FilterImpl>,
         synced_tip: BlockHash,
     ) -> Self {
         Self {
-            esplora: esplora_client,
+            esplora,
             filter,
             watched_txs: HashSet::new(),
             watched_outputs: HashSet::new(),
@@ -35,146 +39,149 @@ impl LipaChainAccess {
     }
 
     pub(crate) fn sync(&mut self, confirm: &ConfirmWrapper) -> LipaResult<()> {
-        let mut cur_tip = self.esplora.get_tip_hash()?;
-
-        while self.synced_tip != cur_tip {
-            debug!("Currently synced up to block hash: {}", self.synced_tip);
-            debug!(
-                "Current blockchain tip hash: {} -> Start syncing blockchain",
-                cur_tip
-            );
-
-            self.sync_to_tip(confirm, &cur_tip)?;
-            self.synced_tip = cur_tip;
-            cur_tip = self.esplora.get_tip_hash()?;
-        }
-
-        Ok(())
-    }
-
-    fn sync_to_tip(&mut self, confirm: &ConfirmWrapper, cur_tip: &BlockHash) -> LipaResult<()> {
-        self.inform_about_new_block(confirm, cur_tip)?;
-
-        // todo: we need to make sure that the following synchronization is only done up to cur_tip.
-        //       otherwise, we might end up in a situation where a block is being mined while while we're syncing
-        //       which would make corrupt the order of the confirmed transactions as required by the Confirm trait:
-        //       https://github.com/lightningdevkit/rust-lightning/blob/d6321e6e11b3e1b11e26617d3bab0b8c21da0b5b/lightning/src/chain/mod.rs#L128
-
-        // The rationale behind looping here is that confirming or unconfirming transactions itself
-        // might lead LDK to register additional transactions/outputs to watch.
         loop {
-            self.sync_relevant_txs_for_reorgs(confirm)?;
-
-            let mut confirmed_txs = self.sync_txs()?;
-            confirmed_txs.extend(self.sync_spending_txs()?);
-            debug!("{} confirmed transactions", confirmed_txs.len());
-            debug!("Confirmed transaction list: {:?}", confirmed_txs);
-
-            sort_txs(&mut confirmed_txs);
-
-            for tx in confirmed_txs {
-                confirm.transactions_confirmed(
-                    &tx.block_header,
-                    &[(tx.position, &tx.tx)],
-                    tx.block_height,
-                );
-            }
-
-            match self.filter.drain() {
-                Some(filter_data) => {
-                    self.watched_txs.extend(filter_data.txs.into_iter());
-                    self.watched_outputs.extend(filter_data.outputs.into_iter())
+            let tip = self.esplora.get_tip_hash()?;
+            let something_new_to_watch = match self.filter.drain() {
+                Some(data) => {
+                    self.watched_txs
+                        .extend(data.txs.into_iter().map(|(txid, _)| txid));
+                    self.watched_outputs.extend(data.outputs.into_iter());
+                    true
                 }
-                None => break,
+                None => false,
+            };
+
+            if tip != self.synced_tip || something_new_to_watch {
+                debug!("Syncing to: {} ...", tip);
+                match self.try_sync_to(tip, confirm)? {
+                    SyncResult::Success => {
+                        self.synced_tip = tip;
+                        debug!("Synced to: {}", tip);
+                    }
+                    SyncResult::PotentialReorg => {
+                        debug!("Potential reorg detected, sync attempt was aborted");
+                    }
+                };
+            } else {
+                break;
             }
         }
 
         Ok(())
     }
 
-    fn sync_relevant_txs_for_reorgs(&self, confirm: &ConfirmWrapper) -> LipaResult<()> {
-        for txid in confirm.get_relevant_txids().iter() {
-            if !self.esplora.is_tx_confirmed(txid)? {
-                debug!("Transactions reorged out of chain: {:?}", txid);
-                confirm.transaction_unconfirmed(txid);
-            }
-        }
-
-        Ok(())
-    }
-
-    fn inform_about_new_block(
-        &self,
+    fn try_sync_to(
+        &mut self,
+        tip_hash: BlockHash,
         confirm: &ConfirmWrapper,
-        cur_tip: &BlockHash,
-    ) -> LipaResult<()> {
-        match self.esplora.get_header_with_height(cur_tip)? {
-            Some((block_header, block_heigh)) => {
-                confirm.best_block_updated(&block_header, block_heigh);
-
-                Ok(())
+    ) -> LipaResult<SyncResult> {
+        let (tip_header, tip_height) = match self.esplora.get_header_with_height(&tip_hash)? {
+            Some(tip) => tip,
+            None => {
+                return Ok(SyncResult::PotentialReorg);
             }
-            None => Err(runtime_error(
-                "Block not found in best chain. Was there a reorg?",
-            )),
-        }
-    }
+        };
 
-    #[allow(clippy::result_large_err)]
-    fn sync_txs(&mut self) -> LipaResult<Vec<ConfirmedTransaction>> {
-        let mut confirmed_txs = Vec::new();
-        let mut not_yet_confirmed_txs = HashSet::new();
+        // 1. Query blockchain state.
+        let unconfirmed_txids = self.filter_unconfirmed(confirm.get_relevant_txids())?;
+        let (confirmed_txs, pending_txids) = self.split_txs_by_status(self.watched_txs.clone())?;
+        let spent_outputs = self.get_spent_outputs(&self.watched_outputs)?;
+        debug!("Unconfirmed txs: {:?}", unconfirmed_txids);
+        debug!("Confirmed txs: {:?}", confirmed_txs.iter().map(txid));
+        debug!("Still pending txs: {:?}", pending_txids);
+        debug!("Spent outputs: {:?}", spent_outputs.iter().map(txid));
 
-        debug!("{} transactions to sync", self.watched_txs.len());
-        debug!(
-            "List of transactions to sync: {:?}",
-            self.watched_txs
-                .iter()
-                .map(|tx| tx.0)
-                .collect::<Vec<Txid>>()
-        );
-
-        for tx in self.watched_txs.iter() {
-            let txid = tx.0;
-            if let Some(confirmed_tx) = self.esplora.get_confirmed_tx_by_id(&txid)? {
-                confirmed_txs.push(confirmed_tx);
-                continue;
-            }
-
-            not_yet_confirmed_txs.insert((txid, tx.1.clone()));
-        }
-        self.watched_txs = not_yet_confirmed_txs;
-
-        Ok(confirmed_txs)
-    }
-
-    fn sync_spending_txs(&mut self) -> LipaResult<Vec<ConfirmedTransaction>> {
-        let mut confirmed_txs = Vec::new();
-        let mut unspent_registered_outputs = HashSet::new();
-
-        debug!("{} outputs to sync", self.watched_outputs.len());
-        debug!(
-            "List of outputs to sync: {:?}",
-            self.watched_outputs
-                .iter()
-                .map(|output| output.outpoint)
-                .collect::<Vec<OutPoint>>()
-        );
-
-        for output in self.watched_outputs.iter() {
-            let txid = output.outpoint.txid;
-            let index = output.outpoint.index as u64;
-            if let Some(confirmed_tx) = self.esplora.get_confirmed_spending_tx(&txid, index)? {
-                confirmed_txs.push(confirmed_tx);
-                continue;
-            }
-            unspent_registered_outputs.insert(output.clone());
+        // 2. Check if a potential reorg has happened while syncing.
+        if tip_hash != self.esplora.get_tip_hash()? {
+            return Ok(SyncResult::PotentialReorg);
         }
 
-        self.watched_outputs = unspent_registered_outputs;
+        // 3. Inform LDK about changes.
+        for txid in &unconfirmed_txids {
+            confirm.transaction_unconfirmed(txid);
+        }
 
-        Ok(confirmed_txs)
+        for tx in join_sort_dedup(confirmed_txs, spent_outputs) {
+            confirm.transactions_confirmed(
+                &tx.block_header,
+                &[(tx.position, &tx.tx)],
+                tx.block_height,
+            );
+        }
+
+        confirm.best_block_updated(&tip_header, tip_height);
+
+        // 4. Update internal state.
+        self.watched_txs.clear();
+        // Keep just unconfirmed txs to check for confirmations on the next sync.
+        self.watched_txs.extend(unconfirmed_txids);
+        self.watched_txs.extend(pending_txids);
+        // Note: We always keep watched outputs, since LDK does not inform us
+        //       about outputs of interest if they were unspent (unconfirmed).
+
+        Ok(SyncResult::Success)
     }
+
+    fn filter_unconfirmed(&self, txids: Vec<Txid>) -> LipaResult<Vec<Txid>> {
+        let mut uncofirmed = Vec::new();
+        for txid in txids {
+            if !self.esplora.is_tx_confirmed(&txid)? {
+                uncofirmed.push(txid);
+            }
+        }
+        Ok(uncofirmed)
+    }
+
+    fn split_txs_by_status(
+        &self,
+        txids: HashSet<Txid>,
+    ) -> LipaResult<(Vec<ConfirmedTransaction>, Vec<Txid>)> {
+        let mut confirmed = Vec::new();
+        let mut pending = Vec::new();
+
+        for txid in txids {
+            match self.esplora.get_confirmed_tx_by_id(&txid)? {
+                Some(tx) => {
+                    confirmed.push(tx);
+                }
+                None => {
+                    pending.push(txid);
+                }
+            }
+        }
+
+        Ok((confirmed, pending))
+    }
+
+    fn get_spent_outputs(
+        &self,
+        outputs: &HashSet<WatchedOutput>,
+    ) -> LipaResult<Vec<ConfirmedTransaction>> {
+        let mut spent_outputs = Vec::new();
+        for output in outputs {
+            if let Some(tx) = self
+                .esplora
+                .get_confirmed_spending_tx(&output.outpoint.txid, output.outpoint.index as u64)?
+            {
+                spent_outputs.push(tx);
+            }
+        }
+        Ok(spent_outputs)
+    }
+}
+
+fn join_sort_dedup(
+    mut lhs: Vec<ConfirmedTransaction>,
+    mut rhs: Vec<ConfirmedTransaction>,
+) -> Vec<ConfirmedTransaction> {
+    lhs.append(&mut rhs);
+    sort_txs(&mut lhs);
+    lhs.dedup();
+    lhs
+}
+
+fn txid(tx: &ConfirmedTransaction) -> Txid {
+    tx.tx.txid()
 }
 
 // Sorting by blocks and by transaction position within the each block
