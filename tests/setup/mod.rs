@@ -258,7 +258,7 @@ pub mod nigiri {
     }
 
     pub fn wait_for_sync(node: NodeInstance) {
-        for _ in 0..10 {
+        for _ in 0..20 {
             debug!("{:?} is NOT synced yet, waiting...", node);
             sleep(Duration::from_millis(500));
 
