@@ -9,7 +9,8 @@ use uniffi_lipalightninglib::errors::InitializationError;
 use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
 
-use crate::setup::nigiri::NodeInstance;
+#[cfg(feature = "nigiri")]
+use crate::setup::nigiri::{NodeInstance, RGS_CLN_HOST, RGS_CLN_ID, RGS_CLN_PORT};
 use bitcoin::Network;
 use simplelog::SimpleLogger;
 use std::sync::{Arc, Once};
@@ -17,10 +18,6 @@ use std::thread::sleep;
 use std::time::Duration;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
-
-const RGS_CLN_ID: &str = "03f3bf54dd54d3cebb21665f8af405261ca8a241938254a46b1ead7b569199f607";
-const RGS_CLN_HOST: &str = "rgs-cln";
-const RGS_CLN_PORT: u16 = 9937;
 
 #[derive(Debug, Clone)]
 pub struct StorageMock {
@@ -91,6 +88,7 @@ impl NodeHandle {
         NodeHandle { config, storage }
     }
 
+    #[cfg(feature = "nigiri")]
     pub fn new_with_lsp_setup() -> NodeHandle {
         nigiri::start();
 
@@ -110,6 +108,7 @@ impl NodeHandle {
         Self::new(lsp_node)
     }
 
+    #[cfg(feature = "nigiri")]
     pub fn new_with_lsp_rgs_setup() -> NodeHandle {
         let handle = Self::new_with_lsp_setup();
 
@@ -177,6 +176,11 @@ pub mod nigiri {
     const NIGIRI_CLN_CMD_PREFIX: &[&str] = &["nigiri", "cln"];
     const NIGIRI_LND_CMD_PREFIX: &[&str] = &["nigiri", "lnd"];
     const LSPD_LND_CMD_PREFIX: &[&str] = &["docker", "exec", "lspd-lnd", "lncli"];
+
+    pub(crate) const RGS_CLN_ID: &str =
+        "03f3bf54dd54d3cebb21665f8af405261ca8a241938254a46b1ead7b569199f607";
+    pub(crate) const RGS_CLN_HOST: &str = "rgs-cln";
+    pub(crate) const RGS_CLN_PORT: u16 = 9937;
 
     #[derive(Debug)]
     pub struct RemoteNodeInfo {

@@ -31,7 +31,7 @@ mod zero_conf_test {
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
         assert_eq!(node.get_node_info().num_peers, 1);
 
-        let lspd_node_id = nigiri::query_lnd_node_info(NodeInstance::LspdLnd)
+        let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
             .unwrap()
             .pub_key;
 

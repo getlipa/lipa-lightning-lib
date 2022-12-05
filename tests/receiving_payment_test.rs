@@ -124,7 +124,7 @@ mod receiving_payments_test {
         sleep(Duration::from_secs(20));
 
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
-        nigiri::cln_node_open_channel(NodeInstance::NigiriCln, &lspd_node_id).unwrap();
+        nigiri::cln_node_open_pub_channel(NodeInstance::NigiriCln, &lspd_node_id).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
         sleep(Duration::from_secs(110)); // wait for super lazy cln to consider its channels active
 
@@ -149,7 +149,7 @@ mod receiving_payments_test {
 
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
         nigiri::lnd_node_open_channel(NodeInstance::NigiriLnd, &lspd_node_id, false).unwrap();
-        nigiri::cln_node_open_channel(NodeInstance::NigiriCln, &lspd_node_id).unwrap();
+        nigiri::cln_node_open_pub_channel(NodeInstance::NigiriCln, &lspd_node_id).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
         sleep(Duration::from_secs(110)); // wait for super lazy cln to consider its channels active
 
