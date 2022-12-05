@@ -112,27 +112,9 @@ impl NodeHandle {
     pub fn new_with_lsp_rgs_setup() -> NodeHandle {
         let handle = Self::new_with_lsp_setup();
 
-        nigiri::node_connect(
-            NodeInstance::LspdLnd,
-            RGS_CLN_ID,
-            RGS_CLN_HOST,
-            RGS_CLN_PORT,
-        )
-        .unwrap();
-        nigiri::node_connect(
-            NodeInstance::NigiriLnd,
-            RGS_CLN_ID,
-            RGS_CLN_HOST,
-            RGS_CLN_PORT,
-        )
-        .unwrap();
-        nigiri::node_connect(
-            NodeInstance::NigiriCln,
-            RGS_CLN_ID,
-            RGS_CLN_HOST,
-            RGS_CLN_PORT,
-        )
-        .unwrap();
+        node_connect_to_rgs_cln(NodeInstance::LspdLnd);
+        node_connect_to_rgs_cln(NodeInstance::NigiriLnd);
+        node_connect_to_rgs_cln(NodeInstance::NigiriCln);
 
         handle
     }
@@ -153,6 +135,11 @@ impl NodeHandle {
 
         node
     }
+}
+
+#[cfg(feature = "nigiri")]
+fn node_connect_to_rgs_cln(node: NodeInstance) {
+    nigiri::node_connect(node, RGS_CLN_ID, RGS_CLN_HOST, RGS_CLN_PORT).unwrap();
 }
 
 #[cfg(feature = "nigiri")]
@@ -177,10 +164,10 @@ pub mod nigiri {
     const NIGIRI_LND_CMD_PREFIX: &[&str] = &["nigiri", "lnd"];
     const LSPD_LND_CMD_PREFIX: &[&str] = &["docker", "exec", "lspd-lnd", "lncli"];
 
-    pub(crate) const RGS_CLN_ID: &str =
+    pub const RGS_CLN_ID: &str =
         "03f3bf54dd54d3cebb21665f8af405261ca8a241938254a46b1ead7b569199f607";
-    pub(crate) const RGS_CLN_HOST: &str = "rgs-cln";
-    pub(crate) const RGS_CLN_PORT: u16 = 9937;
+    pub const RGS_CLN_HOST: &str = "rgs-cln";
+    pub const RGS_CLN_PORT: u16 = 9937;
 
     #[derive(Debug)]
     pub struct RemoteNodeInfo {
