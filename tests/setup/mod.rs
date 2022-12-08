@@ -9,8 +9,9 @@ use uniffi_lipalightninglib::errors::InitializationError;
 use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
 
+#[cfg(feature = "nigiri")]
+use crate::setup::nigiri::{NodeInstance, RGS_CLN_HOST, RGS_CLN_ID, RGS_CLN_PORT};
 use bitcoin::Network;
-use nigiri::NodeInstance;
 use simplelog::SimpleLogger;
 use std::sync::{Arc, Once};
 use std::thread::sleep;
@@ -87,6 +88,7 @@ impl NodeHandle {
         NodeHandle { config, storage }
     }
 
+    #[cfg(feature = "nigiri")]
     pub fn new_with_lsp_setup() -> NodeHandle {
         nigiri::start();
 
@@ -106,6 +108,17 @@ impl NodeHandle {
         Self::new(lsp_node)
     }
 
+    #[cfg(feature = "nigiri")]
+    pub fn new_with_lsp_rgs_setup() -> NodeHandle {
+        let handle = Self::new_with_lsp_setup();
+
+        node_connect_to_rgs_cln(NodeInstance::LspdLnd);
+        node_connect_to_rgs_cln(NodeInstance::NigiriLnd);
+        node_connect_to_rgs_cln(NodeInstance::NigiriCln);
+
+        handle
+    }
+
     pub fn start(&self) -> Result<LightningNode, InitializationError> {
         let lsp_address = "http://127.0.0.1:6666".to_string();
         let lsp_auth_token =
@@ -122,6 +135,11 @@ impl NodeHandle {
 
         node
     }
+}
+
+#[cfg(feature = "nigiri")]
+fn node_connect_to_rgs_cln(node: NodeInstance) {
+    nigiri::node_connect(node, RGS_CLN_ID, RGS_CLN_HOST, RGS_CLN_PORT).unwrap();
 }
 
 #[cfg(feature = "nigiri")]
@@ -146,6 +164,11 @@ pub mod nigiri {
     const NIGIRI_LND_CMD_PREFIX: &[&str] = &["nigiri", "lnd"];
     const LSPD_LND_CMD_PREFIX: &[&str] = &["docker", "exec", "lspd-lnd", "lncli"];
 
+    pub const RGS_CLN_ID: &str =
+        "03f3bf54dd54d3cebb21665f8af405261ca8a241938254a46b1ead7b569199f607";
+    pub const RGS_CLN_HOST: &str = "rgs-cln";
+    pub const RGS_CLN_PORT: u16 = 9937;
+
     #[derive(Debug)]
     pub struct RemoteNodeInfo {
         pub pub_key: String,
@@ -163,9 +186,11 @@ pub mod nigiri {
 
         start_nigiri();
         start_lspd();
+        start_rgs();
     }
 
     pub fn stop() {
+        stop_rgs();
         debug!("LSPD stopping ...");
         stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
         debug!("NIGIRI stopping ...");
@@ -173,6 +198,7 @@ pub mod nigiri {
     }
 
     pub fn pause() {
+        stop_rgs();
         debug!("LSPD stopping ...");
         stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
         debug!("NIGIRI pausing (stopping without resetting)...");
@@ -199,6 +225,16 @@ pub mod nigiri {
         wait_for_sync(NodeInstance::LspdLnd);
     }
 
+    pub fn stop_rgs() {
+        debug!("RGS server stopping ...");
+        exec_in_dir(&["docker-compose", "down"], "rgs");
+    }
+
+    fn start_rgs() {
+        debug!("RGS server starting ...");
+        exec_in_dir(&["docker-compose", "up", "-d", "rgs"], "rgs");
+    }
+
     fn start_nigiri() {
         debug!("NIGIRI starting ...");
         exec(&["nigiri", "start", "--ci", "--ln"]);
@@ -208,7 +244,7 @@ pub mod nigiri {
     }
 
     pub fn wait_for_sync(node: NodeInstance) {
-        for _ in 0..10 {
+        for _ in 0..20 {
             debug!("{:?} is NOT synced yet, waiting...", node);
             sleep(Duration::from_millis(500));
 
@@ -406,7 +442,7 @@ pub mod nigiri {
         lnd_node_open_generic_channel(node, target_node_id, zero_conf, false)
     }
 
-    pub fn cln_node_open_channel(
+    pub fn cln_node_open_pub_channel(
         node: NodeInstance,
         target_node_id: &str,
     ) -> Result<String, String> {
