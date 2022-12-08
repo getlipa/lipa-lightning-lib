@@ -1,8 +1,8 @@
 mod setup;
 
 // Caution: Run these tests sequentially, otherwise they will corrupt each other
-//      because they are manipulating their environment:
-// cargo test --features nigiri -- --test-threads 1
+//          because they are manipulating their environment:
+//          cargo test --features nigiri -- --test-threads 1
 #[cfg(feature = "nigiri")]
 mod zero_conf_test {
     use crate::setup::nigiri::NodeInstance;
