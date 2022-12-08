@@ -3,7 +3,7 @@ FROM rust:latest as builder
 WORKDIR /usr/src
 RUN git clone https://github.com/lightningdevkit/rapid-gossip-sync-server/
 WORKDIR /usr/src/rapid-gossip-sync-server
-RUN git reset --hard f0ef17314840b4e30d08511dfc7773b4ffc8d343
+RUN git checkout f0ef17314840b4e30d08511dfc7773b4ffc8d343
 
 RUN sed -i 's/std::net::SocketAddr;/std::net::{SocketAddr, ToSocketAddrs};/g' /usr/src/rapid-gossip-sync-server/src/config.rs
 RUN sed -i 's/SNAPSHOT_CALCULATION_INTERVAL: u32 = 3600 \* 24;/SNAPSHOT_CALCULATION_INTERVAL: u32 = 20;/g' /usr/src/rapid-gossip-sync-server/src/config.rs

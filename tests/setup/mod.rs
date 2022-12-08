@@ -190,7 +190,6 @@ pub mod nigiri {
     }
 
     pub fn stop() {
-        debug!("RGS server stopping ...");
         stop_rgs();
         debug!("LSPD stopping ...");
         stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
@@ -199,7 +198,6 @@ pub mod nigiri {
     }
 
     pub fn pause() {
-        debug!("RGS server stopping ...");
         stop_rgs();
         debug!("LSPD stopping ...");
         stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
@@ -228,6 +226,7 @@ pub mod nigiri {
     }
 
     pub fn stop_rgs() {
+        debug!("RGS server stopping ...");
         exec_in_dir(&["docker-compose", "down"], "rgs");
     }
 
