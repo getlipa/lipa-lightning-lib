@@ -14,7 +14,9 @@ jobs:
         target: [ x86_64-apple-ios, aarch64-apple-ios, aarch64-apple-ios-sim ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
+        with:
+          submodules: true
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -22,6 +24,10 @@ jobs:
           profile: minimal
           override: true
           target: ${{ matrix.target }}
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
@@ -52,7 +58,9 @@ jobs:
         target: [ aarch64-linux-android, armv7-linux-androideabi, i686-linux-android ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
+        with:
+          submodules: true
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -60,6 +68,10 @@ jobs:
           profile: minimal
           override: true
           target: ${{ matrix.target }}
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
