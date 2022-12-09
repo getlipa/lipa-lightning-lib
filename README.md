@@ -7,7 +7,7 @@
 
  - install protobuf
 
-# Test locally with Nigiri
+# Test Example Node Locally with Nigiri
 
 ## Step 1: Setup Environment
 Start [Nigiri Bitcoin](https://github.com/vulpemventures/nigiri)
@@ -23,7 +23,7 @@ Start LSPD + Custom LND
 ## Step 2: Fire it up!
 Start the example node:
 ```sh
-cargo run --example node
+make runnode
 ```
 
 The example node will connect to LSPD and get information about lightning node
