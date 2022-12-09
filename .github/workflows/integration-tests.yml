@@ -26,4 +26,4 @@ jobs:
           use_ln: true
       - name: Run integration tests
         run: |
-          cargo test --features nigiri --test '*' -- --test-threads 1 # runs integration tests only and sequentially
+          make integrationtests
