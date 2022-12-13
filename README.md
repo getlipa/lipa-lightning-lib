@@ -31,3 +31,9 @@ pubkey and fees.
 
 ### Logs
 View logs in `./.ldk/logs.txt`.
+
+# Interface documentation
+The consumer interface is most aptly documented in the interface file `src/lipalightninglib.udl`.
+For the language-specific calls, refer to the respective language bindings:
+ - [Kotlin](https://github.com/getlipa/lipa-lightning-lib-android)
+ - [Swift](https://github.com/getlipa/lipa-lightning-lib-swift)
