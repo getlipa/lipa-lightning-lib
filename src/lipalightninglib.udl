@@ -28,6 +28,56 @@ callback interface RedundantStorageCallback {
 };
 
 [Error]
+enum CallbackError {
+    // Invalid input.
+    // Consider fixing the input and retrying the request.
+    "InvalidInput",
+
+    // Recoverable problem (e.g. network issue, problem with en external service).
+    // Consider retrying the request.
+    "RuntimeError",
+
+    // Unrecoverable problem (e.g. internal invariant broken).
+    // Consider suggesting the user to report the issue to the developers.
+    "PermanentFailure",
+
+    // This value is required by UniFFI library. Do not use the value directly.
+    "UnexpectedUniFFI",
+};
+
+// Remote key-value storage. Buckets are not managed explicitly.
+callback interface RemoteStorageCallback {
+    // Check if the remote server is reachable and the client has necessary
+    // permissions. The library will likely to call this method before starting
+    // a transaction.
+    // Hint: request and cache an access tocken if needed.
+    boolean check_health();
+
+    // List objects in the bucket. Return empty list if there is no such bucket.
+    [Throws=CallbackError]
+    sequence<string> list_objects(string bucket);
+
+    // Check if the bucket exists and the object in the bucket.
+    [Throws=CallbackError]
+    boolean object_exists(string bucket, string key);
+
+    [Throws=CallbackError]
+    sequence<u8> get_object(string bucket, string key);
+
+    // Atomically put the object in the bucket (create the bucket if it does not
+    // exists).
+    // Must only return after being certain that data was persisted safely.
+    // Failure to do so for `monitors` bucket may result in loss of funds.
+    // Returning `false` for `monitors` bucket will likely result in a channel
+    // being force-closed.
+    [Throws=CallbackError]
+    void put_object(string bucket, string key, sequence<u8> value);
+
+    [Throws=CallbackError]
+    void delete_object(string bucket, string key);
+};
+
+[Error]
 enum InitializationError {
     "AsyncRuntime",
     "ChainMonitorWatchChannel",
