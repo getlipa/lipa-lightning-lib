@@ -48,16 +48,16 @@ enum CallbackError {
 // Remote key-value storage. Buckets are not managed explicitly.
 callback interface RemoteStorageCallback {
     // Check if the remote server is reachable and the client has necessary
-    // permissions. The library will likely to call this method before starting
+    // permissions. The library will likely call this method before starting
     // a transaction.
-    // Hint: request and cache an access tocken if needed.
+    // Hint: request and cache an access token if needed.
     boolean check_health();
 
     // List objects in the bucket. Return empty list if there is no such bucket.
     [Throws=CallbackError]
     sequence<string> list_objects(string bucket);
 
-    // Check if the bucket exists and the object in the bucket.
+    // Check if the bucket exists and if the object is in the bucket.
     [Throws=CallbackError]
     boolean object_exists(string bucket, string key);
 
