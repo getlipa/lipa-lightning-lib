@@ -28,12 +28,12 @@ mod tx_broadcaster;
 mod types;
 
 use crate::async_runtime::{AsyncRuntime, RepeatingTaskHandle};
-use crate::callbacks::{LspCallback, RedundantStorageCallback};
+use crate::callbacks::{LspCallback, RedundantStorageCallback, RemoteStorageCallback};
 use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, NodeAddress};
 use crate::confirm::ConfirmWrapper;
 use crate::errors::*;
-use crate::errors::{InitializationError, LipaError, LspError, RuntimeError};
+use crate::errors::{CallbackError, InitializationError, LipaError, LspError, RuntimeError};
 use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
