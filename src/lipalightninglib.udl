@@ -15,7 +15,7 @@ dictionary Config {
 
 dictionary NodeAddress {
     string pub_key;
-    string address;
+    string host;
 };
 
 callback interface RedundantStorageCallback {

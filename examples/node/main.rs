@@ -42,7 +42,7 @@ fn main() {
     let lsp_info = ChannelInformationReply::decode(&*lsp_info).unwrap();
     let ln_node_address = NodeAddress {
         pub_key: lsp_info.pubkey,
-        address: lsp_info.host,
+        host: lsp_info.host,
     };
     info!("Lsp pubkey: {}", lsp_info.lsp_pubkey.to_hex());
     info!("LN node {:?}", ln_node_address);

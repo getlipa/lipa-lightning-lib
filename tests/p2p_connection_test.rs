@@ -22,7 +22,7 @@ mod p2p_connection_test {
         let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
-            address: NIGIRI_LND_ADDR.to_string(),
+            host: NIGIRI_LND_ADDR.to_string(),
         };
 
         let node = NodeHandle::new(lsp_node.clone()).start().unwrap();
@@ -37,7 +37,7 @@ mod p2p_connection_test {
         let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
-            address: FAULTY_ADDR.to_string(),
+            host: FAULTY_ADDR.to_string(),
         };
 
         let node = NodeHandle::new(lsp_node.clone()).start().unwrap();
@@ -51,7 +51,7 @@ mod p2p_connection_test {
         let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
-            address: NIGIRI_LND_ADDR.to_string(),
+            host: NIGIRI_LND_ADDR.to_string(),
         };
 
         // Let's shutdown LND, while we leave Esplora running (test should not affect chain sync)
@@ -80,7 +80,7 @@ mod p2p_connection_test {
         let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
-            address: NIGIRI_LND_ADDR.to_string(),
+            host: NIGIRI_LND_ADDR.to_string(),
         };
 
         {
@@ -101,7 +101,7 @@ mod p2p_connection_test {
         let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
-            address: NIGIRI_LND_ADDR.to_string(),
+            host: NIGIRI_LND_ADDR.to_string(),
         };
         let node = NodeHandle::new(lsp_node.clone()).start().unwrap();
 

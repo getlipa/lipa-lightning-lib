@@ -18,5 +18,5 @@ pub struct Config {
 #[derive(Debug, Clone)]
 pub struct NodeAddress {
     pub pub_key: String,
-    pub address: String,
+    pub host: String,
 }
