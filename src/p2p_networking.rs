@@ -50,7 +50,7 @@ impl P2pConnection {
         let result = lightning_net_tokio::connect_outbound(
             Arc::clone(&peer_manager),
             peer.pub_key,
-            peer.address,
+            peer.host,
         )
         .await;
 
@@ -94,7 +94,7 @@ impl P2pConnection {
 
 pub struct LnPeer {
     pub pub_key: PublicKey,
-    pub address: SocketAddr,
+    pub host: SocketAddr,
 }
 
 impl TryFrom<&NodeAddress> for LnPeer {
@@ -103,16 +103,16 @@ impl TryFrom<&NodeAddress> for LnPeer {
     fn try_from(node_address: &NodeAddress) -> LipaResult<Self> {
         let pub_key = PublicKey::from_str(&node_address.pub_key)
             .map_to_invalid_input("Could not parse node public key")?;
-        let address = SocketAddr::from_str(&node_address.address)
+        let host = SocketAddr::from_str(&node_address.host)
             .map_to_invalid_input("Could not parse node address")?;
 
-        Ok(Self { pub_key, address })
+        Ok(Self { pub_key, host })
     }
 }
 
 impl fmt::Display for LnPeer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{}", self.pub_key, self.address)
+        write!(f, "{}@{}", self.pub_key, self.host)
     }
 }
 
@@ -128,7 +128,7 @@ mod tests {
 
         let sample_node = NodeAddress {
             pub_key: sample_pubkey.to_string(),
-            address: sample_address.to_string(),
+            host: sample_address.to_string(),
         };
 
         let ln_peer = LnPeer::try_from(&sample_node).unwrap();

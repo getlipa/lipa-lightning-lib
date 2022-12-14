@@ -1,3 +1,25 @@
+// The main goal of this library is to instantiate a full Lightning Network node,
+// which synchronizes itself using various Lipa-hosted services (Esplora, Rapid-Gossip-Sync) and
+// and is connected through a Lightning channel to an LSP (owned by Lipa as well).
+// This node then runs in the background and keeps syncing with the network(s).
+// Library consumers can perform various operations: create invoices, receive payments, validate invoices, send payments, etc.
+//
+// Remarks:
+//  - When the LSP is mentioned in this document, it is being seen from the point-of-view of the Lipa Lightning node; as an external service.
+//    However, it is assumed that the LSP is being run by the same party that uses this library, so the LSP is highly customized and trusted.
+//  - The LSP flow is as follows:
+//      1. User wants to receive a payment and therefore creates an invoice
+//      2. If the amount the user wants to receive does not surpass
+//         the amount that can be received through existing channels (inbound capacity),
+//         the LSP flow ends here and a regular Lightning payment is performed.
+//      3. If the amount the user wants to receive surpasses the amount that can be received through existing channels,
+//         the payment the user wants to receive must be registered with the LSP.
+//         Caution: Such payments incur additional costs and the user must be warned about that -> query_lsp_fee()
+//      4. When the payment towards the user is initiated, the LSP creates a new channel on-the-fly.
+//         The creation of the channel and the receiving of the payment happens simultaneously for the user.
+
+// Use "Bitcoin" for production code (= runs on the Bitcoin mainnet)
+// Testnet and Signet are test *networks*, while Regtest enables an entirely local test environment
 enum Network {
     "Bitcoin",
     "Testnet",
@@ -5,6 +27,19 @@ enum Network {
     "Regtest",
 };
 
+// An object that holds all configuration needed to start a LightningNode instance.
+//
+// Fields:
+// * network - the Bitcoin Network the node should run on (see enum above)
+// * seed - the seed derived from the mnemonic optionally including a pass phrase
+// * esplora_api_url - url of the esplora API to retrieve chain data from and over which transactions are being published
+//     possible values:
+//     - "https://blockstream.info/api" for Mainnet (PROD)
+//     - "https://blockstream.info/testnet/api" for Testnet
+// * lsp_node - the Lightning Protocol address of the Lightning Service Provider (LSP) node
+// * rgs_url - the url of the Rapid Gossip Sync (RGS) server. Possible values:
+//     - "https://rapidsync.lightningdevkit.org/snapshot/" for Mainnet (PROD)
+//     - *WIP* for Testnet
 dictionary Config {
     Network network;
     sequence<u8> seed;
@@ -13,11 +48,16 @@ dictionary Config {
     string rgs_url;
 };
 
+// A Lightning Protocol address of a node (how Lightning nodes address each other within the Lightning Network)
+// Sometimes displayed as pub_key@address:port.
+// The pub_key is the public id of a Lightning node, eg: 0296a2a67b95d9a02cb0889dd71cfffa3f1e6715a66cfc83c1fc8cef0f8fcf2ed6
+// The variable 'host' contains the part <address:port>, eg: 192.168.0.6:9735
 dictionary NodeAddress {
     string pub_key;
-    string address;
+    string host;
 };
 
+// This interface is being reworked. Documentation will follow
 callback interface RedundantStorageCallback {
     boolean object_exists(string bucket, string key);
     sequence<u8> get_object(string bucket, string key);
@@ -81,46 +121,64 @@ callback interface RemoteStorageCallback {
 enum InitializationError {
     "AsyncRuntime",
     "ChainMonitorWatchChannel",
-    "ChainSync",
+    "ChainSync", // Layer 1 synchronization
     "ChannelMonitorBackup",
-    "EsploraClient",
+    "EsploraClient", // Layer 1 handling
     "KeysManager",
     "Logic",
-    "PeerConnection",
+    "PeerConnection", // Layer 2 connections
     "PublicKey",
     "SecretGeneration",
 };
 
 [Error]
 enum RuntimeError {
-    "ChainSync",
+    "ChainSync", // Layer 1 synchronization
     "InvalidAddress",
     "InvalidPubKey",
     "Logic",
-    "PeerConnection",
+    "PeerConnection", // Layer 2 connections
 };
 
 [Error]
 enum LipaError {
+    // Invalid input.
+    // Consider fixing the input and retrying the request.
     "InvalidInput",
+    // Recoverable problem (e.g. network issue, problem with en external service).
+    // Consider retrying the request.
     "RuntimeError",
+    // Unrecoverable problem (e.g. internal invariant broken).
+    // Consider suggesting the user to report the issue to the developers.
     "PermanentFailure",
 };
 
 interface LightningNode {
+    // Initiate the Lightning node and let it run in a background thread
     [Throws=InitializationError]
     constructor([ByRef] Config config, RedundantStorageCallback redundant_storage_callback, LspCallback lsp_callback);
 
+    // Request some basic info about the local node
     NodeInfo get_node_info();
 
+    // Get information about the fee charged by the LSP for opening new channels
+    // This does NOT check for established channels, but only for established TCP connections
     [Throws=LipaError]
     LspFee query_lsp_fee();
 
+    // Verify whether there is an established Layer 2 connection between the local node and a given node
     boolean connected_to_node([ByRef] NodeAddress node);
 
+    // Create an invoice to receive a payment with:
+    //    - amount_msat - the smallest amount of millisats required for the node to accept the incoming payment (sender will have to pay fees on top of that amount)
+    //    - description - a description to be embedded into the created invoice
     [Throws=LipaError]
     string create_invoice(u64 amount_msat, string description);
 
+    // TODO: It is not yet entirely clear when exactly this method should be called (periodically | on startup | before each payment | ...)
+    //       And neither who takes the responsibility for it (will it be handled internally by the library or by the app?)
+    // Sync the Layer 2 channel graph.
+    // Doing this before sending a payment increases the likelihood that the payment will go through.
     [Throws=LipaError]
     void sync_graph();
 };
@@ -139,18 +197,23 @@ dictionary ChannelsInfo {
     u64 outbound_capacity_msat;
 };
 
+// Information about the Lightning node running in the background
 dictionary NodeInfo {
-    sequence<u8> node_pubkey;
-    u16 num_peers;
-    ChannelsInfo channels_info;
+    sequence<u8> node_pubkey; // Lightning network public key of the node (also known as node id)
+    u16 num_peers; // Number of peers the node is connected to
+    ChannelsInfo channels_info; // Information about the channels of the node
 };
 
+// The fee charged by the Lightning Service Provider (LSP) for opening a channel with the node.
+// This fee is being charged at the time of the channel creation.
+// The LSP simply substracts this fee from an incoming payment (if this incoming payment leads to a channel creation).
 dictionary LspFee {
   u64 min_msat;
-  // 1_000_000 is 100%
+  // Parts per million -> 1_000_000 is 100%
   u64 rate_ppm;
 };
 
+// Potential errors when communicating with LSP
 [Error]
 enum LspError {
     "Grpc",
@@ -158,9 +221,13 @@ enum LspError {
     "UnexpectedUniFFI",
 };
 
+// Callback interface for the Lightning Service Provider (LSP) to be implemented by the library consumer
 callback interface LspCallback {
+    // This interface is about to change. Ignore it for the time being.
     [Throws=LspError]
     sequence<u8> channel_information();
+
+    // Pass a serialized RegisterPaymentRequest message to the LSP
     [Throws=LspError]
     void register_payment(sequence<u8> bytes);
 };
@@ -173,18 +240,37 @@ enum LogLevel {
     "Trace",
 };
 
+// An object that holds necessary secrets. Should be dealt with carefully and never be logged.
+//
+// Fields:
+// * mnemonic - a mnemonic code or mnemonic sentence as described in BIP-39.
+// * passphrase - an optional word (or sentence) added to the mnemonic.
+// * seed - a seed one-way derived from the mnemonic and the passphrase.
+//
+// The consumer of the library *must* persist `mnemonic` and `passphrase`
+// *securely* on the device,
+// The consumer of the library *must* never use or share it except to display it to
+// the end user for backup or for recovering a wallet.
+// The consumer of the library may want to *securely* persist `seed` or derive it
+// every time `seed` is needed, but it will have performance implications.
 dictionary Secret {
+    // The 24 words used to derive the node's private key
     sequence<string> mnemonic;
+    // optional passphrase. If not provided, it is an empty string.
     string passphrase;
+    // The seed derived from the mnemonic and the passphrase
     sequence<u8> seed;
 };
 
 namespace lipalightninglib {
+    // Initiate the logger and set the log level
     void init_native_logger_once(LogLevel min_level);
 
+    // Generate a new mnemonic with an optional passphrase. Provide an empty string to use no passphrase.
     [Throws=LipaError]
     Secret generate_secret(string passphrase);
 
+    // Generate a Secret object (containing the seed). Provide an empty string to use no passphrase.
     [Throws=LipaError]
     Secret mnemonic_to_secret(sequence<string> mnemonic_string, string passphrase);
 };

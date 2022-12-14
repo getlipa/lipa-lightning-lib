@@ -17,18 +17,10 @@ use uniffi::ffi::foreigncallbacks::UnexpectedUniFFICallbackError;
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum LipaError {
-    /// Invalid input.
-    /// Consider fixing the input and retrying the request.
     #[error("InvalidInput: {message}")]
     InvalidInput { message: String },
-
-    /// Recoverable problem (e.g. network issue, problem with en external service).
-    /// Consider retrying the request.
     #[error("RuntimeError: {message}")]
     RuntimeError { message: String },
-
-    /// Unrecoverable problem (e.g. internal invariant broken).
-    /// Consider suggesting the user to report the issue to the developers.
     #[error("PermanentFailure: {message}")]
     PermanentFailure { message: String },
 }

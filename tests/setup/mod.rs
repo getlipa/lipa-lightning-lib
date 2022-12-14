@@ -102,7 +102,7 @@ impl NodeHandle {
         let lsp_info = nigiri::query_node_info(NodeInstance::LspdLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
-            address: "127.0.0.1:9739".to_string(),
+            host: "127.0.0.1:9739".to_string(),
         };
 
         Self::new(lsp_node)

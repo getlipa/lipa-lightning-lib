@@ -15,7 +15,7 @@ mod node_info_test {
         let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
         let lsp_node = NodeAddress {
             pub_key: lsp_info.pub_key,
-            address: "127.0.0.1:9735".to_string(),
+            host: "127.0.0.1:9735".to_string(),
         };
         let node = NodeHandle::new(lsp_node).start().unwrap();
         let node_info = node.get_node_info();
