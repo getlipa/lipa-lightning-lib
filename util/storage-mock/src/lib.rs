@@ -6,14 +6,14 @@ use std::sync::Mutex;
 pub struct Storage {
     // Put the map into RefCell to allow mutation by immutable ref in MemoryStorage::put_object().
     pub objects: Mutex<RefCell<HashMap<(String, String), Vec<u8>>>>,
-    pub health: Mutex<HashMap<String, bool>>,
+    pub health: Mutex<bool>,
 }
 
 impl Storage {
     pub fn new() -> Self {
         Self {
             objects: Mutex::new(RefCell::new(HashMap::new())),
-            health: Mutex::new(HashMap::new()),
+            health: Mutex::new(true),
         }
     }
 
@@ -35,21 +35,17 @@ impl Storage {
             .clone()
     }
 
-    pub fn check_health(&self, bucket: String) -> bool {
-        match self.health.lock().unwrap().get(&bucket) {
-            Some(health) => *health,
-            None => false,
-        }
+    pub fn check_health(&self) -> bool {
+        *self.health.lock().unwrap()
     }
 
-    pub fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> bool {
-        self.health.lock().unwrap().insert(bucket.clone(), true);
+    pub fn put_object(&self, bucket: String, key: String, value: Vec<u8>) {
+        *self.health.lock().unwrap() = true;
         self.objects
             .lock()
             .unwrap()
             .borrow_mut()
             .insert((bucket, key), value);
-        true
     }
 
     pub fn list_objects(&self, bucket: String) -> Vec<String> {
@@ -63,17 +59,13 @@ impl Storage {
             .collect()
     }
 
-    pub fn delete_object(&self, bucket: String, key: String) -> bool {
-        match self
+    pub fn delete_object(&self, bucket: String, key: String) {
+        self
             .objects
             .lock()
             .unwrap()
             .borrow_mut()
-            .remove(&(bucket, key))
-        {
-            Some(_) => true,
-            None => false,
-        }
+            .remove(&(bucket, key));
     }
 }
 
@@ -89,7 +81,7 @@ mod tests {
 
         storage.put_object("bucket".to_string(), "key".to_string(), vec![1, 2, 3]);
 
-        assert!(storage.check_health("bucket".to_string()));
+        assert!(storage.check_health());
         assert_eq!(
             storage.list_objects("bucket".to_string()),
             vec!["key".to_string()]
@@ -100,7 +92,6 @@ mod tests {
             vec![1, 2, 3]
         );
 
-        assert!(storage.delete_object("bucket".to_string(), "key".to_string()));
-        assert!(!storage.object_exists("bucket".to_string(), "key".to_string()));
+        storage.delete_object("bucket".to_string(), "key".to_string());
     }
 }

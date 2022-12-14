@@ -18,7 +18,7 @@ use prost::Message;
 use std::fs;
 use std::thread::sleep;
 use std::time::Duration;
-use uniffi_lipalightninglib::callbacks::{LspCallback, RedundantStorageCallback};
+use uniffi_lipalightninglib::callbacks::{LspCallback, RemoteStorageCallback};
 use uniffi_lipalightninglib::config::{Config, NodeAddress};
 use uniffi_lipalightninglib::keys_manager::mnemonic_to_secret;
 use uniffi_lipalightninglib::LightningNode;
@@ -88,25 +88,34 @@ fn init_logger() {
 
 fn read_or_generate_seed(storage: &FileStorage) -> Vec<u8> {
     let seed_file_name = "seed";
-    if storage.object_exists(".".to_string(), seed_file_name.to_string()) {
-        return storage.get_object(".".to_string(), seed_file_name.to_string());
+    if storage
+        .object_exists(".".to_string(), seed_file_name.to_string())
+        .unwrap()
+    {
+        return storage
+            .get_object(".".to_string(), seed_file_name.to_string())
+            .unwrap();
     }
     info!("No existent seed found, generating a new one.");
     let passphrase = "".to_string();
     let mnemonic = "kid rent scatter hire lonely deal simple olympic stool juice ketchup situate crouch taste stone badge act minute borrow mail venue lunar walk empower".to_string();
     let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
     let secret = mnemonic_to_secret(mnemonic, passphrase).unwrap();
-    storage.put_object(
-        ".".to_string(),
-        seed_file_name.to_string(),
-        secret.seed.clone(),
-    );
+    storage
+        .put_object(
+            ".".to_string(),
+            seed_file_name.to_string(),
+            secret.seed.clone(),
+        )
+        .unwrap();
     let mut mnemonic = secret.mnemonic.join(" ");
     mnemonic.push('\n');
-    storage.put_object(
-        ".".to_string(),
-        "mnemonic".to_string(),
-        mnemonic.into_bytes(),
-    );
+    storage
+        .put_object(
+            ".".to_string(),
+            "mnemonic".to_string(),
+            mnemonic.into_bytes(),
+        )
+        .unwrap();
     secret.seed
 }

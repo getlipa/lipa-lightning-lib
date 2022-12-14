@@ -28,7 +28,7 @@ mod tx_broadcaster;
 mod types;
 
 use crate::async_runtime::{AsyncRuntime, RepeatingTaskHandle};
-use crate::callbacks::{LspCallback, RedundantStorageCallback, RemoteStorageCallback};
+use crate::callbacks::{LspCallback, RemoteStorageCallback};
 use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, NodeAddress};
 use crate::confirm::ConfirmWrapper;
@@ -94,7 +94,7 @@ impl LightningNode {
     #[allow(clippy::result_large_err)]
     pub fn new(
         config: &Config,
-        redundant_storage_callback: Box<dyn RedundantStorageCallback>,
+        remote_storage_callback: Box<dyn RemoteStorageCallback>,
         lsp_callback: Box<dyn LspCallback>,
     ) -> Result<Self, InitializationError> {
         let rt = AsyncRuntime::new()?;
@@ -118,12 +118,9 @@ impl LightningNode {
         let tx_broadcaster = Arc::new(TxBroadcaster::new(Arc::clone(&esplora_client)));
 
         // Step 4. Initialize Persist
-        let persister = Arc::new(StoragePersister::new(redundant_storage_callback));
-        if !persister.check_monitor_storage_health() {
-            warn!("Monitor storage is unhealty");
-        }
-        if !persister.check_object_storage_health() {
-            warn!("Object storage is unhealty");
+        let persister = Arc::new(StoragePersister::new(remote_storage_callback));
+        if !persister.check_health() {
+            warn!("Remote storage is unhealty");
         }
 
         // Step x. Initialize the Transaction Filter
@@ -175,7 +172,10 @@ impl LightningNode {
                 mut_channel_monitors,
                 mobile_node_user_config,
                 chain_params,
-            )?;
+            )
+            .map_err(|e| InitializationError::ChannelMonitorBackup {
+                message: e.to_string(),
+            })?;
         let channel_manager = Arc::new(channel_manager);
 
         // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
