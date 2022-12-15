@@ -105,7 +105,7 @@ impl StoragePersister {
         if self
             .storage
             .object_exists(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
-            .map_to_runtime_error("Failed to check read channel manager")?
+            .map_to_runtime_error("Failed to check channel manager")?
         {
             let data = self
                 .storage
