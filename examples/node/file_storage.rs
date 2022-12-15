@@ -3,7 +3,10 @@ use std::fmt::Debug;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use uniffi_lipalightninglib::callbacks::RedundantStorageCallback;
+use uniffi_lipalightninglib::callbacks::RemoteStorageCallback;
+use uniffi_lipalightninglib::errors::CallbackError;
+
+pub type CallbackResult<T> = Result<T, CallbackError>;
 
 #[derive(Debug)]
 pub struct FileStorage {
@@ -18,56 +21,57 @@ impl FileStorage {
     }
 }
 
-impl RedundantStorageCallback for FileStorage {
-    fn object_exists(&self, bucket: String, key: String) -> bool {
+impl RemoteStorageCallback for FileStorage {
+    fn object_exists(&self, bucket: String, key: String) -> CallbackResult<bool> {
         debug!("object_exists({}, {})", bucket, key);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
         path_buf.push(key);
-        path_buf.exists()
+        Ok(path_buf.exists())
     }
 
-    fn get_object(&self, bucket: String, key: String) -> Vec<u8> {
+    fn get_object(&self, bucket: String, key: String) -> CallbackResult<Vec<u8>> {
         debug!("get_object({}, {})", bucket, key);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
         path_buf.push(key);
-        fs::read(path_buf).unwrap()
+        Ok(fs::read(path_buf).unwrap())
     }
 
-    fn check_health(&self, bucket: String) -> bool {
-        debug!("check_health({})", bucket);
+    fn check_health(&self) -> bool {
+        debug!("check_health()");
         true
     }
 
-    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> bool {
+    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> CallbackResult<()> {
         debug!("put_object({}, {}, value.len={})", bucket, key, value.len());
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
         fs::create_dir_all(path_buf.clone()).unwrap();
         path_buf.push(key);
         fs::write(&path_buf, value).unwrap();
-        true
+        Ok(())
     }
 
-    fn list_objects(&self, bucket: String) -> Vec<String> {
+    fn list_objects(&self, bucket: String) -> CallbackResult<Vec<String>> {
         debug!("list_objects({})", bucket);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
-        if let Ok(res) = fs::read_dir(path_buf) {
+        let list = if let Ok(res) = fs::read_dir(path_buf) {
             res.map(|res| res.map(|e| e.file_name().to_str().unwrap().to_string()))
                 .collect::<Result<Vec<_>, io::Error>>()
                 .unwrap()
         } else {
             Vec::new()
-        }
+        };
+        Ok(list)
     }
 
-    fn delete_object(&self, bucket: String, key: String) -> bool {
+    fn delete_object(&self, bucket: String, key: String) -> CallbackResult<()> {
         debug!("delete_object({}, {})", bucket, key);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
         path_buf.push(key);
-        fs::remove_file(path_buf).is_ok()
+        fs::remove_file(path_buf).map_err(|_| CallbackError::RuntimeError)
     }
 }

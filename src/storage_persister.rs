@@ -1,5 +1,5 @@
-use crate::callbacks::RedundantStorageCallback;
-use crate::errors::{InitializationError, LipaResult};
+use crate::callbacks::RemoteStorageCallback;
+use crate::errors::*;
 
 use crate::LightningLogger;
 use bitcoin::hash_types::BlockHash;
@@ -34,20 +34,16 @@ static GRAPH_KEY: &str = "graph";
 static SCORER_KEY: &str = "scorer";
 
 pub struct StoragePersister {
-    storage: Box<dyn RedundantStorageCallback>,
+    storage: Box<dyn RemoteStorageCallback>,
 }
 
 impl StoragePersister {
-    pub fn new(storage: Box<dyn RedundantStorageCallback>) -> Self {
+    pub fn new(storage: Box<dyn RemoteStorageCallback>) -> Self {
         Self { storage }
     }
 
-    pub fn check_monitor_storage_health(&self) -> bool {
-        self.storage.check_health(MONITORS_BUCKET.to_string())
-    }
-
-    pub fn check_object_storage_health(&self) -> bool {
-        self.storage.check_health(OBJECTS_BUCKET.to_string())
+    pub fn check_health(&self) -> bool {
+        self.storage.check_health()
     }
 
     pub fn read_channel_monitors<Signer: Sign, K: Deref>(
@@ -58,10 +54,17 @@ impl StoragePersister {
         K::Target: KeysInterface<Signer = Signer> + Sized,
     {
         let mut result = Vec::new();
-        for key in self.storage.list_objects(MONITORS_BUCKET.to_string()) {
+        // TODO: Handle unwrap().
+        for key in self
+            .storage
+            .list_objects(MONITORS_BUCKET.to_string())
+            .unwrap()
+        {
+            // TODO: Handle unwrap().
             let data = self
                 .storage
-                .get_object(MONITORS_BUCKET.to_string(), key.clone());
+                .get_object(MONITORS_BUCKET.to_string(), key.clone())
+                .unwrap();
             let mut buffer = Cursor::new(&data);
             match <(BlockHash, ChannelMonitor<Signer>)>::read(&mut buffer, &*keys_manager) {
                 Ok((blockhash, channel_monitor)) => {
@@ -92,7 +95,7 @@ impl StoragePersister {
         channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>>,
         user_config: UserConfig,
         chain_params: ChainParameters,
-    ) -> Result<(Option<BlockHash>, SimpleArcChannelManager<M, T, F, L>), InitializationError>
+    ) -> LipaResult<(Option<BlockHash>, SimpleArcChannelManager<M, T, F, L>)>
     where
         M: Watch<InMemorySigner>,
         T: BroadcasterInterface,
@@ -102,10 +105,12 @@ impl StoragePersister {
         if self
             .storage
             .object_exists(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
+            .map_to_runtime_error("Failed to check channel manager")?
         {
             let data = self
                 .storage
-                .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string());
+                .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
+                .map_to_runtime_error("Failed to read channel manager")?;
             let read_args = ChannelManagerReadArgs::new(
                 keys_manager,
                 fee_estimator,
@@ -118,9 +123,7 @@ impl StoragePersister {
             let mut buffer = Cursor::new(&data);
             let (block_hash, channel_manager) =
                 <(BlockHash, SimpleArcChannelManager<M, T, F, L>)>::read(&mut buffer, read_args)
-                    .map_err(|e| InitializationError::ChannelMonitorBackup {
-                        message: e.to_string(),
-                    })?;
+                    .map_to_runtime_error("Failed to parse channel manager")?;
             debug!(
                 "Successfully read the ChannelManager from storage. It knows of {} channels",
                 channel_manager.list_channels().len()
@@ -156,10 +159,12 @@ impl StoragePersister {
         if self
             .storage
             .object_exists(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string())
+            .map_to_runtime_error("Failed to check network graph")?
         {
             let data = self
                 .storage
-                .get_object(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string());
+                .get_object(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string())
+                .map_to_runtime_error("Failed to read network graph")?;
             let mut buffer = Cursor::new(&data);
             let network_graph = match NetworkGraph::read(&mut buffer, Arc::clone(&logger)) {
                 Ok(graph) => {
@@ -176,8 +181,10 @@ impl StoragePersister {
                         "Failed to parse network graph data: {} - Deleting and continuing...",
                         e
                     );
+                    // TODO: Handle unwrap().
                     self.storage
-                        .delete_object(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string());
+                        .delete_object(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string())
+                        .unwrap();
                     NetworkGraph::new(genesis_hash, logger)
                 }
             };
@@ -192,16 +199,6 @@ impl StoragePersister {
     pub fn read_scorer(&self) {
         // TODO: Implement
     }
-
-    fn persist_object(&self, bucket: String, key: String, data: Vec<u8>) -> Result<(), Error> {
-        if !self.storage.put_object(bucket, key, data) {
-            return Err(Error::new(
-                io::ErrorKind::Other,
-                "Failed to persist object using storage callback",
-            ));
-        }
-        Ok(())
-    }
 }
 
 impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
@@ -213,9 +210,10 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
     ) -> ChannelMonitorUpdateStatus {
         let key = channel_id.to_channel_id().to_hex();
         let data = data.encode();
-        if !self
+        if self
             .storage
             .put_object(MONITORS_BUCKET.to_string(), key, data)
+            .is_err()
         {
             return ChannelMonitorUpdateStatus::PermanentFailure;
         }
@@ -247,7 +245,8 @@ where
         channel_manager: &lightning::ln::channelmanager::ChannelManager<Signer, M, T, K, F, L>,
     ) -> Result<(), Error> {
         if self
-            .persist_object(
+            .storage
+            .put_object(
                 OBJECTS_BUCKET.to_string(),
                 MANAGER_KEY.to_string(),
                 channel_manager.encode(),
@@ -264,19 +263,33 @@ where
     }
 
     fn persist_graph(&self, network_graph: &NetworkGraph<L>) -> Result<(), Error> {
-        self.persist_object(
-            OBJECTS_BUCKET.to_string(),
-            GRAPH_KEY.to_string(),
-            network_graph.encode(),
-        )
+        self.storage
+            .put_object(
+                OBJECTS_BUCKET.to_string(),
+                GRAPH_KEY.to_string(),
+                network_graph.encode(),
+            )
+            .map_err(|_| {
+                Error::new(
+                    io::ErrorKind::Other,
+                    "Failed to persist graph using storage callback",
+                )
+            })
     }
 
     fn persist_scorer(&self, scorer: &S) -> Result<(), Error> {
-        self.persist_object(
-            OBJECTS_BUCKET.to_string(),
-            SCORER_KEY.to_string(),
-            scorer.encode(),
-        )
+        self.storage
+            .put_object(
+                OBJECTS_BUCKET.to_string(),
+                SCORER_KEY.to_string(),
+                scorer.encode(),
+            )
+            .map_err(|_| {
+                Error::new(
+                    io::ErrorKind::Other,
+                    "Failed to persist socrer using storage callback",
+                )
+            })
     }
 }
 
@@ -301,29 +314,31 @@ mod tests {
         }
     }
 
-    impl RedundantStorageCallback for StorageMock {
-        fn object_exists(&self, bucket: String, key: String) -> bool {
-            self.storage.object_exists(bucket, key)
+    impl RemoteStorageCallback for StorageMock {
+        fn object_exists(&self, bucket: String, key: String) -> CallbackResult<bool> {
+            Ok(self.storage.object_exists(bucket, key))
         }
 
-        fn get_object(&self, bucket: String, key: String) -> Vec<u8> {
-            self.storage.get_object(bucket, key)
+        fn get_object(&self, bucket: String, key: String) -> CallbackResult<Vec<u8>> {
+            Ok(self.storage.get_object(bucket, key))
         }
 
-        fn check_health(&self, bucket: String) -> bool {
-            self.storage.check_health(bucket)
+        fn check_health(&self) -> bool {
+            self.storage.check_health()
         }
 
-        fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> bool {
-            self.storage.put_object(bucket, key, value)
+        fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> CallbackResult<()> {
+            self.storage.put_object(bucket, key, value);
+            Ok(())
         }
 
-        fn list_objects(&self, bucket: String) -> Vec<String> {
-            self.storage.list_objects(bucket)
+        fn list_objects(&self, bucket: String) -> CallbackResult<Vec<String>> {
+            Ok(self.storage.list_objects(bucket))
         }
 
-        fn delete_object(&self, bucket: String, key: String) -> bool {
-            self.storage.delete_object(bucket, key)
+        fn delete_object(&self, bucket: String, key: String) -> CallbackResult<()> {
+            self.storage.delete_object(bucket, key);
+            Ok(())
         }
     }
 
@@ -331,26 +346,11 @@ mod tests {
     fn test_check_storage_health() {
         let storage = Arc::new(Storage::new());
         let persister = StoragePersister::new(Box::new(StorageMock::new(storage.clone())));
-        storage
-            .health
-            .lock()
-            .unwrap()
-            .insert("monitors".to_string(), true);
-        storage
-            .health
-            .lock()
-            .unwrap()
-            .insert("objects".to_string(), true);
-        assert!(persister.check_monitor_storage_health());
-        assert!(persister.check_object_storage_health());
+        *storage.health.lock().unwrap() = true;
+        assert!(persister.check_health());
 
-        storage
-            .health
-            .lock()
-            .unwrap()
-            .insert("monitors".to_string(), false);
-        assert!(!persister.check_monitor_storage_health());
-        assert!(persister.check_object_storage_health());
+        *storage.health.lock().unwrap() = false;
+        assert!(!persister.check_health());
     }
 
     #[test]

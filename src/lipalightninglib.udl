@@ -57,16 +57,6 @@ dictionary NodeAddress {
     string host;
 };
 
-// This interface is being reworked. Documentation will follow
-callback interface RedundantStorageCallback {
-    boolean object_exists(string bucket, string key);
-    sequence<u8> get_object(string bucket, string key);
-    boolean check_health(string bucket);
-    boolean put_object(string bucket, string key, sequence<u8> value);
-    sequence<string> list_objects(string bucket);
-    boolean delete_object(string bucket, string key);
-};
-
 [Error]
 enum CallbackError {
     // Invalid input.
@@ -156,7 +146,7 @@ enum LipaError {
 interface LightningNode {
     // Initiate the Lightning node and let it run in a background thread
     [Throws=InitializationError]
-    constructor([ByRef] Config config, RedundantStorageCallback redundant_storage_callback, LspCallback lsp_callback);
+    constructor([ByRef] Config config, RemoteStorageCallback remote_storage_callback, LspCallback lsp_callback);
 
     // Request some basic info about the local node
     NodeInfo get_node_info();
