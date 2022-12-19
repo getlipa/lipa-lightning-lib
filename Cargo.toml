@@ -51,4 +51,4 @@ pre-build = ["apt update --no-show-upgraded && apt install --yes protobuf-compil
 [build-dependencies]
 camino = "1.1.1"
 tonic-build = "0.8.2"
-uniffi_bindgen = "0.21.0"
+uniffi_bindgen = "0.22.0"
