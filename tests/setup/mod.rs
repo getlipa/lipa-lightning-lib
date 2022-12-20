@@ -2,6 +2,7 @@
 mod lsp_client;
 
 use lsp_client::LspClient;
+use std::fs::remove_dir_all;
 use storage_mock::Storage;
 use uniffi_lipalightninglib::callbacks::RemoteStorageCallback;
 use uniffi_lipalightninglib::config::{Config, NodeAddress};
@@ -79,12 +80,15 @@ impl NodeHandle {
         });
         let storage = StorageMock::new(Arc::new(Storage::new()));
 
+        let _ = remove_dir_all(".3l_local_test");
+
         let config = Config {
             network: Network::Regtest,
             seed: generate_secret("".to_string()).unwrap().seed,
             esplora_api_url: "http://localhost:30000".to_string(),
             lsp_node,
             rgs_url: "http://localhost:8080/snapshot/".to_string(),
+            local_persistence_path: ".3l_local_test".to_string(),
         };
 
         NodeHandle { config, storage }
