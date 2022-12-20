@@ -43,7 +43,7 @@ storage-mock = { path = "util/storage-mock" }
 oslog = "0.2.0"
 
 [target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.11"
+android_logger = "0.10.1"
 
 [package.metadata.cross.build]
 pre-build = ["apt update --no-show-upgraded && apt install --yes protobuf-compiler"]
