@@ -6,6 +6,7 @@ pub struct Config {
     pub esplora_api_url: String,
     pub lsp_node: NodeAddress,
     pub rgs_url: String,
+    pub local_persistence_path: String,
 }
 
 #[derive(Debug, Clone)]

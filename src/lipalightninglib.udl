@@ -40,12 +40,14 @@ enum Network {
 // * rgs_url - the url of the Rapid Gossip Sync (RGS) server. Possible values:
 //     - "https://rapidsync.lightningdevkit.org/snapshot/" for Mainnet (PROD)
 //     - *WIP* for Testnet
+// * local_persistence_path - a path on the local filesystem where this library will directly persist data
 dictionary Config {
     Network network;
     sequence<u8> seed;
     string esplora_api_url;
     NodeAddress lsp_node;
     string rgs_url;
+    string local_persistence_path;
 };
 
 // A Lightning Protocol address of a node (how Lightning nodes address each other within the Lightning Network)

@@ -55,6 +55,7 @@ fn main() {
         esplora_api_url: "http://localhost:30000".to_string(),
         lsp_node: ln_node_address,
         rgs_url: "http://localhost:8080/snapshot/".to_string(),
+        local_persistence_path: ".3l_local_example_node".to_string(),
     };
 
     let node = LightningNode::new(&config, storage, lsp_client).unwrap();
