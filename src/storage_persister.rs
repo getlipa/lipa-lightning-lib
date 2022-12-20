@@ -231,18 +231,18 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
     }
 }
 
-impl<'a, Signer: Sign, M: Deref, T: Deref, K: Deref, F: Deref, L: Deref, S: WriteableScore<'a>>
-    Persister<'a, Signer, M, T, K, F, L, S> for StoragePersister
+impl<'a, M: Deref, T: Deref, K: Deref, F: Deref, L: Deref, S: WriteableScore<'a>>
+    Persister<'a, M, T, K, F, L, S> for StoragePersister
 where
-    M::Target: 'static + chain::Watch<Signer>,
+    M::Target: 'static + chain::Watch<<K::Target as KeysInterface>::Signer>,
     T::Target: 'static + BroadcasterInterface,
-    K::Target: 'static + KeysInterface<Signer = Signer>,
+    K::Target: 'static + KeysInterface,
     F::Target: 'static + FeeEstimator,
     L::Target: 'static + Logger,
 {
     fn persist_manager(
         &self,
-        channel_manager: &lightning::ln::channelmanager::ChannelManager<Signer, M, T, K, F, L>,
+        channel_manager: &lightning::ln::channelmanager::ChannelManager<M, T, K, F, L>,
     ) -> Result<(), Error> {
         if self
             .storage

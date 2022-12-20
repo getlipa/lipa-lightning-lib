@@ -1,10 +1,10 @@
 #![cfg(test)]
 
+use bitcoin::secp256k1::{PublicKey, Secp256k1, ONE_KEY};
 use lightning::ln::channelmanager::ChannelDetails;
 use lightning::ln::channelmanager::{ChannelCounterparty, CounterpartyForwardingInfo};
 use lightning::ln::features::InitFeatures;
 use lightning::util::config::ChannelConfig;
-use secp256k1::{PublicKey, Secp256k1, ONE_KEY};
 
 pub fn channel() -> ChannelDetails {
     let secp = Secp256k1::new();
@@ -38,12 +38,13 @@ pub fn channel() -> ChannelDetails {
         inbound_scid_alias: None,
         channel_value_satoshis: 0u64,
         unspendable_punishment_reserve: None,
-        user_channel_id: 0u64,
+        user_channel_id: 0u128,
         balance_msat: 0u64,
         outbound_capacity_msat: 0u64,
         next_outbound_htlc_limit_msat: 0u64,
         inbound_capacity_msat: 0u64,
         confirmations_required: None,
+        confirmations: Some(0),
         force_close_spend_delay: None,
         is_outbound: false,
         is_channel_ready: false,

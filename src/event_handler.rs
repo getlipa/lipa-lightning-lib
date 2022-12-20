@@ -20,15 +20,18 @@ impl LipaEventHandler {
 }
 
 impl EventHandler for LipaEventHandler {
-    fn handle_event(&self, event: &Event) {
+    fn handle_event(&self, event: Event) {
         trace!("Event occured: {:?}", event);
 
         match event {
             Event::FundingGenerationReady { .. } => {}
-            Event::PaymentReceived {
+            Event::PaymentClaimable {
+                receiver_node_id: _,
                 payment_hash,
                 amount_msat,
                 purpose,
+                via_channel_id: _,
+                via_user_channel_id: _,
             } => {
                 // Note: LDK will not stop an inbound payment from being paid multiple times,
                 //       so multiple PaymentReceived events may be generated for the same payment.
@@ -44,7 +47,7 @@ impl EventHandler for LipaEventHandler {
                             "Registered incoming invoice payment for {} msat with hash {:?}",
                             amount_msat, payment_hash
                         );
-                        self.channel_manager.claim_funds(*payment_preimage);
+                        self.channel_manager.claim_funds(payment_preimage);
                     }
                     PaymentPurpose::InvoicePayment {
                         payment_preimage: None,
@@ -54,18 +57,19 @@ impl EventHandler for LipaEventHandler {
                             "Registered incoming invoice payment for {} msat with hash {:?}, but no preimage was found",
                             amount_msat, payment_hash
                         );
-                        self.channel_manager.fail_htlc_backwards(payment_hash);
+                        self.channel_manager.fail_htlc_backwards(&payment_hash);
                     }
                     PaymentPurpose::SpontaneousPayment(payment_preimage) => {
                         info!(
                             "Registered incoming spontaneous payment for {} msat with hash {:?}",
                             amount_msat, payment_hash
                         );
-                        self.channel_manager.claim_funds(*payment_preimage);
+                        self.channel_manager.claim_funds(payment_preimage);
                     }
                 }
             }
             Event::PaymentClaimed {
+                receiver_node_id: _,
                 payment_hash,
                 amount_msat,
                 purpose: _,
@@ -117,23 +121,25 @@ impl EventHandler for LipaEventHandler {
                 channel_type,
             } => {
                 info!("EVENT: OpenChannelRequest");
-                if counterparty_node_id == &self.lsp_pubkey && channel_type.supports_zero_conf() {
+                if counterparty_node_id == self.lsp_pubkey && channel_type.supports_zero_conf() {
                     self.channel_manager
                         .accept_inbound_channel_from_trusted_peer_0conf(
-                            temporary_channel_id,
-                            counterparty_node_id,
-                            0u64,
+                            &temporary_channel_id,
+                            &counterparty_node_id,
+                            0u128,
                         )
                         .unwrap();
                 } else if channel_type.requires_zero_conf() {
                     error!("Unexpected OpenChannelRequest event. We don't know the peer and it is trying to open a zero-conf channel. How did this p2p connection get established?");
                 } else {
                     self.channel_manager
-                        .accept_inbound_channel(temporary_channel_id, counterparty_node_id, 0u64)
+                        .accept_inbound_channel(&temporary_channel_id, &counterparty_node_id, 0u128)
                         .unwrap();
                 }
             }
             Event::HTLCHandlingFailed { .. } => {}
+            Event::HTLCIntercepted { .. } => {}
+            Event::ChannelReady { .. } => {}
         }
     }
 }

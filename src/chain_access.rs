@@ -83,6 +83,7 @@ impl LipaChainAccess {
         };
 
         // 1. Query blockchain state.
+        // TODO: Handle bock hash of unconfirmed txs.
         let unconfirmed_txids = self.filter_unconfirmed(confirm.get_relevant_txids())?;
         let (confirmed_txs, pending_txids) = self.split_txs_by_status(self.watched_txs.clone())?;
         let spent_outputs = self.get_spent_outputs(&self.watched_outputs)?;
@@ -122,9 +123,9 @@ impl LipaChainAccess {
         Ok(SyncResult::Success)
     }
 
-    fn filter_unconfirmed(&self, txids: Vec<Txid>) -> LipaResult<Vec<Txid>> {
+    fn filter_unconfirmed(&self, txids: Vec<(Txid, Option<BlockHash>)>) -> LipaResult<Vec<Txid>> {
         let mut uncofirmed = Vec::new();
-        for txid in txids {
+        for (txid, _block_hash) in txids {
             if !self.esplora.is_tx_confirmed(&txid)? {
                 uncofirmed.push(txid);
             }
