@@ -1,4 +1,4 @@
-use bitcoin::{blockdata::block::BlockHeader, Txid};
+use bitcoin::{blockdata::block::BlockHeader, BlockHash, Txid};
 use lightning::chain::transaction::TransactionData;
 use lightning::chain::Confirm;
 
@@ -37,7 +37,7 @@ impl<'a> Confirm for ConfirmWrapper<'a> {
     }
 
     /// Returns relevant tx ids of all members joined and deduplicated.
-    fn get_relevant_txids(&self) -> Vec<Txid> {
+    fn get_relevant_txids(&self) -> Vec<(Txid, Option<BlockHash>)> {
         let mut joined = Vec::new();
         for member in &self.members {
             joined.extend_from_slice(&member.get_relevant_txids());
@@ -46,7 +46,7 @@ impl<'a> Confirm for ConfirmWrapper<'a> {
     }
 }
 
-fn unique(mut vec: Vec<Txid>) -> Vec<Txid> {
+fn unique(mut vec: Vec<(Txid, Option<BlockHash>)>) -> Vec<(Txid, Option<BlockHash>)> {
     vec.sort_unstable();
     vec.dedup();
     vec
