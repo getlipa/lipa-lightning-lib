@@ -39,6 +39,7 @@ use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;
 use crate::invoice::create_raw_invoice;
+pub use crate::invoice::InvoiceDetails;
 use crate::keys_manager::{
     generate_random_bytes, generate_secret, init_keys_manager, mnemonic_to_secret,
 };
@@ -52,6 +53,8 @@ use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync};
+use std::fmt::Debug;
+use std::str::FromStr;
 
 use bitcoin::bech32::ToBase32;
 use bitcoin::blockdata::constants::genesis_block;
@@ -67,7 +70,7 @@ use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringParameters};
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
-use lightning_invoice::Currency;
+use lightning_invoice::{Currency, Invoice, InvoiceDescription};
 use lightning_rapid_gossip_sync::GraphSyncError;
 use log::{debug, error, info, warn, Level as LogLevel};
 use std::sync::{Arc, Mutex};
@@ -407,6 +410,53 @@ impl LightningNode {
             },
         };
         Ok(())
+    }
+
+    pub fn validate_and_decode_invoice(&self, invoice: String) -> LipaResult<InvoiceDetails> {
+        let invoice = Invoice::from_str(Self::chomp_prefix(&invoice))
+            .map_to_invalid_input("Invalid invoice - parse failure")?;
+
+        let network = match invoice.currency() {
+            Currency::Bitcoin => Network::Bitcoin,
+            Currency::BitcoinTestnet => Network::Testnet,
+            Currency::Regtest => Network::Regtest,
+            Currency::Simnet => Network::Signet,
+            Currency::Signet => Network::Signet,
+        };
+
+        if network != self.network {
+            return Err(invalid_input("Invalid invoice - network mismatch"));
+        }
+
+        // TODO: should we return the hash when no direct description is provided?
+        //      or should we return something like "No description" or an empty string?
+        let description = match invoice.description() {
+            InvoiceDescription::Direct(d) => d.to_string(),
+            InvoiceDescription::Hash(h) => h.0.to_string(),
+        };
+
+        let payee_pub_key = match invoice.payee_pub_key() {
+            None => invoice.recover_payee_pub_key().to_string(),
+            Some(p) => p.to_string(),
+        };
+
+        Ok(InvoiceDetails {
+            amount_msat: invoice.amount_milli_satoshis().unwrap_or(0),
+            description,
+            payment_hash: invoice.payment_hash().to_string(),
+            payee_pub_key,
+            invoice_timestamp: invoice.timestamp(),
+            expiry_time: invoice.expiry_time(),
+        })
+    }
+
+    fn chomp_prefix(string: &str) -> &str {
+        let prefix = "lightning:";
+        if let Some(string) = string.strip_prefix(prefix) {
+            string
+        } else {
+            string
+        }
     }
 }
 

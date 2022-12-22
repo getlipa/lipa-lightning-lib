@@ -145,6 +145,16 @@ enum LipaError {
     "PermanentFailure",
 };
 
+// Information embedded in an invoice
+dictionary InvoiceDetails {
+    u64 amount_msat;
+    string description;
+    string payment_hash;
+    string payee_pub_key;
+    timestamp invoice_timestamp; // The moment an invoice was created
+    duration expiry_time; // The interval after which the invoice expires (invoice_timestamp + expiry_time = timestamp of expiration)
+};
+
 interface LightningNode {
     // Initiate the Lightning node and let it run in a background thread
     [Throws=InitializationError]
@@ -173,6 +183,10 @@ interface LightningNode {
     // Doing this before sending a payment increases the likelihood that the payment will go through.
     [Throws=LipaError]
     void sync_graph();
+
+    // Validates and, if valid, decodes an invoice returning detailed information
+    [Throws=LipaError]
+    InvoiceDetails validate_and_decode_invoice(string invoice);
 };
 
 dictionary ChannelsInfo {

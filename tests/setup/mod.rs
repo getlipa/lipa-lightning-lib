@@ -497,6 +497,74 @@ pub mod nigiri {
         Ok(())
     }
 
+    pub fn issue_invoice(
+        node: NodeInstance,
+        description: &str,
+        amount_msat: u64,
+        expiry: u64,
+    ) -> Result<String, String> {
+        match node {
+            NodeInstance::NigiriCln => cln_issue_invoice(node, description, amount_msat, expiry),
+            _ => lnd_issue_invoice(node, description, amount_msat, expiry),
+        }
+    }
+
+    pub fn lnd_issue_invoice(
+        node: NodeInstance,
+        description: &str,
+        amount_msat: u64,
+        expiry: u64,
+    ) -> Result<String, String> {
+        let sub_cmd = &[
+            "addinvoice",
+            "--memo",
+            description,
+            "--amt_msat",
+            &amount_msat.to_string(),
+            "--expiry",
+            &expiry.to_string(),
+        ];
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(cmd.as_slice(), output));
+        }
+
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let invoice = json["payment_request"].as_str().unwrap().to_string();
+
+        Ok(invoice)
+    }
+
+    pub fn cln_issue_invoice(
+        node: NodeInstance,
+        description: &str,
+        amount_msat: u64,
+        expiry: u64,
+    ) -> Result<String, String> {
+        let sub_cmd = &[
+            "invoice",
+            &amount_msat.to_string(),
+            &rand::random::<u64>().to_string(),
+            description,
+            &expiry.to_string(),
+        ];
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(cmd.as_slice(), output));
+        }
+
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let invoice = json["bolt11"].as_str().unwrap().to_string();
+
+        Ok(invoice)
+    }
+
     pub fn lnd_node_disconnect_peer(node: NodeInstance, node_id: String) -> Result<(), String> {
         let sub_cmd = &["disconnect", &node_id];
         let cmd = [get_node_prefix(node), sub_cmd].concat();
