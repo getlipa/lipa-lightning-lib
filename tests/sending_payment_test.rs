@@ -30,16 +30,14 @@ mod sending_payments_test {
     const MAINNET_INVOICE: &str = "lnbc10u1p36gu9hpp5dmg5up4kyhkefpxue5smrgucg889esu6zc9vyntnzmqyyr4dycaqdqqcqpjsp5h0n3nc53t2tcm8a9kjpsdgql7ex2c7qrpc0dn4ja9c64adycxx7s9q7sqqqqqqqqqqqqqqqqqqqsqqqqqysgqmqz9gxqyjw5qrzjqwryaup9lh50kkranzgcdnn2fgvx390wgj5jd07rwr3vxeje0glcll63swcqxvlas5qqqqlgqqqqqeqqjqmstdrvfcyq9as46xuu63dfgstehmthqlxg8ljuyqk2z9mxvhjfzh0a6jm53rrgscyd7v0y7dj4zckq69tlsdex0352y89wmvvv0j3gspnku4sz";
 
     #[test]
-    fn invoice_validation_and_decode_test() {
+    fn invoice_decode_test() {
         let node_handle = NodeHandle::new_with_lsp_setup();
 
         let node = node_handle.start().unwrap();
 
         // Test valid hardcoded invoice
 
-        let invoice_details = node
-            .validate_and_decode_invoice(REGTEST_INVOICE.to_string())
-            .unwrap();
+        let invoice_details = node.decode_invoice(REGTEST_INVOICE.to_string()).unwrap();
 
         assert_eq!(invoice_details.payment_hash, REGTEST_INVOICE_HASH);
         assert_eq!(
@@ -59,7 +57,7 @@ mod sending_payments_test {
 
         // Test invalid hardcoded invoice (fail to parse)
 
-        let invoice_details_result = node.validate_and_decode_invoice(ONCHAIN_ADDRESS.to_string());
+        let invoice_details_result = node.decode_invoice(ONCHAIN_ADDRESS.to_string());
         assert!(invoice_details_result.is_err());
         assert!(invoice_details_result
             .err()
@@ -69,7 +67,7 @@ mod sending_payments_test {
 
         // Test invalid hardcoded invoice (wrong network)
 
-        let invoice_details_result = node.validate_and_decode_invoice(MAINNET_INVOICE.to_string());
+        let invoice_details_result = node.decode_invoice(MAINNET_INVOICE.to_string());
         assert!(invoice_details_result.is_err());
         assert!(invoice_details_result
             .err()
@@ -87,7 +85,7 @@ mod sending_payments_test {
         )
         .unwrap();
 
-        let invoice_details = node.validate_and_decode_invoice(invoice).unwrap();
+        let invoice_details = node.decode_invoice(invoice).unwrap();
 
         assert_invoice_details(
             invoice_details,
@@ -107,7 +105,7 @@ mod sending_payments_test {
         )
         .unwrap();
 
-        let invoice_details = node.validate_and_decode_invoice(invoice).unwrap();
+        let invoice_details = node.decode_invoice(invoice).unwrap();
 
         assert_invoice_details(
             invoice_details,
@@ -127,7 +125,7 @@ mod sending_payments_test {
         )
         .unwrap();
 
-        let invoice_details = node.validate_and_decode_invoice(invoice).unwrap();
+        let invoice_details = node.decode_invoice(invoice).unwrap();
 
         assert_invoice_details(
             invoice_details,
@@ -145,9 +143,9 @@ mod sending_payments_test {
         expiry_time: Duration,
         payee_pub_key: &str,
     ) {
-        assert_eq!(invoice_details.amount_msat, amount_msat);
+        assert_eq!(invoice_details.amount_msat.unwrap(), amount_msat);
         assert_eq!(invoice_details.description, description);
-        assert_eq!(invoice_details.expiry_time, expiry_time);
+        assert_eq!(invoice_details.expiry_interval, expiry_time);
         assert_eq!(invoice_details.payee_pub_key, payee_pub_key);
     }
 }

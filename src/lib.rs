@@ -412,8 +412,8 @@ impl LightningNode {
         Ok(())
     }
 
-    pub fn validate_and_decode_invoice(&self, invoice: String) -> LipaResult<InvoiceDetails> {
-        let invoice = Invoice::from_str(Self::chomp_prefix(&invoice))
+    pub fn decode_invoice(&self, invoice: String) -> LipaResult<InvoiceDetails> {
+        let invoice = Invoice::from_str(Self::chomp_prefix(invoice.trim()))
             .map_to_invalid_input("Invalid invoice - parse failure")?;
 
         let network = match invoice.currency() {
@@ -428,11 +428,9 @@ impl LightningNode {
             return Err(invalid_input("Invalid invoice - network mismatch"));
         }
 
-        // TODO: should we return the hash when no direct description is provided?
-        //      or should we return something like "No description" or an empty string?
         let description = match invoice.description() {
             InvoiceDescription::Direct(d) => d.to_string(),
-            InvoiceDescription::Hash(h) => h.0.to_string(),
+            InvoiceDescription::Hash(_) => String::new(),
         };
 
         let payee_pub_key = match invoice.payee_pub_key() {
@@ -441,12 +439,12 @@ impl LightningNode {
         };
 
         Ok(InvoiceDetails {
-            amount_msat: invoice.amount_milli_satoshis().unwrap_or(0),
+            amount_msat: invoice.amount_milli_satoshis(),
             description,
             payment_hash: invoice.payment_hash().to_string(),
             payee_pub_key,
             invoice_timestamp: invoice.timestamp(),
-            expiry_time: invoice.expiry_time(),
+            expiry_interval: invoice.expiry_time(),
         })
     }
 

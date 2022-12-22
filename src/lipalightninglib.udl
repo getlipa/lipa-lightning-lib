@@ -147,12 +147,12 @@ enum LipaError {
 
 // Information embedded in an invoice
 dictionary InvoiceDetails {
-    u64 amount_msat;
+    u64? amount_msat;
     string description;
     string payment_hash;
     string payee_pub_key;
-    timestamp invoice_timestamp; // The moment an invoice was created
-    duration expiry_time; // The interval after which the invoice expires (invoice_timestamp + expiry_time = timestamp of expiration)
+    timestamp invoice_timestamp; // The moment an invoice was created (UTC)
+    duration expiry_interval; // The interval after which the invoice expires (invoice_timestamp + expiry_interval = timestamp of expiration)
 };
 
 interface LightningNode {
@@ -186,7 +186,7 @@ interface LightningNode {
 
     // Validates and, if valid, decodes an invoice returning detailed information
     [Throws=LipaError]
-    InvoiceDetails validate_and_decode_invoice(string invoice);
+    InvoiceDetails decode_invoice(string invoice);
 };
 
 dictionary ChannelsInfo {

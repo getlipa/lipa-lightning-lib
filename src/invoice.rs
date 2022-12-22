@@ -12,12 +12,12 @@ use lightning_invoice::{Currency, InvoiceBuilder, RawInvoice};
 use log::info;
 
 pub struct InvoiceDetails {
-    pub amount_msat: u64,
+    pub amount_msat: Option<u64>,
     pub description: String,
     pub payment_hash: String,
     pub payee_pub_key: String,
     pub invoice_timestamp: SystemTime,
-    pub expiry_time: Duration,
+    pub expiry_interval: Duration,
 }
 
 pub(crate) fn create_raw_invoice(
