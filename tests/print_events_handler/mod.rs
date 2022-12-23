@@ -20,4 +20,24 @@ impl EventsCallback for PrintEventsHandler {
         );
         Ok(())
     }
+
+    fn payment_sent(
+        &self,
+        payment_hash: String,
+        payment_preimage: String,
+        fee_paid_msat: u64,
+    ) -> CallbackResult<()> {
+        info!(
+            "A payment has been successfully sent! Its preimage is {}, the hash is {}, and a total of {} msats were paid in lightning fees", 
+            payment_preimage,
+            payment_hash,
+            fee_paid_msat
+        );
+        Ok(())
+    }
+
+    fn payment_failed(&self, payment_hash: String) -> CallbackResult<()> {
+        info!("A payment has failed! Its hash is {}", payment_hash);
+        Ok(())
+    }
 }

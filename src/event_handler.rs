@@ -103,11 +103,42 @@ impl EventHandler for LipaEventHandler {
                         //      feature of the MVP.
                     }
                 }
-
-                // Todo: inform the consumer of this library that the payment was claimed
             }
-            Event::PaymentSent { .. } => {}
-            Event::PaymentFailed { .. } => {}
+            Event::PaymentSent {
+                payment_id: _,
+                payment_preimage,
+                payment_hash,
+                fee_paid_msat,
+            } => {
+                let fee_paid_msat = fee_paid_msat.unwrap_or(0);
+                info!(
+                    "EVENT: PaymentSent - preimage: {} - hash: {} - fee: {}",
+                    payment_preimage.0.to_hex(),
+                    payment_hash.0.to_hex(),
+                    fee_paid_msat,
+                );
+                // TODO: Handle unwrap()
+                self.events_callback
+                    .payment_sent(
+                        payment_preimage.0.to_hex(),
+                        payment_hash.0.to_hex(),
+                        fee_paid_msat,
+                    )
+                    .unwrap();
+            }
+            Event::PaymentFailed {
+                payment_id: _,
+                payment_hash,
+            } => {
+                info!(
+                    "EVENT: PaymentFailed - preimage: {}",
+                    payment_hash.0.to_hex()
+                );
+                // TODO: Handle unwrap()
+                self.events_callback
+                    .payment_failed(payment_hash.0.to_hex())
+                    .unwrap();
+            }
             Event::PaymentPathSuccessful { .. } => {}
             Event::PaymentPathFailed { .. } => {}
             Event::ProbeSuccessful { .. } => {}
