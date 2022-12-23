@@ -28,7 +28,7 @@ mod tx_broadcaster;
 mod types;
 
 use crate::async_runtime::{AsyncRuntime, RepeatingTaskHandle};
-use crate::callbacks::{LspCallback, RemoteStorageCallback};
+use crate::callbacks::{EventsCallback, LspCallback, RemoteStorageCallback};
 use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, NodeAddress};
 use crate::confirm::ConfirmWrapper;
@@ -96,6 +96,7 @@ impl LightningNode {
         config: &Config,
         remote_storage_callback: Box<dyn RemoteStorageCallback>,
         lsp_callback: Box<dyn LspCallback>,
+        events_callback: Box<dyn EventsCallback>,
     ) -> Result<Self, InitializationError> {
         let rt = AsyncRuntime::new()?;
         let genesis_hash = genesis_block(config.network).header.block_hash();
@@ -269,6 +270,7 @@ impl LightningNode {
         let event_handler = Arc::new(LipaEventHandler::new(
             lsp_pubkey,
             Arc::clone(&channel_manager),
+            events_callback,
         ));
 
         // Step 16. Initialize the ProbabilisticScorer

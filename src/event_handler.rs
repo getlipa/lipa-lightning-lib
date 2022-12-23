@@ -1,5 +1,7 @@
 use crate::types::ChannelManager;
 
+use crate::callbacks::EventsCallback;
+use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::PublicKey;
 use lightning::util::events::{Event, EventHandler, PaymentPurpose};
 use log::{error, info, trace};
@@ -8,13 +10,19 @@ use std::sync::Arc;
 pub(crate) struct LipaEventHandler {
     lsp_pubkey: PublicKey,
     channel_manager: Arc<ChannelManager>,
+    events_callback: Box<dyn EventsCallback>,
 }
 
 impl LipaEventHandler {
-    pub fn new(lsp_pubkey: PublicKey, channel_manager: Arc<ChannelManager>) -> Self {
+    pub fn new(
+        lsp_pubkey: PublicKey,
+        channel_manager: Arc<ChannelManager>,
+        events_callback: Box<dyn EventsCallback>,
+    ) -> Self {
         Self {
             lsp_pubkey,
             channel_manager,
+            events_callback,
         }
     }
 }
@@ -72,12 +80,29 @@ impl EventHandler for LipaEventHandler {
                 receiver_node_id: _,
                 payment_hash,
                 amount_msat,
-                purpose: _,
+                purpose,
             } => {
-                info!(
-                    "Claimed payment for {} msat with hash {:?}",
-                    amount_msat, payment_hash
-                );
+                match purpose {
+                    PaymentPurpose::InvoicePayment { .. } => {
+                        info!(
+                            "Registered incoming invoice payment for {} msat with hash {:?}",
+                            amount_msat, payment_hash
+                        );
+                        // TODO: Handle unwrap()
+                        self.events_callback
+                            .payment_claimed(payment_hash.0.to_hex(), amount_msat)
+                            .unwrap();
+                    }
+                    PaymentPurpose::SpontaneousPayment(_) => {
+                        info!(
+                            "Claimed incoming spontaneous payment for {} msat with hash {:?}",
+                            amount_msat, payment_hash
+                        );
+                        // TODO: inform consumer of this library about a claimed spontaneous payment
+                        //      We can leave this for later as spontaneous payments are not a
+                        //      feature of the MVP.
+                    }
+                }
 
                 // Todo: inform the consumer of this library that the payment was claimed
             }

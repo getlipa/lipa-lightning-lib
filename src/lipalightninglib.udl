@@ -109,6 +109,19 @@ callback interface RemoteStorageCallback {
     void delete_object(string bucket, string key);
 };
 
+// Asynchronous events that the consumer of this library needs/wants to handle are delivered through this interface.
+// These callbacks will only be called once, so the consumer of this library should be quick to persist information
+// regarding their occurrence. Otherwise, it's possible that an event gets "lost" if the app is terminated before
+// persistence finishes.
+callback interface EventsCallback {
+    // This callback will be called when a payment has been claimed.
+    // The payment_hash can be used cross-reference this claimed payment with a previously issued invoice.
+    // The received amount (amount_msat) will be at least as high as the value requested in the invoice but it's
+    // possible for it to be higher.
+    [Throws=CallbackError]
+    void payment_claimed(string payment_hash, u64 amount_msat);
+};
+
 [Error]
 enum InitializationError {
     "AsyncRuntime",
@@ -148,7 +161,7 @@ enum LipaError {
 interface LightningNode {
     // Initiate the Lightning node and let it run in a background thread
     [Throws=InitializationError]
-    constructor([ByRef] Config config, RemoteStorageCallback remote_storage_callback, LspCallback lsp_callback);
+    constructor([ByRef] Config config, RemoteStorageCallback remote_storage_callback, LspCallback lsp_callback, EventsCallback events_callback);
 
     // Request some basic info about the local node
     NodeInfo get_node_info();

@@ -24,3 +24,7 @@ pub trait LspCallback: Send + Sync {
     /// Returns non empty string with description in case of an error.
     fn register_payment(&self, bytes: Vec<u8>) -> Result<(), LspError>;
 }
+
+pub trait EventsCallback: Send + Sync {
+    fn payment_claimed(&self, payment_hash: String, amount_msat: u64) -> CallbackResult<()>;
+}
