@@ -154,6 +154,7 @@ pub mod nigiri {
     use super::*;
 
     use crate::try_cmd_repeatedly;
+    use bitcoin::hashes::hex::ToHex;
     use log::debug;
     use std::process::{Command, Output};
     use std::thread::sleep;
@@ -165,6 +166,9 @@ pub mod nigiri {
         NigiriLnd,
         LspdLnd,
     }
+
+    const HALF_SEC: Duration = Duration::from_millis(500);
+    const N_RETRIES: u8 = 10;
 
     const NIGIRI_CLN_CMD_PREFIX: &[&str] = &["nigiri", "cln"];
     const NIGIRI_LND_CMD_PREFIX: &[&str] = &["nigiri", "lnd"];
@@ -321,6 +325,35 @@ pub mod nigiri {
             synced: bitcoind_synced && lightningd_synced,
             pub_key,
         })
+    }
+
+    pub fn query_node_balance(node: NodeInstance) -> Result<u64, String> {
+        match node {
+            NodeInstance::NigiriCln => query_cln_node_balance(node),
+            _ => query_lnd_node_balance(node),
+        }
+    }
+
+    fn query_lnd_node_balance(node: NodeInstance) -> Result<u64, String> {
+        let sub_cmd = &["channelbalance"];
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(&cmd, output));
+        }
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let balance = json["local_balance"]["msat"]
+            .as_str()
+            .unwrap()
+            .parse::<u64>()
+            .unwrap();
+        Ok(balance)
+    }
+
+    fn query_cln_node_balance(_node: NodeInstance) -> Result<u64, String> {
+        todo!();
     }
 
     pub fn mine_blocks(block_amount: u32) -> Result<(), String> {
@@ -661,5 +694,20 @@ pub mod nigiri {
                 sleep($interval);
             }
         }};
+    }
+
+    pub fn initiate_node_with_channel(remote_node: NodeInstance) -> LightningNode {
+        let node_handle = NodeHandle::new_with_lsp_setup();
+
+        let node = node_handle.start().unwrap();
+        let node_id = node.get_node_info().node_pubkey.to_hex();
+
+        assert_eq!(node.get_node_info().num_peers, 1);
+
+        lnd_node_open_channel(remote_node, &node_id, false).unwrap();
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
+
+        sleep(Duration::from_secs(10));
+        node
     }
 }

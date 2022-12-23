@@ -4,7 +4,7 @@ mod setup;
 // because they are manipulating their environment:
 // cargo test --features nigiri -- --test-threads 1
 #[cfg(feature = "nigiri")]
-mod receiving_payments_test {
+pub mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
     use std::thread::sleep;
     use std::time::Duration;
@@ -35,7 +35,7 @@ mod receiving_payments_test {
     #[test]
     // Test receiving an invoice on a node that already has an open channel
     fn receive_payment_on_established_node() {
-        let node = initiate_node_with_channel(NodeInstance::LspdLnd);
+        let node = nigiri::initiate_node_with_channel(NodeInstance::LspdLnd);
         run_payment_flow(node, NodeInstance::LspdLnd, TWENTY_K_SATS, MILLION_SATS);
     }
 
@@ -44,7 +44,7 @@ mod receiving_payments_test {
     // is that receiving 1_000 sats creates a dust-HTLC, while receiving 20_000 sats does not.
     // A dust-HTLC is an HTLC that is too small to be worth the fees to settle it.
     fn receive_dust_htlc_payment() {
-        let node = initiate_node_with_channel(NodeInstance::LspdLnd);
+        let node = nigiri::initiate_node_with_channel(NodeInstance::LspdLnd);
         run_payment_flow(node, NodeInstance::LspdLnd, THOUSAND_SATS, MILLION_SATS);
     }
 
@@ -56,7 +56,7 @@ mod receiving_payments_test {
     // In case the bug gets fixed as a byproduct, for example through updating dependencies,
     // this test should be removed, and the issues in the project management tools should be resolved.
     fn dust_bug_still_exists() {
-        let node = initiate_node_with_channel(NodeInstance::LspdLnd);
+        let node = nigiri::initiate_node_with_channel(NodeInstance::LspdLnd);
         assert_channel_ready(&node, TEN_K_SATS);
         let invoice = issue_invoice(&node, TEN_K_SATS);
 
@@ -67,7 +67,7 @@ mod receiving_payments_test {
     #[test]
     fn receive_multiple_payments() {
         let amt_of_payments = 10;
-        let node = initiate_node_with_channel(NodeInstance::LspdLnd);
+        let node = nigiri::initiate_node_with_channel(NodeInstance::LspdLnd);
         assert_channel_ready(&node, TWENTY_K_SATS * amt_of_payments);
 
         for i in 1..=amt_of_payments {
@@ -161,21 +161,6 @@ mod receiving_payments_test {
         nigiri::cln_pay_invoice(NodeInstance::NigiriCln, &invoice).unwrap();
 
         assert_payment_received(&node, TWENTY_K_SATS * 3, MILLION_SATS);
-    }
-
-    fn initiate_node_with_channel(remote_node: NodeInstance) -> LightningNode {
-        let node_handle = NodeHandle::new_with_lsp_setup();
-
-        let node = node_handle.start().unwrap();
-        let node_id = node.get_node_info().node_pubkey.to_hex();
-
-        assert_eq!(node.get_node_info().num_peers, 1);
-
-        nigiri::lnd_node_open_channel(remote_node, &node_id, false).unwrap();
-        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-
-        sleep(Duration::from_secs(10));
-        node
     }
 
     fn run_payment_flow(

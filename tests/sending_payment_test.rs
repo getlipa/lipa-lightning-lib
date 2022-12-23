@@ -5,6 +5,7 @@ mod setup;
 //      cargo test --features nigiri -- --test-threads 1
 #[cfg(feature = "nigiri")]
 mod sending_payments_test {
+    use std::thread::sleep;
     use std::time::{Duration, UNIX_EPOCH};
     use uniffi_lipalightninglib::InvoiceDetails;
 
@@ -134,6 +135,47 @@ mod sending_payments_test {
             Duration::from_secs(SECONDS_IN_AN_HOUR),
             &nigiri::query_node_info(NigiriLnd).unwrap().pub_key,
         );
+    }
+
+    const REBALANCE_AMOUNT: u64 = 50_000_000;
+    const CHANNEL_SIZE: u64 = 1_000_000_000;
+    const PAYMENT_AMOUNT: u64 = 1_000_000;
+
+    #[test]
+    fn pay_invoice_direct_peer_test() {
+        let node = nigiri::initiate_node_with_channel(LspdLnd);
+
+        assert!(node.get_node_info().channels_info.num_channels > 0);
+        assert!(node.get_node_info().channels_info.num_usable_channels > 0);
+        assert!(node.get_node_info().channels_info.inbound_capacity_msat > REBALANCE_AMOUNT);
+
+        let invoice = node
+            .create_invoice(REBALANCE_AMOUNT, "test".to_string())
+            .unwrap();
+        assert!(invoice.starts_with("lnbc"));
+
+        nigiri::pay_invoice(LspdLnd, &invoice).unwrap();
+
+        assert_eq!(
+            node.get_node_info().channels_info.local_balance_msat,
+            REBALANCE_AMOUNT
+        );
+        assert!(node.get_node_info().channels_info.outbound_capacity_msat < REBALANCE_AMOUNT); // because of channel reserves
+        assert!(
+            node.get_node_info().channels_info.inbound_capacity_msat
+                < CHANNEL_SIZE - REBALANCE_AMOUNT
+        ); // smaller instead of equal because of channel reserves
+
+        let invoice = nigiri::issue_invoice(LspdLnd, "test", PAYMENT_AMOUNT, 3600).unwrap();
+
+        let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
+
+        node.pay_invoice(invoice).unwrap();
+        sleep(Duration::from_secs(10));
+
+        let final_balance = nigiri::query_node_balance(LspdLnd).unwrap();
+
+        assert_eq!(final_balance - initial_balance, PAYMENT_AMOUNT);
     }
 
     fn assert_invoice_details(
