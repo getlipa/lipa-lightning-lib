@@ -52,7 +52,7 @@ use crate::p2p_networking::{LnPeer, P2pConnection};
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
-use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync};
+use crate::types::{ChainMonitor, ChannelManager, InvoicePayer, PeerManager, RapidGossipSync};
 use std::fmt::Debug;
 use std::str::FromStr;
 
@@ -67,9 +67,11 @@ use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager
 use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Watch};
 use lightning::ln::channelmanager::ChainParameters;
 use lightning::ln::peer_handler::IgnoringMessageHandler;
+use lightning::routing::router::DefaultRouter;
 use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringParameters};
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
+use lightning_invoice::payment::{PaymentError, Retry};
 use lightning_invoice::{Currency, Invoice, InvoiceDescription};
 use lightning_rapid_gossip_sync::GraphSyncError;
 use log::{debug, error, info, warn, Level as LogLevel};
@@ -91,6 +93,7 @@ pub struct LightningNode {
     sync_handle: RepeatingTaskHandle,
     rgs_url: String,
     rapid_sync: Arc<RapidGossipSync>,
+    invoice_payer: Arc<InvoicePayer>,
 }
 
 impl LightningNode {
@@ -278,11 +281,24 @@ impl LightningNode {
         let _scorer = persister.read_scorer();
         let scorer = Arc::new(Mutex::new(ProbabilisticScorer::new(
             ProbabilisticScoringParameters::default(),
-            graph,
+            Arc::clone(&graph),
             Arc::clone(&logger),
         )));
 
         // Step 17. Initialize the InvoicePayer
+        let router = DefaultRouter::new(
+            graph,
+            Arc::clone(&logger),
+            keys_manager.get_secure_random_bytes(),
+            Arc::clone(&scorer),
+        );
+        let invoice_payer = Arc::new(InvoicePayer::new(
+            Arc::clone(&channel_manager),
+            router,
+            Arc::clone(&logger),
+            Arc::clone(&event_handler),
+            Retry::Timeout(Duration::from_secs(10)),
+        ));
 
         // Step 18. Initialize the Persister
         // Persister trait already implemented and instantiated ("persister")
@@ -321,6 +337,7 @@ impl LightningNode {
             sync_handle,
             rgs_url: config.rgs_url.clone(),
             rapid_sync,
+            invoice_payer,
         })
     }
 
@@ -413,20 +430,7 @@ impl LightningNode {
     }
 
     pub fn decode_invoice(&self, invoice: String) -> LipaResult<InvoiceDetails> {
-        let invoice = Invoice::from_str(Self::chomp_prefix(invoice.trim()))
-            .map_to_invalid_input("Invalid invoice - parse failure")?;
-
-        let network = match invoice.currency() {
-            Currency::Bitcoin => Network::Bitcoin,
-            Currency::BitcoinTestnet => Network::Testnet,
-            Currency::Regtest => Network::Regtest,
-            Currency::Simnet => Network::Signet,
-            Currency::Signet => Network::Signet,
-        };
-
-        if network != self.network {
-            return Err(invalid_input("Invalid invoice - network mismatch"));
-        }
+        let invoice = Self::parse_validate_invoice(self, &invoice)?;
 
         let description = match invoice.description() {
             InvoiceDescription::Direct(d) => d.to_string(),
@@ -446,6 +450,57 @@ impl LightningNode {
             invoice_timestamp: invoice.timestamp(),
             expiry_interval: invoice.expiry_time(),
         })
+    }
+
+    pub fn pay_invoice(&self, invoice: String) -> LipaResult<()> {
+        let invoice = Self::parse_validate_invoice(self, &invoice)?;
+
+        if invoice.amount_milli_satoshis().is_none() {
+            return Err(invalid_input("Invalid invoice - invoice is a zero value invoice and paying such invoice is not supported yet"));
+        }
+
+        match self.invoice_payer.pay_invoice(&invoice) {
+            Ok(_payment_id) => {
+                info!(
+                    "Initiated payment of {} msats",
+                    invoice.amount_milli_satoshis().unwrap()
+                );
+            }
+            Err(e) => {
+                return match e {
+                    PaymentError::Invoice(e) => {
+                        Err(invalid_input(format!("Invalid invoice - {}", e)))
+                    }
+                    PaymentError::Routing(e) => Err(runtime_error(format!(
+                        "Failed to find a route - {} - Recommended action: {:?}",
+                        e.err, e.action
+                    ))),
+                    PaymentError::Sending(e) => {
+                        Err(runtime_error(format!("Failed to send payment - {:?}", e)))
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn parse_validate_invoice(&self, invoice: &str) -> LipaResult<Invoice> {
+        let invoice = Invoice::from_str(Self::chomp_prefix(invoice.trim()))
+            .map_to_invalid_input("Invalid invoice - parse failure")?;
+
+        let network = match invoice.currency() {
+            Currency::Bitcoin => Network::Bitcoin,
+            Currency::BitcoinTestnet => Network::Testnet,
+            Currency::Regtest => Network::Regtest,
+            Currency::Simnet => Network::Signet,
+            Currency::Signet => Network::Signet,
+        };
+
+        if network != self.network {
+            return Err(invalid_input("Invalid invoice - network mismatch"));
+        }
+
+        Ok(invoice)
     }
 
     fn chomp_prefix(string: &str) -> &str {

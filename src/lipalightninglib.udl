@@ -187,6 +187,9 @@ interface LightningNode {
     // Validates and, if valid, decodes an invoice returning detailed information
     [Throws=LipaError]
     InvoiceDetails decode_invoice(string invoice);
+
+    [Throws=LipaError]
+    void pay_invoice(string invoice);
 };
 
 dictionary ChannelsInfo {
