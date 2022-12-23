@@ -136,7 +136,21 @@ impl EventHandler for LipaEventHandler {
             }
             Event::SpendableOutputs { .. } => {}
             Event::PaymentForwarded { .. } => {}
-            Event::ChannelClosed { .. } => {}
+            Event::ChannelClosed {
+                channel_id,
+                user_channel_id: _,
+                reason,
+            } => {
+                info!(
+                    "EVENT: ChannelClosed - channel {} closed due to {}",
+                    channel_id.to_hex(),
+                    reason
+                );
+                // TODO: Handle unwrap()
+                self.events_callback
+                    .channel_closed(channel_id.to_hex(), reason.to_string())
+                    .unwrap();
+            }
             Event::DiscardFunding { .. } => {}
             Event::OpenChannelRequest {
                 temporary_channel_id,

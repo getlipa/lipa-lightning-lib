@@ -27,4 +27,6 @@ pub trait LspCallback: Send + Sync {
 
 pub trait EventsCallback: Send + Sync {
     fn payment_claimed(&self, payment_hash: String, amount_msat: u64) -> CallbackResult<()>;
+
+    fn channel_closed(&self, channel_id: String, reason: String) -> CallbackResult<()>;
 }

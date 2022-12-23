@@ -120,6 +120,15 @@ callback interface EventsCallback {
     // possible for it to be higher.
     [Throws=CallbackError]
     void payment_claimed(string payment_hash, u64 amount_msat);
+
+    // This callback will be called when a channel has started closing
+    // The channel_id is the Channel ID encoded in hexadecimal.
+    // `reason` provides a reason for the close.
+    // On the MVP version of Lipa wallet, this event is unexpected and is likely to result in funds moving
+    // on-chain, thus becoming unavailable. If this happens, the user should be informed of the problem and that he
+    // should contact Lipa.
+    [Throws=CallbackError]
+    void channel_closed(string channel_id, string reason);
 };
 
 [Error]

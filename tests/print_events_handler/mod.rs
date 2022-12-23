@@ -12,4 +12,12 @@ impl EventsCallback for PrintEventsHandler {
         );
         Ok(())
     }
+
+    fn channel_closed(&self, channel_id: String, reason: String) -> CallbackResult<()> {
+        info!(
+            "A channel was closed! Channel ID {} was closed due to {}",
+            channel_id, reason
+        );
+        Ok(())
+    }
 }
