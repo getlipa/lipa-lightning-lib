@@ -40,6 +40,16 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 "syncgraph" => {
                     sync_graph(node);
                 }
+                "decodeinvoice" => {
+                    if let Err(message) = decode_invoice(node, &mut words) {
+                        println!("Error: {}", message);
+                    }
+                }
+                "payinvoice" => {
+                    if let Err(message) = pay_invoice(node, &mut words) {
+                        println!("Error: {}", message);
+                    }
+                }
                 "stop" => {
                     break;
                 }
@@ -54,6 +64,8 @@ fn help() {
     println!("nodeinfo");
     println!("lspfee");
     println!("syncgraph");
+    println!("decodeinvoice");
+    println!("payinvoice");
     println!("stop");
 }
 
@@ -115,4 +127,53 @@ fn sync_graph(node: &LightningNode) {
         Ok(_) => println!("Successfully synced the network graph"),
         Err(e) => error!("Failed to sync the network graph: {:?}", e),
     };
+}
+
+fn decode_invoice<'a>(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &'a str>,
+) -> Result<(), String> {
+    let invoice = words
+        .next()
+        .ok_or_else(|| "invoice is required".to_string())?;
+
+    let invoice_details = match node.decode_invoice(invoice.to_string()) {
+        Ok(id) => id,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    println!("Invoice details:");
+    println!(
+        "  Amount msats        {}",
+        invoice_details.amount_msat.unwrap()
+    );
+    println!("  Description         {}", invoice_details.description);
+    println!("  Payment hash        {}", invoice_details.payment_hash);
+    println!("  Payee public key    {}", invoice_details.payee_pub_key);
+    println!(
+        "  Invoice timestamp   {:?}",
+        invoice_details.invoice_timestamp
+    );
+    println!(
+        "  Expiry interval     {:?}",
+        invoice_details.expiry_interval
+    );
+
+    Ok(())
+}
+
+fn pay_invoice<'a>(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &'a str>,
+) -> Result<(), String> {
+    let invoice = words
+        .next()
+        .ok_or_else(|| "invoice is required".to_string())?;
+
+    match node.pay_invoice(invoice.to_string()) {
+        Ok(_) => {}
+        Err(e) => return Err(e.to_string()),
+    };
+
+    Ok(())
 }
