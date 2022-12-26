@@ -73,6 +73,7 @@ mod zero_conf_test {
             node.get_node_info().channels_info.local_balance_msat,
             HUNDRED_K_SATS
         );
+        sleep(Duration::from_secs(10));
         assert!(node.get_node_info().channels_info.outbound_capacity_msat > 0);
 
         sleep(Duration::from_secs(250)); // wait for the RGS server to learn about the new channels
