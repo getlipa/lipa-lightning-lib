@@ -455,16 +455,11 @@ impl LightningNode {
     pub fn pay_invoice(&self, invoice: String) -> LipaResult<()> {
         let invoice = Self::parse_validate_invoice(self, &invoice)?;
 
-        if invoice.amount_milli_satoshis().is_none() {
-            return Err(invalid_input("Invalid invoice - invoice is a zero value invoice and paying such invoice is not supported yet"));
-        }
+        let amount_msat = invoice.amount_milli_satoshis().ok_or_else(|| invalid_input("Invalid invoice - invoice is a zero value invoice and paying such invoice is not supported yet"))?;
 
         match self.invoice_payer.pay_invoice(&invoice) {
             Ok(_payment_id) => {
-                info!(
-                    "Initiated payment of {} msats",
-                    invoice.amount_milli_satoshis().unwrap()
-                );
+                info!("Initiated payment of {} msats", amount_msat);
             }
             Err(e) => {
                 return match e {
