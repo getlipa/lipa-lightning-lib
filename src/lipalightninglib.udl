@@ -114,14 +114,14 @@ callback interface RemoteStorageCallback {
 // regarding their occurrence. Otherwise, it's possible that an event gets "lost" if the app is terminated before
 // persistence finishes.
 callback interface EventsCallback {
-    // This callback will be called when a payment has been claimed.
+    // This callback will be called when a payment has been received.
     //
     // Parameters:
     // * payment_hash - can be used cross-reference this claimed payment with a previously issued invoice.
     // * amount_msat - will be at least as high as the value requested in the invoice but it's possible
     //      for it to be higher.
     [Throws=CallbackError]
-    void payment_claimed(string payment_hash, u64 amount_msat);
+    void payment_received(string payment_hash, u64 amount_msat);
 
     // This callback will be called when a channel has started closing
     //

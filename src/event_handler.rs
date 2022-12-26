@@ -90,7 +90,7 @@ impl EventHandler for LipaEventHandler {
                         );
                         // TODO: Handle unwrap()
                         self.events_callback
-                            .payment_claimed(payment_hash.0.to_hex(), amount_msat)
+                            .payment_received(payment_hash.0.to_hex(), amount_msat)
                             .unwrap();
                     }
                     PaymentPurpose::SpontaneousPayment(_) => {
