@@ -352,8 +352,30 @@ pub mod nigiri {
         Ok(balance)
     }
 
-    fn query_cln_node_balance(_node: NodeInstance) -> Result<u64, String> {
-        todo!();
+    fn query_cln_node_balance(node: NodeInstance) -> Result<u64, String> {
+        let sub_cmd = &["listfunds"];
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(&cmd, output));
+        }
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+
+        let channels = json["channels"].as_array().unwrap();
+        let mut balance: u64 = 0;
+        for channel in channels {
+            balance += channel["our_amount_msat"]
+                .as_str()
+                .unwrap()
+                .strip_suffix("msat")
+                .unwrap()
+                .parse::<u64>()
+                .unwrap();
+        }
+
+        Ok(balance)
     }
 
     pub fn mine_blocks(block_amount: u32) -> Result<(), String> {
