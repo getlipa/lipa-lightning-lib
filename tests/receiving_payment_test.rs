@@ -4,7 +4,7 @@ mod setup;
 // because they are manipulating their environment:
 // cargo test --features nigiri -- --test-threads 1
 #[cfg(feature = "nigiri")]
-pub mod receiving_payments_test {
+mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
     use std::thread::sleep;
     use std::time::Duration;
