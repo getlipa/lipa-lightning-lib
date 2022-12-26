@@ -61,7 +61,7 @@ mod zero_conf_test {
 
         assert!(node.get_node_info().channels_info.inbound_capacity_msat > 2 * HUNDRED_K_SATS);
 
-        // Pay from NigiriLnd and NigiriCln to 3L to create outbound liquidity
+        // Pay from NigiriCln to 3L to create outbound liquidity
         let invoice_cln = node
             .create_invoice(HUNDRED_K_SATS, "test".to_string())
             .unwrap();
@@ -82,11 +82,11 @@ mod zero_conf_test {
         send_payment_flow(&node, NodeInstance::NigiriCln, ONE_K_SATS);
 
         // Create new channel - the 3L node will have to learn about it in a partial sync
-
         nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
         sleep(Duration::from_secs(10));
 
+        // Pay from NigiriLnd to 3L to create outbound liquidity (LspdLnd -> NigiriLnd)
         let invoice_lnd = node
             .create_invoice(HUNDRED_K_SATS, "test".to_string())
             .unwrap();
