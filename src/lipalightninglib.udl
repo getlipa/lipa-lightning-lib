@@ -109,6 +109,49 @@ callback interface RemoteStorageCallback {
     void delete_object(string bucket, string key);
 };
 
+// Asynchronous events that the consumer of this library needs/wants to handle are delivered through this interface.
+// These callbacks will only be called once, so the consumer of this library should be quick to persist information
+// regarding their occurrence. Otherwise, it's possible that an event gets "lost" if the app is terminated before
+// persistence finishes.
+callback interface EventsCallback {
+    // This callback will be called when a payment has been received.
+    //
+    // Parameters:
+    // * payment_hash - can be used cross-reference this claimed payment with a previously issued invoice.
+    // * amount_msat - will be at least as high as the value requested in the invoice but it's possible
+    //      for it to be higher.
+    [Throws=CallbackError]
+    void payment_received(string payment_hash, u64 amount_msat);
+
+    // This callback will be called when a channel has started closing
+    //
+    // On the MVP version of Lipa wallet, this event is unexpected and is likely to result in funds moving
+    // on-chain, thus becoming unavailable. If this happens, the user should be informed of the problem and that he
+    // should contact Lipa.
+    //
+    // Parameters:
+    // * channel_id - Channel ID encoded in hexadecimal.
+    // * reason - provides a reason for the close
+    [Throws=CallbackError]
+    void channel_closed(string channel_id, string reason);
+
+    // This callback will be called when a payment has been successfully sent (the payee received the funds)
+    //
+    // Parameters:
+    // * payment_hash - the hash of the payment can be used to cross-reference this event to the payment that has succeeded
+    // * payment_preimage - the preimage of the payment can be used as proof of payment
+    // * fee_paid_msat - the amount that was paid in routing fees
+    [Throws=CallbackError]
+    void payment_sent(string payment_hash, string payment_preimage, u64 fee_paid_msat);
+
+    // This callback will be called when a payment has failed and no further attempts will be pursued.
+    //
+    // Parameters:
+    // * payment_hash - the hash of the payment can be used to cross-reference this event to the payment that has failed
+    [Throws=CallbackError]
+    void payment_failed(string payment_hash);
+};
+
 [Error]
 enum InitializationError {
     "AsyncRuntime",
@@ -158,7 +201,7 @@ dictionary InvoiceDetails {
 interface LightningNode {
     // Initiate the Lightning node and let it run in a background thread
     [Throws=InitializationError]
-    constructor([ByRef] Config config, RemoteStorageCallback remote_storage_callback, LspCallback lsp_callback);
+    constructor([ByRef] Config config, RemoteStorageCallback remote_storage_callback, LspCallback lsp_callback, EventsCallback events_callback);
 
     // Request some basic info about the local node
     NodeInfo get_node_info();

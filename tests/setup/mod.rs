@@ -1,5 +1,7 @@
 #[path = "../lsp_client/mod.rs"]
 mod lsp_client;
+#[path = "../print_events_handler/mod.rs"]
+mod print_event_handler;
 
 use lsp_client::LspClient;
 use std::fs::remove_dir_all;
@@ -12,6 +14,7 @@ use uniffi_lipalightninglib::LightningNode;
 
 #[cfg(feature = "nigiri")]
 use crate::setup::nigiri::{NodeInstance, RGS_CLN_HOST, RGS_CLN_ID, RGS_CLN_PORT};
+use crate::setup::print_event_handler::PrintEventsHandler;
 use bitcoin::Network;
 use simplelog::SimpleLogger;
 use std::sync::{Arc, Once};
@@ -130,10 +133,12 @@ impl NodeHandle {
         let lsp_auth_token =
             "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();
         let lsp_client = LspClient::build(lsp_address, lsp_auth_token);
+        let events_handler = PrintEventsHandler {};
         let node = LightningNode::new(
             &self.config,
             Box::new(self.storage.clone()),
             Box::new(lsp_client),
+            Box::new(events_handler),
         );
 
         // Wait for the the P2P background task to connect to the LSP

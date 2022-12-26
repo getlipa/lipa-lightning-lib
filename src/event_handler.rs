@@ -1,5 +1,7 @@
 use crate::types::ChannelManager;
 
+use crate::callbacks::EventsCallback;
+use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::PublicKey;
 use lightning::util::events::{Event, EventHandler, PaymentPurpose};
 use log::{error, info, trace};
@@ -8,13 +10,19 @@ use std::sync::Arc;
 pub(crate) struct LipaEventHandler {
     lsp_pubkey: PublicKey,
     channel_manager: Arc<ChannelManager>,
+    events_callback: Box<dyn EventsCallback>,
 }
 
 impl LipaEventHandler {
-    pub fn new(lsp_pubkey: PublicKey, channel_manager: Arc<ChannelManager>) -> Self {
+    pub fn new(
+        lsp_pubkey: PublicKey,
+        channel_manager: Arc<ChannelManager>,
+        events_callback: Box<dyn EventsCallback>,
+    ) -> Self {
         Self {
             lsp_pubkey,
             channel_manager,
+            events_callback,
         }
     }
 }
@@ -72,17 +80,65 @@ impl EventHandler for LipaEventHandler {
                 receiver_node_id: _,
                 payment_hash,
                 amount_msat,
-                purpose: _,
+                purpose,
+            } => {
+                match purpose {
+                    PaymentPurpose::InvoicePayment { .. } => {
+                        info!(
+                            "Registered incoming invoice payment for {} msat with hash {:?}",
+                            amount_msat, payment_hash
+                        );
+                        // TODO: Handle unwrap()
+                        self.events_callback
+                            .payment_received(payment_hash.0.to_hex(), amount_msat)
+                            .unwrap();
+                    }
+                    PaymentPurpose::SpontaneousPayment(_) => {
+                        info!(
+                            "Claimed incoming spontaneous payment for {} msat with hash {:?}",
+                            amount_msat, payment_hash
+                        );
+                        // TODO: inform consumer of this library about a claimed spontaneous payment
+                        //      We can leave this for later as spontaneous payments are not a
+                        //      feature of the MVP.
+                    }
+                }
+            }
+            Event::PaymentSent {
+                payment_id: _,
+                payment_preimage,
+                payment_hash,
+                fee_paid_msat,
+            } => {
+                let fee_paid_msat = fee_paid_msat.unwrap_or(0);
+                info!(
+                    "EVENT: PaymentSent - preimage: {} - hash: {} - fee: {}",
+                    payment_preimage.0.to_hex(),
+                    payment_hash.0.to_hex(),
+                    fee_paid_msat,
+                );
+                // TODO: Handle unwrap()
+                self.events_callback
+                    .payment_sent(
+                        payment_preimage.0.to_hex(),
+                        payment_hash.0.to_hex(),
+                        fee_paid_msat,
+                    )
+                    .unwrap();
+            }
+            Event::PaymentFailed {
+                payment_id: _,
+                payment_hash,
             } => {
                 info!(
-                    "Claimed payment for {} msat with hash {:?}",
-                    amount_msat, payment_hash
+                    "EVENT: PaymentFailed - preimage: {}",
+                    payment_hash.0.to_hex()
                 );
-
-                // Todo: inform the consumer of this library that the payment was claimed
+                // TODO: Handle unwrap()
+                self.events_callback
+                    .payment_failed(payment_hash.0.to_hex())
+                    .unwrap();
             }
-            Event::PaymentSent { .. } => {}
-            Event::PaymentFailed { .. } => {}
             Event::PaymentPathSuccessful { .. } => {}
             Event::PaymentPathFailed { .. } => {}
             Event::ProbeSuccessful { .. } => {}
@@ -111,7 +167,21 @@ impl EventHandler for LipaEventHandler {
             }
             Event::SpendableOutputs { .. } => {}
             Event::PaymentForwarded { .. } => {}
-            Event::ChannelClosed { .. } => {}
+            Event::ChannelClosed {
+                channel_id,
+                user_channel_id: _,
+                reason,
+            } => {
+                info!(
+                    "EVENT: ChannelClosed - channel {} closed due to {}",
+                    channel_id.to_hex(),
+                    reason
+                );
+                // TODO: Handle unwrap()
+                self.events_callback
+                    .channel_closed(channel_id.to_hex(), reason.to_string())
+                    .unwrap();
+            }
             Event::DiscardFunding { .. } => {}
             Event::OpenChannelRequest {
                 temporary_channel_id,

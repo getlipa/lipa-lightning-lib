@@ -2,6 +2,8 @@ mod cli;
 mod file_storage;
 #[path = "../../tests/lsp_client/mod.rs"]
 mod lsp_client;
+#[path = "../../tests/print_events_handler/mod.rs"]
+mod print_events_handler;
 
 pub mod lspd {
     tonic::include_proto!("lspd");
@@ -10,6 +12,7 @@ pub mod lspd {
 use file_storage::FileStorage;
 use lsp_client::LspClient;
 
+use crate::print_events_handler::PrintEventsHandler;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::Network;
 use log::info;
@@ -48,6 +51,9 @@ fn main() {
     info!("LN node {:?}", ln_node_address);
 
     let storage = Box::new(FileStorage::new(BASE_DIR));
+
+    let events = Box::new(PrintEventsHandler {});
+
     let seed = read_or_generate_seed(&storage);
     let config = Config {
         network: Network::Regtest,
@@ -58,7 +64,7 @@ fn main() {
         local_persistence_path: ".3l_local_example_node".to_string(),
     };
 
-    let node = LightningNode::new(&config, storage, lsp_client).unwrap();
+    let node = LightningNode::new(&config, storage, lsp_client, events).unwrap();
 
     // Lauch CLI
     sleep(Duration::from_secs(1));
