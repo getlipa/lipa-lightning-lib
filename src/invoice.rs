@@ -2,6 +2,7 @@ use crate::errors::*;
 use crate::lsp::{LspClient, PaymentRequest};
 use crate::node_info::get_channels_info;
 use crate::types::ChannelManager;
+use std::time::{Duration, SystemTime};
 
 use bitcoin::hashes::{sha256, Hash};
 use lightning::ln::channelmanager::ChannelDetails;
@@ -9,6 +10,15 @@ use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{Currency, InvoiceBuilder, RawInvoice};
 use log::info;
+
+pub struct InvoiceDetails {
+    pub amount_msat: Option<u64>,
+    pub description: String,
+    pub payment_hash: String,
+    pub payee_pub_key: String,
+    pub invoice_timestamp: SystemTime,
+    pub expiry_interval: Duration,
+}
 
 pub(crate) fn create_raw_invoice(
     amount_msat: u64,
