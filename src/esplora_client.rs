@@ -1,4 +1,5 @@
 use crate::errors::*;
+use std::collections::HashMap;
 
 use bitcoin::{BlockHash, BlockHeader, Transaction, Txid};
 use esplora_client::blocking::BlockingClient;
@@ -154,5 +155,11 @@ impl EsploraClient {
         self.client
             .broadcast(tx)
             .map_to_runtime_error("Esplora failed to broadcast tx")
+    }
+
+    pub fn get_fee_estimates(&self) -> LipaResult<HashMap<String, f64>> {
+        self.client
+            .get_fee_estimates()
+            .map_to_runtime_error("Esplora failed to get fee estimates")
     }
 }
