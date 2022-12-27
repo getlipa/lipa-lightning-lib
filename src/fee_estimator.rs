@@ -1,5 +1,6 @@
 use crate::async_runtime::Handle;
 use crate::esplora_client::EsploraClient;
+use bitcoin::Network;
 use lightning::chain::chaininterface::{ConfirmationTarget, FeeEstimator as LdkFeeEstimator};
 use log::{debug, error};
 use std::collections::HashMap;
@@ -21,10 +22,15 @@ const HIGH_PRIORITY_DEFAULT: u32 = 5000; // 20 sats per byte
 
 pub(crate) struct FeeEstimator {
     fees: Arc<HashMap<ConfirmationTarget, AtomicU32>>,
+    network: Network,
 }
 
 impl FeeEstimator {
-    pub fn new(esplora_client: Arc<EsploraClient>, runtime_handle: Handle) -> Self {
+    pub fn new(
+        esplora_client: Arc<EsploraClient>,
+        runtime_handle: Handle,
+        network: Network,
+    ) -> Self {
         // Init fees
         let mut fees: HashMap<ConfirmationTarget, AtomicU32> = HashMap::new();
         fees.insert(
@@ -90,7 +96,7 @@ impl FeeEstimator {
             },
         );
 
-        Self { fees }
+        Self { fees, network }
     }
 }
 
@@ -111,22 +117,29 @@ fn get_ldk_estimate_from_esplora_estimates(
 
 impl LdkFeeEstimator for FeeEstimator {
     fn get_est_sat_per_1000_weight(&self, confirmation_target: ConfirmationTarget) -> u32 {
-        match confirmation_target {
-            ConfirmationTarget::Background => self
-                .fees
-                .get(&ConfirmationTarget::Background)
-                .unwrap()
-                .load(Ordering::Acquire),
-            ConfirmationTarget::Normal => self
-                .fees
-                .get(&ConfirmationTarget::Normal)
-                .unwrap()
-                .load(Ordering::Acquire),
-            ConfirmationTarget::HighPriority => self
-                .fees
-                .get(&ConfirmationTarget::HighPriority)
-                .unwrap()
-                .load(Ordering::Acquire),
+        match self.network {
+            Network::Bitcoin => match confirmation_target {
+                ConfirmationTarget::Background => self
+                    .fees
+                    .get(&ConfirmationTarget::Background)
+                    .unwrap()
+                    .load(Ordering::Acquire),
+                ConfirmationTarget::Normal => self
+                    .fees
+                    .get(&ConfirmationTarget::Normal)
+                    .unwrap()
+                    .load(Ordering::Acquire),
+                ConfirmationTarget::HighPriority => self
+                    .fees
+                    .get(&ConfirmationTarget::HighPriority)
+                    .unwrap()
+                    .load(Ordering::Acquire),
+            },
+            _ => match confirmation_target {
+                ConfirmationTarget::Background => BACKGROUND_DEFAULT,
+                ConfirmationTarget::Normal => NORMAL_DEFAULT,
+                ConfirmationTarget::HighPriority => HIGH_PRIORITY_DEFAULT,
+            },
         }
     }
 }
@@ -144,6 +157,7 @@ mod tests {
         let client = FeeEstimator::new(
             Arc::new(EsploraClient::new(ESPLORA_API_URL).unwrap()),
             rt.handle(),
+            Network::Bitcoin,
         );
         assert!(client.get_est_sat_per_1000_weight(ConfirmationTarget::Background) >= 253);
         assert!(client.get_est_sat_per_1000_weight(ConfirmationTarget::Normal) >= 253);
@@ -156,6 +170,7 @@ mod tests {
         let client = FeeEstimator::new(
             Arc::new(EsploraClient::new(ESPLORA_API_URL).unwrap()),
             rt.handle(),
+            Network::Bitcoin,
         );
         assert!(client.get_est_sat_per_1000_weight(ConfirmationTarget::Background) < 1000000);
         assert!(client.get_est_sat_per_1000_weight(ConfirmationTarget::Normal) < 5000000);
@@ -168,6 +183,7 @@ mod tests {
         let client = FeeEstimator::new(
             Arc::new(EsploraClient::new(ESPLORA_API_URL).unwrap()),
             rt.handle(),
+            Network::Bitcoin,
         );
         let background = client.get_est_sat_per_1000_weight(ConfirmationTarget::Background);
         let normal = client.get_est_sat_per_1000_weight(ConfirmationTarget::Normal);

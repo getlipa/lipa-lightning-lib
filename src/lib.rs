@@ -116,7 +116,11 @@ impl LightningNode {
         );
 
         // Step 1. Initialize the FeeEstimator
-        let fee_estimator = Arc::new(FeeEstimator::new(Arc::clone(&esplora_client), rt.handle()));
+        let fee_estimator = Arc::new(FeeEstimator::new(
+            Arc::clone(&esplora_client),
+            rt.handle(),
+            config.network,
+        ));
 
         // Step 2. Initialize the Logger
         let logger = Arc::new(LightningLogger {});
