@@ -230,6 +230,13 @@ interface LightningNode {
     // Validates and, if valid, decodes an invoice returning detailed information
     [Throws=LipaError]
     InvoiceDetails decode_invoice(string invoice);
+
+    // Starts an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.
+    // If successful, it doesn't mean that the payment itself was successful (funds received by the payee).
+    // After this method returns, the consumer of this library will learn about a successful/failed payment through the
+    // callbacks `payment_sent()` and `payment_failed()` in `EventsCallback`.
+    [Throws=LipaError]
+    void pay_invoice(string invoice);
 };
 
 dictionary ChannelsInfo {
