@@ -1,14 +1,11 @@
-use crate::async_runtime::Handle;
+use crate::errors::{runtime_error, LipaResult};
 use crate::esplora_client::EsploraClient;
 use bitcoin::Network;
 use lightning::chain::chaininterface::{ConfirmationTarget, FeeEstimator as LdkFeeEstimator};
-use log::{debug, error};
+use log::debug;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
-
-const FEE_ESTIMATE_POLLING_INTERVAL: u64 = 60;
 
 const BACKGROUND_CONFIRM_IN_BLOCKS: &str = "25";
 const NORMAL_CONFIRM_IN_BLOCKS: &str = "6";
@@ -21,16 +18,13 @@ const NORMAL_DEFAULT: u32 = 2000; // 8 sats per byte
 const HIGH_PRIORITY_DEFAULT: u32 = 5000; // 20 sats per byte
 
 pub(crate) struct FeeEstimator {
+    esplora_client: Arc<EsploraClient>,
     fees: Arc<HashMap<ConfirmationTarget, AtomicU32>>,
     network: Network,
 }
 
 impl FeeEstimator {
-    pub fn new(
-        esplora_client: Arc<EsploraClient>,
-        runtime_handle: Handle,
-        network: Network,
-    ) -> Self {
+    pub fn new(esplora_client: Arc<EsploraClient>, network: Network) -> Self {
         // Init fees
         let mut fees: HashMap<ConfirmationTarget, AtomicU32> = HashMap::new();
         fees.insert(
@@ -44,109 +38,87 @@ impl FeeEstimator {
         );
         let fees = Arc::new(fees);
 
-        // Launch polling background task
-        let esplora_client_poll = Arc::clone(&esplora_client);
-        let fees_poll = Arc::clone(&fees);
-        runtime_handle.spawn_repeating_task(
-            Duration::from_secs(FEE_ESTIMATE_POLLING_INTERVAL),
-            move || {
-                let esplora_client_poll = Arc::clone(&esplora_client_poll);
-                let fees_poll = Arc::clone(&fees_poll);
-                async move {
-                    match esplora_client_poll.get_fee_estimates() {
-                        Ok(estimates) => {
-                            let background_estimate = get_ldk_estimate_from_esplora_estimates(
-                                &estimates,
-                                BACKGROUND_CONFIRM_IN_BLOCKS,
-                                BACKGROUND_DEFAULT,
-                            );
-                            let normal_estimate = get_ldk_estimate_from_esplora_estimates(
-                                &estimates,
-                                NORMAL_CONFIRM_IN_BLOCKS,
-                                NORMAL_DEFAULT,
-                            );
-                            let high_priority_estimate = get_ldk_estimate_from_esplora_estimates(
-                                &estimates,
-                                HIGH_PRIORITY_CONFIRM_IN_BLOCKS,
-                                HIGH_PRIORITY_DEFAULT,
-                            );
+        Self {
+            esplora_client,
+            fees,
+            network,
+        }
+    }
 
-                            // Multi-line print done with a single debug! so that the lines can't 
-                            // get separated by other debug prints
-                            debug!("FeeEstimator fetched new estimates from esplora: \n    Background: {}\n    Normal: {} \n    HighPriority: {}", background_estimate, normal_estimate, high_priority_estimate);
+    pub fn poll_updates(&self) -> LipaResult<()> {
+        if self.network != Network::Bitcoin {
+            return Ok(());
+        }
 
-                            fees_poll
-                                .get(&ConfirmationTarget::Background)
-                                .unwrap()
-                                .store(background_estimate, Ordering::Release);
-                            fees_poll
-                                .get(&ConfirmationTarget::Normal)
-                                .unwrap()
-                                .store(normal_estimate, Ordering::Release);
-                            fees_poll
-                                .get(&ConfirmationTarget::HighPriority)
-                                .unwrap()
-                                .store(high_priority_estimate, Ordering::Release);
-                        }
-                        Err(e) => {
-                            error!("Failed to get fee estimates from esplora: {}", e);
-                        }
-                    }
-                }
-            },
-        );
+        let estimates = self.esplora_client.get_fee_estimates()?;
 
-        Self { fees, network }
+        let background_estimate =
+            get_ldk_estimate_from_esplora_estimates(&estimates, BACKGROUND_CONFIRM_IN_BLOCKS)?;
+        let normal_estimate =
+            get_ldk_estimate_from_esplora_estimates(&estimates, NORMAL_CONFIRM_IN_BLOCKS)?;
+        let high_priority_estimate =
+            get_ldk_estimate_from_esplora_estimates(&estimates, HIGH_PRIORITY_CONFIRM_IN_BLOCKS)?;
+
+        // Multi-line print done with a single debug! so that the lines can't
+        // get separated by other debug prints
+        debug!("FeeEstimator fetched new estimates from esplora: \n    Background: {}\n    Normal: {} \n    HighPriority: {}", background_estimate, normal_estimate, high_priority_estimate);
+
+        self.fees
+            .get(&ConfirmationTarget::Background)
+            .unwrap()
+            .store(background_estimate, Ordering::Release);
+        self.fees
+            .get(&ConfirmationTarget::Normal)
+            .unwrap()
+            .store(normal_estimate, Ordering::Release);
+        self.fees
+            .get(&ConfirmationTarget::HighPriority)
+            .unwrap()
+            .store(high_priority_estimate, Ordering::Release);
+
+        Ok(())
     }
 }
 
 fn get_ldk_estimate_from_esplora_estimates(
     esplora_estimates: &HashMap<String, f64>,
     confirm_in_blocks: &str,
-    default: u32,
-) -> u32 {
+) -> LipaResult<u32> {
     let background_estimate = match esplora_estimates.get(confirm_in_blocks) {
         None => {
-            error!("Failed to get fee estimates: Esplora didn't provide an estimate for confirmation in {} blocks", confirm_in_blocks);
-            return default;
+            return Err(runtime_error(format!("Failed to get fee estimates: Esplora didn't provide an estimate for confirmation in {} blocks", confirm_in_blocks)));
         }
         Some(e) => e,
     };
-    std::cmp::max((background_estimate * 250.0).round() as u32, MIN_FEERATE)
+    Ok(std::cmp::max(
+        (background_estimate * 250.0).round() as u32,
+        MIN_FEERATE,
+    ))
 }
 
 impl LdkFeeEstimator for FeeEstimator {
     fn get_est_sat_per_1000_weight(&self, confirmation_target: ConfirmationTarget) -> u32 {
-        match self.network {
-            Network::Bitcoin => self
-                .fees
-                .get(&confirmation_target)
-                .unwrap()
-                .load(Ordering::Acquire),
-            _ => match confirmation_target {
-                ConfirmationTarget::Background => BACKGROUND_DEFAULT,
-                ConfirmationTarget::Normal => NORMAL_DEFAULT,
-                ConfirmationTarget::HighPriority => HIGH_PRIORITY_DEFAULT,
-            },
-        }
+        self.fees
+            .get(&confirmation_target)
+            .unwrap()
+            .load(Ordering::Acquire)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::async_runtime::AsyncRuntime;
 
     // 9 is a discard port
     // See https://en.wikipedia.org/wiki/Port_(computer_networking)
-    const ESPLORA_API_URL: &str = "http://localhost:9";
+    const DISCARD_ESPLORA_API_URL: &str = "http://localhost:9";
+
+    const MAINNET_ESPLORA_API_URL: &str = "https://blockstream.info/api/";
 
     #[test]
     fn fee_is_above_minimum() {
-        let rt = AsyncRuntime::new().unwrap();
         let client = FeeEstimator::new(
-            Arc::new(EsploraClient::new(ESPLORA_API_URL).unwrap()),
-            rt.handle(),
+            Arc::new(EsploraClient::new(DISCARD_ESPLORA_API_URL).unwrap()),
             Network::Bitcoin,
         );
         assert!(client.get_est_sat_per_1000_weight(ConfirmationTarget::Background) >= 253);
@@ -156,10 +128,8 @@ mod tests {
 
     #[test]
     fn fee_is_reasonable() {
-        let rt = AsyncRuntime::new().unwrap();
         let client = FeeEstimator::new(
-            Arc::new(EsploraClient::new(ESPLORA_API_URL).unwrap()),
-            rt.handle(),
+            Arc::new(EsploraClient::new(DISCARD_ESPLORA_API_URL).unwrap()),
             Network::Bitcoin,
         );
         assert!(client.get_est_sat_per_1000_weight(ConfirmationTarget::Background) < 1000000);
@@ -169,10 +139,8 @@ mod tests {
 
     #[test]
     fn fee_is_ordered() {
-        let rt = AsyncRuntime::new().unwrap();
         let client = FeeEstimator::new(
-            Arc::new(EsploraClient::new(ESPLORA_API_URL).unwrap()),
-            rt.handle(),
+            Arc::new(EsploraClient::new(DISCARD_ESPLORA_API_URL).unwrap()),
             Network::Bitcoin,
         );
         let background = client.get_est_sat_per_1000_weight(ConfirmationTarget::Background);
@@ -180,5 +148,16 @@ mod tests {
         let high_priority = client.get_est_sat_per_1000_weight(ConfirmationTarget::HighPriority);
         assert!(background <= normal);
         assert!(normal <= high_priority);
+    }
+
+    #[test]
+    fn can_get_mainnet_fee_estimations() {
+        let client = FeeEstimator::new(
+            Arc::new(EsploraClient::new(MAINNET_ESPLORA_API_URL).unwrap()),
+            Network::Bitcoin,
+        );
+        // If poll_updates() is successful, it means the response from esplora included
+        // the fee estimations we need
+        client.poll_updates().unwrap();
     }
 }
