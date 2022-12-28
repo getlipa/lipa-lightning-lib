@@ -27,17 +27,28 @@ pub(crate) fn create_raw_invoice(
     channel_manager: &ChannelManager,
     lsp_client: &LspClient,
 ) -> LipaResult<RawInvoice> {
+    let channels_info = get_channels_info(&channel_manager.list_channels());
+    let needs_channel_opening = channels_info.inbound_capacity_msat < amount_msat;
+
+    let incoming_amount_msat = match needs_channel_opening {
+        true => {
+            let fee = std::cmp::max(amount_msat * 40 / 10_000 / 1_000 * 1_000, 2_000_000);
+            if fee > amount_msat {
+                return Err(invalid_input("Payment amount must be bigger than fees"));
+            }
+            amount_msat - fee
+        }
+        false => amount_msat,
+    };
     let (payment_hash, payment_secret) = channel_manager
-        .create_inbound_payment(Some(amount_msat), 1000)
+        .create_inbound_payment(Some(incoming_amount_msat), 1000)
         .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
     let payee_pubkey = channel_manager.get_our_node_id();
 
-    let channels_info = get_channels_info(&channel_manager.list_channels());
-    let needs_channel_opening = channels_info.inbound_capacity_msat < amount_msat;
     let private_routes = if needs_channel_opening {
         info!(
-            "Not enough inbound capacity for {} msat, needs channel opening",
-            amount_msat
+            "Not enough inbound capacity for {} msat, needs channel opening, will only receive {} msat due to LSP fees",
+            amount_msat, incoming_amount_msat
         );
         let payment_request = PaymentRequest {
             payment_hash,

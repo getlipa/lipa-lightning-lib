@@ -15,6 +15,7 @@ mod receiving_payments_test {
     use crate::try_cmd_repeatedly;
 
     const THOUSAND_SATS: u64 = 1_000_000;
+    const THREE_THOUSAND_SATS: u64 = 3_000_000;
     const TEN_K_SATS: u64 = 10_000_000;
     const TWENTY_K_SATS: u64 = 20_000_000;
     const MILLION_SATS: u64 = 1_000_000_000;
@@ -29,7 +30,35 @@ mod receiving_payments_test {
     // Test receiving an invoice on a node that does not have any channel yet
     // resp, the channel opening is part of the payment process.
     fn receive_payment_on_fresh_node() {
-        // todo: as soon as LSPD functionality is implemented
+        let node_handle = NodeHandle::new_with_lsp_setup();
+
+        let node = node_handle.start().unwrap();
+        assert_eq!(node.get_node_info().num_peers, 1);
+
+        let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
+            .unwrap()
+            .pub_key;
+
+        connect_node_to_lsp(NodeInstance::NigiriLnd, &lspd_node_id);
+
+        nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false).unwrap();
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
+        sleep(Duration::from_secs(10));
+
+        let invoice = node
+            .create_invoice(THREE_THOUSAND_SATS, "test".to_string())
+            .unwrap();
+
+        sleep(Duration::from_secs(5));
+
+        nigiri::pay_invoice(NodeInstance::NigiriLnd, &invoice).unwrap();
+
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
+        assert!(node.get_node_info().channels_info.local_balance_msat > 0);
+        assert_eq!(
+            node.get_node_info().channels_info.local_balance_msat,
+            THOUSAND_SATS
+        );
     }
 
     #[test]

@@ -46,6 +46,12 @@ impl EventHandler for LipaEventHandler {
                 // Todo: This needs more research on what exactly is happening under the hood
                 //       and what the correct behaviour should be to deal with this situation.
 
+                info!(
+                    "EVENT: PaymentClaimable - hash: {} - amount msat: {}",
+                    payment_hash.0.to_hex(),
+                    amount_msat,
+                );
+
                 match purpose {
                     PaymentPurpose::InvoicePayment {
                         payment_preimage: Some(payment_preimage),
@@ -82,6 +88,11 @@ impl EventHandler for LipaEventHandler {
                 amount_msat,
                 purpose,
             } => {
+                info!(
+                    "EVENT: PaymentClaimed - hash: {} - amount msat: {}",
+                    payment_hash.0.to_hex(),
+                    amount_msat,
+                );
                 match purpose {
                     PaymentPurpose::InvoicePayment { .. } => {
                         info!(
@@ -163,6 +174,8 @@ impl EventHandler for LipaEventHandler {
                 // any meaningful privacy advantage for our case and therefore
                 // do not delay the acceptance of HTLC using the time_forwardable variable for now.
 
+                info!("EVENT: PendingHTLCsForwardable");
+
                 self.channel_manager.process_pending_htlc_forwards();
             }
             Event::SpendableOutputs { .. } => {}
@@ -207,9 +220,22 @@ impl EventHandler for LipaEventHandler {
                         .unwrap();
                 }
             }
-            Event::HTLCHandlingFailed { .. } => {}
-            Event::HTLCIntercepted { .. } => {}
-            Event::ChannelReady { .. } => {}
+            Event::HTLCHandlingFailed {
+                prev_channel_id,
+                failed_next_destination,
+            } => {
+                info!(
+                    "EVENT: HTLCHandlingFailed - prev_channel_id: {} - failed_next_destination: {:?}",
+                    prev_channel_id.to_hex(),
+                    failed_next_destination
+                );
+            }
+            Event::HTLCIntercepted { .. } => {
+                info!("EVENT: HTLCIntercepted");
+            }
+            Event::ChannelReady { .. } => {
+                info!("EVENT: ChannelReady");
+            }
         }
     }
 }
