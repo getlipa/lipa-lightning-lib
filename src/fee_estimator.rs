@@ -118,23 +118,11 @@ fn get_ldk_estimate_from_esplora_estimates(
 impl LdkFeeEstimator for FeeEstimator {
     fn get_est_sat_per_1000_weight(&self, confirmation_target: ConfirmationTarget) -> u32 {
         match self.network {
-            Network::Bitcoin => match confirmation_target {
-                ConfirmationTarget::Background => self
-                    .fees
-                    .get(&ConfirmationTarget::Background)
-                    .unwrap()
-                    .load(Ordering::Acquire),
-                ConfirmationTarget::Normal => self
-                    .fees
-                    .get(&ConfirmationTarget::Normal)
-                    .unwrap()
-                    .load(Ordering::Acquire),
-                ConfirmationTarget::HighPriority => self
-                    .fees
-                    .get(&ConfirmationTarget::HighPriority)
-                    .unwrap()
-                    .load(Ordering::Acquire),
-            },
+            Network::Bitcoin => self
+                .fees
+                .get(&confirmation_target)
+                .unwrap()
+                .load(Ordering::Acquire),
             _ => match confirmation_target {
                 ConfirmationTarget::Background => BACKGROUND_DEFAULT,
                 ConfirmationTarget::Normal => NORMAL_DEFAULT,
@@ -149,7 +137,9 @@ mod tests {
     use super::*;
     use crate::async_runtime::AsyncRuntime;
 
-    const ESPLORA_API_URL: &str = "";
+    // 9 is a discard port
+    // See https://en.wikipedia.org/wiki/Port_(computer_networking)
+    const ESPLORA_API_URL: &str = "http://localhost:9";
 
     #[test]
     fn fee_is_above_minimum() {
