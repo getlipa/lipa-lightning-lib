@@ -42,3 +42,21 @@ pr: fmt buildall test clippy
 .PHONY: runnode
 runnode:
 	cargo run --example node
+
+.PHONY: build-dev-env
+build-dev-env:
+	docker-compose -f lspd/compose.yaml build
+	docker-compose -f rgs/compose.yaml build
+
+.PHONY: start-dev-env
+start-dev-env:
+	nigiri start --ln
+	docker-compose -f lspd/compose.yaml up -d
+	docker-compose -f rgs/compose.yaml up -d
+	docker exec lspd-lnd lncli getinfo | grep identity_pubkey
+
+.PHONY: stop-dev-env
+stop-dev-env:
+	docker-compose -f rgs/compose.yaml down
+	docker-compose -f lspd/compose.yaml down
+	nigiri stop --delete
