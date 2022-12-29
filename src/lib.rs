@@ -94,6 +94,7 @@ pub struct LightningNode {
     rgs_url: String,
     rapid_sync: Arc<RapidGossipSync>,
     invoice_payer: Arc<InvoicePayer>,
+    fee_estimator_handle: RepeatingTaskHandle,
 }
 
 impl LightningNode {
@@ -116,7 +117,24 @@ impl LightningNode {
         );
 
         // Step 1. Initialize the FeeEstimator
-        let fee_estimator = Arc::new(FeeEstimator {});
+        let fee_estimator = Arc::new(FeeEstimator::new(
+            Arc::clone(&esplora_client),
+            config.network,
+        ));
+
+        // TODO: decide how often to run fee estimation poll
+        let fee_estimator_poll = Arc::clone(&fee_estimator);
+        let fee_estimator_handle =
+            rt.handle()
+                .spawn_repeating_task(Duration::from_secs(60), move || {
+                    let fee_estimator_poll = Arc::clone(&fee_estimator_poll);
+                    async move {
+                        match fee_estimator_poll.poll_updates() {
+                            Ok(_) => {}
+                            Err(e) => error!("Failed to get fee estimates from esplora: {}", e),
+                        }
+                    }
+                });
 
         // Step 2. Initialize the Logger
         let logger = Arc::new(LightningLogger {});
@@ -340,6 +358,7 @@ impl LightningNode {
             rgs_url: config.rgs_url.clone(),
             rapid_sync,
             invoice_payer,
+            fee_estimator_handle,
         })
     }
 
@@ -514,6 +533,7 @@ impl Drop for LightningNode {
     fn drop(&mut self) {
         self.p2p_connector_handle.blocking_shutdown();
         self.sync_handle.blocking_shutdown();
+        self.fee_estimator_handle.blocking_shutdown();
 
         // TODO: Stop reconnecting to peers
         self.peer_manager.disconnect_all_peers();

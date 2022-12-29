@@ -32,6 +32,8 @@ jobs:
         uses: arduino/setup-protoc@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Cross
+        run: cargo install cross --locked
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
@@ -76,6 +78,8 @@ jobs:
         uses: arduino/setup-protoc@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Cross
+        run: cargo install cross --locked
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
