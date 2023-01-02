@@ -29,8 +29,9 @@ mod zero_conf_test {
         assert!(node.get_node_info().channels_info.inbound_capacity_msat < TEN_SATS);
         let invoice = node.create_invoice(TEN_SATS, "test".to_string());
         assert_eq!(
-	    invoice.unwrap_err().to_string(),
-	    "PermanentFailure: Failed to register payment: InvalidInput: Payment amount must be bigger than fees");
+            invoice.unwrap_err().to_string(),
+            "InvalidInput: Payment amount must be higher than lsp fees"
+        );
         let invoice = node.create_invoice(TWENTY_K_SATS, "test".to_string());
         assert!(invoice.unwrap().starts_with("lnbc"));
 
@@ -40,10 +41,17 @@ mod zero_conf_test {
 
         // With a channel, 10 sats invoice is perfectly fine.
         assert!(node.get_node_info().channels_info.inbound_capacity_msat > TEN_SATS);
-        let invoice = node.create_invoice(TEN_SATS, "test".to_string());
-        assert!(invoice.unwrap().starts_with("lnbc"));
+        let invoice = node.create_invoice(TEN_SATS, "test".to_string()).unwrap();
+        assert!(invoice.starts_with("lnbc"));
 
         assert_eq!(node.get_node_info().channels_info.num_channels, 1);
         assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
+
+        nigiri::pay_invoice(NodeInstance::LspdLnd, &invoice).unwrap();
+
+        assert_eq!(
+            node.get_node_info().channels_info.local_balance_msat,
+            TEN_SATS
+        );
     }
 }

@@ -18,8 +18,8 @@ use std::cmp::max;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct LspFee {
-    pub min_msat: u64,
-    pub rate_ppm: u64, // 1_000_000 is 100%
+    pub channel_minimum_fee_msat: u64,
+    pub channel_fee_permyriad: u64, // 100 is 1%
 }
 
 #[derive(Debug)]
@@ -112,8 +112,8 @@ fn parse_lsp_info(bytes: &[u8]) -> LipaResult<LspInfo> {
         PublicKey::from_slice(&ln_pubkey).map_to_invalid_input("Invalid LN node pubkey")?;
 
     let fee = LspFee {
-        min_msat: info.channel_minimum_fee_msat as u64,
-        rate_ppm: info.channel_fee_permyriad as u64 * 100,
+        channel_minimum_fee_msat: info.channel_minimum_fee_msat as u64,
+        channel_fee_permyriad: info.channel_fee_permyriad as u64,
     };
 
     let node_info = NodeInfo {
@@ -136,13 +136,8 @@ fn parse_lsp_info(bytes: &[u8]) -> LipaResult<LspInfo> {
 }
 
 pub(crate) fn calculate_fee(value_msat: u64, fee: &LspFee) -> u64 {
-    const MILLION: u64 = 1_000_000;
-    let mut fee_value = (value_msat * fee.rate_ppm) / MILLION;
-    // Round up the result.
-    if (value_msat * fee.rate_ppm) % MILLION > 0 {
-        fee_value += 1;
-    }
-    max(fee_value, fee.min_msat)
+    let fee_value = value_msat * fee.channel_fee_permyriad / 10_000 / 1_000 * 1_000;
+    max(fee_value, fee.channel_minimum_fee_msat)
 }
 
 #[cfg(test)]
@@ -170,8 +165,8 @@ mod tests {
             "03ca7819d982a95b29bcdbf00a06d99639b523da40e5f43402027097965f578806"
         );
         let fee = LspFee {
-            min_msat: 2_000_000,
-            rate_ppm: 4_000,
+            channel_minimum_fee_msat: 2_000_000,
+            channel_fee_permyriad: 40,
         };
         assert_eq!(lsp_info.fee, fee);
         assert_eq!(
@@ -193,35 +188,31 @@ mod tests {
     #[rustfmt::skip]
     pub fn test_calculate_fee() {
         let fee = LspFee {
-            min_msat: 2_000_000,
-            rate_ppm: 4_000,
+            channel_minimum_fee_msat: 2_000_000,
+            channel_fee_permyriad: 40,
         };
         assert_eq!(calculate_fee(             0, &fee),  2_000_000);
         assert_eq!(calculate_fee(             2, &fee),  2_000_000);
         assert_eq!(calculate_fee(   200_000_000, &fee),  2_000_000);
         assert_eq!(calculate_fee( 1_000_000_000, &fee),  4_000_000);
-        // 1000000001 * 0.004 = 4000000.004
-        assert_eq!(calculate_fee( 1_000_000_001, &fee),  4_000_001);
-        // 1000000250 * 0.004 = 4000001.0
-        assert_eq!(calculate_fee( 1_000_000_250, &fee),  4_000_001);
-        // 1000000251 * 0.004 = 4000001.004
-        assert_eq!(calculate_fee( 1_000_000_251, &fee),  4_000_002);
+        // 1000000001 * 0.004 = 4000000.004 -> 4000 sats
+        assert_eq!(calculate_fee( 1_000_000_001, &fee),  4_000_000);
+        // 1000000250 * 0.004 = 4000001.0 -> 4000 sats
+        assert_eq!(calculate_fee( 1_000_000_250, &fee),  4_000_000);
+        // 1000000251 * 0.004 = 4000001.004 -> 4000 sats
+        assert_eq!(calculate_fee( 1_000_000_251, &fee),  4_000_000);
+        // 1000249999 * 0.004 = 4000999.996 -> 4000 sats
+        assert_eq!(calculate_fee( 1_000_249_999, &fee),  4_000_000);
+        // 1000250000 * 0.004 = 4001000.0 -> 4001 sats
+        assert_eq!(calculate_fee( 1_000_250_000, &fee),  4_001_000);
         assert_eq!(calculate_fee( 2_000_000_000, &fee),  8_000_000);
         assert_eq!(calculate_fee(20_000_000_000, &fee), 80_000_000);
 
         let zero_fee = LspFee {
-            min_msat: 0,
-            rate_ppm: 0,
+            channel_minimum_fee_msat: 0,
+            channel_fee_permyriad: 0,
         };
         assert_eq!(calculate_fee(0, &zero_fee), 0);
         assert_eq!(calculate_fee(100_000_000, &zero_fee), 0);
-
-        let extortionate_fee = LspFee {
-            min_msat: 1,
-            rate_ppm: 1_000_000, // 100% !!!
-        };
-        let hundred_btc_msat = 100 * 100_000_000 * 1_000; // #reckless
-        // No overflow!
-        assert_eq!(calculate_fee(hundred_btc_msat, &extortionate_fee), 10_000_000_000_000);
     }
 }

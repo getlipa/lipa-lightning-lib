@@ -264,9 +264,9 @@ dictionary NodeInfo {
 // This fee is being charged at the time of the channel creation.
 // The LSP simply substracts this fee from an incoming payment (if this incoming payment leads to a channel creation).
 dictionary LspFee {
-  u64 min_msat;
-  // Parts per million -> 1_000_000 is 100%
-  u64 rate_ppm;
+  u64 channel_minimum_fee_msat;
+  // Parts per myriad (aka basis points) -> 100 is 1%
+  u64 channel_fee_permyriad;
 };
 
 // Potential errors when communicating with LSP

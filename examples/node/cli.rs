@@ -71,8 +71,14 @@ fn help() {
 
 fn lsp_fee(node: &LightningNode) {
     let lsp_fee = node.query_lsp_fee().unwrap();
-    println!(" Min fee: {} sats", lsp_fee.min_msat as f64 / 1_000f64);
-    println!("Fee rate: {}%", lsp_fee.rate_ppm as f64 / 10_000f64);
+    println!(
+        " Min fee: {} sats",
+        lsp_fee.channel_minimum_fee_msat as f64 / 1_000f64
+    );
+    println!(
+        "Fee rate: {}%",
+        lsp_fee.channel_fee_permyriad as f64 / 100f64
+    );
 }
 
 fn node_info(node: &LightningNode) {

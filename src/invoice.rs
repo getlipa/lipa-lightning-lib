@@ -4,6 +4,7 @@ use crate::node_info::get_channels_info;
 use crate::types::ChannelManager;
 use std::time::{Duration, SystemTime};
 
+use crate::lsp;
 use bitcoin::hashes::{sha256, Hash};
 use lightning::ln::channelmanager::ChannelDetails;
 use lightning::routing::gossip::RoutingFees;
@@ -27,35 +28,58 @@ pub(crate) fn create_raw_invoice(
     channel_manager: &ChannelManager,
     lsp_client: &LspClient,
 ) -> LipaResult<RawInvoice> {
-    let (payment_hash, payment_secret) = channel_manager
-        .create_inbound_payment(Some(amount_msat), 1000)
-        .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
-    let payee_pubkey = channel_manager.get_our_node_id();
-
+    // Do we need a new channel to receive this payment?
     let channels_info = get_channels_info(&channel_manager.list_channels());
     let needs_channel_opening = channels_info.inbound_capacity_msat < amount_msat;
-    let private_routes = if needs_channel_opening {
+
+    let payee_pubkey = channel_manager.get_our_node_id();
+
+    let (payment_hash, payment_secret, private_routes) = if needs_channel_opening {
+        let lsp_info = lsp_client
+            .query_info()
+            .lift_invalid_input()
+            .prefix_error("Failed to query LSPD")?;
+
+        let lsp_fee = lsp::calculate_fee(amount_msat, &lsp_info.fee);
+        if lsp_fee >= amount_msat {
+            return Err(invalid_input("Payment amount must be higher than lsp fees"));
+        }
+        let incoming_amount_msat = amount_msat - lsp_fee;
+
         info!(
-            "Not enough inbound capacity for {} msat, needs channel opening",
-            amount_msat
+            "Not enough inbound capacity for {} msat, needs channel opening, will only receive {} msat due to LSP fees",
+            amount_msat, incoming_amount_msat
         );
+
+        let (payment_hash, payment_secret) = channel_manager
+            .create_inbound_payment(Some(incoming_amount_msat), 1000)
+            .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
+
         let payment_request = PaymentRequest {
             payment_hash,
             payment_secret,
             payee_pubkey,
             amount_msat,
         };
-        let lsp_info = lsp_client
-            .query_info()
-            .lift_invalid_input()
-            .prefix_error("Failed to query LSPD")?;
         let hint_hop = lsp_client
             .register_payment(&payment_request, &lsp_info)
             .lift_invalid_input()
             .prefix_error("Failed to register payment")?;
-        vec![RouteHint(vec![hint_hop])]
+        (
+            payment_hash,
+            payment_secret,
+            vec![RouteHint(vec![hint_hop])],
+        )
     } else {
-        construct_private_routes(&channel_manager.list_usable_channels())
+        let (payment_hash, payment_secret) = channel_manager
+            .create_inbound_payment(Some(amount_msat), 1000)
+            .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
+
+        (
+            payment_hash,
+            payment_secret,
+            construct_private_routes(&channel_manager.list_usable_channels()),
+        )
     };
 
     // TODO: Watch the issue if it fixes this ugly conversion from

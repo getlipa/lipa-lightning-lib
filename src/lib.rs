@@ -556,6 +556,14 @@ fn build_mobile_node_user_config() -> UserConfig {
     // Do not announce the channel publicly.
     user_config.channel_handshake_config.announced_channel = false;
 
+    // Do not limit inbound HTLC size (default is to allow only 10% of channel size)
+    user_config
+        .channel_handshake_config
+        .max_inbound_htlc_value_in_flight_percent_of_channel = 100;
+
+    // Increase the max dust htlc exposure from the 5000 sat default to 1M sats
+    user_config.channel_config.max_dust_htlc_exposure_msat = 1_000_000_000;
+
     // Manually accept inbound requests to open a new channel to support
     // zero-conf channels.
     user_config.manually_accept_inbound_channels = true;
