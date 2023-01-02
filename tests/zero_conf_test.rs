@@ -30,7 +30,7 @@ mod zero_conf_test {
         let invoice = node.create_invoice(TEN_SATS, "test".to_string());
         assert_eq!(
             invoice.unwrap_err().to_string(),
-            "InvalidInput: Payment amount must be bigger than fees"
+            "InvalidInput: Payment amount must be higher than lsp fees"
         );
         let invoice = node.create_invoice(TWENTY_K_SATS, "test".to_string());
         assert!(invoice.unwrap().starts_with("lnbc"));
