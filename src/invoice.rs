@@ -1,9 +1,10 @@
 use crate::errors::*;
-use crate::lsp::{LspClient, PaymentRequest};
+use crate::lsp::{LspClient, LspInfo, PaymentRequest};
 use crate::node_info::get_channels_info;
 use crate::types::ChannelManager;
 use std::time::{Duration, SystemTime};
 
+use crate::lsp;
 use bitcoin::hashes::{sha256, Hash};
 use lightning::ln::channelmanager::ChannelDetails;
 use lightning::routing::gossip::RoutingFees;
@@ -27,16 +28,28 @@ pub(crate) fn create_raw_invoice(
     channel_manager: &ChannelManager,
     lsp_client: &LspClient,
 ) -> LipaResult<RawInvoice> {
+    // Do we need a new channel to receive this payment?
     let channels_info = get_channels_info(&channel_manager.list_channels());
     let needs_channel_opening = channels_info.inbound_capacity_msat < amount_msat;
 
+    let lsp_info: Option<LspInfo> = match needs_channel_opening {
+        true => Some(
+            lsp_client
+                .query_info()
+                .lift_invalid_input()
+                .prefix_error("Failed to query LSPD")?,
+        ),
+        false => None,
+    };
+
     let incoming_amount_msat = match needs_channel_opening {
         true => {
-            let fee = std::cmp::max(amount_msat * 40 / 10_000 / 1_000 * 1_000, 2_000_000);
-            if fee > amount_msat {
-                return Err(invalid_input("Payment amount must be bigger than fees"));
+            let lsp_info = lsp_info.as_ref().unwrap();
+            let lsp_fee = lsp::calculate_fee(amount_msat, &lsp_info.fee);
+            if lsp_fee >= amount_msat {
+                return Err(invalid_input("Payment amount must be higher than lsp fees"));
             }
-            amount_msat - fee
+            amount_msat - lsp_fee
         }
         false => amount_msat,
     };
@@ -56,10 +69,7 @@ pub(crate) fn create_raw_invoice(
             payee_pubkey,
             amount_msat,
         };
-        let lsp_info = lsp_client
-            .query_info()
-            .lift_invalid_input()
-            .prefix_error("Failed to query LSPD")?;
+        let lsp_info = lsp_info.unwrap();
         let hint_hop = lsp_client
             .register_payment(&payment_request, &lsp_info)
             .lift_invalid_input()

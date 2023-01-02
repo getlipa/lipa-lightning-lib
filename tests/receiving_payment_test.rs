@@ -72,25 +72,15 @@ mod receiving_payments_test {
     // The difference between sending 1_000 sats and 20_000 sats (test case receive_payment_on_established_node)
     // is that receiving 1_000 sats creates a dust-HTLC, while receiving 20_000 sats does not.
     // A dust-HTLC is an HTLC that is too small to be worth the fees to settle it.
-    fn receive_dust_htlc_payment() {
+    fn receive_dust_htlc_payment_1k() {
         let node = nigiri::initiate_node_with_channel(NodeInstance::LspdLnd);
         run_payment_flow(node, NodeInstance::LspdLnd, THOUSAND_SATS, MILLION_SATS);
     }
 
     #[test]
-    // Todo remove this test, once the bug is fixed
-    // This is kind of the opposite of a test.
-    // Instead of testing whether a feature *works*, it is here to test whether a bug still exists.
-    // This serves kind of as a reminder, as well as a description and proof of the bug.
-    // In case the bug gets fixed as a byproduct, for example through updating dependencies,
-    // this test should be removed, and the issues in the project management tools should be resolved.
-    fn dust_bug_still_exists() {
+    fn receive_dust_htlc_payment_10k() {
         let node = nigiri::initiate_node_with_channel(NodeInstance::LspdLnd);
-        assert_channel_ready(&node, TEN_K_SATS);
-        let invoice = issue_invoice(&node, TEN_K_SATS);
-
-        let result = nigiri::lnd_pay_invoice(NodeInstance::LspdLnd, &invoice);
-        assert!(result.is_err());
+        run_payment_flow(node, NodeInstance::LspdLnd, TEN_K_SATS, MILLION_SATS);
     }
 
     #[test]
