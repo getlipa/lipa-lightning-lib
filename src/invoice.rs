@@ -1,5 +1,5 @@
 use crate::errors::*;
-use crate::lsp::{LspClient, LspInfo, PaymentRequest};
+use crate::lsp::{LspClient, PaymentRequest};
 use crate::node_info::get_channels_info;
 use crate::types::ChannelManager;
 use std::time::{Duration, SystemTime};
@@ -32,27 +32,22 @@ pub(crate) fn create_raw_invoice(
     let channels_info = get_channels_info(&channel_manager.list_channels());
     let needs_channel_opening = channels_info.inbound_capacity_msat < amount_msat;
 
-    let lsp_info: Option<LspInfo> = match needs_channel_opening {
-        true => Some(
-            lsp_client
+    let (lsp_info, incoming_amount_msat) = match needs_channel_opening {
+        true => {
+            let lsp_info = lsp_client
                 .query_info()
                 .lift_invalid_input()
-                .prefix_error("Failed to query LSPD")?,
-        ),
-        false => None,
-    };
-
-    let incoming_amount_msat = match needs_channel_opening {
-        true => {
-            let lsp_info = lsp_info.as_ref().unwrap();
+                .prefix_error("Failed to query LSPD")?;
             let lsp_fee = lsp::calculate_fee(amount_msat, &lsp_info.fee);
             if lsp_fee >= amount_msat {
                 return Err(invalid_input("Payment amount must be higher than lsp fees"));
             }
-            amount_msat - lsp_fee
+            (Some(lsp_info), amount_msat - lsp_fee)
         }
-        false => amount_msat,
+
+        false => (None, amount_msat),
     };
+
     let (payment_hash, payment_secret) = channel_manager
         .create_inbound_payment(Some(incoming_amount_msat), 1000)
         .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
@@ -69,7 +64,7 @@ pub(crate) fn create_raw_invoice(
             payee_pubkey,
             amount_msat,
         };
-        let lsp_info = lsp_info.unwrap();
+        let lsp_info = lsp_info.ok_or_else(|| permanent_failure("Unexpected None value"))?;
         let hint_hop = lsp_client
             .register_payment(&payment_request, &lsp_info)
             .lift_invalid_input()
