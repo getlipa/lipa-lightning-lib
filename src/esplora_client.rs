@@ -25,9 +25,10 @@ impl EsploraClient {
     pub fn new(url: &str) -> LipaResult<Self> {
         let builder = Builder::new(url).timeout(ESPLORA_TIMEOUT_SECS);
         Ok(Self {
-            client: builder
-                .build_blocking()
-                .map_to_runtime_error("Failed to build Esplora client")?,
+            client: builder.build_blocking().map_to_runtime_error(
+                RuntimeErrorCode::EsploraServiceUnavailable,
+                "Failed to build Esplora client",
+            )?,
         })
     }
 
@@ -36,7 +37,10 @@ impl EsploraClient {
         Ok(self
             .client
             .get_block_status(hash)
-            .map_to_runtime_error("Esplora failed to get block status")?
+            .map_to_runtime_error(
+                RuntimeErrorCode::EsploraServiceUnavailable,
+                "Esplora failed to get block status",
+            )?
             .height)
     }
 
@@ -44,7 +48,10 @@ impl EsploraClient {
         Ok(self
             .client
             .get_tx_status(txid)
-            .map_to_runtime_error("Esplora failed to get tx status")?
+            .map_to_runtime_error(
+                RuntimeErrorCode::EsploraServiceUnavailable,
+                "Esplora failed to get tx status",
+            )?
             .map_or(false, |status| status.confirmed))
     }
 
@@ -56,7 +63,10 @@ impl EsploraClient {
             let header = self
                 .client
                 .get_header_by_hash(block_hash)
-                .map_to_runtime_error("Esplora failed to get header by hash")?;
+                .map_to_runtime_error(
+                    RuntimeErrorCode::EsploraServiceUnavailable,
+                    "Esplora failed to get header by hash",
+                )?;
             return Ok(Some((header, height)));
         }
 
@@ -64,11 +74,10 @@ impl EsploraClient {
     }
 
     pub fn get_confirmed_tx_by_id(&self, txid: &Txid) -> LipaResult<Option<ConfirmedTransaction>> {
-        if let Some(tx_status) = self
-            .client
-            .get_tx_status(txid)
-            .map_to_runtime_error("Esplora failed to get tx status")?
-        {
+        if let Some(tx_status) = self.client.get_tx_status(txid).map_to_runtime_error(
+            RuntimeErrorCode::EsploraServiceUnavailable,
+            "Esplora failed to get tx status",
+        )? {
             return self.get_confirmed_tx(txid, &tx_status);
         }
 
@@ -83,7 +92,10 @@ impl EsploraClient {
         if let Some(output_status) = self
             .client
             .get_output_status(txid, index)
-            .map_to_runtime_error("Esplora failed to get output status")?
+            .map_to_runtime_error(
+                RuntimeErrorCode::EsploraServiceUnavailable,
+                "Esplora failed to get output status",
+            )?
         {
             if output_status.spent {
                 if let (Some(spending_tx_id), Some(spending_tx_status)) =
@@ -108,19 +120,22 @@ impl EsploraClient {
             if let (Some(block_hash), Some(block_height)) =
                 (tx_status.block_hash, tx_status.block_height)
             {
-                if let Some(tx) = self
-                    .client
-                    .get_tx(txid)
-                    .map_to_runtime_error("Esplora failed to get tx")?
-                {
+                if let Some(tx) = self.client.get_tx(txid).map_to_runtime_error(
+                    RuntimeErrorCode::EsploraServiceUnavailable,
+                    "Esplora failed to get tx",
+                )? {
                     let block_header = self
                         .client
                         .get_header_by_hash(&block_hash)
-                        .map_to_runtime_error("Esplora failed to get header by hash")?;
-                    if let Some(merkle_proof) = self
-                        .client
-                        .get_merkle_proof(txid)
-                        .map_to_runtime_error("Esplora failed to get merkle proof")?
+                        .map_to_runtime_error(
+                            RuntimeErrorCode::EsploraServiceUnavailable,
+                            "Esplora failed to get header by hash",
+                        )?;
+                    if let Some(merkle_proof) =
+                        self.client.get_merkle_proof(txid).map_to_runtime_error(
+                            RuntimeErrorCode::EsploraServiceUnavailable,
+                            "Esplora failed to get merkle proof",
+                        )?
                     {
                         return Ok(Some(ConfirmedTransaction {
                             tx,
@@ -146,20 +161,23 @@ impl EsploraClient {
     }
 
     pub fn get_tip_hash(&self) -> LipaResult<BlockHash> {
-        self.client
-            .get_tip_hash()
-            .map_to_runtime_error("Esplora failed to get tip hash")
+        self.client.get_tip_hash().map_to_runtime_error(
+            RuntimeErrorCode::EsploraServiceUnavailable,
+            "Esplora failed to get tip hash",
+        )
     }
 
     pub fn broadcast(&self, tx: &Transaction) -> LipaResult<()> {
-        self.client
-            .broadcast(tx)
-            .map_to_runtime_error("Esplora failed to broadcast tx")
+        self.client.broadcast(tx).map_to_runtime_error(
+            RuntimeErrorCode::EsploraServiceUnavailable,
+            "Esplora failed to broadcast tx",
+        )
     }
 
     pub fn get_fee_estimates(&self) -> LipaResult<HashMap<String, f64>> {
-        self.client
-            .get_fee_estimates()
-            .map_to_runtime_error("Esplora failed to get fee estimates")
+        self.client.get_fee_estimates().map_to_runtime_error(
+            RuntimeErrorCode::EsploraServiceUnavailable,
+            "Esplora failed to get fee estimates",
+        )
     }
 }

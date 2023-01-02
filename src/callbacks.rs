@@ -1,4 +1,4 @@
-use crate::errors::{CallbackResult, LspError};
+use crate::errors::CallbackResult;
 use std::fmt::Debug;
 
 pub trait RemoteStorageCallback: Send + Sync + Debug {
@@ -16,13 +16,13 @@ pub trait RemoteStorageCallback: Send + Sync + Debug {
 }
 
 pub trait LspCallback: Send + Sync {
-    fn channel_information(&self) -> Result<Vec<u8>, LspError>;
+    fn channel_information(&self) -> CallbackResult<Vec<u8>>;
 
     /// Register a new incoming payment.
     ///
     /// # Return
     /// Returns non empty string with description in case of an error.
-    fn register_payment(&self, bytes: Vec<u8>) -> Result<(), LspError>;
+    fn register_payment(&self, bytes: Vec<u8>) -> CallbackResult<()>;
 }
 
 pub trait EventsCallback: Send + Sync {

@@ -57,10 +57,10 @@ impl LspClient {
     }
 
     pub fn query_info(&self) -> LipaResult<LspInfo> {
-        let response = self
-            .lsp
-            .channel_information()
-            .map_to_runtime_error("Error contacting LSP")?;
+        let response = self.lsp.channel_information().map_to_runtime_error(
+            RuntimeErrorCode::LspServiceUnavailable,
+            "Failed to contact LSP",
+        )?;
         parse_lsp_info(&response).prefix_error("Invalid LSP response")
     }
 
@@ -87,7 +87,10 @@ impl LspClient {
             .prefix_error("Failed to encrypt payment request")?;
         self.lsp
             .register_payment(encrypted_payment_info)
-            .map_to_runtime_error("Error on contacting LSP")?;
+            .map_to_runtime_error(
+                RuntimeErrorCode::LspServiceUnavailable,
+                "Failed to contact LSP",
+            )?;
 
         Ok(RouteHintHop {
             src_node_id: lsp_info.node_info.pubkey,

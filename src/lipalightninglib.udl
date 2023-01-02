@@ -152,40 +152,32 @@ callback interface EventsCallback {
     void payment_failed(string payment_hash);
 };
 
-[Error]
-enum InitializationError {
-    "AsyncRuntime",
-    "ChainMonitorWatchChannel",
-    "ChainSync", // Layer 1 synchronization
-    "ChannelMonitorBackup",
-    "EsploraClient", // Layer 1 handling
-    "KeysManager",
-    "Logic",
-    "PeerConnection", // Layer 2 connections
-    "PublicKey",
-    "SecretGeneration",
+// A code that specifies the RuntimError that ocurred
+enum RuntimeErrorCode {
+    "RemoteServiceUnavailable", // A remote service is unavailable. Could there be a loss of internet connection?
+    "EsploraServiceUnavailable", // The esplora service is unavailable. Could there be a loss of internet connection?
+    "RgsServiceUnavailable", // The rapid gossip sync service is unavailable. Could there be a loss of internet connection?
+    "RgsUpdateError", // Failed to apply update. Maybe retry?
+    "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
+    "RemoteStorageServiceUnavailable", // The remote storage service is unavailable. Could there be a loss of internet connection?
+    "NoRouteFound", // Many things can cause this. Do we have enough funds?
+    "SendFailure", // A path was found but sending failed. Many things can cause this
+    "GenericError", // A generic error for unexpected/unknown runtime errors
 };
 
 [Error]
-enum RuntimeError {
-    "ChainSync", // Layer 1 synchronization
-    "InvalidAddress",
-    "InvalidPubKey",
-    "Logic",
-    "PeerConnection", // Layer 2 connections
-};
-
-[Error]
-enum LipaError {
+interface LipaError {
     // Invalid input.
     // Consider fixing the input and retrying the request.
-    "InvalidInput",
+    InvalidInput(string msg);
+
     // Recoverable problem (e.g. network issue, problem with en external service).
     // Consider retrying the request.
-    "RuntimeError",
+    RuntimeError(RuntimeErrorCode code, string msg);
+
     // Unrecoverable problem (e.g. internal invariant broken).
     // Consider suggesting the user to report the issue to the developers.
-    "PermanentFailure",
+    PermanentFailure(string msg);
 };
 
 // Information embedded in an invoice
@@ -200,7 +192,7 @@ dictionary InvoiceDetails {
 
 interface LightningNode {
     // Initiate the Lightning node and let it run in a background thread
-    [Throws=InitializationError]
+    [Throws=LipaError]
     constructor([ByRef] Config config, RemoteStorageCallback remote_storage_callback, LspCallback lsp_callback, EventsCallback events_callback);
 
     // Request some basic info about the local node
@@ -269,22 +261,14 @@ dictionary LspFee {
   u64 channel_fee_permyriad;
 };
 
-// Potential errors when communicating with LSP
-[Error]
-enum LspError {
-    "Grpc",
-    "Network",
-    "UnexpectedUniFFI",
-};
-
 // Callback interface for the Lightning Service Provider (LSP) to be implemented by the library consumer
 callback interface LspCallback {
     // This interface is about to change. Ignore it for the time being.
-    [Throws=LspError]
+    [Throws=CallbackError]
     sequence<u8> channel_information();
 
     // Pass a serialized RegisterPaymentRequest message to the LSP
-    [Throws=LspError]
+    [Throws=CallbackError]
     void register_payment(sequence<u8> bytes);
 };
 

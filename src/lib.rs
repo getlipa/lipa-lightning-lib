@@ -33,7 +33,7 @@ use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, NodeAddress};
 use crate::confirm::ConfirmWrapper;
 use crate::errors::*;
-use crate::errors::{CallbackError, InitializationError, LipaError, LspError, RuntimeError};
+use crate::errors::{CallbackError, LipaError};
 use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
@@ -104,17 +104,11 @@ impl LightningNode {
         remote_storage_callback: Box<dyn RemoteStorageCallback>,
         lsp_callback: Box<dyn LspCallback>,
         events_callback: Box<dyn EventsCallback>,
-    ) -> Result<Self, InitializationError> {
+    ) -> LipaResult<Self> {
         let rt = AsyncRuntime::new()?;
         let genesis_hash = genesis_block(config.network).header.block_hash();
 
-        let esplora_client = Arc::new(
-            EsploraClient::new(&config.esplora_api_url.clone()).map_err(|e| {
-                InitializationError::EsploraClient {
-                    message: e.to_string(),
-                }
-            })?,
-        );
+        let esplora_client = Arc::new(EsploraClient::new(&config.esplora_api_url.clone())?);
 
         // Step 1. Initialize the FeeEstimator
         let fee_estimator = Arc::new(FeeEstimator::new(
@@ -161,11 +155,7 @@ impl LightningNode {
         ));
 
         // Step 6. Initialize the KeysManager
-        let keys_manager = Arc::new(init_keys_manager(&config.seed).map_err(|e| {
-            InitializationError::KeysManager {
-                message: e.to_string(),
-            }
-        })?);
+        let keys_manager = Arc::new(init_keys_manager(&config.seed)?);
 
         // Step 7. Read ChannelMonitor state from disk
         let mut channel_monitors = persister.read_channel_monitors(&*keys_manager);
@@ -197,10 +187,7 @@ impl LightningNode {
                 mut_channel_monitors,
                 mobile_node_user_config,
                 chain_params,
-            )
-            .map_err(|e| InitializationError::ChannelMonitorBackup {
-                message: e.to_string(),
-            })?;
+            )?;
         let channel_manager = Arc::new(channel_manager);
 
         // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
@@ -210,11 +197,7 @@ impl LightningNode {
             filter,
             channel_manager_block_hash.unwrap_or(genesis_hash),
         )));
-        chain_access.lock().unwrap().sync(&confirm).map_err(|e| {
-            InitializationError::EsploraClient {
-                message: e.to_string(),
-            }
-        })?;
+        chain_access.lock().unwrap().sync(&confirm)?;
 
         // Step 10. Give ChannelMonitors to ChainMonitor
         for (_, channel_monitor) in channel_monitors {
@@ -222,10 +205,14 @@ impl LightningNode {
             match chain_monitor.watch_channel(funding_outpoint, channel_monitor) {
                 ChannelMonitorUpdateStatus::Completed => {}
                 ChannelMonitorUpdateStatus::InProgress => {
-                    return Err(InitializationError::ChainMonitorWatchChannel)
+                    return Err(permanent_failure(
+                        "Failed to give a ChannelMonitor to the ChainMonitor",
+                    ))
                 }
                 ChannelMonitorUpdateStatus::PermanentFailure => {
-                    return Err(InitializationError::ChainMonitorWatchChannel)
+                    return Err(permanent_failure(
+                        "Failed to give a ChannelMonitor to the ChainMonitor",
+                    ))
                 }
             }
         }
@@ -282,15 +269,11 @@ impl LightningNode {
             });
 
         // Step 15. Initialize an EventHandler
-        let lsp_pubkey =
-            PublicKey::from_slice(&Vec::from_hex(&config.lsp_node.pub_key).map_err(|e| {
-                InitializationError::PublicKey {
-                    message: e.to_string(),
-                }
-            })?)
-            .map_err(|e| InitializationError::PublicKey {
-                message: e.to_string(),
-            })?;
+        let lsp_pubkey = PublicKey::from_slice(
+            &Vec::from_hex(&config.lsp_node.pub_key)
+                .map_to_invalid_input("Invalid LSP node public key")?,
+        )
+        .map_to_invalid_input("Invalid LSP node public key")?;
         let event_handler = Arc::new(LipaEventHandler::new(
             lsp_pubkey,
             Arc::clone(&channel_manager),
@@ -424,11 +407,20 @@ impl LightningNode {
 
         let snapshot_contents =
             reqwest::blocking::get(format!("{}{}", self.rgs_url, last_sync_timestamp))
-                .map_to_runtime_error("Failed to get response from RGS server")?
+                .map_to_runtime_error(
+                    RuntimeErrorCode::RgsServiceUnavailable,
+                    "Failed to get response from RGS server",
+                )?
                 .error_for_status()
-                .map_to_runtime_error("The RGS server returned an error")?
+                .map_to_runtime_error(
+                    RuntimeErrorCode::RgsServiceUnavailable,
+                    "The RGS server returned an error",
+                )?
                 .bytes()
-                .map_to_runtime_error("Failed to get the RGS server response as bytes")?
+                .map_to_runtime_error(
+                    RuntimeErrorCode::RgsServiceUnavailable,
+                    "Failed to get the RGS server response as bytes",
+                )?
                 .to_vec();
 
         match self.rapid_sync.update_network_graph(&snapshot_contents) {
@@ -438,10 +430,10 @@ impl LightningNode {
             ),
             Err(e) => return match e {
                 GraphSyncError::DecodeError(e) => {
-                    Err(e).map_to_runtime_error("Failed to decode a network graph update")
+                    Err(e).map_to_runtime_error(RuntimeErrorCode::RgsUpdateError, "Failed to decode a network graph update")
                 }
                 GraphSyncError::LightningError(e) => {
-                    Err(runtime_error(
+                    Err(runtime_error(RuntimeErrorCode::RgsUpdateError,
                         format!("Failed to apply a network graph update to the local graph: {} - Recommended action: {:?}", e.err, e.action),
                     ))
                 }
@@ -487,13 +479,17 @@ impl LightningNode {
                     PaymentError::Invoice(e) => {
                         Err(invalid_input(format!("Invalid invoice - {}", e)))
                     }
-                    PaymentError::Routing(e) => Err(runtime_error(format!(
-                        "Failed to find a route - {} - Recommended action: {:?}",
-                        e.err, e.action
-                    ))),
-                    PaymentError::Sending(e) => {
-                        Err(runtime_error(format!("Failed to send payment - {:?}", e)))
-                    }
+                    PaymentError::Routing(e) => Err(runtime_error(
+                        RuntimeErrorCode::NoRouteFound,
+                        format!(
+                            "Failed to find a route - {} - Recommended action: {:?}",
+                            e.err, e.action
+                        ),
+                    )),
+                    PaymentError::Sending(e) => Err(runtime_error(
+                        RuntimeErrorCode::SendFailure,
+                        format!("Failed to send payment - {:?}", e),
+                    )),
                 }
             }
         }
@@ -580,16 +576,12 @@ fn init_peer_manager(
     channel_manager: Arc<ChannelManager>,
     keys_manager: &KeysManager,
     logger: Arc<LightningLogger>,
-) -> Result<PeerManager, InitializationError> {
-    let ephemeral_bytes =
-        generate_random_bytes::<32>().map_err(|e| InitializationError::PeerConnection {
-            message: e.to_string(),
-        })?;
+) -> LipaResult<PeerManager> {
+    let ephemeral_bytes = generate_random_bytes::<32>()
+        .map_to_permanent_failure("Failed to generate random bytes")?;
     let our_node_secret = keys_manager
         .get_node_secret(Recipient::Node)
-        .map_err(|()| InitializationError::Logic {
-            message: "Get node secret for node recipient failed".to_string(),
-        })?;
+        .map_to_permanent_failure("Failed to get our own node secret")?;
     Ok(PeerManager::new_channel_only(
         channel_manager,
         IgnoringMessageHandler {},

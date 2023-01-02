@@ -1,5 +1,5 @@
 use crate::async_runtime::Handle;
-use crate::errors::{LipaError, LipaResult, MapToLipaError, RuntimeError};
+use crate::errors::{runtime_error, LipaError, LipaResult, MapToLipaError, RuntimeErrorCode};
 use crate::{NodeAddress, PeerManager, RepeatingTaskHandle};
 use bitcoin::secp256k1::PublicKey;
 use log::{debug, error, trace};
@@ -38,10 +38,7 @@ impl P2pConnection {
         Ok(join_handle)
     }
 
-    async fn connect_peer(
-        peer: &LnPeer,
-        peer_manager: Arc<PeerManager>,
-    ) -> Result<(), RuntimeError> {
+    async fn connect_peer(peer: &LnPeer, peer_manager: Arc<PeerManager>) -> LipaResult<()> {
         if Self::is_connected(peer, Arc::clone(&peer_manager)) {
             trace!("Peer {} is already connected", peer.pub_key);
             return Ok(());
@@ -60,9 +57,10 @@ impl P2pConnection {
                 // Make sure the connection is still established.
                 match futures::poll!(&mut connection_closed_future) {
                     Poll::Ready(_) => {
-                        return Err(RuntimeError::PeerConnection {
-                            message: "Peer disconnected before handshake completed".to_string(),
-                        });
+                        return Err(runtime_error(
+                            RuntimeErrorCode::GenericError,
+                            "Peer disconnected before handshake completed",
+                        ));
                     }
                     Poll::Pending => {
                         debug!("Peer connection to {} still pending", peer.pub_key);
@@ -79,9 +77,10 @@ impl P2pConnection {
             }
         }
 
-        Err(RuntimeError::PeerConnection {
-            message: format!("Failed to connect to peer {}", peer.pub_key),
-        })
+        Err(runtime_error(
+            RuntimeErrorCode::GenericError,
+            format!("Failed to connect to peer {}", peer.pub_key),
+        ))
     }
 
     fn is_connected(peer: &LnPeer, peer_manager: Arc<PeerManager>) -> bool {
