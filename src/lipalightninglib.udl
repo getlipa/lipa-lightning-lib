@@ -154,7 +154,6 @@ callback interface EventsCallback {
 
 // A code that specifies the RuntimError that ocurred
 enum RuntimeErrorCode {
-    "RemoteServiceUnavailable", // A remote service is unavailable. Could there be a loss of internet connection?
     "EsploraServiceUnavailable", // The esplora service is unavailable. Could there be a loss of internet connection?
     "RgsServiceUnavailable", // The rapid gossip sync service is unavailable. Could there be a loss of internet connection?
     "RgsUpdateError", // Failed to apply update. Maybe retry?

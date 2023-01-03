@@ -18,7 +18,6 @@ use uniffi::ffi::foreigncallbacks::UnexpectedUniFFICallbackError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RuntimeErrorCode {
-    RemoteServiceUnavailable,
     EsploraServiceUnavailable,
     RgsServiceUnavailable,
     RgsUpdateError,
@@ -168,7 +167,6 @@ impl<T> MapToLipaErrorForUnitType<T> for Result<T, ()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::RuntimeErrorCode::RemoteServiceUnavailable;
 
     #[test]
     fn test_map_to_lipa_errors() {
@@ -176,20 +174,26 @@ mod tests {
 
         let io_error: Result<()> = Err(Error::new(ErrorKind::Other, "File not found"));
         let lipa_error = io_error
-            .map_to_runtime_error(RemoteServiceUnavailable, "No backup")
+            .map_to_runtime_error(
+                RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                "No backup",
+            )
             .unwrap_err();
         assert_eq!(
             lipa_error.to_string(),
-            "RuntimeError: RemoteServiceUnavailable - No backup: File not found"
+            "RuntimeError: RemoteStorageServiceUnavailable - No backup: File not found"
         );
 
         let error: std::result::Result<(), ()> = Err(());
         let lipa_error = error
-            .map_to_runtime_error(RemoteServiceUnavailable, "No backup")
+            .map_to_runtime_error(
+                RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                "No backup",
+            )
             .unwrap_err();
         assert_eq!(
             lipa_error.to_string(),
-            "RuntimeError: RemoteServiceUnavailable - No backup"
+            "RuntimeError: RemoteStorageServiceUnavailable - No backup"
         );
     }
 
@@ -202,11 +206,14 @@ mod tests {
             "PermanentFailure: InvalidInput: Number must be positive"
         );
 
-        let result: LipaResult<()> =
-            Err(runtime_error(RemoteServiceUnavailable, "Socket timeout")).lift_invalid_input();
+        let result: LipaResult<()> = Err(runtime_error(
+            RuntimeErrorCode::EsploraServiceUnavailable,
+            "Socket timeout",
+        ))
+        .lift_invalid_input();
         assert_eq!(
             result.unwrap_err().to_string(),
-            "RuntimeError: RemoteServiceUnavailable - Socket timeout"
+            "RuntimeError: EsploraServiceUnavailable - Socket timeout"
         );
 
         let result: LipaResult<()> =
