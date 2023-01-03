@@ -11,8 +11,21 @@ on:
   pull_request:
 
 jobs:
+  # Skip this GitHub Action if a previous run has already been triggered by another event
+  pre_job:
+    runs-on: ubuntu-latest
+    # Map a step output to a job output
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v5
+        with:
+          concurrent_skipping: 'same_content_newer'
   security-audit:
     name: Security audit
+    needs: pre_job
+    if: needs.pre_job.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: rust-toolchain
@@ -26,6 +39,8 @@ jobs:
         run: cargo audit
   fmt_check:
     name: Check code formatting
+    needs: pre_job
+    if: needs.pre_job.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: rust-toolchain
@@ -38,6 +53,8 @@ jobs:
         run: cargo fmt -- --check
   clippy_check:
     name: Clippy check
+    needs: pre_job
+    if: needs.pre_job.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: rust-toolchain
@@ -57,6 +74,8 @@ jobs:
         run: cargo clippy -- -D warnings
   unused_dependencies:
     name: Look for unused dependencies
+    needs: pre_job
+    if: needs.pre_job.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: rust-toolchain
