@@ -105,12 +105,18 @@ impl StoragePersister {
         if self
             .storage
             .object_exists(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
-            .map_to_runtime_error("Failed to check channel manager")?
+            .map_to_runtime_error(
+                RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                "Failed to check channel manager",
+            )?
         {
             let data = self
                 .storage
                 .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
-                .map_to_runtime_error("Failed to read channel manager")?;
+                .map_to_runtime_error(
+                    RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                    "Failed to read channel manager",
+                )?;
             let read_args = ChannelManagerReadArgs::new(
                 keys_manager,
                 fee_estimator,
@@ -123,7 +129,7 @@ impl StoragePersister {
             let mut buffer = Cursor::new(&data);
             let (block_hash, channel_manager) =
                 <(BlockHash, SimpleArcChannelManager<M, T, F, L>)>::read(&mut buffer, read_args)
-                    .map_to_runtime_error("Failed to parse channel manager")?;
+                    .map_to_permanent_failure("Failed to parse channel manager")?;
             debug!(
                 "Successfully read the ChannelManager from storage. It knows of {} channels",
                 channel_manager.list_channels().len()
@@ -159,12 +165,18 @@ impl StoragePersister {
         if self
             .storage
             .object_exists(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string())
-            .map_to_runtime_error("Failed to check network graph")?
+            .map_to_runtime_error(
+                RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                "Failed to check network graph",
+            )?
         {
             let data = self
                 .storage
                 .get_object(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string())
-                .map_to_runtime_error("Failed to read network graph")?;
+                .map_to_runtime_error(
+                    RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                    "Failed to read network graph",
+                )?;
             let mut buffer = Cursor::new(&data);
             let network_graph = match NetworkGraph::read(&mut buffer, Arc::clone(&logger)) {
                 Ok(graph) => {

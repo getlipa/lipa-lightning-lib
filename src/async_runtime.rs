@@ -1,5 +1,4 @@
-use crate::errors::InitializationError;
-
+use crate::errors::{LipaResult, MapToLipaError};
 use core::future::Future;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
@@ -17,16 +16,14 @@ pub(crate) struct Handle {
 
 impl AsyncRuntime {
     #[allow(clippy::result_large_err)]
-    pub fn new() -> Result<Self, InitializationError> {
+    pub fn new() -> LipaResult<Self> {
         let rt = Builder::new_multi_thread()
             .worker_threads(4)
             .thread_name("3l-async-runtime")
             .enable_time()
             .enable_io()
             .build()
-            .map_err(|e| InitializationError::AsyncRuntime {
-                message: e.to_string(),
-            })?;
+            .map_to_permanent_failure("Failed to build tokio async runtime")?;
         Ok(Self { rt })
     }
 

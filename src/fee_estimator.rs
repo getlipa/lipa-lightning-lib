@@ -1,4 +1,4 @@
-use crate::errors::{runtime_error, LipaResult};
+use crate::errors::{permanent_failure, LipaResult};
 use crate::esplora_client::EsploraClient;
 use bitcoin::Network;
 use lightning::chain::chaininterface::{ConfirmationTarget, FeeEstimator as LdkFeeEstimator};
@@ -86,7 +86,7 @@ fn get_ldk_estimate_from_esplora_estimates(
 ) -> LipaResult<u32> {
     let background_estimate = match esplora_estimates.get(confirm_in_blocks) {
         None => {
-            return Err(runtime_error(format!("Failed to get fee estimates: Esplora didn't provide an estimate for confirmation in {} blocks", confirm_in_blocks)));
+            return Err(permanent_failure(format!("Failed to get fee estimates: Esplora didn't provide an estimate for confirmation in {} blocks", confirm_in_blocks)));
         }
         Some(e) => e,
     };
