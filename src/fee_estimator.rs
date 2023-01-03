@@ -61,7 +61,7 @@ impl FeeEstimator {
 
         // Multi-line print done with a single debug! so that the lines can't
         // get separated by other debug prints
-        debug!("FeeEstimator fetched new estimates from esplora: \n    Background: {}\n    Normal: {} \n    HighPriority: {}", background_estimate, normal_estimate, high_priority_estimate);
+        debug!("FeeEstimator fetched new estimates from esplora:\n    Background: {}\n    Normal: {}\n    HighPriority: {}", background_estimate, normal_estimate, high_priority_estimate);
 
         self.fees
             .get(&ConfirmationTarget::Background)
