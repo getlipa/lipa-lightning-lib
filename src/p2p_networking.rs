@@ -96,7 +96,7 @@ mod tests {
 
         assert_eq!(
             ln_peer.to_string(),
-            format!("{}@{}", sample_pubkey, sample_address)
+            "03beb9d00217e9cf9d485e47ffc6e6842c79d8941a755e261a796fe0c2e7ba2e53@1.2.3.4:9735"
         );
     }
 }
