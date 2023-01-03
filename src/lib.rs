@@ -48,7 +48,7 @@ use crate::lsp::LspClient;
 use crate::lsp::LspFee;
 use crate::native_logger::init_native_logger_once;
 use crate::node_info::{get_channels_info, ChannelsInfo, NodeInfo};
-use crate::p2p_networking::{LnPeer, P2pConnection};
+use crate::p2p_networking::{connect_peer, LnPeer};
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
@@ -233,9 +233,19 @@ impl LightningNode {
         )?);
 
         // Step 13. Initialize Networking
+        let peer = Arc::new(LnPeer::try_from(&config.lsp_node)?);
+        let peer_manager_clone = Arc::clone(&peer_manager);
         let p2p_connector_handle =
-            P2pConnection::init_background_task(&config.lsp_node, rt.handle(), &peer_manager)
-                .unwrap(); // todo proper error handling instead of unwrap()
+            rt.handle()
+                .spawn_repeating_task(Duration::from_secs(1), move || {
+                    let peer = Arc::clone(&peer);
+                    let peer_manager = Arc::clone(&peer_manager_clone);
+                    async move {
+                        if let Err(e) = connect_peer(&peer, peer_manager).await {
+                            error!("Connecting to peer {} failed: {}", peer, e);
+                        }
+                    }
+                });
 
         // Step 14. Keep LDK Up-to-date with Chain Info
         // TODO: optimize how often we want to run sync. LDK-sample syncs every second and
