@@ -6,6 +6,7 @@ mod setup;
 #[cfg(feature = "nigiri")]
 mod p2p_connection_test {
     use super::*;
+    use bitcoin::hashes::hex::ToHex;
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -28,7 +29,8 @@ mod p2p_connection_test {
         let node = NodeHandle::new(lsp_node.clone()).start().unwrap();
 
         assert_eq!(node.get_node_info().num_peers, 1);
-        assert!(node.connected_to_node(&lsp_node));
+        let peers = setup::nigiri::list_peers(NodeInstance::NigiriLnd).unwrap();
+        assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
     }
 
     #[test]
@@ -43,7 +45,9 @@ mod p2p_connection_test {
         let node = NodeHandle::new(lsp_node.clone()).start().unwrap();
 
         assert_eq!(node.get_node_info().num_peers, 0);
-        assert!(!node.connected_to_node(&lsp_node));
+        assert!(setup::nigiri::list_peers(NodeInstance::NigiriLnd)
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
@@ -61,7 +65,6 @@ mod p2p_connection_test {
         let node = NodeHandle::new(lsp_node.clone()).start().unwrap();
 
         assert_eq!(node.get_node_info().num_peers, 0);
-        assert!(!node.connected_to_node(&lsp_node));
 
         // Now let's start Nigiri with LND again
         setup::nigiri::pause();
@@ -71,7 +74,8 @@ mod p2p_connection_test {
         sleep(Duration::from_millis(1500));
 
         assert_eq!(node.get_node_info().num_peers, 1);
-        assert!(node.connected_to_node(&lsp_node));
+        let peers = setup::nigiri::list_peers(NodeInstance::NigiriLnd).unwrap();
+        assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
     }
 
     #[test]
@@ -87,7 +91,8 @@ mod p2p_connection_test {
             let node = NodeHandle::new(lsp_node.clone()).start().unwrap();
 
             assert_eq!(node.get_node_info().num_peers, 1);
-            assert!(node.connected_to_node(&lsp_node));
+            let peers = setup::nigiri::list_peers(NodeInstance::NigiriLnd).unwrap();
+            assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
 
             setup::nigiri::stop();
             sleep(Duration::from_secs(5)); // Wait for the LDK to disconnect from the LSP
@@ -106,7 +111,8 @@ mod p2p_connection_test {
         let node = NodeHandle::new(lsp_node.clone()).start().unwrap();
 
         assert_eq!(node.get_node_info().num_peers, 1);
-        assert!(node.connected_to_node(&lsp_node));
+        let peers = setup::nigiri::list_peers(NodeInstance::NigiriLnd).unwrap();
+        assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
 
         setup::nigiri::pause();
 
@@ -114,7 +120,6 @@ mod p2p_connection_test {
         sleep(Duration::from_millis(1500));
 
         assert_eq!(node.get_node_info().num_peers, 0);
-        assert!(!node.connected_to_node(&lsp_node));
 
         setup::nigiri::resume();
 
@@ -122,6 +127,7 @@ mod p2p_connection_test {
         sleep(Duration::from_millis(1500));
 
         assert_eq!(node.get_node_info().num_peers, 1);
-        assert!(node.connected_to_node(&lsp_node));
+        let peers = setup::nigiri::list_peers(NodeInstance::NigiriLnd).unwrap();
+        assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
     }
 }

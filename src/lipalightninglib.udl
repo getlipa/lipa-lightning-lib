@@ -198,12 +198,8 @@ interface LightningNode {
     NodeInfo get_node_info();
 
     // Get information about the fee charged by the LSP for opening new channels
-    // This does NOT check for established channels, but only for established TCP connections
     [Throws=LipaError]
     LspFee query_lsp_fee();
-
-    // Verify whether there is an established Layer 2 connection between the local node and a given node
-    boolean connected_to_node([ByRef] NodeAddress node);
 
     // Create an invoice to receive a payment with:
     //    - amount_msat - the smallest amount of millisats required for the node to accept the incoming payment (sender will have to pay fees on top of that amount)

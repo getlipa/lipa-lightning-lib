@@ -698,6 +698,25 @@ pub mod nigiri {
         }
     }
 
+    pub fn list_peers(node: NodeInstance) -> Result<Vec<String>, String> {
+        let sub_cmd = &["listpeers"];
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(&cmd, output));
+        }
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+        let peers = json["peers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|peer| peer["pub_key"].as_str().unwrap().to_string())
+            .collect();
+        Ok(peers)
+    }
+
     fn produce_cmd_err_msg(cmd: &[&str], output: Output) -> String {
         format!(
             "Command `{}` failed.\nStderr: {}Stdout: {}",

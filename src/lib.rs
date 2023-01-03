@@ -373,13 +373,6 @@ impl LightningNode {
         Ok(lsp_info.fee)
     }
 
-    pub fn connected_to_node(&self, lsp_node: &NodeAddress) -> bool {
-        let peer = Arc::new(LnPeer::try_from(lsp_node).unwrap()); // todo proper error handling instead of unwrap()
-        self.peer_manager
-            .get_peer_node_ids()
-            .contains(&peer.pub_key)
-    }
-
     pub fn create_invoice(&self, amount_msat: u64, description: String) -> LipaResult<String> {
         let currency = match self.network {
             Network::Bitcoin => Currency::Bitcoin,
