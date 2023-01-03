@@ -517,8 +517,8 @@ impl LightningNode {
 
     fn chomp_prefix(string: &str) -> &str {
         let prefix = "lightning:";
-        if let Some(string) = string.strip_prefix(prefix) {
-            string
+        if let Some(tail) = string.strip_prefix(prefix) {
+            tail
         } else {
             string
         }
