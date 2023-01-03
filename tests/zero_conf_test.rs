@@ -6,10 +6,8 @@ mod setup;
 #[cfg(feature = "nigiri")]
 mod zero_conf_test {
     use bitcoin::hashes::hex::ToHex;
-    use std::thread::sleep;
-    use std::time::Duration;
 
-    use crate::setup::nigiri::NodeInstance;
+    use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
     use crate::setup::{nigiri, NodeHandle};
 
     #[test]
@@ -36,8 +34,7 @@ mod zero_conf_test {
         assert!(invoice.unwrap().starts_with("lnbc"));
 
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, true).unwrap();
-
-        sleep(Duration::from_secs(5));
+        wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &node_id);
 
         // With a channel, 10 sats invoice is perfectly fine.
         assert!(node.get_node_info().channels_info.inbound_capacity_msat > TEN_SATS);

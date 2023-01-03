@@ -171,7 +171,7 @@ mod sending_payments_test {
         let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
 
         node.pay_invoice(invoice).unwrap();
-        sleep(Duration::from_secs(10));
+        sleep(Duration::from_secs(2));
 
         let final_balance = nigiri::query_node_balance(LspdLnd).unwrap();
 

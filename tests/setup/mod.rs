@@ -762,7 +762,48 @@ pub mod nigiri {
         lnd_node_open_channel(remote_node, &node_id, false).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
 
-        sleep(Duration::from_secs(10));
+        wait_for_new_channel_to_confirm(remote_node, &node_id);
         node
+    }
+
+    pub fn wait_for_new_channel_to_confirm(node: NodeInstance, target_node_id: &str) {
+        let remote_node_json_keyword = match node {
+            NodeInstance::NigiriCln => "destination",
+            _ => "remote_pubkey",
+        };
+
+        let mut retries = 0;
+        loop {
+            let sub_cmd = &["listchannels"];
+            let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+            let output = exec(cmd.as_slice());
+            if !output.status.success() {
+                panic!("Command \"{:?}\" failed!", cmd);
+            }
+            let json: serde_json::Value = serde_json::from_slice(&output.stdout)
+                .map_err(|_| "Invalid json")
+                .unwrap();
+
+            let channels = json["channels"].as_array().unwrap();
+            for channel in channels {
+                if let (Some(pubkey), Some(active)) = (
+                    channel[remote_node_json_keyword].as_str(),
+                    channel["active"].as_bool(),
+                ) {
+                    if pubkey.eq(target_node_id) && active {
+                        return;
+                    }
+                }
+            }
+            sleep(Duration::from_millis(500));
+            retries += 1;
+            if retries >= 220 {
+                panic!(
+                    "Failed to create channel between from {:?} to {}",
+                    node, target_node_id
+                );
+            }
+        }
     }
 }

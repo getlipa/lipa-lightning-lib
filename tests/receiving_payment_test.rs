@@ -10,7 +10,7 @@ mod receiving_payments_test {
     use std::time::Duration;
     use uniffi_lipalightninglib::LightningNode;
 
-    use crate::setup::nigiri::NodeInstance;
+    use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
     use crate::setup::{nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
 
@@ -44,7 +44,7 @@ mod receiving_payments_test {
 
         nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-        sleep(Duration::from_secs(10));
+        wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
 
         run_jit_channel_open_flow(
             &node,
@@ -70,7 +70,7 @@ mod receiving_payments_test {
 
         nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-        sleep(Duration::from_secs(10));
+        wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
 
         let initial_num_channels = node.get_node_info().channels_info.num_usable_channels;
 
@@ -147,7 +147,8 @@ mod receiving_payments_test {
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
         nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-        sleep(Duration::from_secs(10));
+        wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &lipa_node_id);
+        wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
 
         run_payment_flow(&node, NodeInstance::NigiriLnd, TWENTY_K_SATS);
     }
@@ -166,12 +167,13 @@ mod receiving_payments_test {
             .pub_key;
 
         connect_node_to_lsp(NodeInstance::NigiriCln, &lspd_node_id);
-        sleep(Duration::from_secs(20));
+        sleep(Duration::from_secs(20)); // If removed CLN complains that no UTXOs are available
 
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
         nigiri::cln_node_open_pub_channel(NodeInstance::NigiriCln, &lspd_node_id).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-        sleep(Duration::from_secs(110)); // wait for super lazy cln to consider its channels active
+        wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &lipa_node_id);
+        wait_for_new_channel_to_confirm(NodeInstance::NigiriCln, &lspd_node_id);
 
         run_payment_flow(&node, NodeInstance::NigiriCln, TWENTY_K_SATS);
     }
@@ -190,13 +192,15 @@ mod receiving_payments_test {
 
         connect_node_to_lsp(NodeInstance::NigiriLnd, &lspd_node_id);
         connect_node_to_lsp(NodeInstance::NigiriCln, &lspd_node_id);
-        sleep(Duration::from_secs(20));
+        sleep(Duration::from_secs(20)); // If removed CLN complains that no UTXOs are available
 
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
         nigiri::lnd_node_open_channel(NodeInstance::NigiriLnd, &lspd_node_id, false).unwrap();
         nigiri::cln_node_open_pub_channel(NodeInstance::NigiriCln, &lspd_node_id).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-        sleep(Duration::from_secs(110)); // wait for super lazy cln to consider its channels active
+        wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &lipa_node_id);
+        wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
+        wait_for_new_channel_to_confirm(NodeInstance::NigiriCln, &lspd_node_id);
 
         assert_channel_ready(&node, TWENTY_K_SATS * 3);
         let invoice = issue_invoice(&node, TWENTY_K_SATS);

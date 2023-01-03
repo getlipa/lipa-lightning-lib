@@ -9,7 +9,7 @@ mod chain_sync_test {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use crate::setup::nigiri::NodeInstance;
+    use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
     use crate::setup::{nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
 
@@ -37,7 +37,7 @@ mod chain_sync_test {
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
-        sleep(Duration::from_secs(10));
+        wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &node_id);
 
         assert_eq!(node.get_node_info().channels_info.num_channels, 1);
         assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
@@ -51,10 +51,8 @@ mod chain_sync_test {
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
         let tx_id = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap();
-
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 50);
-
-        sleep(Duration::from_secs(10));
+        wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &node_id);
 
         assert_eq!(node.get_node_info().channels_info.num_channels, 1);
         assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
@@ -173,8 +171,7 @@ mod chain_sync_test {
         assert_eq!(node.get_node_info().channels_info.num_usable_channels, 0);
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 6);
-
-        sleep(Duration::from_secs(10));
+        wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &node_id);
 
         assert_eq!(node.get_node_info().channels_info.num_channels, 1);
         assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
