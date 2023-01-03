@@ -792,6 +792,8 @@ pub mod nigiri {
                     channel["active"].as_bool(),
                 ) {
                     if pubkey.eq(target_node_id) && active {
+                        // Wait a bit to avoid insufficient balance errors
+                        sleep(Duration::from_secs(1));
                         return;
                     }
                 }
