@@ -202,11 +202,13 @@ pub mod nigiri {
         start_nigiri();
         start_lspd();
         start_rgs();
+
+        wait_for_healthy_nigiri();
+        wait_for_healthy_lspd();
     }
 
     pub fn stop() {
         stop_rgs();
-        debug!("LSPD stopping ...");
         stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
         debug!("NIGIRI stopping ...");
         exec(&["nigiri", "stop", "--delete"]);
@@ -214,7 +216,6 @@ pub mod nigiri {
 
     pub fn pause() {
         stop_rgs();
-        debug!("LSPD stopping ...");
         stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
         debug!("NIGIRI pausing (stopping without resetting)...");
         exec(&["nigiri", "stop"]);
@@ -222,6 +223,7 @@ pub mod nigiri {
 
     pub fn resume() {
         start_nigiri();
+        wait_for_healthy_nigiri();
     }
 
     pub fn resume_without_ln() {
@@ -231,12 +233,16 @@ pub mod nigiri {
     }
 
     pub fn stop_lspd() {
+        debug!("LSPD stopping ...");
         exec_in_dir(&["docker-compose", "down"], "lspd");
     }
 
-    pub fn start_lspd() {
+    fn start_lspd() {
         debug!("LSP starting ...");
         exec_in_dir(&["docker-compose", "up", "-d", "lspd"], "lspd");
+    }
+
+    fn wait_for_healthy_lspd() {
         wait_for_sync(NodeInstance::LspdLnd);
     }
 
@@ -253,6 +259,9 @@ pub mod nigiri {
     fn start_nigiri() {
         debug!("NIGIRI starting ...");
         exec(&["nigiri", "start", "--ci", "--ln"]);
+    }
+
+    fn wait_for_healthy_nigiri() {
         wait_for_sync(NodeInstance::NigiriLnd);
         wait_for_sync(NodeInstance::NigiriCln);
         wait_for_esplora();
