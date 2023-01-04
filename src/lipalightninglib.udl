@@ -257,7 +257,7 @@ dictionary LspFee {
 };
 
 // Callback interface for the Lightning Service Provider (LSP) to be implemented by the library consumer.
-// The implementation of thie callback consists of building the appropriate LSPD requests, sending them to the
+// The implementation of the callback consists of building the appropriate LSPD requests, sending them to the
 // respective lipa backend endpoints, and return the response, if any.
 callback interface LspCallback {
     // Make a ChannelInformationRequest to the ChannelInformation endpoint. The pubkey field should be set empty.
