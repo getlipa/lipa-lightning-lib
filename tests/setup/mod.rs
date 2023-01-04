@@ -202,11 +202,13 @@ pub mod nigiri {
         start_nigiri();
         start_lspd();
         start_rgs();
+
+        wait_for_healthy_nigiri();
+        wait_for_healthy_lspd();
     }
 
     pub fn stop() {
         stop_rgs();
-        debug!("LSPD stopping ...");
         stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
         debug!("NIGIRI stopping ...");
         exec(&["nigiri", "stop", "--delete"]);
@@ -214,7 +216,6 @@ pub mod nigiri {
 
     pub fn pause() {
         stop_rgs();
-        debug!("LSPD stopping ...");
         stop_lspd(); // Nigiri cannot be stopped if lspd is still connected to it.
         debug!("NIGIRI pausing (stopping without resetting)...");
         exec(&["nigiri", "stop"]);
@@ -222,6 +223,7 @@ pub mod nigiri {
 
     pub fn resume() {
         start_nigiri();
+        wait_for_healthy_nigiri();
     }
 
     pub fn resume_without_ln() {
@@ -231,12 +233,16 @@ pub mod nigiri {
     }
 
     pub fn stop_lspd() {
+        debug!("LSPD stopping ...");
         exec_in_dir(&["docker-compose", "down"], "lspd");
     }
 
-    pub fn start_lspd() {
+    fn start_lspd() {
         debug!("LSP starting ...");
         exec_in_dir(&["docker-compose", "up", "-d", "lspd"], "lspd");
+    }
+
+    fn wait_for_healthy_lspd() {
         wait_for_sync(NodeInstance::LspdLnd);
     }
 
@@ -253,6 +259,9 @@ pub mod nigiri {
     fn start_nigiri() {
         debug!("NIGIRI starting ...");
         exec(&["nigiri", "start", "--ci", "--ln"]);
+    }
+
+    fn wait_for_healthy_nigiri() {
         wait_for_sync(NodeInstance::NigiriLnd);
         wait_for_sync(NodeInstance::NigiriCln);
         wait_for_esplora();
@@ -753,7 +762,49 @@ pub mod nigiri {
         lnd_node_open_channel(remote_node, &node_id, false).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
 
-        sleep(Duration::from_secs(10));
+        wait_for_new_channel_to_confirm(remote_node, &node_id);
         node
+    }
+
+    pub fn wait_for_new_channel_to_confirm(node: NodeInstance, target_node_id: &str) {
+        let remote_node_json_keyword = match node {
+            NodeInstance::NigiriCln => "destination",
+            _ => "remote_pubkey",
+        };
+
+        let mut retries = 0;
+        loop {
+            let sub_cmd = &["listchannels"];
+            let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+            let output = exec(cmd.as_slice());
+            if !output.status.success() {
+                panic!("Command \"{:?}\" failed!", cmd);
+            }
+            let json: serde_json::Value =
+                serde_json::from_slice(&output.stdout).expect("Invalid json");
+
+            let channels = json["channels"].as_array().unwrap();
+            for channel in channels {
+                if let (Some(pubkey), Some(active)) = (
+                    channel[remote_node_json_keyword].as_str(),
+                    channel["active"].as_bool(),
+                ) {
+                    if pubkey.eq(target_node_id) && active {
+                        // Wait a bit to avoid insufficient balance errors
+                        sleep(Duration::from_secs(1));
+                        return;
+                    }
+                }
+            }
+            sleep(Duration::from_millis(500));
+            retries += 1;
+            if retries >= 220 {
+                panic!(
+                    "Failed to create channel between from {:?} to {}",
+                    node, target_node_id
+                );
+            }
+        }
     }
 }

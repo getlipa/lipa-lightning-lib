@@ -5,7 +5,7 @@ mod setup;
 //          cargo test --features nigiri -- --test-threads 1
 #[cfg(feature = "nigiri")]
 mod zero_conf_test {
-    use crate::setup::nigiri::NodeInstance;
+    use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
     use crate::setup::{nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
     use bitcoin::hashes::hex::ToHex;
@@ -54,7 +54,8 @@ mod zero_conf_test {
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
         nigiri::cln_node_open_pub_channel(NodeInstance::NigiriCln, &lspd_node_id).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-        sleep(Duration::from_secs(110)); // wait for super lazy cln to consider its channels active
+        wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &lipa_node_id);
+        wait_for_new_channel_to_confirm(NodeInstance::NigiriCln, &lspd_node_id);
 
         assert_eq!(node.get_node_info().channels_info.num_channels, 1);
         assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
@@ -73,10 +74,12 @@ mod zero_conf_test {
             node.get_node_info().channels_info.local_balance_msat,
             HUNDRED_K_SATS
         );
+        // TODO: figure out why the following sleep is needed - the assert that follows fails otherwise
         sleep(Duration::from_secs(10));
         assert!(node.get_node_info().channels_info.outbound_capacity_msat > 0);
 
-        sleep(Duration::from_secs(250)); // wait for the RGS server to learn about the new channels
+        // wait for the RGS server to learn about the new channels (100 seconds isn't enough)
+        sleep(Duration::from_secs(150));
 
         node.sync_graph().unwrap();
 
@@ -85,7 +88,7 @@ mod zero_conf_test {
         // Create new channel - the 3L node will have to learn about it in a partial sync
         nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-        sleep(Duration::from_secs(10));
+        wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
 
         // Pay from NigiriLnd to 3L to create outbound liquidity (LspdLnd -> NigiriLnd)
         let invoice_lnd = node
@@ -95,7 +98,8 @@ mod zero_conf_test {
 
         nigiri::lnd_pay_invoice(NodeInstance::NigiriLnd, &invoice_lnd).unwrap();
 
-        sleep(Duration::from_secs(250)); // wait for the RGS server to learn about the new channels
+        // wait for the RGS server to learn about the new channels (100 seconds isn't enough)
+        sleep(Duration::from_secs(150));
 
         node.sync_graph().unwrap();
 
@@ -106,7 +110,7 @@ mod zero_conf_test {
         let invoice = nigiri::issue_invoice(target, "test", amount_msat, 3600).unwrap();
         let initial_balance = nigiri::query_node_balance(target).unwrap();
         node.pay_invoice(invoice).unwrap();
-        sleep(Duration::from_secs(10));
+        sleep(Duration::from_secs(2));
         let final_balance = nigiri::query_node_balance(target).unwrap();
         assert_eq!(final_balance - initial_balance, amount_msat);
     }
