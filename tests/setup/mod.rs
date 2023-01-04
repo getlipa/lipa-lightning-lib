@@ -781,9 +781,8 @@ pub mod nigiri {
             if !output.status.success() {
                 panic!("Command \"{:?}\" failed!", cmd);
             }
-            let json: serde_json::Value = serde_json::from_slice(&output.stdout)
-                .map_err(|_| "Invalid json")
-                .unwrap();
+            let json: serde_json::Value =
+                serde_json::from_slice(&output.stdout).expect("Invalid json");
 
             let channels = json["channels"].as_array().unwrap();
             for channel in channels {
