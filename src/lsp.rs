@@ -15,11 +15,24 @@ use lightning::routing::router::RouteHintHop;
 use lspd::{ChannelInformationReply, PaymentInformation};
 use prost::Message;
 use std::cmp::max;
+use std::net::SocketAddr;
+use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct LspFee {
     pub channel_minimum_fee_msat: u64,
     pub channel_fee_permyriad: u64, // 100 is 1%
+}
+
+#[derive(Debug)]
+pub(crate) struct NodeInfo {
+    pubkey: PublicKey,
+    #[allow(dead_code)]
+    address: SocketAddr,
+    fees: RoutingFees,
+    cltv_expiry_delta: u16,
+    htlc_minimum_msat: Option<u64>,
+    htlc_maximum_msat: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -29,26 +42,15 @@ pub(crate) struct LspInfo {
     pub node_info: NodeInfo,
 }
 
-#[derive(Debug)]
-pub(crate) struct NodeInfo {
-    pubkey: PublicKey,
-    #[allow(dead_code)]
-    address: String,
-    fees: RoutingFees,
-    cltv_expiry_delta: u16,
-    htlc_minimum_msat: Option<u64>,
-    htlc_maximum_msat: Option<u64>,
-}
-
-pub(crate) struct LspClient {
-    lsp: Box<dyn LspCallback>,
-}
-
 pub(crate) struct PaymentRequest {
     pub payment_hash: PaymentHash,
     pub payment_secret: PaymentSecret,
     pub payee_pubkey: PublicKey,
     pub amount_msat: u64,
+}
+
+pub(crate) struct LspClient {
+    lsp: Box<dyn LspCallback>,
 }
 
 impl LspClient {
@@ -119,9 +121,11 @@ fn parse_lsp_info(bytes: &[u8]) -> LipaResult<LspInfo> {
         channel_fee_permyriad: info.channel_fee_permyriad as u64,
     };
 
+    let address = SocketAddr::from_str(&info.host).map_to_invalid_input("Invalid LN node host")?;
+
     let node_info = NodeInfo {
         pubkey: ln_pubkey,
-        address: info.host,
+        address,
         fees: RoutingFees {
             base_msat: info.base_fee_msat as u32,
             proportional_millionths: (info.fee_rate * 1_000_000_f64) as u32,
@@ -176,7 +180,7 @@ mod tests {
             lsp_info.node_info.pubkey.to_hex(),
             "0330fa874142a5bacd17881e815a1fde16a147a0c407460091d135400ba95825dd"
         );
-        assert_eq!(lsp_info.node_info.address, "127.0.0.1:9735");
+        assert_eq!(lsp_info.node_info.address.to_string(), "127.0.0.1:9735");
         let routing_fees = RoutingFees {
             base_msat: 1000,
             proportional_millionths: 1,
