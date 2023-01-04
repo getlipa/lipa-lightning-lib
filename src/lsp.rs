@@ -18,24 +18,23 @@ use std::cmp::max;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LspFee {
     pub channel_minimum_fee_msat: u64,
     pub channel_fee_permyriad: u64, // 100 is 1%
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct NodeInfo {
-    pubkey: PublicKey,
-    #[allow(dead_code)]
-    address: SocketAddr,
-    fees: RoutingFees,
-    cltv_expiry_delta: u16,
-    htlc_minimum_msat: Option<u64>,
-    htlc_maximum_msat: Option<u64>,
+    pub pubkey: PublicKey,
+    pub address: SocketAddr,
+    pub fees: RoutingFees,
+    pub cltv_expiry_delta: u16,
+    pub htlc_minimum_msat: Option<u64>,
+    pub htlc_maximum_msat: Option<u64>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct LspInfo {
     pub pubkey: PublicKey,
     pub fee: LspFee,

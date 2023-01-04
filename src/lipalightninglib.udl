@@ -45,6 +45,7 @@ dictionary Config {
     Network network;
     sequence<u8> seed;
     string esplora_api_url;
+    // Deprecated. Will be removed.
     NodeAddress lsp_node;
     string rgs_url;
     string local_persistence_path;
@@ -224,6 +225,15 @@ interface LightningNode {
     // callbacks `payment_sent()` and `payment_failed()` in `EventsCallback`.
     [Throws=LipaError]
     void pay_invoice(string invoice);
+
+    // Call the method when the app goes foreground, such that the user can interact with it.
+    // The library starts running the background tasks more frequently to improve user experience.
+    void foreground();
+
+    // Call the method when the app goes backgroung, such that the user can not interact with it.
+    // The library stops running some unnecessery tasks and runs necessary tasks less frequently.
+    // It should save battery and internet traffic.
+    void background();
 };
 
 dictionary ChannelsInfo {

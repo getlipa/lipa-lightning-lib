@@ -1,0 +1,44 @@
+* Node Methods
+1. constructor()
+2. query info
+   1. get_node_info()
+   2. query_lsp_fee()
+3. receive flow
+   1. calculate_lsp_fee()
+   2. create_invoice()
+4. pay flow
+   1. decode_invoice()
+   2. pay_invoice()?
+5. lifetime
+   1. foreground()
+   2. background()
+
+* Background Tasks
+1. check remote channel monitors if they are newer
+2. upload channel monitors to remote if the previous attempt failed???
+3. ~lightning_background_processor::BackgroundProcessor~
+   1. process ~Event~s
+   2. persist ~ChannelManager~
+4. sync blockchain
+5. query on-chain fees
+6. update network graph
+7. query LPS info
+8. reconnect to LSP LN node
+9. reconnect to channel peers
+
+* Lifetime Model
+|---+----------------------------+---------+------------+------------|
+|   | Task                       | Startup | Foreground | Background |
+|---+----------------------------+---------+------------+------------|
+| 1 | check remote *monitors*    | yes     | as sync    | as sync    |
+| 2 | upload *monitors*          | wait    | 60 secs    |            |
+| 3 | run *BackgroundProcessor*  | wait    | yes        | yes?       |
+| 4 | sync *blockchain*          | wait    | 5 mins     | 1 hour     |
+| 5 | query *on-chain fees*      | yes     | 5 mins     |            |
+| 6 | update *network graph*     | yes     | 1 hour     |            |
+| 7 | query *lsp info*           | yes     | 10 mins    |            |
+| 8 | reconnect to *LSP LN node* | yes     | 10 sec     | 1 min      |
+| 9 | reconnect to *peers*       | yes     | 10 secs    | 1 min      |
+|---+----------------------------+---------+------------+------------|
+
+** Shutdown
