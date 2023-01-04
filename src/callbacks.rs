@@ -22,7 +22,7 @@ pub trait LspCallback: Send + Sync {
     ///
     /// # Return
     /// Returns non empty string with description in case of an error.
-    fn register_payment(&self, bytes: Vec<u8>) -> CallbackResult<()>;
+    fn register_payment(&self, encrypted_payment_info_blob: Vec<u8>) -> CallbackResult<()>;
 }
 
 pub trait EventsCallback: Send + Sync {

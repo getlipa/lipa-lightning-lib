@@ -256,15 +256,19 @@ dictionary LspFee {
   u64 channel_fee_permyriad;
 };
 
-// Callback interface for the Lightning Service Provider (LSP) to be implemented by the library consumer
+// Callback interface for the Lightning Service Provider (LSP) to be implemented by the library consumer.
+// The implementation of thie callback consists of building the appropriate LSPD requests, sending them to the
+// respective lipa backend endpoints, and return the response, if any.
 callback interface LspCallback {
-    // This interface is about to change. Ignore it for the time being.
+    // Make a ChannelInformationRequest to the ChannelInformation endpoint. The pubkey field should be set empty.
+    // The response to the request should be returned as a byte sequence.
     [Throws=CallbackError]
     sequence<u8> channel_information();
 
-    // Pass a serialized RegisterPaymentRequest message to the LSP
+    // Make a RegisterPaymentRequest to the RegisterPayment endpoint. The body of the request should be set with
+    //      the provided encrypted_payment_info_blob.
     [Throws=CallbackError]
-    void register_payment(sequence<u8> bytes);
+    void register_payment(sequence<u8> encrypted_payment_info_blob);
 };
 
 enum LogLevel {
