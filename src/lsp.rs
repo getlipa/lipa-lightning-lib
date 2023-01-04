@@ -25,13 +25,6 @@ pub struct LspFee {
 }
 
 #[derive(Debug)]
-pub(crate) struct LspInfo {
-    pub pubkey: PublicKey,
-    pub fee: LspFee,
-    pub node_info: NodeInfo,
-}
-
-#[derive(Debug)]
 pub(crate) struct NodeInfo {
     pubkey: PublicKey,
     #[allow(dead_code)]
@@ -42,8 +35,11 @@ pub(crate) struct NodeInfo {
     htlc_maximum_msat: Option<u64>,
 }
 
-pub(crate) struct LspClient {
-    lsp: Box<dyn LspCallback>,
+#[derive(Debug)]
+pub(crate) struct LspInfo {
+    pub pubkey: PublicKey,
+    pub fee: LspFee,
+    pub node_info: NodeInfo,
 }
 
 pub(crate) struct PaymentRequest {
@@ -51,6 +47,10 @@ pub(crate) struct PaymentRequest {
     pub payment_secret: PaymentSecret,
     pub payee_pubkey: PublicKey,
     pub amount_msat: u64,
+}
+
+pub(crate) struct LspClient {
+    lsp: Box<dyn LspCallback>,
 }
 
 impl LspClient {
