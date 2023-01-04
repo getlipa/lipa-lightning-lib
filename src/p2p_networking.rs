@@ -39,7 +39,7 @@ pub(crate) async fn connect_peer(peer: &LnPeer, peer_manager: Arc<PeerManager>) 
         }
 
         debug!("LN handshake to peer {} still pending ...", peer.pub_key);
-        sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(100)).await;
     }
 
     debug!("LN connection to peer {} established", peer.pub_key);
