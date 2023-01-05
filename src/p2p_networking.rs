@@ -1,4 +1,4 @@
-use crate::errors::{runtime_error, LipaError, LipaResult, MapToLipaError, RuntimeErrorCode};
+use crate::errors::*;
 use crate::{NodeAddress, PeerManager};
 use bitcoin::secp256k1::PublicKey;
 use log::{debug, trace};
@@ -20,12 +20,10 @@ pub(crate) async fn connect_peer(peer: &LnPeer, peer_manager: Arc<PeerManager>) 
     let connection_closed_future =
         lightning_net_tokio::connect_outbound(Arc::clone(&peer_manager), peer.pub_key, peer.host)
             .await
-            .ok_or_else(|| {
-                runtime_error(
-                    RuntimeErrorCode::GenericError,
-                    "Failed to establish TCP connection",
-                )
-            })?;
+            .ok_or_runtime_error(
+                RuntimeErrorCode::GenericError,
+                "Failed to establish TCP connection",
+            )?;
     let mut connection_closed_future = Box::pin(connection_closed_future);
     debug!("TCP connection to peer {} established", peer.pub_key);
 

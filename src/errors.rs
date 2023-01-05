@@ -164,6 +164,21 @@ impl<T> MapToLipaErrorForUnitType<T> for Result<T, ()> {
     }
 }
 
+pub trait OptionToError<T> {
+    fn ok_or_runtime_error<M: ToString>(self, code: RuntimeErrorCode, msg: M) -> LipaResult<T>;
+    fn ok_or_permanent_failure<M: ToString>(self, msg: M) -> LipaResult<T>;
+}
+
+impl<T> OptionToError<T> for Option<T> {
+    fn ok_or_runtime_error<M: ToString>(self, code: RuntimeErrorCode, msg: M) -> LipaResult<T> {
+        self.ok_or_else(|| runtime_error(code, msg))
+    }
+
+    fn ok_or_permanent_failure<M: ToString>(self, msg: M) -> LipaResult<T> {
+        self.ok_or_else(|| permanent_failure(msg))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,6 +247,26 @@ mod tests {
             result.unwrap_err().to_string(),
             "InvalidInput: Invalid amount: Number must be positive"
         );
+    }
+
+    #[test]
+    fn test_ok_or() {
+        assert_eq!(Some(1).ok_or_permanent_failure("Value expected"), Ok(1));
+
+        let none: Option<u32> = None;
+        let error = none
+            .ok_or_runtime_error(
+                RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                "Value expected",
+            )
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "RuntimeError: RemoteStorageServiceUnavailable - Value expected"
+        );
+
+        let error = none.ok_or_permanent_failure("Value expected").unwrap_err();
+        assert_eq!(error.to_string(), "PermanentFailure: Value expected");
     }
 }
 
