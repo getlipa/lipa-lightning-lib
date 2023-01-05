@@ -22,7 +22,7 @@
 4. sync blockchain
 5. query on-chain fees
 6. update network graph
-7. query LPS info
+7. query LSP info
 8. reconnect to LSP LN node
 9. reconnect to channel peers
 
