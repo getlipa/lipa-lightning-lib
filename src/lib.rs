@@ -79,11 +79,13 @@ use tokio::time::{Duration, Instant};
 const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_lsp_info: Some(Duration::from_secs(10 * 60)),
     reconnect_to_lsp: Duration::from_secs(10),
+    update_fees: Some(Duration::from_secs(5 * 10)),
 };
 
 const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_lsp_info: None,
     reconnect_to_lsp: Duration::from_secs(60),
+    update_fees: None,
 };
 
 #[allow(dead_code)]
@@ -100,7 +102,6 @@ pub struct LightningNode {
     rgs_url: String,
     rapid_sync: Arc<RapidGossipSync>,
     invoice_payer: Arc<InvoicePayer>,
-    fee_estimator_handle: RepeatingTaskHandle,
     task_manager: Arc<Mutex<TaskManager>>,
 }
 
@@ -122,20 +123,6 @@ impl LightningNode {
             Arc::clone(&esplora_client),
             config.network,
         ));
-
-        // TODO: decide how often to run fee estimation poll
-        let fee_estimator_poll = Arc::clone(&fee_estimator);
-        let fee_estimator_handle =
-            rt.handle()
-                .spawn_repeating_task(Duration::from_secs(60), move || {
-                    let fee_estimator_poll = Arc::clone(&fee_estimator_poll);
-                    async move {
-                        match fee_estimator_poll.poll_updates() {
-                            Ok(_) => {}
-                            Err(e) => error!("Failed to get fee estimates from esplora: {}", e),
-                        }
-                    }
-                });
 
         // Step 2. Initialize the Logger
         let logger = Arc::new(LightningLogger {});
@@ -279,6 +266,7 @@ impl LightningNode {
             rt.handle(),
             Arc::clone(&lsp_client),
             Arc::clone(&peer_manager),
+            Arc::clone(&fee_estimator),
         )));
         task_manager.lock().unwrap().restart(FOREGROUND_PERIODS);
 
@@ -347,7 +335,6 @@ impl LightningNode {
             rgs_url: config.rgs_url.clone(),
             rapid_sync,
             invoice_payer,
-            fee_estimator_handle,
             task_manager,
         })
     }
@@ -546,7 +533,6 @@ impl LightningNode {
 impl Drop for LightningNode {
     fn drop(&mut self) {
         self.sync_handle.blocking_shutdown();
-        self.fee_estimator_handle.blocking_shutdown();
         self.task_manager.lock().unwrap().request_shutdown_all();
 
         // TODO: Stop reconnecting to peers

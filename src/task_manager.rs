@@ -1,4 +1,5 @@
 use crate::async_runtime::{Handle, RepeatingTaskHandle};
+use crate::fee_estimator::FeeEstimator;
 use crate::lsp::{LspClient, LspInfo};
 use crate::p2p_networking::{connect_peer, LnPeer};
 use crate::types::PeerManager;
@@ -10,12 +11,14 @@ use tokio::time::Duration;
 pub(crate) struct TaskPeriods {
     pub update_lsp_info: Option<Duration>,
     pub reconnect_to_lsp: Duration,
+    pub update_fees: Option<Duration>,
 }
 
 pub(crate) struct TaskManager {
     runtime_handle: Handle,
     lsp_client: Arc<LspClient>,
     peer_manager: Arc<PeerManager>,
+    fee_estimator: Arc<FeeEstimator>,
 
     lsp_info: Arc<Mutex<Option<LspInfo>>>,
 
@@ -27,11 +30,13 @@ impl TaskManager {
         runtime_handle: Handle,
         lsp_client: Arc<LspClient>,
         peer_manager: Arc<PeerManager>,
+        fee_estimator: Arc<FeeEstimator>,
     ) -> Self {
         Self {
             runtime_handle,
             lsp_client,
             peer_manager,
+            fee_estimator,
             lsp_info: Arc::new(Mutex::new(None)),
             task_handles: Vec::new(),
         }
@@ -52,8 +57,6 @@ impl TaskManager {
 
         // TODO: Blockchain sync.
 
-        // TODO: Fee estimator.
-
         // LSP info update.
         if let Some(period) = periods.update_lsp_info {
             self.task_handles.push(self.start_lsp_info_update(period));
@@ -62,6 +65,11 @@ impl TaskManager {
         // Reconnect to LSP LN node.
         self.task_handles
             .push(self.start_reconnect_to_lsp(periods.reconnect_to_lsp));
+
+        // Update on-chain fee.
+        if let Some(period) = periods.update_fees {
+            self.task_handles.push(self.start_fee_update(period));
+        }
 
         // TODO: Update network graph.
 
@@ -77,8 +85,7 @@ impl TaskManager {
             let lsp_client = Arc::clone(&lsp_client);
             let lsp_info = Arc::clone(&lsp_info);
             async move {
-                let result = tokio::task::spawn_blocking(move || lsp_client.query_info()).await;
-                match result {
+                match tokio::task::spawn_blocking(move || lsp_client.query_info()).await {
                     Ok(Ok(new_lsp_info)) => {
                         if Some(new_lsp_info.clone()) != *lsp_info.lock().unwrap() {
                             debug!("New LSP info received: {:?}", new_lsp_info);
@@ -117,6 +124,20 @@ impl TaskManager {
                     if let Err(e) = connect_peer(&peer, peer_manager).await {
                         error!("Connecting to peer {} failed: {}", peer, e);
                     }
+                }
+            }
+        })
+    }
+
+    fn start_fee_update(&self, period: Duration) -> RepeatingTaskHandle {
+        let fee_estimator = Arc::clone(&self.fee_estimator);
+        self.runtime_handle.spawn_repeating_task(period, move || {
+            let fee_estimator = Arc::clone(&fee_estimator);
+            async move {
+                match tokio::task::spawn_blocking(move || fee_estimator.poll_updates()).await {
+                    Ok(Ok(())) => (),
+                    Ok(Err(e)) => error!("Failed to get fee estimates: {}", e),
+                    Err(e) => error!("Update fees task panicked: {}", e),
                 }
             }
         })
