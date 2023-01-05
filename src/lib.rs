@@ -367,12 +367,10 @@ impl LightningNode {
             .lock()
             .unwrap()
             .get_lsp_info()
-            .ok_or_else(|| {
-                runtime_error(
-                    RuntimeErrorCode::LspServiceUnavailable,
-                    "Failed to get LSP info",
-                )
-            })?;
+            .ok_or_runtime_error(
+                RuntimeErrorCode::LspServiceUnavailable,
+                "Failed to get LSP info",
+            )?;
         Ok(lsp_info.fee)
     }
 
@@ -549,7 +547,7 @@ impl Drop for LightningNode {
     fn drop(&mut self) {
         self.sync_handle.blocking_shutdown();
         self.fee_estimator_handle.blocking_shutdown();
-        self.task_manager.lock().unwrap().request_shutdowns();
+        self.task_manager.lock().unwrap().request_shutdown_all();
 
         // TODO: Stop reconnecting to peers
         self.peer_manager.disconnect_all_peers();

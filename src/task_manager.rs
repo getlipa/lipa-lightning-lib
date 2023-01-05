@@ -41,14 +41,14 @@ impl TaskManager {
         (*self.lsp_info.lock().unwrap()).clone()
     }
 
-    pub fn request_shutdowns(&mut self) {
+    pub fn request_shutdown_all(&mut self) {
         self.task_handles
             .drain(..)
             .for_each(|h| h.request_shutdown());
     }
 
     pub fn restart(&mut self, periods: TaskPeriods) {
-        self.request_shutdowns();
+        self.request_shutdown_all();
 
         // TODO: Blockchain sync.
 
@@ -80,16 +80,18 @@ impl TaskManager {
                 let result = tokio::task::spawn_blocking(move || lsp_client.query_info()).await;
                 match result {
                     Ok(Ok(new_lsp_info)) => {
-                        debug!("New LSP info: {:?}", new_lsp_info);
-                        *lsp_info.lock().unwrap() = Some(new_lsp_info.clone());
+                        if Some(new_lsp_info.clone()) != *lsp_info.lock().unwrap() {
+                            debug!("New LSP info received: {:?}", new_lsp_info);
+                            *lsp_info.lock().unwrap() = Some(new_lsp_info.clone());
 
-                        // Kick in reconnecting to LSP when we get new info.
-                        let peer = LnPeer {
-                            pub_key: new_lsp_info.node_info.pubkey,
-                            host: new_lsp_info.node_info.address,
-                        };
-                        if let Err(e) = connect_peer(&peer, peer_manager).await {
-                            error!("Connecting to peer {} failed: {}", peer, e);
+                            // Kick in reconnecting to LSP when we get new info.
+                            let peer = LnPeer {
+                                pub_key: new_lsp_info.node_info.pubkey,
+                                host: new_lsp_info.node_info.address,
+                            };
+                            if let Err(e) = connect_peer(&peer, peer_manager).await {
+                                error!("Connecting to peer {} failed: {}", peer, e);
+                            }
                         }
                     }
                     Ok(Err(e)) => error!("Failed to query LSP: {}", e),
@@ -123,6 +125,6 @@ impl TaskManager {
 
 impl Drop for TaskManager {
     fn drop(&mut self) {
-        self.request_shutdowns();
+        self.request_shutdown_all();
     }
 }

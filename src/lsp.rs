@@ -24,7 +24,7 @@ pub struct LspFee {
     pub channel_fee_permyriad: u64, // 100 is 1%
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct NodeInfo {
     pub pubkey: PublicKey,
     pub address: SocketAddr,
@@ -34,7 +34,7 @@ pub(crate) struct NodeInfo {
     pub htlc_maximum_msat: Option<u64>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LspInfo {
     pub pubkey: PublicKey,
     pub fee: LspFee,
