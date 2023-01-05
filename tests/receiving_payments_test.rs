@@ -1,11 +1,9 @@
 mod setup;
 
-// Caution: Run these tests sequentially, otherwise they will corrupt each other,
-// because they are manipulating their environment:
-// cargo test --features nigiri -- --test-threads 1
 #[cfg(feature = "nigiri")]
 mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
+    use serial_test::file_serial;
     use log::info;
     use std::thread::sleep;
     use std::time::Duration;
@@ -29,6 +27,8 @@ mod receiving_payments_test {
     const LSPD_LND_PORT: u16 = 9739;
 
     #[test]
+    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
+    #[file_serial]
     fn test_multiple_receive_scenarios() {
         // Test receiving an invoice on a node that does not have any channel yet
         // resp, the channel opening is part of the payment process.
@@ -120,9 +120,11 @@ mod receiving_payments_test {
         }
     }
 
-    #[test]
     // This also tests that payments with a hop work and as such, routing hints are being correctly
     // included in the created invoices
+    #[test]
+    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
+    #[file_serial]
     fn receive_multiple_payments_for_same_invoice() {
         let node_handle = NodeHandle::new_with_lsp_setup();
 

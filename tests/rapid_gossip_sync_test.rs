@@ -1,14 +1,12 @@
 mod setup;
 
-// Caution: Run these tests sequentially, otherwise they will corrupt each other
-//          because they are manipulating their environment:
-//          cargo test --features nigiri -- --test-threads 1
 #[cfg(feature = "nigiri")]
 mod zero_conf_test {
     use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
     use crate::setup::{nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
     use bitcoin::hashes::hex::ToHex;
+    use serial_test::file_serial;
     use log::info;
     use std::thread::sleep;
     use std::time::Duration;
@@ -24,6 +22,8 @@ mod zero_conf_test {
     const LSPD_LND_PORT: u16 = 9739;
 
     #[test]
+    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
+    #[file_serial]
     fn test_update_from_0_and_partial_update() {
         let node_handle = NodeHandle::new_with_lsp_rgs_setup();
 

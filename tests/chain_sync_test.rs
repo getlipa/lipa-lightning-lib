@@ -1,11 +1,9 @@
 mod setup;
 
-// Caution: Run these tests sequentially, otherwise they will corrupt each other,
-// because they are manipulating their environment:
-// cargo test --features nigiri -- --test-threads 1
 #[cfg(feature = "nigiri")]
 mod chain_sync_test {
     use bitcoin::hashes::hex::ToHex;
+    use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -17,6 +15,8 @@ mod chain_sync_test {
     const N_RETRIES: u8 = 10;
 
     #[test]
+    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
+    #[file_serial]
     fn test_react_to_events() {
         let node_handle = NodeHandle::new_with_lsp_setup();
 
@@ -77,6 +77,8 @@ mod chain_sync_test {
     }
 
     #[test]
+    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
+    #[file_serial]
     fn test_react_to_events_with_offline_node() {
         let node_handle = NodeHandle::new_with_lsp_setup();
 
@@ -117,6 +119,8 @@ mod chain_sync_test {
     }
 
     #[test]
+    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
+    #[file_serial]
     fn test_force_close_is_detected_offline_node_unconfirmed_channel() {
         let node_handle = NodeHandle::new_with_lsp_setup();
 

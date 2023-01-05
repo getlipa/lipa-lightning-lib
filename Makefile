@@ -23,7 +23,7 @@ test:
 integrationtests: FILE = *
 integrationtests: TEST = ''
 integrationtests:
-	cargo test --features nigiri --test '$(FILE)' -- --test-threads 1 $(TEST)
+	cargo test --features nigiri --test '$(FILE)' -- $(TEST)
 
 .PHONY: testall
 testall: test integrationtests
