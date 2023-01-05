@@ -23,6 +23,7 @@ mod logger;
 mod lsp;
 mod native_logger;
 mod storage_persister;
+mod task_manager;
 mod test_utils;
 mod tx_broadcaster;
 mod types;
@@ -33,7 +34,6 @@ use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, NodeAddress};
 use crate::confirm::ConfirmWrapper;
 use crate::errors::*;
-use crate::errors::{CallbackError, LipaError};
 use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
@@ -44,13 +44,12 @@ use crate::keys_manager::{
     generate_random_bytes, generate_secret, init_keys_manager, mnemonic_to_secret,
 };
 use crate::logger::LightningLogger;
-use crate::lsp::LspClient;
-use crate::lsp::LspFee;
+use crate::lsp::{LspClient, LspFee};
 use crate::native_logger::init_native_logger_once;
 use crate::node_info::{get_channels_info, ChannelsInfo, NodeInfo};
-use crate::p2p_networking::{connect_peer, LnPeer};
 use crate::secret::Secret;
 use crate::storage_persister::StoragePersister;
+use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, InvoicePayer, PeerManager, RapidGossipSync};
 use std::fmt::Debug;
@@ -58,9 +57,7 @@ use std::str::FromStr;
 
 use bitcoin::bech32::ToBase32;
 use bitcoin::blockdata::constants::genesis_block;
-use bitcoin::hashes::hex::FromHex;
 use bitcoin::secp256k1::ecdsa::RecoverableSignature;
-use bitcoin::secp256k1::PublicKey;
 use bitcoin::Network;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Recipient};
@@ -79,6 +76,16 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::{Duration, Instant};
 
+const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
+    update_lsp_info: Some(Duration::from_secs(10 * 60)),
+    reconnect_to_lsp: Duration::from_secs(10),
+};
+
+const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
+    update_lsp_info: None,
+    reconnect_to_lsp: Duration::from_secs(60),
+};
+
 #[allow(dead_code)]
 pub struct LightningNode {
     network: Network,
@@ -89,12 +96,12 @@ pub struct LightningNode {
     background_processor: BackgroundProcessor,
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
-    p2p_connector_handle: RepeatingTaskHandle,
     sync_handle: RepeatingTaskHandle,
     rgs_url: String,
     rapid_sync: Arc<RapidGossipSync>,
     invoice_payer: Arc<InvoicePayer>,
     fee_estimator_handle: RepeatingTaskHandle,
+    task_manager: Arc<Mutex<TaskManager>>,
 }
 
 impl LightningNode {
@@ -233,19 +240,7 @@ impl LightningNode {
         )?);
 
         // Step 13. Initialize Networking
-        let peer = Arc::new(LnPeer::try_from(&config.lsp_node)?);
-        let peer_manager_clone = Arc::clone(&peer_manager);
-        let p2p_connector_handle =
-            rt.handle()
-                .spawn_repeating_task(Duration::from_secs(1), move || {
-                    let peer = Arc::clone(&peer);
-                    let peer_manager = Arc::clone(&peer_manager_clone);
-                    async move {
-                        if let Err(e) = connect_peer(&peer, peer_manager).await {
-                            error!("Connecting to peer {} failed: {}", peer, e);
-                        }
-                    }
-                });
+        // Skip it, since the node does not listen to incoming connections.
 
         // Step 14. Keep LDK Up-to-date with Chain Info
         // TODO: optimize how often we want to run sync. LDK-sample syncs every second and
@@ -278,15 +273,19 @@ impl LightningNode {
                 }
             });
 
+        let lsp_client = Arc::new(LspClient::new(lsp_callback));
+
+        let task_manager = Arc::new(Mutex::new(TaskManager::new(
+            rt.handle(),
+            Arc::clone(&lsp_client),
+            Arc::clone(&peer_manager),
+        )));
+        task_manager.lock().unwrap().restart(FOREGROUND_PERIODS);
+
         // Step 15. Initialize an EventHandler
-        let lsp_pubkey = PublicKey::from_slice(
-            &Vec::from_hex(&config.lsp_node.pub_key)
-                .map_to_invalid_input("Invalid LSP node public key")?,
-        )
-        .map_to_invalid_input("Invalid LSP node public key")?;
         let event_handler = Arc::new(LipaEventHandler::new(
-            lsp_pubkey,
             Arc::clone(&channel_manager),
+            Arc::clone(&task_manager),
             events_callback,
         ));
 
@@ -335,8 +334,6 @@ impl LightningNode {
             Some(scorer),
         );
 
-        let lsp_client = Arc::new(LspClient::new(lsp_callback));
-
         Ok(Self {
             network: config.network,
             rt,
@@ -346,12 +343,12 @@ impl LightningNode {
             background_processor,
             channel_manager: Arc::clone(&channel_manager),
             peer_manager,
-            p2p_connector_handle,
             sync_handle,
             rgs_url: config.rgs_url.clone(),
             rapid_sync,
             invoice_payer,
             fee_estimator_handle,
+            task_manager,
         })
     }
 
@@ -366,10 +363,14 @@ impl LightningNode {
 
     pub fn query_lsp_fee(&self) -> LipaResult<LspFee> {
         let lsp_info = self
-            .lsp_client
-            .query_info()
-            .lift_invalid_input()
-            .prefix_error("Failed to query LSPD")?;
+            .task_manager
+            .lock()
+            .unwrap()
+            .get_lsp_info()
+            .ok_or_runtime_error(
+                RuntimeErrorCode::LspServiceUnavailable,
+                "Failed to get LSP info",
+            )?;
         Ok(lsp_info.fee)
     }
 
@@ -499,6 +500,20 @@ impl LightningNode {
         Ok(())
     }
 
+    pub fn foreground(&self) {
+        self.task_manager
+            .lock()
+            .unwrap()
+            .restart(FOREGROUND_PERIODS);
+    }
+
+    pub fn background(&self) {
+        self.task_manager
+            .lock()
+            .unwrap()
+            .restart(BACKGROUND_PERIODS);
+    }
+
     fn parse_validate_invoice(&self, invoice: &str) -> LipaResult<Invoice> {
         let invoice = Invoice::from_str(Self::chomp_prefix(invoice.trim()))
             .map_to_invalid_input("Invalid invoice - parse failure")?;
@@ -530,9 +545,9 @@ impl LightningNode {
 
 impl Drop for LightningNode {
     fn drop(&mut self) {
-        self.p2p_connector_handle.blocking_shutdown();
         self.sync_handle.blocking_shutdown();
         self.fee_estimator_handle.blocking_shutdown();
+        self.task_manager.lock().unwrap().request_shutdown_all();
 
         // TODO: Stop reconnecting to peers
         self.peer_manager.disconnect_all_peers();

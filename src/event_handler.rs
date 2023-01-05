@@ -1,27 +1,27 @@
+use crate::callbacks::EventsCallback;
+use crate::task_manager::TaskManager;
 use crate::types::ChannelManager;
 
-use crate::callbacks::EventsCallback;
 use bitcoin::hashes::hex::ToHex;
-use bitcoin::secp256k1::PublicKey;
 use lightning::util::events::{Event, EventHandler, PaymentPurpose};
 use log::{error, info, trace};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub(crate) struct LipaEventHandler {
-    lsp_pubkey: PublicKey,
     channel_manager: Arc<ChannelManager>,
+    task_manager: Arc<Mutex<TaskManager>>,
     events_callback: Box<dyn EventsCallback>,
 }
 
 impl LipaEventHandler {
     pub fn new(
-        lsp_pubkey: PublicKey,
         channel_manager: Arc<ChannelManager>,
+        task_manager: Arc<Mutex<TaskManager>>,
         events_callback: Box<dyn EventsCallback>,
     ) -> Self {
         Self {
-            lsp_pubkey,
             channel_manager,
+            task_manager,
             events_callback,
         }
     }
@@ -204,16 +204,40 @@ impl EventHandler for LipaEventHandler {
                 channel_type,
             } => {
                 info!("EVENT: OpenChannelRequest");
-                if counterparty_node_id == self.lsp_pubkey && channel_type.supports_zero_conf() {
-                    self.channel_manager
-                        .accept_inbound_channel_from_trusted_peer_0conf(
-                            &temporary_channel_id,
-                            &counterparty_node_id,
-                            0u128,
-                        )
-                        .unwrap();
-                } else if channel_type.requires_zero_conf() {
-                    error!("Unexpected OpenChannelRequest event. We don't know the peer and it is trying to open a zero-conf channel. How did this p2p connection get established?");
+                if channel_type.supports_zero_conf() {
+                    if let Some(lsp_info) = self.task_manager.lock().unwrap().get_lsp_info() {
+                        if lsp_info.node_info.pubkey == counterparty_node_id {
+                            self.channel_manager
+                                .accept_inbound_channel_from_trusted_peer_0conf(
+                                    &temporary_channel_id,
+                                    &counterparty_node_id,
+                                    0u128,
+                                )
+                                .unwrap();
+                        } else if channel_type.requires_zero_conf() {
+                            error!("Unexpected OpenChannelRequest event. We don't know the peer and it is trying to open a zero-conf channel. How did this p2p connection get established?");
+                            // TODO: Reject the request, call ChannelManager::force_close_without_broadcasting_txn.
+                        } else {
+                            self.channel_manager
+                                .accept_inbound_channel(
+                                    &temporary_channel_id,
+                                    &counterparty_node_id,
+                                    0u128,
+                                )
+                                .unwrap();
+                        }
+                    } else if channel_type.requires_zero_conf() {
+                        error!("Got OpenChannelRequest event requiring zero-conf, but we could not connect to LSP to learn if we can trust the remote node");
+                        // TODO: Reject the request, call ChannelManager::force_close_without_broadcasting_txn.
+                    } else {
+                        self.channel_manager
+                            .accept_inbound_channel(
+                                &temporary_channel_id,
+                                &counterparty_node_id,
+                                0u128,
+                            )
+                            .unwrap();
+                    }
                 } else {
                     self.channel_manager
                         .accept_inbound_channel(&temporary_channel_id, &counterparty_node_id, 0u128)

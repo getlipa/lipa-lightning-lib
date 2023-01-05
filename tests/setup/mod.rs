@@ -237,12 +237,17 @@ pub mod nigiri {
         exec_in_dir(&["docker-compose", "down"], "lspd");
     }
 
-    fn start_lspd() {
-        debug!("LSP starting ...");
+    pub fn pause_lspd() {
+        debug!("LSPD stopping ...");
+        exec_in_dir(&["docker-compose", "stop"], "lspd");
+    }
+
+    pub fn start_lspd() {
+        debug!("LSPD starting ...");
         exec_in_dir(&["docker-compose", "up", "-d", "lspd"], "lspd");
     }
 
-    fn wait_for_healthy_lspd() {
+    pub fn wait_for_healthy_lspd() {
         wait_for_sync(NodeInstance::LspdLnd);
     }
 
