@@ -59,13 +59,13 @@ impl Handle {
             let mut interval = time::interval(interval);
             interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
             loop {
-                func().await;
                 tokio::select! {
                     _ = stop_receiver.recv() => {
                         break;
                     },
                     _ = interval.tick() => {},
                 }
+                func().await;
             }
             drop(status_sender);
         });
