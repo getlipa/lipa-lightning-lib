@@ -389,6 +389,7 @@ impl LightningNode {
         Ok(signed_invoice.to_string())
     }
 
+    // Not exposed in UDL. For intergration tests and example node use only.
     pub fn sync_graph(&self) -> LipaResult<()> {
         let last_sync_timestamp = self
             .rapid_sync
