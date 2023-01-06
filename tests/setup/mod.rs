@@ -99,14 +99,18 @@ impl NodeHandle {
     }
 
     #[cfg(feature = "nigiri")]
-    pub fn new_with_lsp_setup() -> NodeHandle {
-        nigiri::start();
+    pub fn new_with_lsp_setup(reset: bool) -> NodeHandle {
+        if reset || !nigiri::is_node_synced(NodeInstance::NigiriLnd) {
+            nigiri::start();
 
-        // to open multiple channels in the same block, multiple UTXOs are required
-        for _ in 0..10 {
-            nigiri::fund_node(NodeInstance::LspdLnd, 0.5);
-            nigiri::fund_node(NodeInstance::NigiriLnd, 0.5);
-            nigiri::fund_node(NodeInstance::NigiriCln, 0.5);
+            // to open multiple channels in the same block, multiple UTXOs are required
+            for _ in 0..10 {
+                nigiri::fund_node(NodeInstance::LspdLnd, 0.5);
+                nigiri::fund_node(NodeInstance::NigiriLnd, 0.5);
+                nigiri::fund_node(NodeInstance::NigiriCln, 0.5);
+            }
+        } else {
+            nigiri::ensure_lspd_running();
         }
 
         Self::new()
@@ -114,7 +118,7 @@ impl NodeHandle {
 
     #[cfg(feature = "nigiri")]
     pub fn new_with_lsp_rgs_setup() -> NodeHandle {
-        let handle = Self::new_with_lsp_setup();
+        let handle = Self::new_with_lsp_setup(true);
 
         node_connect_to_rgs_cln(NodeInstance::LspdLnd);
         node_connect_to_rgs_cln(NodeInstance::NigiriLnd);
@@ -247,7 +251,9 @@ pub mod nigiri {
     }
 
     pub fn ensure_lspd_running() {
-        if !is_node_synced(NodeInstance::LspdLnd) {
+        if is_node_synced(NodeInstance::LspdLnd) {
+            debug!("LSPD already running");
+        } else {
             start_lspd();
             wait_for_healthy_lspd();
         }
@@ -293,7 +299,7 @@ pub mod nigiri {
             }
         }
 
-        debug!("{:?} is NOT synced yet, waiting...", node);
+        debug!("{:?} is NOT synced", node);
         false
     }
 
@@ -766,7 +772,7 @@ pub mod nigiri {
     }
 
     pub fn initiate_node_with_channel(remote_node: NodeInstance) -> LightningNode {
-        let node_handle = NodeHandle::new_with_lsp_setup();
+        let node_handle = NodeHandle::new_with_lsp_setup(true);
 
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();

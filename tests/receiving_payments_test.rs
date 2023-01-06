@@ -31,7 +31,7 @@ mod receiving_payments_test {
     fn test_multiple_receive_scenarios() {
         // Test receiving an invoice on a node that does not have any channel yet
         // resp, the channel opening is part of the payment process.
-        let node_handle = NodeHandle::new_with_lsp_setup();
+        let node_handle = NodeHandle::new_with_lsp_setup(true);
 
         {
             let node = node_handle.start().unwrap();
@@ -124,7 +124,7 @@ mod receiving_payments_test {
     #[test]
     #[file_serial]
     fn receive_multiple_payments_for_same_invoice() {
-        let node_handle = NodeHandle::new_with_lsp_setup();
+        let node_handle = NodeHandle::new_with_lsp_setup(false);
 
         let node = node_handle.start().unwrap();
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();

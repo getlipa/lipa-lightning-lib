@@ -17,9 +17,8 @@ mod p2p_connection_test {
     #[test]
     #[file_serial]
     fn test_p2p_connection() {
-        setup::nigiri::start();
-
-        let node = NodeHandle::new().start().unwrap();
+        let node = NodeHandle::new_with_lsp_setup(false);
+        let node = node.start().unwrap();
 
         // Test successful p2p connection.
         {
