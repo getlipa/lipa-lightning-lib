@@ -15,7 +15,6 @@ mod p2p_connection_test {
     use crate::setup::NodeHandle;
 
     #[test]
-    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
     #[file_serial]
     fn test_p2p_connection() {
         setup::nigiri::start();

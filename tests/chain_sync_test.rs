@@ -76,7 +76,6 @@ mod chain_sync_test {
     }
 
     #[test]
-    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
     #[file_serial]
     fn test_react_to_events_with_offline_node() {
         let node_handle = NodeHandle::new_with_lsp_setup();
@@ -118,7 +117,6 @@ mod chain_sync_test {
     }
 
     #[test]
-    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
     #[file_serial]
     fn test_force_close_is_detected_offline_node_unconfirmed_channel() {
         let node_handle = NodeHandle::new_with_lsp_setup();

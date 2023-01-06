@@ -27,7 +27,6 @@ mod receiving_payments_test {
     const LSPD_LND_PORT: u16 = 9739;
 
     #[test]
-    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
     #[file_serial]
     fn test_multiple_receive_scenarios() {
         // Test receiving an invoice on a node that does not have any channel yet
@@ -123,7 +122,6 @@ mod receiving_payments_test {
     // This also tests that payments with a hop work and as such, routing hints are being correctly
     // included in the created invoices
     #[test]
-    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
     #[file_serial]
     fn receive_multiple_payments_for_same_invoice() {
         let node_handle = NodeHandle::new_with_lsp_setup();

@@ -22,7 +22,6 @@ mod zero_conf_test {
     const LSPD_LND_PORT: u16 = 9739;
 
     #[test]
-    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
     #[file_serial]
     fn test_update_from_0_and_partial_update() {
         let node_handle = NodeHandle::new_with_lsp_rgs_setup();
