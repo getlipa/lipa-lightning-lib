@@ -246,6 +246,13 @@ pub mod nigiri {
         wait_for_sync(NodeInstance::LspdLnd);
     }
 
+    pub fn ensure_lspd_running() {
+        if !is_node_synced(NodeInstance::LspdLnd) {
+            start_lspd();
+            wait_for_healthy_lspd();
+        }
+    }
+
     pub fn stop_rgs() {
         debug!("RGS server stopping ...");
         exec_in_dir(&["docker-compose", "down"], "rgs");
