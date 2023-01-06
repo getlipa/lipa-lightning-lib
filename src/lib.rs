@@ -79,7 +79,7 @@ use tokio::time::{Duration, Instant};
 const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_lsp_info: Some(Duration::from_secs(10 * 60)),
     reconnect_to_lsp: Duration::from_secs(10),
-    update_fees: Some(Duration::from_secs(5 * 10)),
+    update_fees: Some(Duration::from_secs(5 * 60)),
 };
 
 const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
