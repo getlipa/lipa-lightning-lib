@@ -24,6 +24,8 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: true
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.2.0
       - name: Run Nigiri
         uses: vulpemventures/nigiri-github-action@master
         with:
