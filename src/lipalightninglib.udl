@@ -197,13 +197,6 @@ interface LightningNode {
     [Throws=LipaError]
     string create_invoice(u64 amount_msat, string description);
 
-    // TODO: It is not yet entirely clear when exactly this method should be called (periodically | on startup | before each payment | ...)
-    //       And neither who takes the responsibility for it (will it be handled internally by the library or by the app?)
-    // Sync the Layer 2 channel graph.
-    // Doing this before sending a payment increases the likelihood that the payment will go through.
-    [Throws=LipaError]
-    void sync_graph();
-
     // Validates and, if valid, decodes an invoice returning detailed information
     [Throws=LipaError]
     InvoiceDetails decode_invoice(string invoice);
