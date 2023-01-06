@@ -53,7 +53,6 @@ start-dev-env:
 	nigiri start --ln
 	docker-compose -f lspd/compose.yaml up -d
 	docker-compose -f rgs/compose.yaml up -d
-	docker exec lspd-lnd lncli getinfo | grep identity_pubkey
 
 .PHONY: stop-dev-env
 stop-dev-env:

@@ -31,7 +31,7 @@ mod types;
 use crate::async_runtime::{AsyncRuntime, RepeatingTaskHandle};
 use crate::callbacks::{EventsCallback, LspCallback, RemoteStorageCallback};
 use crate::chain_access::LipaChainAccess;
-use crate::config::{Config, NodeAddress};
+use crate::config::Config;
 use crate::confirm::ConfirmWrapper;
 use crate::errors::*;
 use crate::esplora_client::EsploraClient;
