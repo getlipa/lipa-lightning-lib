@@ -4,12 +4,14 @@ mod setup;
 mod node_info_test {
     use super::*;
 
-    use crate::setup::NodeHandle;
     use bitcoin::secp256k1::PublicKey;
+    use serial_test::file_parallel;
+
+    use crate::setup::NodeHandle;
 
     #[test]
     // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
-    #[file_serial]
+    #[file_parallel]
     fn test_get_node_info() {
         setup::nigiri::start();
         let node = NodeHandle::new().start().unwrap();
