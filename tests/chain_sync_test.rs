@@ -15,7 +15,6 @@ mod chain_sync_test {
     const N_RETRIES: u8 = 10;
 
     #[test]
-    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
     #[file_serial]
     fn test_react_to_events() {
         let node_handle = NodeHandle::new_with_lsp_setup();
