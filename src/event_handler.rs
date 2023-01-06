@@ -204,7 +204,7 @@ impl EventHandler for LipaEventHandler {
                 channel_type,
             } => {
                 info!("EVENT: OpenChannelRequest");
-                if channel_type.supports_zero_conf() {
+                let result = if channel_type.supports_zero_conf() {
                     if let Some(lsp_info) = self.task_manager.lock().unwrap().get_lsp_info() {
                         if lsp_info.node_info.pubkey == counterparty_node_id {
                             self.channel_manager
@@ -213,35 +213,48 @@ impl EventHandler for LipaEventHandler {
                                     &counterparty_node_id,
                                     0u128,
                                 )
-                                .unwrap();
                         } else if channel_type.requires_zero_conf() {
-                            error!("Unexpected OpenChannelRequest event. We don't know the peer and it is trying to open a zero-conf channel. How did this p2p connection get established?");
-                            // TODO: Reject the request, call ChannelManager::force_close_without_broadcasting_txn.
+                            error!(
+                                "Unexpected OpenChannelRequest event. \
+				 We don't know the peer and it is trying to open a zero-conf channel. \
+				 How did this p2p connection get established?"
+                            );
+                            self.channel_manager.force_close_without_broadcasting_txn(
+                                &temporary_channel_id,
+                                &counterparty_node_id,
+                            )
                         } else {
-                            self.channel_manager
-                                .accept_inbound_channel(
-                                    &temporary_channel_id,
-                                    &counterparty_node_id,
-                                    0u128,
-                                )
-                                .unwrap();
-                        }
-                    } else if channel_type.requires_zero_conf() {
-                        error!("Got OpenChannelRequest event requiring zero-conf, but we could not connect to LSP to learn if we can trust the remote node");
-                        // TODO: Reject the request, call ChannelManager::force_close_without_broadcasting_txn.
-                    } else {
-                        self.channel_manager
-                            .accept_inbound_channel(
+                            self.channel_manager.accept_inbound_channel(
                                 &temporary_channel_id,
                                 &counterparty_node_id,
                                 0u128,
                             )
-                            .unwrap();
+                        }
+                    } else if channel_type.requires_zero_conf() {
+                        error!(
+                            "Got OpenChannelRequest event requiring zero-conf, \
+			     but we could not connect to LSP to learn if we can trust the remote node"
+                        );
+                        self.channel_manager.force_close_without_broadcasting_txn(
+                            &temporary_channel_id,
+                            &counterparty_node_id,
+                        )
+                    } else {
+                        self.channel_manager.accept_inbound_channel(
+                            &temporary_channel_id,
+                            &counterparty_node_id,
+                            0u128,
+                        )
                     }
                 } else {
-                    self.channel_manager
-                        .accept_inbound_channel(&temporary_channel_id, &counterparty_node_id, 0u128)
-                        .unwrap();
+                    self.channel_manager.accept_inbound_channel(
+                        &temporary_channel_id,
+                        &counterparty_node_id,
+                        0u128,
+                    )
+                };
+                if let Err(e) = result {
+                    error!("Error on handling new OpenChannelRequest: {:?}", e);
                 }
             }
             Event::HTLCHandlingFailed {
