@@ -269,18 +269,25 @@ pub mod nigiri {
 
     pub fn wait_for_sync(node: NodeInstance) {
         for _ in 0..20 {
-            debug!("{:?} is NOT synced yet, waiting...", node);
-            sleep(Duration::from_millis(500));
-
-            if let Ok(info) = query_node_info(node) {
-                if info.synced {
-                    debug!("{:?} is synced", node);
-                    return;
-                }
+            if is_node_synced(node) {
+                return;
             }
+            sleep(Duration::from_millis(500));
         }
 
         panic!("Failed to start {:?}. Not synced after 5 sec.", node);
+    }
+
+    pub fn is_node_synced(node: NodeInstance) -> bool {
+        if let Ok(info) = query_node_info(node) {
+            if info.synced {
+                debug!("{:?} is synced", node);
+                return true;
+            }
+        }
+
+        debug!("{:?} is NOT synced yet, waiting...", node);
+        false
     }
 
     fn wait_for_esplora() {
