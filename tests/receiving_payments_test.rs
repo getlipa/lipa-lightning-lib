@@ -6,6 +6,7 @@ mod setup;
 #[cfg(feature = "nigiri")]
 mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
+    use log::info;
     use std::thread::sleep;
     use std::time::Duration;
     use uniffi_lipalightninglib::LightningNode;
@@ -33,63 +34,90 @@ mod receiving_payments_test {
         // resp, the channel opening is part of the payment process.
         let node_handle = NodeHandle::new_with_lsp_setup();
 
-        let node = node_handle.start().unwrap();
-        assert_eq!(node.get_node_info().num_peers, 1);
+        {
+            let node = node_handle.start().unwrap();
+            assert_eq!(node.get_node_info().num_peers, 1);
 
-        let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
-            .unwrap()
-            .pub_key;
+            let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
+                .unwrap()
+                .pub_key;
 
-        connect_node_to_lsp(NodeInstance::NigiriLnd, &lspd_node_id);
+            connect_node_to_lsp(NodeInstance::NigiriLnd, &lspd_node_id);
 
-        nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false).unwrap();
-        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-        wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
+            nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false)
+                .unwrap();
+            try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
+            wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
 
-        run_jit_channel_open_flow(
-            &node,
-            NodeInstance::NigiriLnd,
-            TWO_K_SATS + ONE_SAT,
-            TWO_K_SATS,
-        );
-
-        // Test receiving an amount that needs a new channel open when we already have existing channels.
-        // We should have 102001 sat channel and have received a 1 sat payment. A 0.5M payment is not
-        // possible. A new channel with 0.6M size should be created
-        run_jit_channel_open_flow(
-            &node,
-            NodeInstance::NigiriLnd,
-            FIVE_HUNDRED_K_SATS,
-            TWO_K_SATS,
-        );
-        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
-
-        // Test receiving an invoice on a node that already has an open channel
-        run_payment_flow(&node, NodeInstance::LspdLnd, TWENTY_K_SATS);
-
-        // The difference between sending 1_000 sats and 20_000 sats is that receiving 1_000 sats
-        // creates a dust-HTLC, while receiving 20_000 sats does not.
-        // A dust-HTLC is an HTLC that is too small to be worth the fees to settle it.
-        run_payment_flow(&node, NodeInstance::LspdLnd, ONE_K_SATS);
-
-        // Previously receiving 10K sats failed because it results in a dust htlc which was above
-        // the default max dust htlc exposure.
-        run_payment_flow(&node, NodeInstance::LspdLnd, TEN_K_SATS);
-
-        // Receive multiple payments
-        let initial_balance = node.get_node_info().channels_info.local_balance_msat;
-        let amt_of_payments = 10;
-        assert_channel_ready(&node, TWO_K_SATS * amt_of_payments);
-        for i in 1..=amt_of_payments {
-            let invoice = issue_invoice(&node, TWO_K_SATS);
-
-            nigiri::lnd_pay_invoice(NodeInstance::LspdLnd, &invoice).unwrap();
-            assert_eq!(
-                node.get_node_info().channels_info.local_balance_msat,
-                initial_balance + TWO_K_SATS * i
+            run_jit_channel_open_flow(
+                &node,
+                NodeInstance::NigiriLnd,
+                TWO_K_SATS + ONE_SAT,
+                TWO_K_SATS,
             );
+            info!("Restarting node..."); // to test that channel monitors and manager are persisted and retrieved correctly
+        } // Shut down the node
+
+        // Wait for shutdown to complete
+        sleep(Duration::from_secs(5));
+
+        {
+            let node = node_handle.start().unwrap();
+
+            // Wait for p2p connection to be reestablished and channels marked active
+            sleep(Duration::from_secs(5));
+            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
+
+            // Test receiving an amount that needs a new channel open when we already have existing channels.
+            // We should have 102001 sat channel and have received a 1 sat payment. A 0.5M payment is not
+            // possible. A new channel with 0.6M size should be created
+            run_jit_channel_open_flow(
+                &node,
+                NodeInstance::NigiriLnd,
+                FIVE_HUNDRED_K_SATS,
+                TWO_K_SATS,
+            );
+            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
+            info!("Restarting node..."); // to test that the graph is persisted and retrieved correctly
+        } // Shut down the node
+
+        // Wait for shutdown to complete
+        sleep(Duration::from_secs(5));
+
+        {
+            let node = node_handle.start().unwrap();
+
+            // Wait for p2p connection to be reestablished and channels marked active
+            sleep(Duration::from_secs(5));
+            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
+
+            // Test receiving an invoice on a node that already has an open channel
+            run_payment_flow(&node, NodeInstance::LspdLnd, TWENTY_K_SATS);
+
+            // The difference between sending 1_000 sats and 20_000 sats is that receiving 1_000 sats
+            // creates a dust-HTLC, while receiving 20_000 sats does not.
+            // A dust-HTLC is an HTLC that is too small to be worth the fees to settle it.
+            run_payment_flow(&node, NodeInstance::LspdLnd, ONE_K_SATS);
+
+            // Previously receiving 10K sats failed because it results in a dust htlc which was above
+            // the default max dust htlc exposure.
+            run_payment_flow(&node, NodeInstance::LspdLnd, TEN_K_SATS);
+
+            // Receive multiple payments
+            let initial_balance = node.get_node_info().channels_info.local_balance_msat;
+            let amt_of_payments = 10;
+            assert_channel_ready(&node, TWO_K_SATS * amt_of_payments);
+            for i in 1..=amt_of_payments {
+                let invoice = issue_invoice(&node, TWO_K_SATS);
+
+                nigiri::lnd_pay_invoice(NodeInstance::LspdLnd, &invoice).unwrap();
+                assert_eq!(
+                    node.get_node_info().channels_info.local_balance_msat,
+                    initial_balance + TWO_K_SATS * i
+                );
+            }
+            assert_payment_received(&node, initial_balance + TWO_K_SATS * amt_of_payments);
         }
-        assert_payment_received(&node, initial_balance + TWO_K_SATS * amt_of_payments);
     }
 
     #[test]

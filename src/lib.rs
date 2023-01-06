@@ -65,7 +65,6 @@ use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Watch};
 use lightning::ln::channelmanager::ChainParameters;
 use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::routing::router::DefaultRouter;
-use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringParameters};
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_invoice::payment::{PaymentError, Retry};
@@ -131,7 +130,10 @@ impl LightningNode {
         let tx_broadcaster = Arc::new(TxBroadcaster::new(Arc::clone(&esplora_client)));
 
         // Step 4. Initialize Persist
-        let persister = Arc::new(StoragePersister::new(remote_storage_callback));
+        let persister = Arc::new(StoragePersister::new(
+            remote_storage_callback,
+            &config.local_persistence_path,
+        ));
         if !persister.check_health() {
             warn!("Remote storage is unhealty");
         }
@@ -152,7 +154,7 @@ impl LightningNode {
         let keys_manager = Arc::new(init_keys_manager(&config.seed)?);
 
         // Step 7. Read ChannelMonitor state from disk
-        let mut channel_monitors = persister.read_channel_monitors(&*keys_manager);
+        let mut channel_monitors = persister.read_channel_monitors(&*keys_manager)?;
 
         // If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
         // on each ChannelMonitor to prepare for chain synchronization in Step 9.
@@ -212,11 +214,7 @@ impl LightningNode {
         }
 
         // Step 11: Optional: Initialize rapid sync
-        let graph = Arc::new(
-            persister
-                .read_or_init_graph(genesis_hash, Arc::clone(&logger))
-                .unwrap(), // TODO: properly handle error
-        );
+        let graph = Arc::new(persister.read_or_init_graph(genesis_hash, Arc::clone(&logger))?);
         let rapid_sync = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
 
         // Step 12. Initialize the PeerManager
@@ -278,12 +276,9 @@ impl LightningNode {
         ));
 
         // Step 16. Initialize the ProbabilisticScorer
-        let _scorer = persister.read_scorer();
-        let scorer = Arc::new(Mutex::new(ProbabilisticScorer::new(
-            ProbabilisticScoringParameters::default(),
-            Arc::clone(&graph),
-            Arc::clone(&logger),
-        )));
+        let scorer = Arc::new(Mutex::new(
+            persister.read_or_init_scorer(Arc::clone(&graph), Arc::clone(&logger))?,
+        ));
 
         // Step 17. Initialize the InvoicePayer
         let router = DefaultRouter::new(

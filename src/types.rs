@@ -49,3 +49,5 @@ type Router = DefaultRouter<
 
 pub(crate) type InvoicePayer =
     payment::InvoicePayer<Arc<ChannelManager>, Router, Arc<LightningLogger>, Arc<LipaEventHandler>>;
+
+pub(crate) type Scorer = ProbabilisticScorer<Arc<NetworkGraph>, Arc<LightningLogger>>;
