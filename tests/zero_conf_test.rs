@@ -9,7 +9,6 @@ mod zero_conf_test {
     use crate::setup::{nigiri, NodeHandle};
 
     #[test]
-    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
     #[file_serial]
     fn test_zero_conf_channel_is_usable_without_confirmations() {
         let node_handle = NodeHandle::new_with_lsp_setup();

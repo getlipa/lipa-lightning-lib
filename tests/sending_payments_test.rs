@@ -15,7 +15,6 @@ mod sending_payments_test {
     const PAYMENT_AMOUNT: u64 = 1_000_000;
 
     #[test]
-    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
     #[file_serial]
     fn pay_invoice_direct_peer_test_and_invoice_decoding_test() {
         let node = nigiri::initiate_node_with_channel(LspdLnd);

@@ -10,7 +10,6 @@ mod node_info_test {
     use crate::setup::NodeHandle;
 
     #[test]
-    // Run test sequentially, to not corrupt each tests, because it is manipulating their environment
     #[file_parallel]
     fn test_get_node_info() {
         setup::nigiri::start();
