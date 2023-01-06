@@ -2,8 +2,6 @@ mod setup;
 
 #[cfg(feature = "nigiri")]
 mod node_info_test {
-    use super::*;
-
     use bitcoin::secp256k1::PublicKey;
     use serial_test::file_parallel;
 
@@ -12,8 +10,9 @@ mod node_info_test {
     #[test]
     #[file_parallel]
     fn test_get_node_info() {
-        setup::nigiri::start();
-        let node = NodeHandle::new().start().unwrap();
+        let node = NodeHandle::new_with_lsp_setup(false);
+        let node = node.start().unwrap();
+
         let node_info = node.get_node_info();
 
         assert!(

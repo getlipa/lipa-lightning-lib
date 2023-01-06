@@ -17,8 +17,7 @@ mod chain_sync_test {
     #[test]
     #[file_serial]
     fn test_react_to_events() {
-        let node_handle = NodeHandle::new_with_lsp_setup();
-
+        let node_handle = NodeHandle::new_with_lsp_setup(true);
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
@@ -78,7 +77,7 @@ mod chain_sync_test {
     #[test]
     #[file_serial]
     fn test_react_to_events_with_offline_node() {
-        let node_handle = NodeHandle::new_with_lsp_setup();
+        let node_handle = NodeHandle::new_with_lsp_setup(true);
 
         // test channel is confirmed only after 6 confirmations with offline node
         let tx_id = start_node_open_channel_without_confirm_stop_node(&node_handle);
@@ -119,7 +118,7 @@ mod chain_sync_test {
     #[test]
     #[file_serial]
     fn test_force_close_is_detected_offline_node_unconfirmed_channel() {
-        let node_handle = NodeHandle::new_with_lsp_setup();
+        let node_handle = NodeHandle::new_with_lsp_setup(true);
 
         let tx_id = start_node_open_channel_without_confirm_stop_node(&node_handle);
 
