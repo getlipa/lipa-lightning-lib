@@ -7,7 +7,7 @@ use lsp_client::LspClient;
 use std::fs::remove_dir_all;
 use storage_mock::Storage;
 use uniffi_lipalightninglib::callbacks::RemoteStorageCallback;
-use uniffi_lipalightninglib::config::{Config, NodeAddress};
+use uniffi_lipalightninglib::config::Config;
 use uniffi_lipalightninglib::errors::{CallbackError, LipaResult};
 use uniffi_lipalightninglib::keys_manager::generate_secret;
 use uniffi_lipalightninglib::LightningNode;
@@ -76,7 +76,7 @@ pub struct NodeHandle {
 
 #[allow(dead_code)]
 impl NodeHandle {
-    pub fn new(lsp_node: NodeAddress) -> Self {
+    pub fn new() -> Self {
         INIT_LOGGER_ONCE.call_once(|| {
             SimpleLogger::init(simplelog::LevelFilter::Trace, simplelog::Config::default())
                 .unwrap();
@@ -89,7 +89,6 @@ impl NodeHandle {
             network: Network::Regtest,
             seed: generate_secret("".to_string()).unwrap().seed,
             esplora_api_url: "http://localhost:30000".to_string(),
-            lsp_node,
             rgs_url: "http://localhost:8080/snapshot/".to_string(),
             local_persistence_path: ".3l_local_test".to_string(),
         };
@@ -108,13 +107,7 @@ impl NodeHandle {
             nigiri::fund_node(NodeInstance::NigiriCln, 0.5);
         }
 
-        let lsp_info = nigiri::query_node_info(NodeInstance::LspdLnd).unwrap();
-        let lsp_node = NodeAddress {
-            pub_key: lsp_info.pub_key,
-            host: "127.0.0.1:9739".to_string(),
-        };
-
-        Self::new(lsp_node)
+        Self::new()
     }
 
     #[cfg(feature = "nigiri")]

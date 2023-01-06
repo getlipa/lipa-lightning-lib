@@ -22,7 +22,7 @@ use std::fs;
 use std::thread::sleep;
 use std::time::Duration;
 use uniffi_lipalightninglib::callbacks::{LspCallback, RemoteStorageCallback};
-use uniffi_lipalightninglib::config::{Config, NodeAddress};
+use uniffi_lipalightninglib::config::Config;
 use uniffi_lipalightninglib::keys_manager::mnemonic_to_secret;
 use uniffi_lipalightninglib::LightningNode;
 
@@ -43,12 +43,7 @@ fn main() {
     let lsp_client = Box::new(LspClient::build(lsp_address, lsp_auth_token));
     let lsp_info = lsp_client.channel_information().unwrap();
     let lsp_info = ChannelInformationReply::decode(&*lsp_info).unwrap();
-    let ln_node_address = NodeAddress {
-        pub_key: lsp_info.pubkey,
-        host: lsp_info.host,
-    };
     info!("Lsp pubkey: {}", lsp_info.lsp_pubkey.to_hex());
-    info!("LN node {:?}", ln_node_address);
 
     let storage = Box::new(FileStorage::new(BASE_DIR));
 
@@ -59,7 +54,6 @@ fn main() {
         network: Network::Regtest,
         seed,
         esplora_api_url: "http://localhost:30000".to_string(),
-        lsp_node: ln_node_address,
         rgs_url: "http://localhost:8080/snapshot/".to_string(),
         local_persistence_path: ".3l_local_example_node".to_string(),
     };

@@ -41,7 +41,6 @@ This will start:
 To configure a 3L node to use this environment, the following config should be used:
 * network: Regtest
 * esplora_api_url: http://localhost:30000
-* lsp_node: NodeAddress{ pub_key: "\<the pubkey that was printed when starting the dev env>", host: "127.0.0.1:9739"}
 * rgs_url: http://localhost:8080/snapshot/
 
 ### Clean the environment

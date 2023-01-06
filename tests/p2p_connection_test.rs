@@ -12,21 +12,12 @@ mod p2p_connection_test {
 
     use crate::setup::nigiri::NodeInstance;
     use crate::setup::NodeHandle;
-    use uniffi_lipalightninglib::config::NodeAddress;
-
-    const NIGIRI_LND_ADDR: &str = "127.0.0.1:9735";
 
     #[test]
     fn test_p2p_connection() {
         setup::nigiri::start();
 
-        let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
-        let lsp_node = NodeAddress {
-            pub_key: lsp_info.pub_key,
-            host: NIGIRI_LND_ADDR.to_string(),
-        };
-
-        let node = NodeHandle::new(lsp_node.clone()).start().unwrap();
+        let node = NodeHandle::new().start().unwrap();
 
         // Test successful p2p connection.
         {

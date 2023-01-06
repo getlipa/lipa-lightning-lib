@@ -4,20 +4,13 @@ mod setup;
 mod node_info_test {
     use super::*;
 
-    use crate::setup::nigiri::NodeInstance;
     use crate::setup::NodeHandle;
     use bitcoin::secp256k1::PublicKey;
-    use uniffi_lipalightninglib::config::NodeAddress;
 
     #[test]
     fn test_get_node_info() {
         setup::nigiri::start();
-        let lsp_info = setup::nigiri::query_node_info(NodeInstance::NigiriLnd).unwrap();
-        let lsp_node = NodeAddress {
-            pub_key: lsp_info.pub_key,
-            host: "127.0.0.1:9735".to_string(),
-        };
-        let node = NodeHandle::new(lsp_node).start().unwrap();
+        let node = NodeHandle::new().start().unwrap();
         let node_info = node.get_node_info();
 
         assert!(
