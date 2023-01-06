@@ -165,11 +165,16 @@ impl<T> MapToLipaErrorForUnitType<T> for Result<T, ()> {
 }
 
 pub trait OptionToError<T> {
+    fn ok_or_invalid_input<M: ToString>(self, msg: M) -> LipaResult<T>;
     fn ok_or_runtime_error<M: ToString>(self, code: RuntimeErrorCode, msg: M) -> LipaResult<T>;
     fn ok_or_permanent_failure<M: ToString>(self, msg: M) -> LipaResult<T>;
 }
 
 impl<T> OptionToError<T> for Option<T> {
+    fn ok_or_invalid_input<M: ToString>(self, msg: M) -> LipaResult<T> {
+        self.ok_or_else(|| invalid_input(msg))
+    }
+
     fn ok_or_runtime_error<M: ToString>(self, code: RuntimeErrorCode, msg: M) -> LipaResult<T> {
         self.ok_or_else(|| runtime_error(code, msg))
     }
@@ -254,6 +259,10 @@ mod tests {
         assert_eq!(Some(1).ok_or_permanent_failure("Value expected"), Ok(1));
 
         let none: Option<u32> = None;
+
+        let error = none.ok_or_invalid_input("Value expected").unwrap_err();
+        assert_eq!(error.to_string(), "InvalidInput: Value expected");
+
         let error = none
             .ok_or_runtime_error(
                 RuntimeErrorCode::RemoteStorageServiceUnavailable,

@@ -82,9 +82,6 @@ pub(crate) fn create_raw_invoice(
         )
     };
 
-    // TODO: Watch the issue if it fixes this ugly conversion from
-    // lightning::ln::PaymentHash to bitcoin::hashes::sha256::Hash.
-    // https://github.com/lightningdevkit/rust-lightning/issues/1803
     let payment_hash = sha256::Hash::from_slice(&payment_hash.0)
         .map_to_permanent_failure("Failed to convert payment hash")?;
     let mut builder = InvoiceBuilder::new(currency)
