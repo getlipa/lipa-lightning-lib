@@ -486,7 +486,10 @@ pub mod nigiri {
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
-            return Err(produce_cmd_err_msg(&cmd, output));
+            let err_msg = String::from_utf8(output.stderr.clone()).unwrap();
+            if !err_msg.contains("already connected to peer") {
+                return Err(produce_cmd_err_msg(&cmd, output));
+            }
         }
 
         Ok(())
