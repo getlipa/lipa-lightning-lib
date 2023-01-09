@@ -36,7 +36,6 @@ enum Network {
 //     possible values:
 //     - "https://blockstream.info/api" for Mainnet (PROD)
 //     - "https://blockstream.info/testnet/api" for Testnet
-// * lsp_node - the Lightning Protocol address of the Lightning Service Provider (LSP) node
 // * rgs_url - the url of the Rapid Gossip Sync (RGS) server. Possible values:
 //     - "https://rapidsync.lightningdevkit.org/snapshot/" for Mainnet (PROD)
 //     - *WIP* for Testnet
@@ -198,6 +197,7 @@ interface LightningNode {
     string create_invoice(u64 amount_msat, string description);
 
     // Validates and, if valid, decodes an invoice returning detailed information
+    //    - invoice - a BOLT-11 invoice (normally starts with lnbc)
     [Throws=LipaError]
     InvoiceDetails decode_invoice(string invoice);
 
@@ -205,6 +205,7 @@ interface LightningNode {
     // If successful, it doesn't mean that the payment itself was successful (funds received by the payee).
     // After this method returns, the consumer of this library will learn about a successful/failed payment through the
     // callbacks `payment_sent()` and `payment_failed()` in `EventsCallback`.
+    //    - invoice - a BOLT-11 invoice (normally starts with lnbc)
     [Throws=LipaError]
     void pay_invoice(string invoice);
 
