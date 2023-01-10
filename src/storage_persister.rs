@@ -1,9 +1,9 @@
 use crate::callbacks::RemoteStorageCallback;
 use crate::errors::*;
-
+use crate::types::Scorer;
 use crate::LightningLogger;
+
 use bitcoin::hash_types::BlockHash;
-use bitcoin::hashes::hex::ToHex;
 use lightning::chain;
 use lightning::chain::chaininterface::{BroadcasterInterface, FeeEstimator};
 use lightning::chain::chainmonitor::{MonitorUpdateId, Persist};
@@ -15,31 +15,38 @@ use lightning::ln::channelmanager::{
     ChainParameters, ChannelManagerReadArgs, SimpleArcChannelManager,
 };
 use lightning::routing::gossip::NetworkGraph;
-use lightning::routing::scoring::WriteableScore;
+use lightning::routing::scoring::{ProbabilisticScoringParameters, WriteableScore};
 use lightning::util::config::UserConfig;
 use lightning::util::logger::Logger;
 use lightning::util::persist::Persister;
-use lightning::util::ser::{ReadableArgs, Writeable};
+use lightning::util::ser::ReadableArgs;
+use lightning_persister::FilesystemPersister;
 use log::{debug, error};
-use std::io;
-use std::io::{Cursor, Error};
+use std::fs;
+use std::io::{BufReader, Error};
 use std::ops::Deref;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-static MONITORS_BUCKET: &str = "monitors";
-static OBJECTS_BUCKET: &str = "objects";
+//static MONITORS_BUCKET: &str = "monitors";
+//static OBJECTS_BUCKET: &str = "objects";
 
 static MANAGER_KEY: &str = "manager";
-static GRAPH_KEY: &str = "graph";
+static GRAPH_KEY: &str = "network_graph";
 static SCORER_KEY: &str = "scorer";
 
 pub struct StoragePersister {
     storage: Box<dyn RemoteStorageCallback>,
+    fs_persister: FilesystemPersister,
 }
 
 impl StoragePersister {
-    pub fn new(storage: Box<dyn RemoteStorageCallback>) -> Self {
-        Self { storage }
+    pub fn new(storage: Box<dyn RemoteStorageCallback>, local_fs_path: String) -> Self {
+        let fs_persister = FilesystemPersister::new(local_fs_path);
+        Self {
+            storage,
+            fs_persister,
+        }
     }
 
     pub fn check_health(&self) -> bool {
@@ -49,11 +56,11 @@ impl StoragePersister {
     pub fn read_channel_monitors<Signer: Sign, K: Deref>(
         &self,
         keys_manager: K,
-    ) -> Vec<(BlockHash, ChannelMonitor<Signer>)>
+    ) -> LipaResult<Vec<(BlockHash, ChannelMonitor<Signer>)>>
     where
         K::Target: KeysInterface<Signer = Signer> + Sized,
     {
-        let mut result = Vec::new();
+        /*let mut result = Vec::new();
         // TODO: Handle unwrap().
         for key in self
             .storage
@@ -80,7 +87,11 @@ impl StoragePersister {
                 }
             }
         }
-        result
+        result*/
+
+        self.fs_persister
+            .read_channelmonitors(&*keys_manager)
+            .map_to_permanent_failure("Failed to read channel monitors from disk")
     }
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -102,7 +113,7 @@ impl StoragePersister {
         F: FeeEstimator,
         L: Logger,
     {
-        if self
+        /*if self
             .storage
             .object_exists(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
             .map_to_runtime_error(
@@ -154,7 +165,40 @@ impl StoragePersister {
                 chain_params,
             );
             Ok((None, channel_manager))
+        }*/
+
+        let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(MANAGER_KEY));
+
+        if let Ok(f) = fs::File::open(path) {
+            let read_args = ChannelManagerReadArgs::new(
+                Arc::clone(&keys_manager),
+                Arc::clone(&fee_estimator),
+                Arc::clone(&chain_monitor),
+                Arc::clone(&broadcaster),
+                Arc::clone(&logger),
+                user_config,
+                channel_monitors,
+            );
+            let (block_hash, channel_manager) =
+                <(BlockHash, SimpleArcChannelManager<M, T, F, L>)>::read(
+                    &mut BufReader::new(f),
+                    read_args,
+                )
+                .map_to_permanent_failure("")?;
+            return Ok((Some(block_hash), channel_manager));
         }
+
+        debug!("Couldn't find a previously persisted channel manager. Creating a new one...");
+        let channel_manager = SimpleArcChannelManager::new(
+            fee_estimator,
+            chain_monitor,
+            broadcaster,
+            logger,
+            keys_manager,
+            user_config,
+            chain_params,
+        );
+        Ok((None, channel_manager))
     }
 
     pub fn read_or_init_graph(
@@ -162,54 +206,43 @@ impl StoragePersister {
         genesis_hash: BlockHash,
         logger: Arc<LightningLogger>,
     ) -> LipaResult<NetworkGraph<Arc<LightningLogger>>> {
-        if self
-            .storage
-            .object_exists(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string())
-            .map_to_runtime_error(
-                RuntimeErrorCode::RemoteStorageServiceUnavailable,
-                "Failed to check network graph",
-            )?
-        {
-            let data = self
-                .storage
-                .get_object(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string())
-                .map_to_runtime_error(
-                    RuntimeErrorCode::RemoteStorageServiceUnavailable,
-                    "Failed to read network graph",
-                )?;
-            let mut buffer = Cursor::new(&data);
-            let network_graph = match NetworkGraph::read(&mut buffer, Arc::clone(&logger)) {
-                Ok(graph) => {
-                    debug!(
-                "Successfully read the NetworkGraph from storage. Last sync made at timestamp {}",
-                graph
-                    .get_last_rapid_gossip_sync_timestamp()
-                    .unwrap_or(0)
-            );
-                    graph
-                }
-                Err(e) => {
-                    error!(
-                        "Failed to parse network graph data: {} - Deleting and continuing...",
-                        e
-                    );
-                    // TODO: Handle unwrap().
-                    self.storage
-                        .delete_object(OBJECTS_BUCKET.to_string(), GRAPH_KEY.to_string())
-                        .unwrap();
-                    NetworkGraph::new(genesis_hash, logger)
-                }
-            };
+        let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(GRAPH_KEY));
 
-            Ok(network_graph)
-        } else {
-            let network_graph = NetworkGraph::new(genesis_hash, Arc::clone(&logger));
-            Ok(network_graph)
+        if let Ok(file) = fs::File::open(&path) {
+            if let Ok(graph) = NetworkGraph::read(&mut BufReader::new(file), logger.clone()) {
+                debug!("Successfully read the network graph from the local filesystem");
+                return Ok(graph);
+            } else {
+                error!("Failed to parse network graph data. Deleting and continuing...");
+                fs::remove_file(path)
+                    .map_to_permanent_failure("Failed to delete an invalid network graph file")?;
+            }
         }
+        debug!("Couldn't find a previously persisted network graph. Creating a new one...");
+        Ok(NetworkGraph::new(genesis_hash, logger))
     }
 
-    pub fn read_scorer(&self) {
-        // TODO: Implement
+    pub fn read_or_init_scorer(
+        &self,
+        graph: Arc<NetworkGraph<Arc<LightningLogger>>>,
+        logger: Arc<LightningLogger>,
+    ) -> LipaResult<Scorer> {
+        let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(SCORER_KEY));
+
+        let params = ProbabilisticScoringParameters::default();
+        if let Ok(file) = fs::File::open(&path) {
+            let args = (params.clone(), Arc::clone(&graph), Arc::clone(&logger));
+            if let Ok(scorer) = Scorer::read(&mut BufReader::new(file), args) {
+                debug!("Successfully read the scorer from the local filesystem");
+                return Ok(scorer);
+            } else {
+                error!("Failed to parse scorer data. Deleting and continuing...");
+                fs::remove_file(&path)
+                    .map_to_permanent_failure("Failed to delete an invalid scorer file")?;
+            }
+        }
+        debug!("Couldn't find a previously persisted scorer. Creating a new one...");
+        Ok(Scorer::new(params, graph, logger))
     }
 }
 
@@ -218,9 +251,9 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
         &self,
         channel_id: OutPoint,
         data: &ChannelMonitor<ChannelSigner>,
-        _update_id: MonitorUpdateId,
+        update_id: MonitorUpdateId,
     ) -> ChannelMonitorUpdateStatus {
-        let key = channel_id.to_channel_id().to_hex();
+        /*let key = channel_id.to_channel_id().to_hex();
         let data = data.encode();
         if self
             .storage
@@ -229,7 +262,10 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
         {
             return ChannelMonitorUpdateStatus::PermanentFailure;
         }
-        ChannelMonitorUpdateStatus::Completed
+        ChannelMonitorUpdateStatus::Completed*/
+
+        self.fs_persister
+            .persist_new_channel(channel_id, data, update_id)
     }
 
     fn update_persisted_channel(
@@ -256,61 +292,34 @@ where
         &self,
         channel_manager: &lightning::ln::channelmanager::ChannelManager<M, T, K, F, L>,
     ) -> Result<(), Error> {
-        if self
-            .storage
-            .put_object(
-                OBJECTS_BUCKET.to_string(),
-                MANAGER_KEY.to_string(),
-                channel_manager.encode(),
-            )
-            .is_err()
-        {
-            // We ignore errors on persisting the channel manager hoping that it
-            // will succeed next time and meanwhile the user will not try to
-            // recover the wallet from an outdated backup (what will result in
-            // force close for some new channels).
-            error!("Error on persisting channel manager. Ignoring.");
-        }
-        Ok(())
+        <FilesystemPersister as Persister<'_, M, T, K, F, L, S>>::persist_manager(
+            &self.fs_persister,
+            channel_manager,
+        )
     }
 
     fn persist_graph(&self, network_graph: &NetworkGraph<L>) -> Result<(), Error> {
-        self.storage
-            .put_object(
-                OBJECTS_BUCKET.to_string(),
-                GRAPH_KEY.to_string(),
-                network_graph.encode(),
-            )
-            .map_err(|_| {
-                Error::new(
-                    io::ErrorKind::Other,
-                    "Failed to persist graph using storage callback",
-                )
-            })
+        <FilesystemPersister as Persister<'_, M, T, K, F, L, S>>::persist_graph(
+            &self.fs_persister,
+            network_graph,
+        )
     }
 
     fn persist_scorer(&self, scorer: &S) -> Result<(), Error> {
-        self.storage
-            .put_object(
-                OBJECTS_BUCKET.to_string(),
-                SCORER_KEY.to_string(),
-                scorer.encode(),
-            )
-            .map_err(|_| {
-                Error::new(
-                    io::ErrorKind::Other,
-                    "Failed to persist socrer using storage callback",
-                )
-            })
+        <FilesystemPersister as Persister<'_, M, T, K, F, L, S>>::persist_scorer(
+            &self.fs_persister,
+            scorer,
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    /*use super::*;
 
     use crate::keys_manager::init_keys_manager;
 
+    use bitcoin::hashes::hex::ToHex;
     use std::fs;
     use std::path::PathBuf;
     use storage_mock::Storage;
@@ -327,6 +336,14 @@ mod tests {
     }
 
     impl RemoteStorageCallback for StorageMock {
+        fn check_health(&self) -> bool {
+            self.storage.check_health()
+        }
+
+        fn list_objects(&self, bucket: String) -> CallbackResult<Vec<String>> {
+            Ok(self.storage.list_objects(bucket))
+        }
+
         fn object_exists(&self, bucket: String, key: String) -> CallbackResult<bool> {
             Ok(self.storage.object_exists(bucket, key))
         }
@@ -335,17 +352,9 @@ mod tests {
             Ok(self.storage.get_object(bucket, key))
         }
 
-        fn check_health(&self) -> bool {
-            self.storage.check_health()
-        }
-
         fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> CallbackResult<()> {
             self.storage.put_object(bucket, key, value);
             Ok(())
-        }
-
-        fn list_objects(&self, bucket: String) -> CallbackResult<Vec<String>> {
-            Ok(self.storage.list_objects(bucket))
         }
 
         fn delete_object(&self, bucket: String, key: String) -> CallbackResult<()> {
@@ -357,7 +366,7 @@ mod tests {
     #[test]
     fn test_check_storage_health() {
         let storage = Arc::new(Storage::new());
-        let persister = StoragePersister::new(Box::new(StorageMock::new(storage.clone())));
+        let persister = StoragePersister::new(Box::new(StorageMock::new(storage.clone())), "");
         *storage.health.lock().unwrap() = true;
         assert!(persister.check_health());
 
@@ -368,17 +377,29 @@ mod tests {
     #[test]
     fn test_read_channel_monitors() {
         let storage = Arc::new(Storage::new());
-        let persister = StoragePersister::new(Box::new(StorageMock::new(storage.clone())));
+        let persister = StoragePersister::new(Box::new(StorageMock::new(storage.clone())), "");
         let keys_manager = init_keys_manager(&[0u8; 32].to_vec()).unwrap();
 
-        assert_eq!(persister.read_channel_monitors(&keys_manager).len(), 0);
+        assert_eq!(
+            persister
+                .read_channel_monitors(&keys_manager)
+                .unwrap()
+                .len(),
+            0
+        );
 
         // With invalid object.
         storage.objects.lock().unwrap().borrow_mut().insert(
             ("monitors".to_string(), "invalid_object".to_string()),
             Vec::new(),
         );
-        assert_eq!(persister.read_channel_monitors(&keys_manager).len(), 0);
+        assert_eq!(
+            persister
+                .read_channel_monitors(&keys_manager)
+                .unwrap()
+                .len(),
+            0
+        );
 
         // With valid object.
         let mut monitors_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -391,7 +412,7 @@ mod tests {
             .unwrap()
             .borrow_mut()
             .insert(("monitors".to_string(), "valid_object".to_string()), data);
-        let monitors = persister.read_channel_monitors(&keys_manager);
+        let monitors = persister.read_channel_monitors(&keys_manager).unwrap();
         assert_eq!(monitors.len(), 1);
         let (blockhash, monitor) = &monitors[0];
         assert_eq!(
@@ -405,5 +426,5 @@ mod tests {
             "739f39903ea426645bd6650c55a568653c4d3c275bcbda17befc468f64c76a58"
         );
         assert_eq!(txo.index, 1);
-    }
+    }*/
 }

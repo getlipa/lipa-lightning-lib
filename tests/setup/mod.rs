@@ -4,7 +4,7 @@ mod lsp_client;
 mod print_event_handler;
 
 use lsp_client::LspClient;
-use std::fs::remove_dir_all;
+use std::fs;
 use storage_mock::Storage;
 use uniffi_lipalightninglib::callbacks::RemoteStorageCallback;
 use uniffi_lipalightninglib::config::Config;
@@ -43,6 +43,14 @@ impl Default for StorageMock {
 }
 
 impl RemoteStorageCallback for StorageMock {
+    fn check_health(&self) -> bool {
+        self.storage.check_health()
+    }
+
+    fn list_objects(&self, bucket: String) -> CallbackResult<Vec<String>> {
+        Ok(self.storage.list_objects(bucket))
+    }
+
     fn object_exists(&self, bucket: String, key: String) -> CallbackResult<bool> {
         Ok(self.storage.object_exists(bucket, key))
     }
@@ -51,20 +59,14 @@ impl RemoteStorageCallback for StorageMock {
         Ok(self.storage.get_object(bucket, key))
     }
 
-    fn check_health(&self) -> bool {
-        self.storage.check_health()
-    }
-
     fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> CallbackResult<()> {
-        Ok(self.storage.put_object(bucket, key, value))
-    }
-
-    fn list_objects(&self, bucket: String) -> CallbackResult<Vec<String>> {
-        Ok(self.storage.list_objects(bucket))
+        self.storage.put_object(bucket, key, value);
+        Ok(())
     }
 
     fn delete_object(&self, bucket: String, key: String) -> CallbackResult<()> {
-        Ok(self.storage.delete_object(bucket, key))
+        self.storage.delete_object(bucket, key);
+        Ok(())
     }
 }
 
@@ -83,7 +85,7 @@ impl NodeHandle {
         });
         let storage = StorageMock::new(Arc::new(Storage::new()));
 
-        let _ = remove_dir_all(".3l_local_test");
+        let _ = fs::remove_dir_all(".3l_local_test");
 
         let config = Config {
             network: Network::Regtest,
@@ -415,7 +417,7 @@ pub mod nigiri {
     }
 
     fn fund_address(amount_btc: f32, address: &str) -> Result<(), String> {
-        let cmd = &["nigiri", "faucet", &address, &amount_btc.to_string()];
+        let cmd = &["nigiri", "faucet", address, &amount_btc.to_string()];
 
         let output = exec(cmd);
         if !output.status.success() {

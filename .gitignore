@@ -3,7 +3,7 @@
 .ldk
 examples/node/.env
 .3l_local
-.3l_local_example_node
+.3l_local_test
 
 bindings
 
