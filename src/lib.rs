@@ -132,7 +132,7 @@ impl LightningNode {
         // Step 4. Initialize Persist
         let persister = Arc::new(StoragePersister::new(
             remote_storage_callback,
-            &config.local_persistence_path,
+            config.local_persistence_path.clone(),
         ));
         if !persister.check_health() {
             warn!("Remote storage is unhealty");

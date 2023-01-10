@@ -41,8 +41,8 @@ pub struct StoragePersister {
 }
 
 impl StoragePersister {
-    pub fn new(storage: Box<dyn RemoteStorageCallback>, local_fs_path: &str) -> Self {
-        let fs_persister = FilesystemPersister::new(local_fs_path.to_string());
+    pub fn new(storage: Box<dyn RemoteStorageCallback>, local_fs_path: String) -> Self {
+        let fs_persister = FilesystemPersister::new(local_fs_path);
         Self {
             storage,
             fs_persister,
