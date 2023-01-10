@@ -36,7 +36,9 @@ mod zero_conf_test {
             let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
             assert_eq!(node.get_node_info().num_peers, 1);
 
-            // CONNECT NigiriLnd -> LspdLnd -> 3L + NigiriCln -> LspdLnd
+            // Setup channels:
+            // NigiriLND -> LspdLnd  -> 3L
+            // NigiriCLN -> LspdLnd
             nigiri::node_connect(
                 NodeInstance::NigiriLnd,
                 &lspd_node_id,
