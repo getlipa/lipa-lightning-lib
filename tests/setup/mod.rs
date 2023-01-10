@@ -288,7 +288,7 @@ pub mod nigiri {
             sleep(Duration::from_millis(500));
         }
 
-        panic!("Failed to start {:?}. Not synced after 5 sec.", node);
+        panic!("Failed to start {:?}. Not synced after 10 sec.", node);
     }
 
     pub fn is_node_synced(node: NodeInstance) -> bool {
