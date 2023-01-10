@@ -22,7 +22,7 @@ test:
 .PHONY: integrationtests
 TEST = *
 integrationtests:
-	cargo test --features nigiri --test '$(TEST)' -- --test-threads 1
+	cargo test --features nigiri --test '$(TEST)'
 
 .PHONY: testall
 testall: test integrationtests

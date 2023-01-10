@@ -97,14 +97,18 @@ impl NodeHandle {
     }
 
     #[cfg(feature = "nigiri")]
-    pub fn new_with_lsp_setup() -> NodeHandle {
-        nigiri::start();
+    pub fn new_with_lsp_setup(reset: bool) -> NodeHandle {
+        if reset || !nigiri::is_node_synced(NodeInstance::NigiriLnd) {
+            nigiri::start();
 
-        // to open multiple channels in the same block, multiple UTXOs are required
-        for _ in 0..10 {
-            nigiri::fund_node(NodeInstance::LspdLnd, 0.5);
-            nigiri::fund_node(NodeInstance::NigiriLnd, 0.5);
-            nigiri::fund_node(NodeInstance::NigiriCln, 0.5);
+            // to open multiple channels in the same block, multiple UTXOs are required
+            for _ in 0..10 {
+                nigiri::fund_node(NodeInstance::LspdLnd, 0.5);
+                nigiri::fund_node(NodeInstance::NigiriLnd, 0.5);
+                nigiri::fund_node(NodeInstance::NigiriCln, 0.5);
+            }
+        } else {
+            nigiri::ensure_lspd_running();
         }
 
         Self::new()
@@ -112,7 +116,7 @@ impl NodeHandle {
 
     #[cfg(feature = "nigiri")]
     pub fn new_with_lsp_rgs_setup() -> NodeHandle {
-        let handle = Self::new_with_lsp_setup();
+        let handle = Self::new_with_lsp_setup(true);
 
         node_connect_to_rgs_cln(NodeInstance::LspdLnd);
         node_connect_to_rgs_cln(NodeInstance::NigiriLnd);
@@ -244,6 +248,15 @@ pub mod nigiri {
         wait_for_sync(NodeInstance::LspdLnd);
     }
 
+    pub fn ensure_lspd_running() {
+        if is_node_synced(NodeInstance::LspdLnd) {
+            debug!("LSPD already running");
+        } else {
+            start_lspd();
+            wait_for_healthy_lspd();
+        }
+    }
+
     pub fn stop_rgs() {
         debug!("RGS server stopping ...");
         exec_in_dir(&["docker-compose", "down"], "rgs");
@@ -267,18 +280,25 @@ pub mod nigiri {
 
     pub fn wait_for_sync(node: NodeInstance) {
         for _ in 0..20 {
-            debug!("{:?} is NOT synced yet, waiting...", node);
+            if is_node_synced(node) {
+                return;
+            }
             sleep(Duration::from_millis(500));
+        }
 
-            if let Ok(info) = query_node_info(node) {
-                if info.synced {
-                    debug!("{:?} is synced", node);
-                    return;
-                }
+        panic!("Failed to start {:?}. Not synced after 10 sec.", node);
+    }
+
+    pub fn is_node_synced(node: NodeInstance) -> bool {
+        if let Ok(info) = query_node_info(node) {
+            if info.synced {
+                debug!("{:?} is synced", node);
+                return true;
             }
         }
 
-        panic!("Failed to start {:?}. Not synced after 5 sec.", node);
+        debug!("{:?} is NOT synced", node);
+        false
     }
 
     fn wait_for_esplora() {
@@ -464,7 +484,10 @@ pub mod nigiri {
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
-            return Err(produce_cmd_err_msg(&cmd, output));
+            let err_msg = String::from_utf8(output.stderr.clone()).unwrap();
+            if !err_msg.contains("already connected to peer") {
+                return Err(produce_cmd_err_msg(&cmd, output));
+            }
         }
 
         Ok(())
@@ -750,7 +773,7 @@ pub mod nigiri {
     }
 
     pub fn initiate_node_with_channel(remote_node: NodeInstance) -> LightningNode {
-        let node_handle = NodeHandle::new_with_lsp_setup();
+        let node_handle = NodeHandle::new_with_lsp_setup(true);
 
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
