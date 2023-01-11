@@ -1,10 +1,11 @@
 use crate::callbacks::RemoteStorageCallback;
 use crate::errors::*;
-use crate::types::Scorer;
+use crate::types::{ChainMonitor, NetworkGraph, Scorer};
 use crate::LightningLogger;
 
+use crate::async_runtime::Handle;
 use bitcoin::hash_types::BlockHash;
-use lightning::chain;
+use bitcoin::hashes::hex::ToHex;
 use lightning::chain::chaininterface::{BroadcasterInterface, FeeEstimator};
 use lightning::chain::chainmonitor::{MonitorUpdateId, Persist};
 use lightning::chain::channelmonitor::{ChannelMonitor, ChannelMonitorUpdate};
@@ -14,39 +15,54 @@ use lightning::chain::{ChannelMonitorUpdateStatus, Watch};
 use lightning::ln::channelmanager::{
     ChainParameters, ChannelManagerReadArgs, SimpleArcChannelManager,
 };
-use lightning::routing::gossip::NetworkGraph;
 use lightning::routing::scoring::{ProbabilisticScoringParameters, WriteableScore};
 use lightning::util::config::UserConfig;
 use lightning::util::logger::Logger;
 use lightning::util::persist::Persister;
-use lightning::util::ser::ReadableArgs;
+use lightning::util::ser::{ReadableArgs, Writeable};
 use lightning_persister::FilesystemPersister;
 use log::{debug, error};
 use std::fs;
 use std::io::{BufReader, Error};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, Weak};
+use std::thread::sleep;
+use std::time::Duration;
 
-//static MONITORS_BUCKET: &str = "monitors";
+static MONITORS_BUCKET: &str = "monitors";
 //static OBJECTS_BUCKET: &str = "objects";
 
 static MANAGER_KEY: &str = "manager";
 static GRAPH_KEY: &str = "network_graph";
 static SCORER_KEY: &str = "scorer";
 
-pub struct StoragePersister {
-    storage: Box<dyn RemoteStorageCallback>,
+pub(crate) struct StoragePersister {
+    storage: Arc<Box<dyn RemoteStorageCallback>>,
     fs_persister: FilesystemPersister,
+    runtime_handle: Handle,
+    chain_monitor: Mutex<Weak<ChainMonitor>>,
 }
 
 impl StoragePersister {
-    pub fn new(storage: Box<dyn RemoteStorageCallback>, local_fs_path: String) -> Self {
+    pub fn new(
+        storage: Box<dyn RemoteStorageCallback>,
+        local_fs_path: String,
+        runtime_handle: Handle,
+    ) -> Self {
+        let storage = Arc::new(storage);
         let fs_persister = FilesystemPersister::new(local_fs_path);
         Self {
             storage,
             fs_persister,
+            runtime_handle,
+            chain_monitor: Mutex::new(Weak::new()),
         }
+    }
+
+    pub fn add_chain_monitor(&self, chain_monitor: Weak<ChainMonitor>) {
+        let mut mutex_chain_monitor = self.chain_monitor.lock().unwrap();
+        *mutex_chain_monitor = chain_monitor;
     }
 
     pub fn check_health(&self) -> bool {
@@ -184,7 +200,7 @@ impl StoragePersister {
                     &mut BufReader::new(f),
                     read_args,
                 )
-                .map_to_permanent_failure("")?;
+                .map_to_permanent_failure("Failed to parse a previously persisted ChannelManager. Could it have been corrupted?")?;
             return Ok((Some(block_hash), channel_manager));
         }
 
@@ -205,7 +221,7 @@ impl StoragePersister {
         &self,
         genesis_hash: BlockHash,
         logger: Arc<LightningLogger>,
-    ) -> LipaResult<NetworkGraph<Arc<LightningLogger>>> {
+    ) -> LipaResult<NetworkGraph> {
         let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(GRAPH_KEY));
 
         if let Ok(file) = fs::File::open(&path) {
@@ -224,7 +240,7 @@ impl StoragePersister {
 
     pub fn read_or_init_scorer(
         &self,
-        graph: Arc<NetworkGraph<Arc<LightningLogger>>>,
+        graph: Arc<NetworkGraph>,
         logger: Arc<LightningLogger>,
     ) -> LipaResult<Scorer> {
         let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(SCORER_KEY));
@@ -253,19 +269,62 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
         data: &ChannelMonitor<ChannelSigner>,
         update_id: MonitorUpdateId,
     ) -> ChannelMonitorUpdateStatus {
-        /*let key = channel_id.to_channel_id().to_hex();
-        let data = data.encode();
-        if self
-            .storage
-            .put_object(MONITORS_BUCKET.to_string(), key, data)
-            .is_err()
-        {
-            return ChannelMonitorUpdateStatus::PermanentFailure;
-        }
-        ChannelMonitorUpdateStatus::Completed*/
-
-        self.fs_persister
+        // Persist locally
+        match self
+            .fs_persister
             .persist_new_channel(channel_id, data, update_id)
+        {
+            ChannelMonitorUpdateStatus::Completed => {}
+            ChannelMonitorUpdateStatus::InProgress => {
+                error!("Unexpected: FilesystemPersister returned ChannelMonitorUpdateStatus::InProgress");
+                return ChannelMonitorUpdateStatus::PermanentFailure;
+            }
+            ChannelMonitorUpdateStatus::PermanentFailure => {
+                error!("Failed to persist a ChannelMonitor in the filesystem.");
+                return ChannelMonitorUpdateStatus::PermanentFailure;
+            }
+        };
+
+        // Launch background task that handles persisting monitor remotely
+        let data = data.encode();
+        let storage = Arc::clone(&self.storage);
+        let key = channel_id.to_channel_id().to_hex();
+        let chain_monitor = match self.chain_monitor.lock().unwrap().upgrade() {
+            None => return ChannelMonitorUpdateStatus::PermanentFailure,
+            Some(c) => c,
+        };
+        self.runtime_handle.spawn(async move {
+            // The channel will block until remote persistence succeeds so let's continuously retry
+            // 
+            // If there is a non-runtime failure or if the node is shutdown before remote persistence 
+            // succeeds, the local version of the channel monitor will be more fresh than the remote one
+            // 
+            // This should sort itself out as the node will get back at trying to persist remotely
+            // when it gets back online (adding the ChannelMonitor to the ChainMonitor calls 
+            // persist_new_channel() again).
+            loop {
+                match storage
+                    .put_object(MONITORS_BUCKET.to_string(), key.clone(), data.clone()) {
+                    Ok(_) => break,
+                    Err(CallbackError::RuntimeError) => {
+                        error!("Temporary failure to remotely persist the ChannelMonitor {}... Retrying...", key);
+                    }
+                    Err(_) => {
+                        error!("Failed to remotely persist the ChannelMonitor {}", key);
+                        return
+                    }
+                }
+                sleep(Duration::from_secs(5));
+            }
+
+            // Let ChainMonitor know that remote persistence has succeeded
+            if chain_monitor.channel_monitor_updated(channel_id, update_id).is_err() {
+                error!("Attempted to inform the ChainMonitor about a successfully persisted ChannelMonitor but the ChainMonitor doesn't know about the ChannelMonitor");
+            }
+            debug!("Successfully remotely persisted the ChannelMonitor {}", key);
+        });
+
+        ChannelMonitorUpdateStatus::InProgress
     }
 
     fn update_persisted_channel(
@@ -282,7 +341,7 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
 impl<'a, M: Deref, T: Deref, K: Deref, F: Deref, L: Deref, S: WriteableScore<'a>>
     Persister<'a, M, T, K, F, L, S> for StoragePersister
 where
-    M::Target: 'static + chain::Watch<<K::Target as KeysInterface>::Signer>,
+    M::Target: 'static + Watch<<K::Target as KeysInterface>::Signer>,
     T::Target: 'static + BroadcasterInterface,
     K::Target: 'static + KeysInterface,
     F::Target: 'static + FeeEstimator,
@@ -298,7 +357,10 @@ where
         )
     }
 
-    fn persist_graph(&self, network_graph: &NetworkGraph<L>) -> Result<(), Error> {
+    fn persist_graph(
+        &self,
+        network_graph: &lightning::routing::gossip::NetworkGraph<L>,
+    ) -> Result<(), Error> {
         <FilesystemPersister as Persister<'_, M, T, K, F, L, S>>::persist_graph(
             &self.fs_persister,
             network_graph,
@@ -319,6 +381,7 @@ mod tests {
 
     use crate::keys_manager::init_keys_manager;
 
+    use crate::async_runtime::AsyncRuntime;
     use bitcoin::hashes::hex::ToHex;
     use std::fs;
     use std::path::PathBuf;
@@ -366,7 +429,12 @@ mod tests {
     #[test]
     fn test_check_storage_health() {
         let storage = Arc::new(Storage::new());
-        let persister = StoragePersister::new(Box::new(StorageMock::new(storage.clone())), "");
+        let rt = AsyncRuntime::new().unwrap();
+        let persister = StoragePersister::new(
+            Box::new(StorageMock::new(storage.clone())),
+            "".to_string(),
+            rt.handle(),
+        );
         *storage.health.lock().unwrap() = true;
         assert!(persister.check_health());
 
@@ -377,7 +445,12 @@ mod tests {
     #[test]
     fn test_read_channel_monitors() {
         let storage = Arc::new(Storage::new());
-        let persister = StoragePersister::new(Box::new(StorageMock::new(storage.clone())), "");
+        let rt = AsyncRuntime::new().unwrap();
+        let persister = StoragePersister::new(
+            Box::new(StorageMock::new(storage.clone())),
+            "".to_string(),
+            rt.handle(),
+        );
         let keys_manager = init_keys_manager(&[0u8; 32].to_vec()).unwrap();
 
         assert_eq!(

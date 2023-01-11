@@ -133,6 +133,7 @@ impl LightningNode {
         let persister = Arc::new(StoragePersister::new(
             remote_storage_callback,
             config.local_persistence_path.clone(),
+            rt.handle(),
         ));
         if !persister.check_health() {
             warn!("Remote storage is unhealty");
@@ -149,6 +150,8 @@ impl LightningNode {
             Arc::clone(&fee_estimator),
             Arc::clone(&persister),
         ));
+
+        persister.add_chain_monitor(Arc::downgrade(&chain_monitor));
 
         // Step 6. Initialize the KeysManager
         let keys_manager = Arc::new(init_keys_manager(&config.seed)?);
@@ -200,11 +203,7 @@ impl LightningNode {
             let funding_outpoint = channel_monitor.get_funding_txo().0;
             match chain_monitor.watch_channel(funding_outpoint, channel_monitor) {
                 ChannelMonitorUpdateStatus::Completed => {}
-                ChannelMonitorUpdateStatus::InProgress => {
-                    return Err(permanent_failure(
-                        "Failed to give a ChannelMonitor to the ChainMonitor",
-                    ))
-                }
+                ChannelMonitorUpdateStatus::InProgress => {}
                 ChannelMonitorUpdateStatus::PermanentFailure => {
                     return Err(permanent_failure(
                         "Failed to give a ChannelMonitor to the ChainMonitor",
