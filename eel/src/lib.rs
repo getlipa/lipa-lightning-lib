@@ -133,6 +133,7 @@ impl LightningNode {
         let persister = Arc::new(StoragePersister::new(
             remote_storage,
             config.local_persistence_path.clone(),
+            rt.handle(),
         ));
         if !persister.check_health() {
             warn!("Remote storage is unhealty");
@@ -149,6 +150,8 @@ impl LightningNode {
             Arc::clone(&fee_estimator),
             Arc::clone(&persister),
         ));
+
+        persister.add_chain_monitor(Arc::downgrade(&chain_monitor));
 
         // Step 6. Initialize the KeysManager
         let keys_manager = Arc::new(init_keys_manager(&config.seed)?);
