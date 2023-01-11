@@ -19,7 +19,7 @@ use lightning::routing::scoring::{ProbabilisticScoringParameters, WriteableScore
 use lightning::util::config::UserConfig;
 use lightning::util::logger::Logger;
 use lightning::util::persist::Persister;
-use lightning::util::ser::ReadableArgs;
+use lightning::util::ser::{ReadableArgs, Writeable};
 use lightning_persister::FilesystemPersister;
 use log::{debug, error};
 use std::fs;
@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 //static MONITORS_BUCKET: &str = "monitors";
-//static OBJECTS_BUCKET: &str = "objects";
+static OBJECTS_BUCKET: &str = "objects";
 
 static MANAGER_KEY: &str = "manager";
 static GRAPH_KEY: &str = "network_graph";
@@ -292,10 +292,40 @@ where
         &self,
         channel_manager: &lightning::ln::channelmanager::ChannelManager<M, T, K, F, L>,
     ) -> Result<(), Error> {
-        <FilesystemPersister as Persister<'_, M, T, K, F, L, S>>::persist_manager(
+        // Persist locally
+        match <FilesystemPersister as Persister<'_, M, T, K, F, L, S>>::persist_manager(
             &self.fs_persister,
             channel_manager,
-        )
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Failed to persist the ChannelManager in the filesystem.");
+                // Returns an error therefor stopping the Background processor.
+                // We could eventually ignore this error as we do for errors in remote persistence,
+                // but an error in local filesystem persistence indicates the existence
+                // of a more permanent issue.
+                return Err(e);
+            }
+        };
+
+        // Persist remotely
+        if self
+            .storage
+            .put_object(
+                OBJECTS_BUCKET.to_string(),
+                MANAGER_KEY.to_string(),
+                channel_manager.encode(),
+            )
+            .is_err()
+        {
+            // We ignore errors on persisting the channel manager remotely hoping that it
+            // will succeed next time and meanwhile the user will not try to
+            // recover the wallet from an outdated backup (which will result in
+            // force close for some new channels).
+            error!("Error on remotely persisting channel manager. Ignoring.");
+        }
+
+        Ok(())
     }
 
     fn persist_graph(&self, network_graph: &NetworkGraph<L>) -> Result<(), Error> {
