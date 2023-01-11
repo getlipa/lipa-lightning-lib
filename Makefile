@@ -15,12 +15,12 @@ buildall:
 	cargo build --all-targets --all-features
 
 .PHONY: test
-TEST = *
+test: TEST = ''
 test:
 	cargo test --lib -- $(TEST)
 
 .PHONY: integrationtests
-TEST = *
+integrationtests: TEST = *
 integrationtests:
 	cargo test --features nigiri --test '$(TEST)' -- --test-threads 1
 
