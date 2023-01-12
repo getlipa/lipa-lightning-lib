@@ -346,11 +346,13 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
             // The channel will block until remote persistence succeeds so let's continuously retry
             // 
             // If there is a non-runtime failure or if the node is shutdown before remote persistence 
-            // succeeds, the local version of the channel monitor will be more fresh than the remote one
+            // succeeds, the local version of the channel monitor will be fresher than the remote one
             // 
-            // This should sort itself out as the node will get back at trying to persist remotely
+            // This should sort itself out as the node will get back to trying to persist remotely
             // when it gets back online (adding the ChannelMonitor to the ChainMonitor calls 
             // persist_new_channel() again).
+            //
+            // We only stop retrying when the ChainMonitor stops stating that the update is pending
             loop {
                 match storage
                     .put_object(MONITORS_BUCKET.to_string(), key.clone(), data.clone()) {
@@ -358,10 +360,14 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
                     Err(crate::Error::RuntimeError{..}) => {
                         error!("Temporary failure to remotely persist the ChannelMonitor {}... Retrying...", key);
                     }
-                    Err(_) => {
-                        error!("Failed to remotely persist the ChannelMonitor {}", key);
+                    Err(e) => {
+                        error!("Failed to remotely persist the ChannelMonitor {} - {}", key, e.to_string());
                         return
                     }
+                }
+                if !chain_monitor.list_pending_monitor_updates().contains_key(&channel_id) {
+                    error!("Failed to remotely persist ChannelMonitor {} - ChainMonitor stopped listing this ChannelMonitor as having pending updates", key);
+                    return
                 }
                 sleep(Duration::from_secs(5));
             }
