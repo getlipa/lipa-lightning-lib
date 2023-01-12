@@ -99,7 +99,7 @@ impl StoragePersister {
                 .get_object(MONITORS_BUCKET.to_string(), key.clone())
                 .map_to_runtime_error(
                     RuntimeErrorCode::RemoteStorageServiceUnavailable,
-                    "Failed to get a ChannelMonitor from remote storage",
+                    format!("Failed to get ChannelMonitor {key} from remote storage"),
                 )?;
             let mut buffer = Cursor::new(&data);
             match <(BlockHash, ChannelMonitor<Signer>)>::read(&mut buffer, &*keys_manager) {
@@ -111,8 +111,15 @@ impl StoragePersister {
                     remote_channel_monitors.push((blockhash, channel_monitor));
                 }
                 Err(e) => {
-                    error!("Failed to deserialize ChannelMonitor `{}`: {}", key, e);
+                    error!(
+                        "Failed to deserialize remote ChannelMonitor `{}`: {}",
+                        key, e
+                    );
                     // TODO: Should we return this information to the caller?
+                    //      A corrupt remote ChannelMonitor could be harmless if in this case we
+                    //      load the local ChannelMonitors and the situation gets fixed. If this
+                    //      is a wallet recovery, we will need to load the remote ChannelMonitors,
+                    //      and this channel will be lost.
                 }
             }
         }
@@ -128,14 +135,16 @@ impl StoragePersister {
         }
 
         // If either the local or the remote state shows the existence of more channels than the other
-        // that means that it's more recent.
+        // that means that that one is more recent than the other.
         match remote_channel_monitors
             .len()
             .cmp(&local_channel_monitors.len())
         {
             Ordering::Less => {
-                // The local state is more recent than the remote one. Let's use the local one and
-                // let the startup of the node handle retry remote persistence
+                // The local state is more recent than the remote one. As part of the node startup,
+                // every ChannelMonitor is persisted again so this is likely to get resolved.
+                // Let's log it anyway...
+                info!("The remote storage doesn't know about all channels.");
                 return Ok(local_channel_monitors);
             }
             Ordering::Equal => {}
