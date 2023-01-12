@@ -337,47 +337,18 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
         // Launch background task that handles persisting monitor remotely
         let data = data.encode();
         let storage = Arc::clone(&self.storage);
-        let key = channel_id.to_channel_id().to_hex();
         let chain_monitor = match self.chain_monitor.lock().unwrap().upgrade() {
             None => return ChannelMonitorUpdateStatus::PermanentFailure,
             Some(c) => c,
         };
-        self.runtime_handle.spawn(async move {
-            // The channel will block until remote persistence succeeds so let's continuously retry
-            // 
-            // If there is a non-runtime failure or if the node is shutdown before remote persistence 
-            // succeeds, the local version of the channel monitor will be fresher than the remote one
-            // 
-            // This should sort itself out as the node will get back to trying to persist remotely
-            // when it gets back online (adding the ChannelMonitor to the ChainMonitor calls 
-            // persist_new_channel() again).
-            //
-            // We only stop retrying when the ChainMonitor stops stating that the update is pending
-            loop {
-                match storage
-                    .put_object(MONITORS_BUCKET.to_string(), key.clone(), data.clone()) {
-                    Ok(_) => break,
-                    Err(crate::Error::RuntimeError{..}) => {
-                        error!("Temporary failure to remotely persist the ChannelMonitor {}... Retrying...", key);
-                    }
-                    Err(e) => {
-                        error!("Failed to remotely persist the ChannelMonitor {} - {}", key, e.to_string());
-                        return
-                    }
-                }
-                if !chain_monitor.list_pending_monitor_updates().contains_key(&channel_id) {
-                    error!("Failed to remotely persist ChannelMonitor {} - ChainMonitor stopped listing this ChannelMonitor as having pending updates", key);
-                    return
-                }
-                sleep(Duration::from_secs(5));
-            }
 
-            // Let ChainMonitor know that remote persistence has succeeded
-            if chain_monitor.channel_monitor_updated(channel_id, update_id).is_err() {
-                error!("Attempted to inform the ChainMonitor about a successfully persisted ChannelMonitor but the ChainMonitor doesn't know about the ChannelMonitor");
-            }
-            debug!("Successfully remotely persisted the ChannelMonitor {}", key);
-        });
+        self.runtime_handle.spawn(persist_monitor_remotely(
+            storage,
+            chain_monitor,
+            data,
+            channel_id,
+            update_id,
+        ));
 
         ChannelMonitorUpdateStatus::InProgress
     }
@@ -391,6 +362,62 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
     ) -> ChannelMonitorUpdateStatus {
         self.persist_new_channel(channel_id, data, update_id)
     }
+}
+
+// The channel will block until remote persistence succeeds so let's continuously retry
+//
+// If there is a non-runtime failure or if the node is shutdown before remote persistence
+// succeeds, the local version of the channel monitor will be fresher than the remote one
+//
+// This should sort itself out as the node will get back to trying to persist remotely
+// when it gets back online (adding the ChannelMonitor to the ChainMonitor calls
+// persist_new_channel() again).
+//
+// We only stop retrying when the ChainMonitor stops stating that the update is pending
+async fn persist_monitor_remotely(
+    storage: Arc<Box<dyn RemoteStorage>>,
+    chain_monitor: Arc<ChainMonitor>,
+    data: Vec<u8>,
+    channel_id: OutPoint,
+    update_id: MonitorUpdateId,
+) {
+    let key = channel_id.to_channel_id().to_hex();
+    loop {
+        match storage.put_object(MONITORS_BUCKET.to_string(), key.clone(), data.clone()) {
+            Ok(_) => break,
+            Err(Error::RuntimeError { .. }) => {
+                error!(
+                    "Temporary failure to remotely persist the ChannelMonitor {}... Retrying...",
+                    key
+                );
+            }
+            Err(e) => {
+                error!(
+                    "Failed to remotely persist the ChannelMonitor {} - {}",
+                    key,
+                    e.to_string()
+                );
+                return;
+            }
+        }
+        if !chain_monitor
+            .list_pending_monitor_updates()
+            .contains_key(&channel_id)
+        {
+            error!("Failed to remotely persist ChannelMonitor {} - ChainMonitor stopped listing this ChannelMonitor as having pending updates", key);
+            return;
+        }
+        sleep(Duration::from_secs(5));
+    }
+
+    // Let ChainMonitor know that remote persistence has succeeded
+    if chain_monitor
+        .channel_monitor_updated(channel_id, update_id)
+        .is_err()
+    {
+        error!("Attempted to inform the ChainMonitor about a successfully persisted ChannelMonitor but the ChainMonitor doesn't know about the ChannelMonitor");
+    }
+    debug!("Successfully remotely persisted the ChannelMonitor {}", key);
 }
 
 impl<'a, M: Deref, T: Deref, K: Deref, F: Deref, L: Deref, S: WriteableScore<'a>>
