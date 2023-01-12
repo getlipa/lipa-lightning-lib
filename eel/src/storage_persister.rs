@@ -22,9 +22,9 @@ use lightning::util::persist::Persister;
 use lightning::util::ser::{ReadableArgs, Writeable};
 use lightning_persister::FilesystemPersister;
 use log::{debug, error};
-use perro::MapToError;
+use perro::{permanent_failure, MapToError};
 use std::fs;
-use std::io::BufReader;
+use std::io::{BufReader, Cursor};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Weak};
@@ -129,72 +129,20 @@ impl StoragePersister {
         F: FeeEstimator,
         L: Logger,
     {
-        /*if self
-            .storage
-            .object_exists(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
-            .map_to_runtime_error(
-                RuntimeErrorCode::RemoteStorageServiceUnavailable,
-                "Failed to check channel manager",
-            )?
-        {
-            let data = self
-                .storage
-                .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
-                .map_to_runtime_error(
-                    RuntimeErrorCode::RemoteStorageServiceUnavailable,
-                    "Failed to read channel manager",
-                )?;
-            let read_args = ChannelManagerReadArgs::new(
-                keys_manager,
-                fee_estimator,
-                chain_monitor,
-                broadcaster,
-                logger,
-                user_config,
-                channel_monitors,
-            );
-            let mut buffer = Cursor::new(&data);
-            let (block_hash, channel_manager) =
-                <(BlockHash, SimpleArcChannelManager<M, T, F, L>)>::read(&mut buffer, read_args)
-                    .map_to_permanent_failure("Failed to parse channel manager")?;
-            debug!(
-                "Successfully read the ChannelManager from storage. It knows of {} channels",
-                channel_manager.list_channels().len()
-            );
-            debug!(
-                "List of channels known to the read ChannelManager: {:?}",
-                channel_manager
-                    .list_channels()
-                    .iter()
-                    .map(|details| details.channel_id.to_hex())
-                    .collect::<Vec<String>>()
-            );
-            Ok((Some(block_hash), channel_manager))
-        } else {
-            let channel_manager = SimpleArcChannelManager::new(
-                fee_estimator,
-                chain_monitor,
-                broadcaster,
-                logger,
-                keys_manager,
-                user_config,
-                chain_params,
-            );
-            Ok((None, channel_manager))
-        }*/
+        let channel_monitors_is_empty = channel_monitors.is_empty();
+        let read_args = ChannelManagerReadArgs::new(
+            Arc::clone(&keys_manager),
+            Arc::clone(&fee_estimator),
+            Arc::clone(&chain_monitor),
+            Arc::clone(&broadcaster),
+            Arc::clone(&logger),
+            user_config,
+            channel_monitors,
+        );
 
+        // Try to read from the local filesystem
         let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(MANAGER_KEY));
-
         if let Ok(f) = fs::File::open(path) {
-            let read_args = ChannelManagerReadArgs::new(
-                Arc::clone(&keys_manager),
-                Arc::clone(&fee_estimator),
-                Arc::clone(&chain_monitor),
-                Arc::clone(&broadcaster),
-                Arc::clone(&logger),
-                user_config,
-                channel_monitors,
-            );
             let (block_hash, channel_manager) =
                 <(BlockHash, SimpleArcChannelManager<M, T, F, L>)>::read(
                     &mut BufReader::new(f),
@@ -202,6 +150,35 @@ impl StoragePersister {
                 )
                 .map_to_permanent_failure("Failed to parse a previously persisted ChannelManager. Could it have been corrupted?")?;
             return Ok((Some(block_hash), channel_manager));
+        } else if !channel_monitors_is_empty {
+            // Channel manager is not in the filesystem
+            // We have ChannelMonitors, but no ChannelManager, so let's try to recover it from remote storage
+            return if self
+                .storage
+                .object_exists(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
+                .map_to_runtime_error(
+                    RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                    "Failed to check channel manager",
+                )? {
+                let data = self
+                    .storage
+                    .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
+                    .map_to_runtime_error(
+                        RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                        "Failed to read channel manager",
+                    )?;
+                let mut buffer = Cursor::new(&data);
+                let (block_hash, channel_manager) = <(
+                    BlockHash,
+                    SimpleArcChannelManager<M, T, F, L>,
+                )>::read(&mut buffer, read_args)
+                .map_to_permanent_failure("Failed to parse a previously remotely persisted ChannelManager. Could it have been corrupted?")?;
+                Ok((Some(block_hash), channel_manager))
+            } else {
+                Err(permanent_failure(
+                    "Failed to find an existing ChannelManager (both locally and remotely) when we know one should exist",
+                ))
+            };
         }
 
         debug!("Couldn't find a previously persisted channel manager. Creating a new one...");
@@ -306,7 +283,7 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
                 match storage
                     .put_object(MONITORS_BUCKET.to_string(), key.clone(), data.clone()) {
                     Ok(_) => break,
-                    Err(Error::RuntimeError{..}) => {
+                    Err(crate::Error::RuntimeError{..}) => {
                         error!("Temporary failure to remotely persist the ChannelMonitor {}... Retrying...", key);
                     }
                     Err(_) => {
