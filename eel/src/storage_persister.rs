@@ -2,6 +2,7 @@ use crate::errors::*;
 use crate::interfaces::RemoteStorage;
 use crate::types::{ChainMonitor, NetworkGraph, Scorer};
 use crate::LightningLogger;
+use std::cmp::Ordering;
 
 use crate::async_runtime::Handle;
 use bitcoin::hash_types::BlockHash;
@@ -21,7 +22,7 @@ use lightning::util::logger::Logger;
 use lightning::util::persist::Persister;
 use lightning::util::ser::{ReadableArgs, Writeable};
 use lightning_persister::FilesystemPersister;
-use log::{debug, error};
+use log::{debug, error, info};
 use perro::{permanent_failure, MapToError};
 use std::fs;
 use std::io::{BufReader, Cursor};
@@ -77,26 +78,37 @@ impl StoragePersister {
     where
         K::Target: KeysInterface<Signer = Signer> + Sized,
     {
-        /*let mut result = Vec::new();
-        // TODO: Handle unwrap().
+        // Get local ChannelMonitors
+        let mut local_channel_monitors = self
+            .fs_persister
+            .read_channelmonitors(&*keys_manager)
+            .map_to_permanent_failure("Failed to read channel monitors from disk")?;
+
+        // Get remote ChannelMonitors
+        let mut remote_channel_monitors = Vec::new();
         for key in self
             .storage
             .list_objects(MONITORS_BUCKET.to_string())
-            .unwrap()
+            .map_to_runtime_error(
+                RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                "Failed to get list of ChannelMonitors from remote storage",
+            )?
         {
-            // TODO: Handle unwrap().
             let data = self
                 .storage
                 .get_object(MONITORS_BUCKET.to_string(), key.clone())
-                .unwrap();
+                .map_to_runtime_error(
+                    RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                    "Failed to get a ChannelMonitor from remote storage",
+                )?;
             let mut buffer = Cursor::new(&data);
             match <(BlockHash, ChannelMonitor<Signer>)>::read(&mut buffer, &*keys_manager) {
                 Ok((blockhash, channel_monitor)) => {
                     debug!(
-                        "Successfully read ChannelMonitor {} from storage",
+                        "Successfully read ChannelMonitor {} from remote storage",
                         channel_monitor.get_funding_txo().0.to_channel_id().to_hex()
                     );
-                    result.push((blockhash, channel_monitor));
+                    remote_channel_monitors.push((blockhash, channel_monitor));
                 }
                 Err(e) => {
                     error!("Failed to deserialize ChannelMonitor `{}`: {}", key, e);
@@ -104,11 +116,71 @@ impl StoragePersister {
                 }
             }
         }
-        result*/
 
-        self.fs_persister
-            .read_channelmonitors(&*keys_manager)
-            .map_to_permanent_failure("Failed to read channel monitors from disk")
+        if local_channel_monitors.is_empty() {
+            // If we don't have any local ChannelMonitors, but have 1 or more remote ChannelMonitors,
+            // we can assume that this is a new app installation and we want to use the remote state.
+            if !remote_channel_monitors.is_empty() {
+                return Ok(remote_channel_monitors);
+            } else {
+                return Ok(Vec::new());
+            }
+        }
+
+        // If either the local or the remote state shows the existence of more channels than the other
+        // that means that it's more recent.
+        match remote_channel_monitors
+            .len()
+            .cmp(&local_channel_monitors.len())
+        {
+            Ordering::Less => {
+                // The local state is more recent than the remote one. Let's use the local one and
+                // let the startup of the node handle retry remote persistence
+                return Ok(local_channel_monitors);
+            }
+            Ordering::Equal => {}
+            Ordering::Greater => {
+                // Another app installation has moved the state forward. Let's fail the node startup!
+                return Err(permanent_failure("The remote channel state is more recent than the local one. It is very likely that another app install has recovered this node. Resuming operation here isn't safe."));
+            }
+        }
+
+        debug_assert_eq!(remote_channel_monitors.len(), local_channel_monitors.len());
+
+        // Check if for any channel, the remote ChannelMonitor is more recent than the local one
+        local_channel_monitors
+            .sort_unstable_by_key(|(_, monitor)| (monitor.get_funding_txo().0.to_channel_id()));
+        remote_channel_monitors
+            .sort_unstable_by_key(|(_, monitor)| (monitor.get_funding_txo().0.to_channel_id()));
+        let zipped_monitors = local_channel_monitors
+            .iter()
+            .zip(remote_channel_monitors.iter());
+
+        for ((_, local_monitor), (_, remote_monitor)) in zipped_monitors {
+            if remote_monitor.get_funding_txo() != local_monitor.get_funding_txo() {
+                return Err(permanent_failure(
+                    "Unexpected incoherence between local and remote ChannelMonitor state",
+                ));
+            }
+            match remote_monitor
+                .get_latest_update_id()
+                .cmp(&local_monitor.get_latest_update_id())
+            {
+                Ordering::Less => {
+                    // The remote ChannelMonitor isn't up-to-date. As part of the node startup, every
+                    // ChannelMonitor is persisted again so this is likely to get resolved.
+                    // Let's log it anyway...
+                    info!("The remote version of a channel monitor {} isn't as recent as the local one", local_monitor.get_funding_txo().0.to_channel_id().to_hex());
+                }
+                Ordering::Equal => {}
+                Ordering::Greater => {
+                    // Another app installation has moved the state forward. Let's fail the node startup!
+                    return Err(permanent_failure("The remote channel state is more recent than the local one. It is very likely that another app install has recovered this node. Resuming operation here isn't safe."));
+                }
+            }
+        }
+
+        Ok(local_channel_monitors)
     }
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]

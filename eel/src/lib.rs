@@ -156,7 +156,7 @@ impl LightningNode {
         // Step 6. Initialize the KeysManager
         let keys_manager = Arc::new(init_keys_manager(&config.seed)?);
 
-        // Step 7. Read ChannelMonitor state from disk
+        // Step 7. Read ChannelMonitor state from disk/remote
         let mut channel_monitors = persister.read_channel_monitors(&*keys_manager)?;
 
         // If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
