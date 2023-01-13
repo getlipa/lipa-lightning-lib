@@ -1,7 +1,7 @@
 use crate::errors::*;
 use crate::interfaces::RemoteStorage;
 use crate::types::{ChainMonitor, NetworkGraph, Scorer};
-use crate::LightningLogger;
+use crate::{LightningLogger, StartupVariant};
 use std::cmp::Ordering;
 
 use crate::async_runtime::Handle;
@@ -71,10 +71,11 @@ impl StoragePersister {
         self.storage.check_health()
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn read_channel_monitors<Signer: Sign, K: Deref>(
         &self,
         keys_manager: K,
-    ) -> Result<Vec<(BlockHash, ChannelMonitor<Signer>)>>
+    ) -> Result<(StartupVariant, Vec<(BlockHash, ChannelMonitor<Signer>)>)>
     where
         K::Target: KeysInterface<Signer = Signer> + Sized,
     {
@@ -128,9 +129,9 @@ impl StoragePersister {
             // If we don't have any local ChannelMonitors, but have 1 or more remote ChannelMonitors,
             // we can assume that this is a new app installation and we want to use the remote state.
             if !remote_channel_monitors.is_empty() {
-                return Ok(remote_channel_monitors);
+                return Ok((StartupVariant::Recovery, remote_channel_monitors));
             } else {
-                return Ok(Vec::new());
+                return Ok((StartupVariant::FreshStart, Vec::new()));
             }
         }
 
@@ -145,7 +146,7 @@ impl StoragePersister {
                 // every ChannelMonitor is persisted again so this is likely to get resolved.
                 // Let's log it anyway...
                 info!("The remote storage doesn't know about all channels.");
-                return Ok(local_channel_monitors);
+                return Ok((StartupVariant::Normal, local_channel_monitors));
             }
             Ordering::Equal => {}
             Ordering::Greater => {
@@ -189,7 +190,7 @@ impl StoragePersister {
             }
         }
 
-        Ok(local_channel_monitors)
+        Ok((StartupVariant::Normal, local_channel_monitors))
     }
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -203,6 +204,7 @@ impl StoragePersister {
         channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>>,
         user_config: UserConfig,
         chain_params: ChainParameters,
+        startup_variant: StartupVariant,
     ) -> Result<(Option<BlockHash>, SimpleArcChannelManager<M, T, F, L>)>
     where
         M: Watch<InMemorySigner>,
@@ -210,7 +212,6 @@ impl StoragePersister {
         F: FeeEstimator,
         L: Logger,
     {
-        let channel_monitors_is_empty = channel_monitors.is_empty();
         let read_args = ChannelManagerReadArgs::new(
             Arc::clone(&keys_manager),
             Arc::clone(&fee_estimator),
@@ -221,58 +222,70 @@ impl StoragePersister {
             channel_monitors,
         );
 
-        // Try to read from the local filesystem
-        let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(MANAGER_KEY));
-        if let Ok(f) = fs::File::open(path) {
-            let (block_hash, channel_manager) =
-                <(BlockHash, SimpleArcChannelManager<M, T, F, L>)>::read(
-                    &mut BufReader::new(f),
-                    read_args,
-                )
-                .map_to_permanent_failure("Failed to parse a previously persisted ChannelManager. Could it have been corrupted?")?;
-            return Ok((Some(block_hash), channel_manager));
-        } else if !channel_monitors_is_empty {
-            // Channel manager is not in the filesystem
-            // We have ChannelMonitors, but no ChannelManager, so let's try to recover it from remote storage
-            return if self
-                .storage
-                .object_exists(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
-                .map_to_runtime_error(
-                    RuntimeErrorCode::RemoteStorageServiceUnavailable,
-                    "Failed to check channel manager",
-                )? {
-                let data = self
+        match startup_variant {
+            StartupVariant::FreshStart => {
+                let channel_manager = SimpleArcChannelManager::new(
+                    fee_estimator,
+                    chain_monitor,
+                    broadcaster,
+                    logger,
+                    keys_manager,
+                    user_config,
+                    chain_params,
+                );
+                Ok((None, channel_manager))
+            }
+            StartupVariant::Recovery => {
+                // Try to get ChannelManager from remote
+                if self
                     .storage
-                    .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
+                    .object_exists(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
                     .map_to_runtime_error(
                         RuntimeErrorCode::RemoteStorageServiceUnavailable,
-                        "Failed to read channel manager",
-                    )?;
-                let mut buffer = Cursor::new(&data);
-                let (block_hash, channel_manager) = <(
-                    BlockHash,
-                    SimpleArcChannelManager<M, T, F, L>,
-                )>::read(&mut buffer, read_args)
-                .map_to_permanent_failure("Failed to parse a previously remotely persisted ChannelManager. Could it have been corrupted?")?;
-                Ok((Some(block_hash), channel_manager))
-            } else {
-                Err(permanent_failure(
-                    "Failed to find an existing ChannelManager (both locally and remotely) when we know one should exist",
-                ))
-            };
+                        "Failed to find a remote ChannelManager",
+                    )?
+                {
+                    let data = self
+                        .storage
+                        .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
+                        .map_to_runtime_error(
+                            RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                            "Failed to read a remote ChannelManager",
+                        )?;
+                    let mut buffer = Cursor::new(&data);
+                    let (block_hash, channel_manager) = <(
+                        BlockHash,
+                        SimpleArcChannelManager<M, T, F, L>,
+                    )>::read(&mut buffer, read_args)
+                        .map_to_permanent_failure("Failed to parse a previously remotely persisted ChannelManager. Could it have been corrupted?")?;
+                    Ok((Some(block_hash), channel_manager))
+                } else {
+                    Err(permanent_failure(
+                        "Failed to find remote ChannelManager during recovery process",
+                    ))
+                }
+            }
+            StartupVariant::Normal => {
+                // Get ChannelManager from local filesystem
+                let path =
+                    PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(MANAGER_KEY));
+                if let Ok(f) = fs::File::open(path) {
+                    let (block_hash, channel_manager) =
+                        <(BlockHash, SimpleArcChannelManager<M, T, F, L>)>::read(
+                            &mut BufReader::new(f),
+                            read_args,
+                        )
+                            .map_to_permanent_failure("Failed to parse a previously locally persisted ChannelManager. Could it have been corrupted?")?;
+                    Ok((Some(block_hash), channel_manager))
+                } else {
+                    error!("Failed to find a local channel manager.");
+                    // TODO: should we try to get the remote ChannelMonitor in this scenario?
+                    Err(permanent_failure(
+                        "Failed to find a local ChannelMonitor during a normal startup",
+                    ))
+                }
+            }
         }
-
-        debug!("Couldn't find a previously persisted channel manager. Creating a new one...");
-        let channel_manager = SimpleArcChannelManager::new(
-            fee_estimator,
-            chain_monitor,
-            broadcaster,
-            logger,
-            keys_manager,
-            user_config,
-            chain_params,
-        );
-        Ok((None, channel_manager))
     }
 
     pub fn read_or_init_graph(

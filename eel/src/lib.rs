@@ -105,6 +105,12 @@ pub struct LightningNode {
     task_manager: Arc<Mutex<TaskManager>>,
 }
 
+enum StartupVariant {
+    FreshStart,
+    Recovery,
+    Normal,
+}
+
 impl LightningNode {
     pub fn new(
         config: &Config,
@@ -157,7 +163,8 @@ impl LightningNode {
         let keys_manager = Arc::new(init_keys_manager(&config.seed)?);
 
         // Step 7. Read ChannelMonitor state from disk/remote
-        let mut channel_monitors = persister.read_channel_monitors(&*keys_manager)?;
+        let (startup_variant, mut channel_monitors) =
+            persister.read_channel_monitors(&*keys_manager)?;
 
         // If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
         // on each ChannelMonitor to prepare for chain synchronization in Step 9.
@@ -186,6 +193,7 @@ impl LightningNode {
                 mut_channel_monitors,
                 mobile_node_user_config,
                 chain_params,
+                startup_variant,
             )?;
         let channel_manager = Arc::new(channel_manager);
 
