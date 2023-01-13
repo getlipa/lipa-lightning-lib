@@ -20,9 +20,10 @@ test:
 	cargo test --lib -- $(TEST)
 
 .PHONY: integrationtests
-integrationtests: TEST = *
+integrationtests: FILE = *
+integrationtests: TEST = ''
 integrationtests:
-	cargo test --features nigiri --test '$(TEST)' -- --test-threads 1
+	cargo test --features nigiri --test '$(FILE)' -- --test-threads 1 $(TEST)
 
 .PHONY: testall
 testall: test integrationtests
