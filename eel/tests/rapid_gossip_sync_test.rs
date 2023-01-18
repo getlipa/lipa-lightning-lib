@@ -24,7 +24,8 @@ mod rapid_gossip_sync_test {
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_update_from_0_and_partial_update() {
-        let node_handle = NodeHandle::new_with_lsp_rgs_setup();
+        nigiri::setup_environment_with_lsp_rgs();
+        let node_handle = NodeHandle::new();
 
         let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
             .unwrap()

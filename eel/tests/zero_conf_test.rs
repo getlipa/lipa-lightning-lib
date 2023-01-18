@@ -11,9 +11,9 @@ mod zero_conf_test {
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_zero_conf_channel_is_usable_without_confirmations() {
-        let node_handle = NodeHandle::new_with_lsp_setup(true);
+        nigiri::setup_environment_with_lsp();
 
-        let node = node_handle.start().unwrap();
+        let node = NodeHandle::new().start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
         assert_eq!(node.get_node_info().num_peers, 1);

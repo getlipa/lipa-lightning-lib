@@ -13,13 +13,14 @@ mod p2p_connection_test {
     use std::time::Duration;
 
     use crate::setup::nigiri::NodeInstance;
-    use crate::setup::NodeHandle;
+    use crate::setup::{nigiri, NodeHandle};
 
     #[test]
     #[file_parallel(key, "/tmp/3l-int-tests-lock")]
     fn test_p2p_connection() {
-        let node = NodeHandle::new_with_lsp_setup(false);
-        let node = node.start().unwrap();
+        nigiri::ensure_nigiri_running();
+        nigiri::ensure_lspd_running();
+        let node = NodeHandle::new().start().unwrap();
 
         sleep(Duration::from_millis(100));
         assert_eq!(node.get_node_info().num_peers, 1);
@@ -30,8 +31,9 @@ mod p2p_connection_test {
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_p2p_connection_with_unreliable_lsp() {
-        let node = NodeHandle::new_with_lsp_setup(false);
-        let node = node.start().unwrap();
+        nigiri::ensure_nigiri_running();
+        nigiri::ensure_lspd_running();
+        let node = NodeHandle::new().start().unwrap();
 
         // Test disconnect when LSP is down.
         {
