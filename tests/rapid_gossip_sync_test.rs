@@ -6,8 +6,8 @@ mod zero_conf_test {
     use crate::setup::{nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
     use bitcoin::hashes::hex::ToHex;
-    use serial_test::file_serial;
     use log::info;
+    use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::Duration;
     use uniffi_lipalightninglib::LightningNode;
