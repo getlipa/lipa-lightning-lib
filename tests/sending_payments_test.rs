@@ -15,7 +15,7 @@ mod sending_payments_test {
     const PAYMENT_AMOUNT: u64 = 1_000_000;
 
     #[test]
-    #[file_serial]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn pay_invoice_direct_peer_test_and_invoice_decoding_test() {
         let node = nigiri::initiate_node_with_channel(LspdLnd);
 

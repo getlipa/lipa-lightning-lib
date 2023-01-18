@@ -9,7 +9,7 @@ mod zero_conf_test {
     use crate::setup::{nigiri, NodeHandle};
 
     #[test]
-    #[file_serial]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_zero_conf_channel_is_usable_without_confirmations() {
         let node_handle = NodeHandle::new_with_lsp_setup(true);
 

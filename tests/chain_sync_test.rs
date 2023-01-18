@@ -15,7 +15,7 @@ mod chain_sync_test {
     const N_RETRIES: u8 = 10;
 
     #[test]
-    #[file_serial]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_react_to_events() {
         let node_handle = NodeHandle::new_with_lsp_setup(true);
         let node = node_handle.start().unwrap();
@@ -75,7 +75,7 @@ mod chain_sync_test {
     }
 
     #[test]
-    #[file_serial]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_react_to_events_with_offline_node() {
         let node_handle = NodeHandle::new_with_lsp_setup(true);
 
@@ -116,7 +116,7 @@ mod chain_sync_test {
     }
 
     #[test]
-    #[file_serial]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_force_close_is_detected_offline_node_unconfirmed_channel() {
         let node_handle = NodeHandle::new_with_lsp_setup(true);
 

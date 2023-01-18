@@ -8,7 +8,7 @@ mod node_info_test {
     use crate::setup::NodeHandle;
 
     #[test]
-    #[file_parallel]
+    #[file_parallel(key, "/tmp/3l-int-tests-lock")]
     fn test_get_node_info() {
         let node = NodeHandle::new_with_lsp_setup(false);
         let node = node.start().unwrap();

@@ -16,7 +16,7 @@ mod p2p_connection_test {
     use crate::setup::NodeHandle;
 
     #[test]
-    #[file_parallel]
+    #[file_parallel(key, "/tmp/3l-int-tests-lock")]
     fn test_p2p_connection() {
         let node = NodeHandle::new_with_lsp_setup(false);
         let node = node.start().unwrap();
@@ -28,7 +28,7 @@ mod p2p_connection_test {
     }
 
     #[test]
-    #[file_serial]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_p2p_connection_with_unreliable_lsp() {
         let node = NodeHandle::new_with_lsp_setup(false);
         let node = node.start().unwrap();

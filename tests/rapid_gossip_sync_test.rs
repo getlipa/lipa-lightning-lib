@@ -22,7 +22,7 @@ mod zero_conf_test {
     const LSPD_LND_PORT: u16 = 9739;
 
     #[test]
-    #[file_serial]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_update_from_0_and_partial_update() {
         let node_handle = NodeHandle::new_with_lsp_rgs_setup();
 
