@@ -164,7 +164,7 @@ pub mod nigiri {
     use std::thread::sleep;
     use std::time::Duration;
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum NodeInstance {
         NigiriCln,
         NigiriLnd,
@@ -795,20 +795,15 @@ pub mod nigiri {
             _ => "remote_pubkey",
         };
 
+        let node_id = if node == NodeInstance::NigiriCln {
+            Some(nigiri::query_cln_node_info(node).unwrap().pub_key)
+        } else {
+            None
+        };
+
         let mut retries = 0;
         loop {
-            let sub_cmd = &["listchannels"];
-            let cmd = [get_node_prefix(node), sub_cmd].concat();
-
-            let output = exec(cmd.as_slice());
-            if !output.status.success() {
-                panic!("Command \"{:?}\" failed!", cmd);
-            }
-            let json: serde_json::Value =
-                serde_json::from_slice(&output.stdout).expect("Invalid json");
-
-            let channels = json["channels"].as_array().unwrap();
-            for channel in channels {
+            for channel in list_channels(node, &node_id) {
                 if let (Some(pubkey), Some(active)) = (
                     channel[remote_node_json_keyword].as_str(),
                     channel["active"].as_bool(),
@@ -829,5 +824,49 @@ pub mod nigiri {
                 );
             }
         }
+    }
+
+    fn list_channels(node: NodeInstance, node_id: &Option<String>) -> Vec<serde_json::Value> {
+        match node {
+            NodeInstance::NigiriCln => list_cln_channels(node, &node_id.clone().unwrap()),
+            _ => list_lnd_channels(node),
+        }
+    }
+
+    fn list_lnd_channels(node: NodeInstance) -> Vec<serde_json::Value> {
+        let sub_cmd = &["listchannels"];
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            panic!("Command \"{:?}\" failed!", cmd);
+        }
+
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("Invalid json");
+
+        json["channels"].as_array().unwrap().to_owned()
+    }
+
+    fn list_cln_channels(node: NodeInstance, self_node_id: &str) -> Vec<serde_json::Value> {
+        let sub_cmd = &["listchannels"];
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            panic!("Command \"{:?}\" failed!", cmd);
+        }
+
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("Invalid json");
+        let channels = json["channels"].as_array().unwrap().to_owned();
+
+        // CLN's listchannel command returns a somewhat surprising result:
+        // - It returns all channels it knows, not only channels that belong to itself
+        // - It returns all channels twice, once as an outgoing channel and once as an incoming channel
+        //   Consequently, each 'owned' channel is returned once with its node id in the 'source' field
+        //   and once with the its node id in the 'destination' field.
+        channels
+            .into_iter()
+            .filter(|channel| self_node_id.eq(channel["source"].as_str().unwrap()))
+            .collect()
     }
 }
