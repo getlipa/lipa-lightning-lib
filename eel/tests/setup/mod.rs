@@ -158,7 +158,6 @@ pub mod nigiri {
         pub synced: bool,
     }
 
-    #[cfg(feature = "nigiri")]
     pub fn setup_environment_with_lsp() {
         start_all_clean();
 
