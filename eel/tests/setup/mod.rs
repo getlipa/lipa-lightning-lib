@@ -249,6 +249,8 @@ pub mod nigiri {
     }
 
     pub fn ensure_lspd_running() {
+        ensure_nigiri_running();
+
         if is_node_synced(NodeInstance::LspdLnd) {
             debug!("LSPD already running");
         } else {

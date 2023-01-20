@@ -18,7 +18,6 @@ mod p2p_connection_test {
     #[test]
     #[file_parallel(key, "/tmp/3l-int-tests-lock")]
     fn test_p2p_connection() {
-        nigiri::ensure_nigiri_running();
         nigiri::ensure_lspd_running();
         let node = NodeHandle::new().start().unwrap();
 
@@ -31,7 +30,6 @@ mod p2p_connection_test {
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_p2p_connection_with_unreliable_lsp() {
-        nigiri::ensure_nigiri_running();
         nigiri::ensure_lspd_running();
         let node = NodeHandle::new().start().unwrap();
 

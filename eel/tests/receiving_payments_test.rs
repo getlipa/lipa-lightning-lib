@@ -125,7 +125,6 @@ mod receiving_payments_test {
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn receive_multiple_payments_for_same_invoice() {
-        nigiri::ensure_nigiri_running();
         nigiri::ensure_lspd_running();
 
         let node = NodeHandle::new().start().unwrap();
