@@ -7,7 +7,7 @@ use std::sync::Once;
 
 fn init_native_logger(min_level: Level) {
     #[cfg(target_os = "android")]
-    android_logger::init_once(Config::default().with_min_level(min_level));
+    android_logger::init_once(Config::default().with_max_level(min_level.to_level_filter()));
 
     #[cfg(target_os = "ios")]
     OsLogger::new("com.getlipa.lipalightninglib")
