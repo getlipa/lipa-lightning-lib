@@ -99,14 +99,18 @@ impl NodeHandle {
     }
 
     #[cfg(feature = "nigiri")]
-    pub fn new_with_lsp_setup() -> NodeHandle {
-        nigiri::start();
+    pub fn new_with_lsp_setup(reset: bool) -> NodeHandle {
+        if reset || !nigiri::is_node_synced(NodeInstance::NigiriLnd) {
+            nigiri::start();
 
-        // to open multiple channels in the same block, multiple UTXOs are required
-        for _ in 0..10 {
-            nigiri::fund_node(NodeInstance::LspdLnd, 0.5);
-            nigiri::fund_node(NodeInstance::NigiriLnd, 0.5);
-            nigiri::fund_node(NodeInstance::NigiriCln, 0.5);
+            // to open multiple channels in the same block, multiple UTXOs are required
+            for _ in 0..10 {
+                nigiri::fund_node(NodeInstance::LspdLnd, 0.5);
+                nigiri::fund_node(NodeInstance::NigiriLnd, 0.5);
+                nigiri::fund_node(NodeInstance::NigiriCln, 0.5);
+            }
+        } else {
+            nigiri::ensure_lspd_running();
         }
 
         Self::new()
@@ -114,7 +118,7 @@ impl NodeHandle {
 
     #[cfg(feature = "nigiri")]
     pub fn new_with_lsp_rgs_setup() -> NodeHandle {
-        let handle = Self::new_with_lsp_setup();
+        let handle = Self::new_with_lsp_setup(true);
 
         node_connect_to_rgs_cln(NodeInstance::LspdLnd);
         node_connect_to_rgs_cln(NodeInstance::NigiriLnd);
@@ -160,7 +164,7 @@ pub mod nigiri {
     use std::thread::sleep;
     use std::time::Duration;
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum NodeInstance {
         NigiriCln,
         NigiriLnd,
@@ -246,6 +250,15 @@ pub mod nigiri {
         wait_for_sync(NodeInstance::LspdLnd);
     }
 
+    pub fn ensure_lspd_running() {
+        if is_node_synced(NodeInstance::LspdLnd) {
+            debug!("LSPD already running");
+        } else {
+            start_lspd();
+            wait_for_healthy_lspd();
+        }
+    }
+
     pub fn stop_rgs() {
         debug!("RGS server stopping ...");
         exec_in_dir(&["docker-compose", "down"], "rgs");
@@ -269,18 +282,25 @@ pub mod nigiri {
 
     pub fn wait_for_sync(node: NodeInstance) {
         for _ in 0..20 {
-            debug!("{:?} is NOT synced yet, waiting...", node);
+            if is_node_synced(node) {
+                return;
+            }
             sleep(Duration::from_millis(500));
+        }
 
-            if let Ok(info) = query_node_info(node) {
-                if info.synced {
-                    debug!("{:?} is synced", node);
-                    return;
-                }
+        panic!("Failed to start {:?}. Not synced after 10 sec.", node);
+    }
+
+    pub fn is_node_synced(node: NodeInstance) -> bool {
+        if let Ok(info) = query_node_info(node) {
+            if info.synced {
+                debug!("{:?} is synced", node);
+                return true;
             }
         }
 
-        panic!("Failed to start {:?}. Not synced after 5 sec.", node);
+        debug!("{:?} is NOT synced", node);
+        false
     }
 
     fn wait_for_esplora() {
@@ -466,7 +486,10 @@ pub mod nigiri {
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
-            return Err(produce_cmd_err_msg(&cmd, output));
+            let err_msg = String::from_utf8(output.stderr.clone()).unwrap();
+            if !err_msg.contains("already connected to peer") {
+                return Err(produce_cmd_err_msg(&cmd, output));
+            }
         }
 
         Ok(())
@@ -752,7 +775,7 @@ pub mod nigiri {
     }
 
     pub fn initiate_node_with_channel(remote_node: NodeInstance) -> LightningNode {
-        let node_handle = NodeHandle::new_with_lsp_setup();
+        let node_handle = NodeHandle::new_with_lsp_setup(true);
 
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
@@ -772,20 +795,15 @@ pub mod nigiri {
             _ => "remote_pubkey",
         };
 
+        let node_id = if node == NodeInstance::NigiriCln {
+            Some(nigiri::query_cln_node_info(node).unwrap().pub_key)
+        } else {
+            None
+        };
+
         let mut retries = 0;
         loop {
-            let sub_cmd = &["listchannels"];
-            let cmd = [get_node_prefix(node), sub_cmd].concat();
-
-            let output = exec(cmd.as_slice());
-            if !output.status.success() {
-                panic!("Command \"{:?}\" failed!", cmd);
-            }
-            let json: serde_json::Value =
-                serde_json::from_slice(&output.stdout).expect("Invalid json");
-
-            let channels = json["channels"].as_array().unwrap();
-            for channel in channels {
+            for channel in list_channels(node, &node_id) {
                 if let (Some(pubkey), Some(active)) = (
                     channel[remote_node_json_keyword].as_str(),
                     channel["active"].as_bool(),
@@ -806,5 +824,49 @@ pub mod nigiri {
                 );
             }
         }
+    }
+
+    fn list_channels(node: NodeInstance, node_id: &Option<String>) -> Vec<serde_json::Value> {
+        match node {
+            NodeInstance::NigiriCln => list_cln_channels(node, &node_id.clone().unwrap()),
+            _ => list_lnd_channels(node),
+        }
+    }
+
+    fn list_lnd_channels(node: NodeInstance) -> Vec<serde_json::Value> {
+        let sub_cmd = &["listchannels"];
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            panic!("Command \"{:?}\" failed!", cmd);
+        }
+
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("Invalid json");
+
+        json["channels"].as_array().unwrap().to_owned()
+    }
+
+    fn list_cln_channels(node: NodeInstance, self_node_id: &str) -> Vec<serde_json::Value> {
+        let sub_cmd = &["listchannels"];
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            panic!("Command \"{:?}\" failed!", cmd);
+        }
+
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("Invalid json");
+        let channels = json["channels"].as_array().unwrap().to_owned();
+
+        // CLN's listchannel command returns a somewhat surprising result:
+        // - It returns all channels it knows, not only channels that belong to itself
+        // - It returns all channels twice, once as an outgoing channel and once as an incoming channel
+        //   Consequently, each 'owned' channel is returned once with its node id in the 'source' field
+        //   and once with the its node id in the 'destination' field.
+        channels
+            .into_iter()
+            .filter(|channel| self_node_id.eq(channel["source"].as_str().unwrap()))
+            .collect()
     }
 }

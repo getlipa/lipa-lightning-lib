@@ -1,17 +1,15 @@
 mod setup;
 
-// Caution: Run these tests sequentially, otherwise they will corrupt each other,
-// because they are manipulating their environment:
-// cargo test --features nigiri -- --test-threads 1
 #[cfg(feature = "nigiri")]
 mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
     use log::info;
+    use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::Duration;
     use uniffi_lipalightninglib::LightningNode;
 
-    use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
+    use crate::setup::nigiri::NodeInstance;
     use crate::setup::{nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
 
@@ -29,10 +27,11 @@ mod receiving_payments_test {
     const LSPD_LND_PORT: u16 = 9739;
 
     #[test]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_multiple_receive_scenarios() {
         // Test receiving an invoice on a node that does not have any channel yet
         // resp, the channel opening is part of the payment process.
-        let node_handle = NodeHandle::new_with_lsp_setup();
+        let node_handle = NodeHandle::new_with_lsp_setup(true);
 
         {
             let node = node_handle.start().unwrap();
@@ -47,7 +46,7 @@ mod receiving_payments_test {
             nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false)
                 .unwrap();
             try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-            wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
+            nigiri::wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
 
             run_jit_channel_open_flow(
                 &node,
@@ -120,11 +119,12 @@ mod receiving_payments_test {
         }
     }
 
-    #[test]
     // This also tests that payments with a hop work and as such, routing hints are being correctly
     // included in the created invoices
+    #[test]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn receive_multiple_payments_for_same_invoice() {
-        let node_handle = NodeHandle::new_with_lsp_setup();
+        let node_handle = NodeHandle::new_with_lsp_setup(false);
 
         let node = node_handle.start().unwrap();
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
@@ -142,9 +142,9 @@ mod receiving_payments_test {
         nigiri::lnd_node_open_channel(NodeInstance::NigiriLnd, &lspd_node_id, false).unwrap();
         nigiri::cln_node_open_pub_channel(NodeInstance::NigiriCln, &lspd_node_id).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-        wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &lipa_node_id);
-        wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
-        wait_for_new_channel_to_confirm(NodeInstance::NigiriCln, &lspd_node_id);
+        nigiri::wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &lipa_node_id);
+        nigiri::wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
+        nigiri::wait_for_new_channel_to_confirm(NodeInstance::NigiriCln, &lspd_node_id);
 
         assert_channel_ready(&node, TWENTY_K_SATS * 3);
         let invoice = issue_invoice(&node, TWENTY_K_SATS);

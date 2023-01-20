@@ -7,6 +7,8 @@ mod setup;
 mod p2p_connection_test {
     use super::*;
     use bitcoin::hashes::hex::ToHex;
+    use serial_test::file_parallel;
+    use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -14,18 +16,22 @@ mod p2p_connection_test {
     use crate::setup::NodeHandle;
 
     #[test]
+    #[file_parallel(key, "/tmp/3l-int-tests-lock")]
     fn test_p2p_connection() {
-        setup::nigiri::start();
+        let node = NodeHandle::new_with_lsp_setup(false);
+        let node = node.start().unwrap();
 
-        let node = NodeHandle::new().start().unwrap();
+        sleep(Duration::from_millis(100));
+        assert_eq!(node.get_node_info().num_peers, 1);
+        let peers = setup::nigiri::list_peers(NodeInstance::LspdLnd).unwrap();
+        assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
+    }
 
-        // Test successful p2p connection.
-        {
-            sleep(Duration::from_millis(100));
-            assert_eq!(node.get_node_info().num_peers, 1);
-            let peers = setup::nigiri::list_peers(NodeInstance::LspdLnd).unwrap();
-            assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
-        }
+    #[test]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
+    fn test_p2p_connection_with_unreliable_lsp() {
+        let node = NodeHandle::new_with_lsp_setup(false);
+        let node = node.start().unwrap();
 
         // Test disconnect when LSP is down.
         {

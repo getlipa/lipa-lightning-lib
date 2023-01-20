@@ -1,18 +1,17 @@
 mod setup;
 
-// Caution: Run these tests sequentially, otherwise they will corrupt each other,
-// because they are manipulating their environment:
-// cargo test --features nigiri -- --test-threads 1
 #[cfg(feature = "nigiri")]
 mod zero_conf_test {
     use bitcoin::hashes::hex::ToHex;
+    use serial_test::file_serial;
 
     use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
     use crate::setup::{nigiri, NodeHandle};
 
     #[test]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_zero_conf_channel_is_usable_without_confirmations() {
-        let node_handle = NodeHandle::new_with_lsp_setup();
+        let node_handle = NodeHandle::new_with_lsp_setup(true);
 
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();

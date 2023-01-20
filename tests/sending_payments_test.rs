@@ -1,10 +1,8 @@
 mod setup;
 
-// Caution: Run these tests sequentially, otherwise they will corrupt each other,
-//      because they are manipulating their environment:
-//      cargo test --features nigiri -- --test-threads 1
 #[cfg(feature = "nigiri")]
 mod sending_payments_test {
+    use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::{Duration, UNIX_EPOCH};
     use uniffi_lipalightninglib::{InvoiceDetails, LightningNode};
@@ -17,6 +15,7 @@ mod sending_payments_test {
     const PAYMENT_AMOUNT: u64 = 1_000_000;
 
     #[test]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn pay_invoice_direct_peer_test_and_invoice_decoding_test() {
         let node = nigiri::initiate_node_with_channel(LspdLnd);
 
