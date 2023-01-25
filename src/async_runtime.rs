@@ -43,6 +43,29 @@ impl Handle {
         self.handle.spawn(future)
     }
 
+    pub fn spawn_self_restarting_task<Func, F>(&self, func: Func) -> RepeatingTaskHandle
+    where
+        Func: Fn() -> F + Send + Sync + 'static,
+        F: Future<Output = Option<Duration>> + Send + 'static,
+    {
+        let (stop_sender, mut stop_receiver) = mpsc::channel(1);
+        let (status_sender, status_receiver) = mpsc::channel(1);
+        let handle = self.handle.spawn(async move {
+            while let Some(restart_after) = func().await {
+                tokio::select! {
+                    _ = time::sleep(restart_after) => (),
+                    _ = stop_receiver.recv() => break,
+                }
+            }
+            drop(status_sender);
+        });
+        RepeatingTaskHandle {
+            handle,
+            stop_sender,
+            status_receiver,
+        }
+    }
+
     pub fn spawn_repeating_task<Func, F>(
         &self,
         interval: Duration,
@@ -60,10 +83,8 @@ impl Handle {
             interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
             loop {
                 tokio::select! {
-                    _ = stop_receiver.recv() => {
-                        break;
-                    },
-                    _ = interval.tick() => {},
+                    _ = interval.tick() => (),
+                    _ = stop_receiver.recv() => break,
                 }
                 func().await;
             }
@@ -114,6 +135,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::thread::yield_now;
+    use std::time::Instant;
     use tokio::time::sleep;
 
     #[test]
@@ -166,7 +188,7 @@ mod tests {
             let data = Arc::clone(&data_in_f);
             async move {
                 data.fetch_add(1, Ordering::SeqCst);
-                sleep(std::time::Duration::from_millis(100)).await;
+                sleep(Duration::from_millis(100)).await;
                 data.fetch_add(1, Ordering::SeqCst);
             }
         };
@@ -184,5 +206,50 @@ mod tests {
         assert!(handle.is_finished());
         // The task iteration is always complete, we cannot observe an odd number.
         assert_eq!(data.load(Ordering::SeqCst) % 2, 0);
+    }
+
+    #[test]
+    fn test_self_restarting_task_exits() {
+        let rt = AsyncRuntime::new().unwrap();
+        let handle = rt.handle();
+
+        let data = Arc::new(AtomicUsize::new(0));
+        let data_in_f = Arc::clone(&data);
+        let inc = move || {
+            let data = Arc::clone(&data_in_f);
+            async move {
+                data.fetch_add(1, Ordering::SeqCst);
+                None
+            }
+        };
+        let mut h = handle.spawn_self_restarting_task(inc);
+        h.join();
+        assert_eq!(data.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_self_restarting_task_keeps_restarting() {
+        let rt = AsyncRuntime::new().unwrap();
+        let handle = rt.handle();
+
+        let data = Arc::new(AtomicUsize::new(0));
+        let data_in_f = Arc::clone(&data);
+        let inc = move || {
+            let data = Arc::clone(&data_in_f);
+            async move {
+                data.fetch_add(1, Ordering::SeqCst);
+                Some(Duration::from_millis(10))
+            }
+        };
+
+        let start_time = Instant::now();
+        let mut h = handle.spawn_self_restarting_task(inc);
+        while data.load(Ordering::SeqCst) <= 10 {
+            yield_now();
+        }
+        assert!(start_time.elapsed() > Duration::from_millis(10 * 10));
+
+        h.blocking_shutdown();
+        assert!(data.load(Ordering::SeqCst) >= 10);
     }
 }
