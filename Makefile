@@ -17,22 +17,40 @@ buildall:
 .PHONY: test
 test: TEST = ''
 test:
-	cargo test --lib -- $(TEST)
+	cargo test --lib --verbose -- $(TEST)
+	cargo test --manifest-path eel/Cargo.toml --lib --verbose -- $(TEST)
+
+.PHONY: integrationtests
+integrationtests: FILE = *
+integrationtests: TEST = ''
+integrationtests:
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --test '$(FILE)' -- $(TEST)
 
 .PHONY: testall
 testall: test integrationtests
 
 .PHONY: fmt
 fmt:
-	cargo fmt
+	cargo fmt -- --check
+	cargo fmt --manifest-path eel/Cargo.toml -- --check
 
 .PHONY: clippy
 clippy:
-	cargo clippy
+	cargo clippy -- -D warnings
+	cargo clippy --manifest-path eel/Cargo.toml -- -D warnings
+
+.PHONY: udeps
+udeps:
+	cargo +nightly udeps
+	cargo +nightly udeps --manifest-path eel/Cargo.toml
 
 # Quick tests to run before creating a PR.
 .PHONY: pr
 pr: fmt buildall test clippy
+
+.PHONY: runnode
+runnode:
+	cargo run --manifest-path eel/Cargo.toml --example node
 
 .PHONY: build-dev-env
 build-dev-env:
