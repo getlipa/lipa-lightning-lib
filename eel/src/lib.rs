@@ -211,11 +211,7 @@ impl LightningNode {
             let funding_outpoint = channel_monitor.get_funding_txo().0;
             match chain_monitor.watch_channel(funding_outpoint, channel_monitor) {
                 ChannelMonitorUpdateStatus::Completed => {}
-                ChannelMonitorUpdateStatus::InProgress => {
-                    return Err(permanent_failure(
-                        "Failed to give a ChannelMonitor to the ChainMonitor",
-                    ))
-                }
+                ChannelMonitorUpdateStatus::InProgress => {}
                 ChannelMonitorUpdateStatus::PermanentFailure => {
                     return Err(permanent_failure(
                         "Failed to give a ChannelMonitor to the ChainMonitor",
