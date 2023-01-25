@@ -110,7 +110,8 @@ pub(crate) struct RepeatingTaskHandle {
 
 impl RepeatingTaskHandle {
     pub fn request_shutdown(&self) {
-        self.stop_sender.blocking_send(()).unwrap();
+        // Ignore errors, probably the receiver was dropped.
+        let _ = self.stop_sender.blocking_send(());
     }
 
     pub fn blocking_shutdown(&mut self) {
@@ -225,6 +226,8 @@ mod tests {
         let mut h = handle.spawn_self_restarting_task(inc);
         h.join();
         assert_eq!(data.load(Ordering::SeqCst), 1);
+
+        h.blocking_shutdown(); // Does not panic.
     }
 
     #[test]
