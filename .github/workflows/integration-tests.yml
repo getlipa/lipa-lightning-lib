@@ -32,6 +32,4 @@ jobs:
           use_liquid: false
           use_ln: true
       - name: Run integration tests
-        run: |
-          cd eel
-          make integrationtests
+        run: make integrationtests

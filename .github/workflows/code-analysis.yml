@@ -36,10 +36,7 @@ jobs:
           components: rustfmt
       - uses: actions/checkout@v3
       - name: Check code formatting
-        run: |
-          cargo fmt -- --check
-          cd eel
-          cargo fmt -- --check
+        run: make fmt
   clippy_check:
     name: Clippy check
     runs-on: ubuntu-latest
@@ -58,10 +55,7 @@ jobs:
         with:
           submodules: true
       - name: Clippy
-        run: |
-          cargo clippy -- -D warnings
-          cd eel
-          cargo clippy -- -D warnings
+        run: make clippy
   unused_dependencies:
     name: Look for unused dependencies
     runs-on: ubuntu-latest
@@ -82,7 +76,4 @@ jobs:
         with:
           submodules: true
       - name: Run unused dependency checker
-        run: |
-          cargo +nightly udeps
-          cd eel
-          cargo +nightly udeps
+        run: make udeps

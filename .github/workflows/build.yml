@@ -36,9 +36,7 @@ jobs:
       - name: Build
         run: cargo build --verbose
       - name: Run unit tests
-        run: |
-          cd eel
-          cargo test --lib --verbose
+        run: make test
   build-ios:
     name: Build for iOS targets
     runs-on: macos-latest
