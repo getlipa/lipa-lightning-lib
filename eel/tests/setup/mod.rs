@@ -3,14 +3,14 @@ mod lsp_client;
 #[path = "../print_events_handler/mod.rs"]
 mod print_event_handler;
 
+use eel::callbacks::RemoteStorageCallback;
+use eel::config::Config;
+use eel::errors::LipaResult;
+use eel::keys_manager::generate_secret;
+use eel::LightningNode;
 use lsp_client::LspClient;
 use std::fs;
 use storage_mock::Storage;
-use uniffi_lipalightninglib::callbacks::RemoteStorageCallback;
-use uniffi_lipalightninglib::config::Config;
-use uniffi_lipalightninglib::errors::{CallbackError, LipaResult};
-use uniffi_lipalightninglib::keys_manager::generate_secret;
-use uniffi_lipalightninglib::LightningNode;
 
 #[cfg(feature = "nigiri")]
 use crate::setup::nigiri::{NodeInstance, RGS_CLN_HOST, RGS_CLN_ID, RGS_CLN_PORT};
@@ -22,8 +22,6 @@ use std::thread::sleep;
 use std::time::Duration;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
-
-pub type CallbackResult<T> = Result<T, CallbackError>;
 
 #[derive(Debug, Clone)]
 pub struct StorageMock {
@@ -47,24 +45,24 @@ impl RemoteStorageCallback for StorageMock {
         self.storage.check_health()
     }
 
-    fn list_objects(&self, bucket: String) -> CallbackResult<Vec<String>> {
+    fn list_objects(&self, bucket: String) -> LipaResult<Vec<String>> {
         Ok(self.storage.list_objects(bucket))
     }
 
-    fn object_exists(&self, bucket: String, key: String) -> CallbackResult<bool> {
+    fn object_exists(&self, bucket: String, key: String) -> LipaResult<bool> {
         Ok(self.storage.object_exists(bucket, key))
     }
 
-    fn get_object(&self, bucket: String, key: String) -> CallbackResult<Vec<u8>> {
+    fn get_object(&self, bucket: String, key: String) -> LipaResult<Vec<u8>> {
         Ok(self.storage.get_object(bucket, key))
     }
 
-    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> CallbackResult<()> {
+    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> LipaResult<()> {
         self.storage.put_object(bucket, key, value);
         Ok(())
     }
 
-    fn delete_object(&self, bucket: String, key: String) -> CallbackResult<()> {
+    fn delete_object(&self, bucket: String, key: String) -> LipaResult<()> {
         self.storage.delete_object(bucket, key);
         Ok(())
     }
@@ -233,17 +231,17 @@ pub mod nigiri {
 
     pub fn stop_lspd() {
         debug!("LSPD stopping ...");
-        exec_in_dir(&["docker-compose", "down"], "lspd");
+        exec_in_dir(&["docker-compose", "down"], "../lspd");
     }
 
     pub fn pause_lspd() {
         debug!("LSPD stopping ...");
-        exec_in_dir(&["docker-compose", "stop"], "lspd");
+        exec_in_dir(&["docker-compose", "stop"], "../lspd");
     }
 
     pub fn start_lspd() {
         debug!("LSPD starting ...");
-        exec_in_dir(&["docker-compose", "up", "-d", "lspd"], "lspd");
+        exec_in_dir(&["docker-compose", "up", "-d", "lspd"], "../lspd");
     }
 
     pub fn wait_for_healthy_lspd() {
@@ -261,12 +259,12 @@ pub mod nigiri {
 
     pub fn stop_rgs() {
         debug!("RGS server stopping ...");
-        exec_in_dir(&["docker-compose", "down"], "rgs");
+        exec_in_dir(&["docker-compose", "down"], "../rgs");
     }
 
     fn start_rgs() {
         debug!("RGS server starting ...");
-        exec_in_dir(&["docker-compose", "up", "-d", "rgs"], "rgs");
+        exec_in_dir(&["docker-compose", "up", "-d", "rgs"], "../rgs");
     }
 
     fn start_nigiri() {

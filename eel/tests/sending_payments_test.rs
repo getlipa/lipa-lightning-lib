@@ -2,10 +2,10 @@ mod setup;
 
 #[cfg(feature = "nigiri")]
 mod sending_payments_test {
+    use eel::{InvoiceDetails, LightningNode};
     use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::{Duration, UNIX_EPOCH};
-    use uniffi_lipalightninglib::{InvoiceDetails, LightningNode};
 
     use crate::setup::nigiri;
     use crate::setup::nigiri::NodeInstance::{LspdLnd, NigiriCln, NigiriLnd};

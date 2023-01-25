@@ -66,38 +66,6 @@ enum CallbackError {
     "UnexpectedUniFFI",
 };
 
-// Remote key-value storage. Buckets are not managed explicitly.
-callback interface RemoteStorageCallback {
-    // Check if the remote server is reachable and the client has necessary
-    // permissions. The library will likely call this method before starting
-    // a transaction.
-    // Hint: request and cache an access token if needed.
-    boolean check_health();
-
-    // List objects in the bucket. Return empty list if there is no such bucket.
-    [Throws=CallbackError]
-    sequence<string> list_objects(string bucket);
-
-    // Check if the bucket exists and if the object is in the bucket.
-    [Throws=CallbackError]
-    boolean object_exists(string bucket, string key);
-
-    [Throws=CallbackError]
-    sequence<u8> get_object(string bucket, string key);
-
-    // Atomically put the object in the bucket (create the bucket if it does not
-    // exists).
-    // Must only return after being certain that data was persisted safely.
-    // Failure to do so for `monitors` bucket may result in loss of funds.
-    // Returning `false` for `monitors` bucket will likely result in a channel
-    // being force-closed.
-    [Throws=CallbackError]
-    void put_object(string bucket, string key, sequence<u8> value);
-
-    [Throws=CallbackError]
-    void delete_object(string bucket, string key);
-};
-
 // Asynchronous events that the consumer of this library needs/wants to handle are delivered through this interface.
 // These callbacks will only be called once, so the consumer of this library should be quick to persist information
 // regarding their occurrence. Otherwise, it's possible that an event gets "lost" if the app is terminated before
@@ -181,7 +149,7 @@ dictionary InvoiceDetails {
 interface LightningNode {
     // Initiate the Lightning node and let it run in a background thread
     [Throws=LipaError]
-    constructor([ByRef] Config config, RemoteStorageCallback remote_storage_callback, LspCallback lsp_callback, EventsCallback events_callback);
+    constructor([ByRef] Config config, LspCallback lsp_callback, EventsCallback events_callback);
 
     // Request some basic info about the local node
     NodeInfo get_node_info();

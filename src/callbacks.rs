@@ -1,19 +1,28 @@
-use crate::errors::CallbackResult;
 use std::fmt::Debug;
+use uniffi::UnexpectedUniFFICallbackError;
 
-pub trait RemoteStorageCallback: Send + Sync + Debug {
-    fn check_health(&self) -> bool;
+#[derive(Debug, thiserror::Error)]
+pub enum CallbackError {
+    #[error("InvalidInput")]
+    InvalidInput,
 
-    fn list_objects(&self, bucket: String) -> CallbackResult<Vec<String>>;
+    #[error("RuntimeError")]
+    RuntimeError,
 
-    fn object_exists(&self, bucket: String, key: String) -> CallbackResult<bool>;
+    #[error("PermanentFailure")]
+    PermanentFailure,
 
-    fn get_object(&self, bucket: String, key: String) -> CallbackResult<Vec<u8>>;
-
-    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> CallbackResult<()>;
-
-    fn delete_object(&self, bucket: String, key: String) -> CallbackResult<()>;
+    #[error("UnexpectedUniFFICallbackError")]
+    UnexpectedUniFFI,
 }
+
+impl From<UnexpectedUniFFICallbackError> for CallbackError {
+    fn from(_error: UnexpectedUniFFICallbackError) -> Self {
+        CallbackError::UnexpectedUniFFI
+    }
+}
+
+pub type CallbackResult<T> = Result<T, CallbackError>;
 
 pub trait LspCallback: Send + Sync {
     fn channel_information(&self) -> CallbackResult<Vec<u8>>;

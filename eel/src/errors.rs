@@ -14,7 +14,6 @@
 //! ```
 
 use std::fmt::{Display, Formatter};
-use uniffi::ffi::foreigncallbacks::UnexpectedUniFFICallbackError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RuntimeErrorCode {
@@ -278,26 +277,3 @@ mod tests {
         assert_eq!(error.to_string(), "PermanentFailure: Value expected");
     }
 }
-
-#[derive(Debug, thiserror::Error)]
-pub enum CallbackError {
-    #[error("InvalidInput")]
-    InvalidInput,
-
-    #[error("RuntimeError")]
-    RuntimeError,
-
-    #[error("PermanentFailure")]
-    PermanentFailure,
-
-    #[error("UnexpectedUniFFICallbackError")]
-    UnexpectedUniFFI,
-}
-
-impl From<UnexpectedUniFFICallbackError> for CallbackError {
-    fn from(_error: UnexpectedUniFFICallbackError) -> Self {
-        CallbackError::UnexpectedUniFFI
-    }
-}
-
-pub type CallbackResult<T> = Result<T, CallbackError>;

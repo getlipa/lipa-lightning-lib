@@ -1,12 +1,10 @@
+use eel::callbacks::RemoteStorageCallback;
+use eel::errors::{LipaResult, MapToLipaError, RuntimeErrorCode};
 use log::debug;
 use std::fmt::Debug;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use uniffi_lipalightninglib::callbacks::RemoteStorageCallback;
-use uniffi_lipalightninglib::errors::CallbackError;
-
-pub type CallbackResult<T> = Result<T, CallbackError>;
 
 #[derive(Debug)]
 pub struct FileStorage {
@@ -22,7 +20,7 @@ impl FileStorage {
 }
 
 impl RemoteStorageCallback for FileStorage {
-    fn object_exists(&self, bucket: String, key: String) -> CallbackResult<bool> {
+    fn object_exists(&self, bucket: String, key: String) -> LipaResult<bool> {
         debug!("object_exists({}, {})", bucket, key);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
@@ -30,7 +28,7 @@ impl RemoteStorageCallback for FileStorage {
         Ok(path_buf.exists())
     }
 
-    fn get_object(&self, bucket: String, key: String) -> CallbackResult<Vec<u8>> {
+    fn get_object(&self, bucket: String, key: String) -> LipaResult<Vec<u8>> {
         debug!("get_object({}, {})", bucket, key);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
@@ -43,7 +41,7 @@ impl RemoteStorageCallback for FileStorage {
         true
     }
 
-    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> CallbackResult<()> {
+    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> LipaResult<()> {
         debug!("put_object({}, {}, value.len={})", bucket, key, value.len());
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
@@ -53,7 +51,7 @@ impl RemoteStorageCallback for FileStorage {
         Ok(())
     }
 
-    fn list_objects(&self, bucket: String) -> CallbackResult<Vec<String>> {
+    fn list_objects(&self, bucket: String) -> LipaResult<Vec<String>> {
         debug!("list_objects({})", bucket);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
@@ -67,11 +65,12 @@ impl RemoteStorageCallback for FileStorage {
         Ok(list)
     }
 
-    fn delete_object(&self, bucket: String, key: String) -> CallbackResult<()> {
+    fn delete_object(&self, bucket: String, key: String) -> LipaResult<()> {
         debug!("delete_object({}, {})", bucket, key);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
         path_buf.push(key);
-        fs::remove_file(path_buf).map_err(|_| CallbackError::RuntimeError)
+        fs::remove_file(path_buf)
+            .map_to_runtime_error(RuntimeErrorCode::GenericError, "Failed to delete object")
     }
 }

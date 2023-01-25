@@ -3,11 +3,11 @@ mod setup;
 #[cfg(feature = "nigiri")]
 mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
+    use eel::LightningNode;
     use log::info;
     use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::Duration;
-    use uniffi_lipalightninglib::LightningNode;
 
     use crate::setup::nigiri::NodeInstance;
     use crate::setup::{nigiri, NodeHandle};
