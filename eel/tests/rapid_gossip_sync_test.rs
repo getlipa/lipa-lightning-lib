@@ -6,11 +6,11 @@ mod zero_conf_test {
     use crate::setup::{nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
     use bitcoin::hashes::hex::ToHex;
+    use eel::LightningNode;
     use log::info;
     use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::Duration;
-    use uniffi_lipalightninglib::LightningNode;
 
     const HUNDRED_K_SATS: u64 = 100_000_000;
     const ONE_K_SATS: u64 = 1_000_000;

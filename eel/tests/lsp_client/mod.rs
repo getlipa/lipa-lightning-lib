@@ -2,14 +2,14 @@ mod lspd {
     tonic::include_proto!("lspd");
 }
 
+use eel::callbacks::LspCallback;
+use eel::errors::LipaResult;
 use lspd::channel_opener_client::ChannelOpenerClient;
 use lspd::{ChannelInformationRequest, RegisterPaymentRequest};
 use prost::Message;
 use tokio::runtime::{Builder, Runtime};
 use tonic::metadata::{Ascii, MetadataValue};
 use tonic::Request;
-use uniffi_lipalightninglib::callbacks::LspCallback;
-use uniffi_lipalightninglib::errors::CallbackResult;
 
 pub(crate) struct LspClient {
     address: String,
@@ -38,7 +38,7 @@ impl LspClient {
 }
 
 impl LspCallback for LspClient {
-    fn channel_information(&self) -> CallbackResult<Vec<u8>> {
+    fn channel_information(&self) -> LipaResult<Vec<u8>> {
         let request = self.wrap_request(ChannelInformationRequest {
             pubkey: "".to_string(),
         });
@@ -54,7 +54,7 @@ impl LspCallback for LspClient {
             .encode_to_vec())
     }
 
-    fn register_payment(&self, blob: Vec<u8>) -> CallbackResult<()> {
+    fn register_payment(&self, blob: Vec<u8>) -> LipaResult<()> {
         let request = self.wrap_request(RegisterPaymentRequest { blob });
         let mut client = self
             .rt
