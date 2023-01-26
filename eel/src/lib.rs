@@ -89,7 +89,6 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
 pub struct LightningNode {
     network: Network,
     rt: AsyncRuntime,
-    esplora_client: Arc<EsploraClient>,
     lsp_client: Arc<LspClient>,
     keys_manager: Arc<KeysManager>,
     background_processor: BackgroundProcessor,
@@ -185,7 +184,7 @@ impl LightningNode {
         // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
         let confirm = ConfirmWrapper::new(vec![&*channel_manager, &*chain_monitor]);
         let chain_access = Arc::new(Mutex::new(LipaChainAccess::new(
-            Arc::clone(&esplora_client),
+            esplora_client,
             filter,
             channel_manager_block_hash.unwrap_or(genesis_hash),
         )));
@@ -321,7 +320,6 @@ impl LightningNode {
         Ok(Self {
             network: config.network,
             rt,
-            esplora_client,
             lsp_client,
             keys_manager,
             background_processor,
