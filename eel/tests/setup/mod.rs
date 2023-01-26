@@ -1,77 +1,33 @@
 #[path = "../lsp_client/mod.rs"]
 mod lsp_client;
+#[path = "../mocked_remote_storage/mod.rs"]
+mod mocked_remote_storate;
 #[path = "../print_events_handler/mod.rs"]
 mod print_event_handler;
 
 use eel::config::Config;
 use eel::errors::LipaResult;
-use eel::interfaces::RemoteStorage;
 use eel::keys_manager::generate_secret;
 use eel::LightningNode;
 use lsp_client::LspClient;
 use std::fs;
-use storage_mock::Storage;
 
+use crate::setup::mocked_remote_storate::MockedRemoteStorage;
 #[cfg(feature = "nigiri")]
 use crate::setup::nigiri::{NodeInstance, RGS_CLN_HOST, RGS_CLN_ID, RGS_CLN_PORT};
 use crate::setup::print_event_handler::PrintEventsHandler;
 use bitcoin::Network;
 use simplelog::SimpleLogger;
-use std::sync::{Arc, Once};
+use std::sync::Once;
 use std::thread::sleep;
 use std::time::Duration;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
 
-#[derive(Debug, Clone)]
-pub struct StorageMock {
-    storage: Arc<Storage>,
-}
-
-impl StorageMock {
-    pub fn new(storage: Arc<Storage>) -> Self {
-        Self { storage }
-    }
-}
-
-impl Default for StorageMock {
-    fn default() -> Self {
-        Self::new(Arc::new(Storage::new()))
-    }
-}
-
-impl RemoteStorage for StorageMock {
-    fn check_health(&self) -> bool {
-        self.storage.check_health()
-    }
-
-    fn list_objects(&self, bucket: String) -> LipaResult<Vec<String>> {
-        Ok(self.storage.list_objects(bucket))
-    }
-
-    fn object_exists(&self, bucket: String, key: String) -> LipaResult<bool> {
-        Ok(self.storage.object_exists(bucket, key))
-    }
-
-    fn get_object(&self, bucket: String, key: String) -> LipaResult<Vec<u8>> {
-        Ok(self.storage.get_object(bucket, key))
-    }
-
-    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> LipaResult<()> {
-        self.storage.put_object(bucket, key, value);
-        Ok(())
-    }
-
-    fn delete_object(&self, bucket: String, key: String) -> LipaResult<()> {
-        self.storage.delete_object(bucket, key);
-        Ok(())
-    }
-}
-
 #[allow(dead_code)]
 pub struct NodeHandle {
     config: Config,
-    storage: StorageMock,
+    storage: MockedRemoteStorage,
 }
 
 #[allow(dead_code)]
@@ -81,7 +37,7 @@ impl NodeHandle {
             SimpleLogger::init(simplelog::LevelFilter::Trace, simplelog::Config::default())
                 .unwrap();
         });
-        let storage = StorageMock::new(Arc::new(Storage::new()));
+        let storage = MockedRemoteStorage::default();
 
         let _ = fs::remove_dir_all(".3l_local_test");
 
