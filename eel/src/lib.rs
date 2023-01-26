@@ -28,7 +28,7 @@ mod test_utils;
 mod tx_broadcaster;
 mod types;
 
-use crate::async_runtime::{AsyncRuntime, RepeatingTaskHandle};
+use crate::async_runtime::AsyncRuntime;
 use crate::chain_access::LipaChainAccess;
 use crate::config::Config;
 use crate::confirm::ConfirmWrapper;
@@ -65,13 +65,14 @@ use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_invoice::payment::{PaymentError, Retry};
 use lightning_invoice::{Currency, Invoice, InvoiceDescription};
 pub use log::Level as LogLevel;
-use log::{debug, error, info, warn};
+use log::{info, warn};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::time::{Duration, Instant};
+use tokio::time::Duration;
 
 const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
+    sync_blockchain: Duration::from_secs(5),
     update_lsp_info: Some(Duration::from_secs(10 * 60)),
     reconnect_to_lsp: Duration::from_secs(10),
     update_fees: Some(Duration::from_secs(5 * 60)),
@@ -79,6 +80,7 @@ const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
 };
 
 const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
+    sync_blockchain: Duration::from_secs(60 * 60),
     update_lsp_info: None,
     reconnect_to_lsp: Duration::from_secs(60),
     update_fees: None,
@@ -94,13 +96,11 @@ pub struct LightningNode {
     background_processor: BackgroundProcessor,
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
-    sync_handle: RepeatingTaskHandle,
     invoice_payer: Arc<InvoicePayer>,
     task_manager: Arc<Mutex<TaskManager>>,
 }
 
 impl LightningNode {
-    #[allow(clippy::result_large_err)]
     pub fn new(
         config: &Config,
         remote_storage: Box<dyn RemoteStorage>,
@@ -227,35 +227,7 @@ impl LightningNode {
         // Skip it, since the node does not listen to incoming connections.
 
         // Step 14. Keep LDK Up-to-date with Chain Info
-        // TODO: optimize how often we want to run sync. LDK-sample syncs every second and
-        //       LDKLite syncs every 5 seconds. Let's try 5 seconds first and change if needed
-        let channel_manager_regular_sync = Arc::clone(&channel_manager);
-        let chain_monitor_regular_sync = Arc::clone(&chain_monitor);
-        let sync_handle = rt
-            .handle()
-            .spawn_repeating_task(Duration::from_secs(5), move || {
-                let chain_access_regular_sync = Arc::clone(&chain_access);
-                let channel_manager_regular_sync = Arc::clone(&channel_manager_regular_sync);
-                let chain_monitor_regular_sync = Arc::clone(&chain_monitor_regular_sync);
-                async move {
-                    let confirm_regular_sync = ConfirmWrapper::new(vec![
-                        &*channel_manager_regular_sync,
-                        &*chain_monitor_regular_sync,
-                    ]);
-                    let now = Instant::now();
-                    match chain_access_regular_sync
-                        .lock()
-                        .unwrap()
-                        .sync(&confirm_regular_sync)
-                    {
-                        Ok(_) => debug!(
-                            "Sync to blockchain finished in {}ms",
-                            now.elapsed().as_millis()
-                        ),
-                        Err(e) => error!("Sync to blockchain failed: {:?}", e),
-                    }
-                }
-            });
+        // Implemented in TaskManager.
 
         let lsp_client = Arc::new(LspClient::new(lsp_client));
 
@@ -265,6 +237,9 @@ impl LightningNode {
             Arc::clone(&peer_manager),
             Arc::clone(&fee_estimator),
             rapid_sync_client,
+            Arc::clone(&channel_manager),
+            Arc::clone(&chain_monitor),
+            Arc::clone(&chain_access),
         )));
         task_manager.lock().unwrap().restart(FOREGROUND_PERIODS);
 
@@ -325,7 +300,6 @@ impl LightningNode {
             background_processor,
             channel_manager: Arc::clone(&channel_manager),
             peer_manager,
-            sync_handle,
             invoice_payer,
             task_manager,
         })
@@ -482,10 +456,8 @@ impl LightningNode {
 
 impl Drop for LightningNode {
     fn drop(&mut self) {
-        self.sync_handle.blocking_shutdown();
         self.task_manager.lock().unwrap().request_shutdown_all();
 
-        // TODO: Stop reconnecting to peers
         self.peer_manager.disconnect_all_peers();
 
         // The background processor implements the drop trait itself.
@@ -525,7 +497,6 @@ fn build_mobile_node_user_config() -> UserConfig {
     user_config
 }
 
-#[allow(clippy::result_large_err)]
 fn init_peer_manager(
     channel_manager: Arc<ChannelManager>,
     keys_manager: &KeysManager,

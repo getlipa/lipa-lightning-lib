@@ -1,17 +1,21 @@
 use crate::async_runtime::{Handle, RepeatingTaskHandle};
+use crate::chain_access::LipaChainAccess;
+use crate::confirm::ConfirmWrapper;
 use crate::fee_estimator::FeeEstimator;
 use crate::lsp::{LspClient, LspInfo};
 use crate::p2p_networking::{connect_peer, LnPeer};
 use crate::rapid_sync_client::RapidSyncClient;
-use crate::types::PeerManager;
+use crate::types::{ChainMonitor, ChannelManager, PeerManager};
 
 use log::{debug, error};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tokio::time::Duration;
 
 pub(crate) type RestartIfFailedPeriod = Duration;
 
 pub(crate) struct TaskPeriods {
+    pub sync_blockchain: Duration,
     pub update_lsp_info: Option<Duration>,
     pub reconnect_to_lsp: Duration,
     pub update_fees: Option<Duration>,
@@ -28,16 +32,24 @@ pub(crate) struct TaskManager {
 
     rapid_sync_client: Arc<RapidSyncClient>,
 
+    channel_manager: Arc<ChannelManager>,
+    chain_monitor: Arc<ChainMonitor>,
+    chain_access: Arc<Mutex<LipaChainAccess>>,
+
     task_handles: Vec<RepeatingTaskHandle>,
 }
 
 impl TaskManager {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         runtime_handle: Handle,
         lsp_client: Arc<LspClient>,
         peer_manager: Arc<PeerManager>,
         fee_estimator: Arc<FeeEstimator>,
         rapid_sync_client: Arc<RapidSyncClient>,
+        channel_manager: Arc<ChannelManager>,
+        chain_monitor: Arc<ChainMonitor>,
+        chain_access: Arc<Mutex<LipaChainAccess>>,
     ) -> Self {
         Self {
             runtime_handle,
@@ -46,6 +58,9 @@ impl TaskManager {
             fee_estimator,
             lsp_info: Arc::new(Mutex::new(None)),
             rapid_sync_client,
+            channel_manager,
+            chain_monitor,
+            chain_access,
             task_handles: Vec::new(),
         }
     }
@@ -63,7 +78,9 @@ impl TaskManager {
     pub fn restart(&mut self, periods: TaskPeriods) {
         self.request_shutdown_all();
 
-        // TODO: Blockchain sync.
+        // Blockchain sync.
+        self.task_handles
+            .push(self.start_blockchain_sync(periods.sync_blockchain));
 
         // LSP info update.
         if let Some(period) = periods.update_lsp_info {
@@ -88,6 +105,32 @@ impl TaskManager {
         }
 
         // TODO: Reconnect to channels' peers.
+    }
+
+    fn start_blockchain_sync(&self, period: Duration) -> RepeatingTaskHandle {
+        let channel_manager = Arc::clone(&self.channel_manager);
+        let chain_monitor = Arc::clone(&self.chain_monitor);
+        let chain_access = Arc::clone(&self.chain_access);
+
+        self.runtime_handle.spawn_repeating_task(period, move || {
+            let chain_access = Arc::clone(&chain_access);
+            let channel_manager_regular_sync = Arc::clone(&channel_manager);
+            let chain_monitor_regular_sync = Arc::clone(&chain_monitor);
+            async move {
+                let confirm_regular_sync = ConfirmWrapper::new(vec![
+                    &*channel_manager_regular_sync,
+                    &*chain_monitor_regular_sync,
+                ]);
+                let now = Instant::now();
+                match chain_access.lock().unwrap().sync(&confirm_regular_sync) {
+                    Ok(()) => debug!(
+                        "Sync to blockchain finished in {}ms",
+                        now.elapsed().as_millis()
+                    ),
+                    Err(e) => error!("Sync to blockchain failed: {:?}", e),
+                }
+            }
+        })
     }
 
     fn start_lsp_info_update(&self, period: Duration) -> RepeatingTaskHandle {
