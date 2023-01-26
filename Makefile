@@ -44,9 +44,14 @@ udeps:
 	cargo +nightly udeps
 	cargo +nightly udeps --manifest-path eel/Cargo.toml
 
+# Check that we stick to `mod tests {` style.
+.PHONY: check-mod-test
+check-mod-test:
+	! grep --recursive --include="*.rs" "mod test " *
+
 # Quick tests to run before creating a PR.
 .PHONY: pr
-pr: fmt buildall test clippy
+pr: fmt buildall test clippy check-mod-test
 
 .PHONY: runnode
 runnode:
