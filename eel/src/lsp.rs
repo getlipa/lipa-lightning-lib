@@ -3,9 +3,9 @@ pub mod lspd {
     tonic::include_proto!("lspd");
 }
 
-use crate::callbacks::LspCallback;
 use crate::encryption::encrypt;
 use crate::errors::*;
+use crate::interfaces::Lsp;
 
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::secp256k1::PublicKey;
@@ -49,11 +49,11 @@ pub(crate) struct PaymentRequest {
 }
 
 pub(crate) struct LspClient {
-    lsp: Box<dyn LspCallback>,
+    lsp: Box<dyn Lsp>,
 }
 
 impl LspClient {
-    pub fn new(lsp: Box<dyn LspCallback>) -> Self {
+    pub fn new(lsp: Box<dyn Lsp>) -> Self {
         Self { lsp }
     }
 

@@ -1,26 +1,26 @@
-use eel::callbacks::{EventsCallback, LspCallback, RemoteStorageCallback};
 use eel::errors::{LipaResult, MapToLipaError};
+use eel::interfaces::{EventHandler, Lsp, RemoteStorage};
 use std::sync::Arc;
 use storage_mock::Storage;
 
 #[derive(Debug, Clone)]
-pub(crate) struct StorageMock {
+pub(crate) struct RemoteStorageMock {
     storage: Arc<Storage>,
 }
 
-impl StorageMock {
+impl RemoteStorageMock {
     pub fn new(storage: Arc<Storage>) -> Self {
         Self { storage }
     }
 }
 
-impl Default for StorageMock {
+impl Default for RemoteStorageMock {
     fn default() -> Self {
         Self::new(Arc::new(Storage::new()))
     }
 }
 
-impl RemoteStorageCallback for StorageMock {
+impl RemoteStorage for RemoteStorageMock {
     fn check_health(&self) -> bool {
         self.storage.check_health()
     }
@@ -52,7 +52,7 @@ pub(crate) struct LspImpl {
     pub lsp_callback: Box<dyn crate::callbacks::LspCallback>,
 }
 
-impl LspCallback for LspImpl {
+impl Lsp for LspImpl {
     fn channel_information(&self) -> LipaResult<Vec<u8>> {
         self.lsp_callback
             .channel_information()
@@ -70,7 +70,7 @@ pub(crate) struct EventsImpl {
     pub events_callback: Box<dyn crate::callbacks::EventsCallback>,
 }
 
-impl EventsCallback for EventsImpl {
+impl EventHandler for EventsImpl {
     fn payment_received(&self, payment_hash: String, amount_msat: u64) -> LipaResult<()> {
         self.events_callback
             .payment_received(payment_hash, amount_msat)

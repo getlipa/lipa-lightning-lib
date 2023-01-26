@@ -1,5 +1,5 @@
-use crate::callbacks::RemoteStorageCallback;
 use crate::errors::*;
+use crate::interfaces::RemoteStorage;
 use crate::types::Scorer;
 use crate::LightningLogger;
 
@@ -36,12 +36,12 @@ static GRAPH_KEY: &str = "network_graph";
 static SCORER_KEY: &str = "scorer";
 
 pub struct StoragePersister {
-    storage: Box<dyn RemoteStorageCallback>,
+    storage: Box<dyn RemoteStorage>,
     fs_persister: FilesystemPersister,
 }
 
 impl StoragePersister {
-    pub fn new(storage: Box<dyn RemoteStorageCallback>, local_fs_path: String) -> Self {
+    pub fn new(storage: Box<dyn RemoteStorage>, local_fs_path: String) -> Self {
         let fs_persister = FilesystemPersister::new(local_fs_path);
         Self {
             storage,
@@ -335,29 +335,29 @@ mod tests {
         }
     }
 
-    impl RemoteStorageCallback for StorageMock {
+    impl RemoteStorage for StorageMock {
         fn check_health(&self) -> bool {
             self.storage.check_health()
         }
 
-        fn list_objects(&self, bucket: String) -> CallbackResult<Vec<String>> {
+        fn list_objects(&self, bucket: String) -> LipaResult<Vec<String>> {
             Ok(self.storage.list_objects(bucket))
         }
 
-        fn object_exists(&self, bucket: String, key: String) -> CallbackResult<bool> {
+        fn object_exists(&self, bucket: String, key: String) -> LipaResult<bool> {
             Ok(self.storage.object_exists(bucket, key))
         }
 
-        fn get_object(&self, bucket: String, key: String) -> CallbackResult<Vec<u8>> {
+        fn get_object(&self, bucket: String, key: String) -> LipaResult<Vec<u8>> {
             Ok(self.storage.get_object(bucket, key))
         }
 
-        fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> CallbackResult<()> {
+        fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> LipaResult<()> {
             self.storage.put_object(bucket, key, value);
             Ok(())
         }
 
-        fn delete_object(&self, bucket: String, key: String) -> CallbackResult<()> {
+        fn delete_object(&self, bucket: String, key: String) -> LipaResult<()> {
             self.storage.delete_object(bucket, key);
             Ok(())
         }

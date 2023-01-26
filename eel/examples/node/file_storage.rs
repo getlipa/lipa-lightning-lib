@@ -1,5 +1,5 @@
-use eel::callbacks::RemoteStorageCallback;
 use eel::errors::{LipaResult, MapToLipaError, RuntimeErrorCode};
+use eel::interfaces::RemoteStorage;
 use log::debug;
 use std::fmt::Debug;
 use std::fs;
@@ -19,7 +19,7 @@ impl FileStorage {
     }
 }
 
-impl RemoteStorageCallback for FileStorage {
+impl RemoteStorage for FileStorage {
     fn object_exists(&self, bucket: String, key: String) -> LipaResult<bool> {
         debug!("object_exists({}, {})", bucket, key);
         let mut path_buf = self.base_path_buf.clone();
