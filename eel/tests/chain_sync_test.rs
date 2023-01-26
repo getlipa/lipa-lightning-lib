@@ -17,8 +17,9 @@ mod chain_sync_test {
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_react_to_events() {
-        let node_handle = NodeHandle::new_with_lsp_setup(true);
-        let node = node_handle.start().unwrap();
+        nigiri::setup_environment_with_lsp();
+
+        let node = NodeHandle::new().start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
         let tx_id = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap();
@@ -77,7 +78,9 @@ mod chain_sync_test {
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_react_to_events_with_offline_node() {
-        let node_handle = NodeHandle::new_with_lsp_setup(true);
+        nigiri::setup_environment_with_lsp();
+
+        let node_handle = NodeHandle::new();
 
         // test channel is confirmed only after 6 confirmations with offline node
         let tx_id = start_node_open_channel_without_confirm_stop_node(&node_handle);
@@ -118,7 +121,8 @@ mod chain_sync_test {
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_force_close_is_detected_offline_node_unconfirmed_channel() {
-        let node_handle = NodeHandle::new_with_lsp_setup(true);
+        nigiri::setup_environment_with_lsp();
+        let node_handle = NodeHandle::new();
 
         let tx_id = start_node_open_channel_without_confirm_stop_node(&node_handle);
 

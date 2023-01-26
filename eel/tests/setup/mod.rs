@@ -96,35 +96,6 @@ impl NodeHandle {
         NodeHandle { config, storage }
     }
 
-    #[cfg(feature = "nigiri")]
-    pub fn new_with_lsp_setup(reset: bool) -> NodeHandle {
-        if reset || !nigiri::is_node_synced(NodeInstance::NigiriLnd) {
-            nigiri::start();
-
-            // to open multiple channels in the same block, multiple UTXOs are required
-            for _ in 0..10 {
-                nigiri::fund_node(NodeInstance::LspdLnd, 0.5);
-                nigiri::fund_node(NodeInstance::NigiriLnd, 0.5);
-                nigiri::fund_node(NodeInstance::NigiriCln, 0.5);
-            }
-        } else {
-            nigiri::ensure_lspd_running();
-        }
-
-        Self::new()
-    }
-
-    #[cfg(feature = "nigiri")]
-    pub fn new_with_lsp_rgs_setup() -> NodeHandle {
-        let handle = Self::new_with_lsp_setup(true);
-
-        node_connect_to_rgs_cln(NodeInstance::LspdLnd);
-        node_connect_to_rgs_cln(NodeInstance::NigiriLnd);
-        node_connect_to_rgs_cln(NodeInstance::NigiriCln);
-
-        handle
-    }
-
     pub fn start(&self) -> LipaResult<LightningNode> {
         let lsp_address = "http://127.0.0.1:6666".to_string();
         let lsp_auth_token =
@@ -187,7 +158,26 @@ pub mod nigiri {
         pub synced: bool,
     }
 
-    pub fn start() {
+    pub fn setup_environment_with_lsp() {
+        start_all_clean();
+
+        // to open multiple channels in the same block, multiple UTXOs are required
+        for _ in 0..10 {
+            fund_node(NodeInstance::LspdLnd, 0.5);
+            fund_node(NodeInstance::NigiriLnd, 0.5);
+            fund_node(NodeInstance::NigiriCln, 0.5);
+        }
+    }
+
+    pub fn setup_environment_with_lsp_rgs() {
+        setup_environment_with_lsp();
+
+        node_connect_to_rgs_cln(NodeInstance::LspdLnd);
+        node_connect_to_rgs_cln(NodeInstance::NigiriLnd);
+        node_connect_to_rgs_cln(NodeInstance::NigiriCln);
+    }
+
+    pub fn start_all_clean() {
         INIT_LOGGER_ONCE.call_once(|| {
             SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default())
                 .unwrap();
@@ -248,7 +238,18 @@ pub mod nigiri {
         wait_for_sync(NodeInstance::LspdLnd);
     }
 
+    pub fn ensure_nigiri_running() {
+        if is_node_synced(NodeInstance::NigiriLnd) {
+            debug!("Nigiri already running");
+        } else {
+            start_nigiri();
+            wait_for_healthy_nigiri();
+        }
+    }
+
     pub fn ensure_lspd_running() {
+        ensure_nigiri_running();
+
         if is_node_synced(NodeInstance::LspdLnd) {
             debug!("LSPD already running");
         } else {
@@ -773,9 +774,9 @@ pub mod nigiri {
     }
 
     pub fn initiate_node_with_channel(remote_node: NodeInstance) -> LightningNode {
-        let node_handle = NodeHandle::new_with_lsp_setup(true);
+        nigiri::setup_environment_with_lsp();
 
-        let node = node_handle.start().unwrap();
+        let node = NodeHandle::new().start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
         assert_eq!(node.get_node_info().num_peers, 1);
@@ -817,7 +818,7 @@ pub mod nigiri {
             retries += 1;
             if retries >= 220 {
                 panic!(
-                    "Failed to create channel between from {:?} to {}",
+                    "Failed to create channel from {:?} to {}",
                     node, target_node_id
                 );
             }
