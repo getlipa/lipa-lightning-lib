@@ -29,7 +29,7 @@ pub enum RuntimeErrorCode {
 
 impl Display for RuntimeErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -87,7 +87,7 @@ impl<T> LipaResultTrait<T> for LipaResult<T> {
     fn lift_invalid_input(self) -> LipaResult<T> {
         self.map_err(|e| match e {
             LipaError::InvalidInput { msg } => LipaError::PermanentFailure {
-                msg: format!("InvalidInput: {}", msg),
+                msg: format!("InvalidInput: {msg}"),
             },
             another_error => another_error,
         })

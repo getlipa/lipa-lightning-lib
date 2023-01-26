@@ -420,7 +420,7 @@ impl LightningNode {
             Err(e) => {
                 return match e {
                     PaymentError::Invoice(e) => {
-                        Err(invalid_input(format!("Invalid invoice - {}", e)))
+                        Err(invalid_input(format!("Invalid invoice - {e}")))
                     }
                     PaymentError::Routing(e) => Err(runtime_error(
                         RuntimeErrorCode::NoRouteFound,
@@ -431,7 +431,7 @@ impl LightningNode {
                     )),
                     PaymentError::Sending(e) => Err(runtime_error(
                         RuntimeErrorCode::SendFailure,
-                        format!("Failed to send payment - {:?}", e),
+                        format!("Failed to send payment - {e:?}"),
                     )),
                 }
             }
