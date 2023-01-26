@@ -15,7 +15,6 @@ pub(crate) struct Handle {
 }
 
 impl AsyncRuntime {
-    #[allow(clippy::result_large_err)]
     pub fn new() -> LipaResult<Self> {
         let rt = Builder::new_multi_thread()
             .worker_threads(4)
@@ -108,6 +107,7 @@ pub(crate) struct RepeatingTaskHandle {
     status_receiver: mpsc::Receiver<()>,
 }
 
+#[allow(dead_code)]
 impl RepeatingTaskHandle {
     pub fn request_shutdown(&self) {
         // Ignore errors, probably the receiver was dropped.
