@@ -60,8 +60,7 @@ impl Storage {
     }
 
     pub fn delete_object(&self, bucket: String, key: String) {
-        self
-            .objects
+        self.objects
             .lock()
             .unwrap()
             .borrow_mut()

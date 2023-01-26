@@ -21,6 +21,7 @@ mod fee_estimator;
 mod filter;
 mod invoice;
 mod logger;
+mod rapid_sync_client;
 mod storage_persister;
 mod task_manager;
 mod test_utils;
@@ -43,11 +44,11 @@ use crate::keys_manager::{generate_random_bytes, init_keys_manager};
 use crate::logger::LightningLogger;
 use crate::lsp::{LspClient, LspFee};
 use crate::node_info::{get_channels_info, NodeInfo};
+use crate::rapid_sync_client::RapidSyncClient;
 use crate::storage_persister::StoragePersister;
-use crate::task_manager::{TaskManager, TaskPeriods};
+use crate::task_manager::{RestartIfFailedPeriod, TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, InvoicePayer, PeerManager, RapidGossipSync};
-use std::str::FromStr;
 
 use bitcoin::bech32::ToBase32;
 use bitcoin::blockdata::constants::genesis_block;
@@ -63,9 +64,9 @@ use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_invoice::payment::{PaymentError, Retry};
 use lightning_invoice::{Currency, Invoice, InvoiceDescription};
-use lightning_rapid_gossip_sync::GraphSyncError;
 pub use log::Level as LogLevel;
 use log::{debug, error, info, warn};
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::{Duration, Instant};
@@ -74,12 +75,14 @@ const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_lsp_info: Some(Duration::from_secs(10 * 60)),
     reconnect_to_lsp: Duration::from_secs(10),
     update_fees: Some(Duration::from_secs(5 * 60)),
+    update_graph: Some(RestartIfFailedPeriod::from_secs(2 * 60)),
 };
 
 const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_lsp_info: None,
     reconnect_to_lsp: Duration::from_secs(60),
     update_fees: None,
+    update_graph: None,
 };
 
 #[allow(dead_code)]
@@ -93,8 +96,6 @@ pub struct LightningNode {
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
     sync_handle: RepeatingTaskHandle,
-    rgs_url: String,
-    rapid_sync: Arc<RapidGossipSync>,
     invoice_payer: Arc<InvoicePayer>,
     task_manager: Arc<Mutex<TaskManager>>,
 }
@@ -211,6 +212,10 @@ impl LightningNode {
         // Step 11: Optional: Initialize rapid sync
         let graph = Arc::new(persister.read_or_init_graph(genesis_hash, Arc::clone(&logger))?);
         let rapid_sync = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
+        let rapid_sync_client = Arc::new(RapidSyncClient::new(
+            config.rgs_url.clone(),
+            Arc::clone(&rapid_sync),
+        )?);
 
         // Step 12. Initialize the PeerManager
         let peer_manager = Arc::new(init_peer_manager(
@@ -260,6 +265,7 @@ impl LightningNode {
             Arc::clone(&lsp_client),
             Arc::clone(&peer_manager),
             Arc::clone(&fee_estimator),
+            rapid_sync_client,
         )));
         task_manager.lock().unwrap().restart(FOREGROUND_PERIODS);
 
@@ -306,7 +312,7 @@ impl LightningNode {
             event_handler,
             chain_monitor,
             Arc::clone(&channel_manager),
-            GossipSync::rapid(Arc::clone(&rapid_sync)),
+            GossipSync::rapid(rapid_sync),
             Arc::clone(&peer_manager),
             logger,
             Some(scorer),
@@ -322,8 +328,6 @@ impl LightningNode {
             channel_manager: Arc::clone(&channel_manager),
             peer_manager,
             sync_handle,
-            rgs_url: config.rgs_url.clone(),
-            rapid_sync,
             invoice_payer,
             task_manager,
         })
@@ -377,51 +381,6 @@ impl LightningNode {
             .sign(|_| Ok::<RecoverableSignature, ()>(signature))
             .map_to_permanent_failure("Failed to sign invoice")?;
         Ok(signed_invoice.to_string())
-    }
-
-    // Not exposed in UDL. For intergration tests and example node use only.
-    pub fn sync_graph(&self) -> LipaResult<()> {
-        let last_sync_timestamp = self
-            .rapid_sync
-            .network_graph()
-            .get_last_rapid_gossip_sync_timestamp()
-            .unwrap_or(0);
-
-        let snapshot_contents =
-            reqwest::blocking::get(format!("{}{}", self.rgs_url, last_sync_timestamp))
-                .map_to_runtime_error(
-                    RuntimeErrorCode::RgsServiceUnavailable,
-                    "Failed to get response from RGS server",
-                )?
-                .error_for_status()
-                .map_to_runtime_error(
-                    RuntimeErrorCode::RgsServiceUnavailable,
-                    "The RGS server returned an error",
-                )?
-                .bytes()
-                .map_to_runtime_error(
-                    RuntimeErrorCode::RgsServiceUnavailable,
-                    "Failed to get the RGS server response as bytes",
-                )?
-                .to_vec();
-
-        match self.rapid_sync.update_network_graph(&snapshot_contents) {
-            Ok(new_timestamp) => info!(
-                "Successfully updated the network graph from timestamp {} to timestamp {}",
-                last_sync_timestamp, new_timestamp
-            ),
-            Err(e) => return match e {
-                GraphSyncError::DecodeError(e) => {
-                    Err(e).map_to_runtime_error(RuntimeErrorCode::RgsUpdateError, "Failed to decode a network graph update")
-                }
-                GraphSyncError::LightningError(e) => {
-                    Err(runtime_error(RuntimeErrorCode::RgsUpdateError,
-                        format!("Failed to apply a network graph update to the local graph: {} - Recommended action: {:?}", e.err, e.action),
-                    ))
-                }
-            },
-        };
-        Ok(())
     }
 
     pub fn decode_invoice(&self, invoice: String) -> LipaResult<InvoiceDetails> {

@@ -1,7 +1,7 @@
 mod setup;
 
 #[cfg(feature = "nigiri")]
-mod zero_conf_test {
+mod rapid_gossip_sync_test {
     use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
     use crate::setup::{nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
@@ -84,7 +84,7 @@ mod zero_conf_test {
             // wait for the RGS server to learn about the new channels (100 seconds isn't enough)
             sleep(Duration::from_secs(150));
 
-            node.sync_graph().unwrap();
+            node.foreground();
 
             info!("Restarting node..."); // to test that the graph is persisted and retrieved correctly
         } // Shut down the node
@@ -118,7 +118,8 @@ mod zero_conf_test {
             // wait for the RGS server to learn about the new channels (100 seconds isn't enough)
             sleep(Duration::from_secs(150));
 
-            node.sync_graph().unwrap();
+            node.foreground();
+
             info!("Restarting node..."); // to test that the graph is persisted and retrieved correctly
         } // Shut down the node
 

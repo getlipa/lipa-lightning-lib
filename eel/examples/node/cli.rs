@@ -1,5 +1,4 @@
 use bitcoin::secp256k1::PublicKey;
-use log::error;
 use std::io;
 use std::io::{BufRead, Write};
 
@@ -37,9 +36,6 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("Error: {}", message);
                     }
                 }
-                "syncgraph" => {
-                    sync_graph(node);
-                }
                 "decodeinvoice" => {
                     if let Err(message) = decode_invoice(node, &mut words) {
                         println!("Error: {}", message);
@@ -49,6 +45,12 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     if let Err(message) = pay_invoice(node, &mut words) {
                         println!("Error: {}", message);
                     }
+                }
+                "foreground" => {
+                    node.foreground();
+                }
+                "background" => {
+                    node.background();
                 }
                 "stop" => {
                     break;
@@ -60,12 +62,16 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
 }
 
 fn help() {
-    println!("invoice <amount in millisats> [description]");
     println!("nodeinfo");
     println!("lspfee");
-    println!("syncgraph");
+
+    println!("invoice <amount in millisats> [description]");
     println!("decodeinvoice");
     println!("payinvoice");
+
+    println!("foreground");
+    println!("background");
+
     println!("stop");
 }
 
@@ -126,13 +132,6 @@ fn create_invoice<'a>(
         .map_err(|e| e.to_string())?;
     println!("{}", invoice);
     Ok(())
-}
-
-fn sync_graph(node: &LightningNode) {
-    match node.sync_graph() {
-        Ok(_) => println!("Successfully synced the network graph"),
-        Err(e) => error!("Failed to sync the network graph: {:?}", e),
-    };
 }
 
 fn decode_invoice<'a>(
