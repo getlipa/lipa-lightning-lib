@@ -80,6 +80,9 @@ impl TaskManager {
         }
 
         // Update network graph.
+        // We regularly retry to update the network graph if it fails.
+        // After the first successful update, not further updates are tried
+        // until the app gets to the foreground again.
         if let Some(period) = periods.update_graph {
             self.task_handles.push(self.start_graph_update(period));
         }
