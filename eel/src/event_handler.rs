@@ -1,4 +1,4 @@
-use crate::callbacks::EventsCallback;
+use crate::interfaces;
 use crate::task_manager::TaskManager;
 use crate::types::ChannelManager;
 
@@ -10,19 +10,19 @@ use std::sync::{Arc, Mutex};
 pub(crate) struct LipaEventHandler {
     channel_manager: Arc<ChannelManager>,
     task_manager: Arc<Mutex<TaskManager>>,
-    events_callback: Box<dyn EventsCallback>,
+    user_event_handler: Box<dyn interfaces::EventHandler>,
 }
 
 impl LipaEventHandler {
     pub fn new(
         channel_manager: Arc<ChannelManager>,
         task_manager: Arc<Mutex<TaskManager>>,
-        events_callback: Box<dyn EventsCallback>,
+        user_event_handler: Box<dyn interfaces::EventHandler>,
     ) -> Self {
         Self {
             channel_manager,
             task_manager,
-            events_callback,
+            user_event_handler,
         }
     }
 }
@@ -100,7 +100,7 @@ impl EventHandler for LipaEventHandler {
                             amount_msat, payment_hash
                         );
                         // TODO: Handle unwrap()
-                        self.events_callback
+                        self.user_event_handler
                             .payment_received(payment_hash.0.to_hex(), amount_msat)
                             .unwrap();
                     }
@@ -129,7 +129,7 @@ impl EventHandler for LipaEventHandler {
                     fee_paid_msat,
                 );
                 // TODO: Handle unwrap()
-                self.events_callback
+                self.user_event_handler
                     .payment_sent(
                         payment_preimage.0.to_hex(),
                         payment_hash.0.to_hex(),
@@ -146,7 +146,7 @@ impl EventHandler for LipaEventHandler {
                     payment_hash.0.to_hex()
                 );
                 // TODO: Handle unwrap()
-                self.events_callback
+                self.user_event_handler
                     .payment_failed(payment_hash.0.to_hex())
                     .unwrap();
             }
@@ -191,7 +191,7 @@ impl EventHandler for LipaEventHandler {
                     reason
                 );
                 // TODO: Handle unwrap()
-                self.events_callback
+                self.user_event_handler
                     .channel_closed(channel_id.to_hex(), reason.to_string())
                     .unwrap();
             }

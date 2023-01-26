@@ -1,10 +1,10 @@
-use eel::callbacks::EventsCallback;
 use eel::errors::LipaResult;
+use eel::interfaces::EventHandler;
 use log::info;
 
 pub struct PrintEventsHandler {}
 
-impl EventsCallback for PrintEventsHandler {
+impl EventHandler for PrintEventsHandler {
     fn payment_received(&self, payment_hash: String, amount_msat: u64) -> LipaResult<()> {
         info!(
             "Received a payment! Value of {} milli satoshis and payment hash is {}",

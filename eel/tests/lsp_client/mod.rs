@@ -2,8 +2,8 @@ mod lspd {
     tonic::include_proto!("lspd");
 }
 
-use eel::callbacks::LspCallback;
 use eel::errors::LipaResult;
+use eel::interfaces::Lsp;
 use lspd::channel_opener_client::ChannelOpenerClient;
 use lspd::{ChannelInformationRequest, RegisterPaymentRequest};
 use prost::Message;
@@ -37,7 +37,7 @@ impl LspClient {
     }
 }
 
-impl LspCallback for LspClient {
+impl Lsp for LspClient {
     fn channel_information(&self) -> LipaResult<Vec<u8>> {
         let request = self.wrap_request(ChannelInformationRequest {
             pubkey: "".to_string(),

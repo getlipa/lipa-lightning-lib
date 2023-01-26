@@ -2,9 +2,9 @@
 
 extern crate core;
 
-pub mod callbacks;
 pub mod config;
 pub mod errors;
+pub mod interfaces;
 pub mod keys_manager;
 pub mod lsp;
 pub mod node_info;
@@ -29,7 +29,6 @@ mod tx_broadcaster;
 mod types;
 
 use crate::async_runtime::{AsyncRuntime, RepeatingTaskHandle};
-use crate::callbacks::{EventsCallback, LspCallback, RemoteStorageCallback};
 use crate::chain_access::LipaChainAccess;
 use crate::config::Config;
 use crate::confirm::ConfirmWrapper;
@@ -38,6 +37,7 @@ use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;
+use crate::interfaces::{EventHandler, Lsp, RemoteStorage};
 use crate::invoice::create_raw_invoice;
 pub use crate::invoice::InvoiceDetails;
 use crate::keys_manager::{generate_random_bytes, init_keys_manager};
@@ -104,9 +104,9 @@ impl LightningNode {
     #[allow(clippy::result_large_err)]
     pub fn new(
         config: &Config,
-        remote_storage_callback: Box<dyn RemoteStorageCallback>,
-        lsp_callback: Box<dyn LspCallback>,
-        events_callback: Box<dyn EventsCallback>,
+        remote_storage: Box<dyn RemoteStorage>,
+        lsp_client: Box<dyn Lsp>,
+        user_event_handler: Box<dyn EventHandler>,
     ) -> LipaResult<Self> {
         let rt = AsyncRuntime::new()?;
         let genesis_hash = genesis_block(config.network).header.block_hash();
@@ -127,7 +127,7 @@ impl LightningNode {
 
         // Step 4. Initialize Persist
         let persister = Arc::new(StoragePersister::new(
-            remote_storage_callback,
+            remote_storage,
             config.local_persistence_path.clone(),
         ));
         if !persister.check_health() {
@@ -258,7 +258,7 @@ impl LightningNode {
                 }
             });
 
-        let lsp_client = Arc::new(LspClient::new(lsp_callback));
+        let lsp_client = Arc::new(LspClient::new(lsp_client));
 
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),
@@ -273,7 +273,7 @@ impl LightningNode {
         let event_handler = Arc::new(LipaEventHandler::new(
             Arc::clone(&channel_manager),
             Arc::clone(&task_manager),
-            events_callback,
+            user_event_handler,
         ));
 
         // Step 16. Initialize the ProbabilisticScorer
@@ -420,7 +420,7 @@ impl LightningNode {
             Err(e) => {
                 return match e {
                     PaymentError::Invoice(e) => {
-                        Err(invalid_input(format!("Invalid invoice - {}", e)))
+                        Err(invalid_input(format!("Invalid invoice - {e}")))
                     }
                     PaymentError::Routing(e) => Err(runtime_error(
                         RuntimeErrorCode::NoRouteFound,
@@ -431,7 +431,7 @@ impl LightningNode {
                     )),
                     PaymentError::Sending(e) => Err(runtime_error(
                         RuntimeErrorCode::SendFailure,
-                        format!("Failed to send payment - {:?}", e),
+                        format!("Failed to send payment - {e:?}"),
                     )),
                 }
             }

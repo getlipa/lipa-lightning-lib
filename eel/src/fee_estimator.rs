@@ -86,7 +86,7 @@ fn get_ldk_estimate_from_esplora_estimates(
 ) -> LipaResult<u32> {
     let background_estimate = match esplora_estimates.get(confirm_in_blocks) {
         None => {
-            return Err(permanent_failure(format!("Failed to get fee estimates: Esplora didn't provide an estimate for confirmation in {} blocks", confirm_in_blocks)));
+            return Err(permanent_failure(format!("Failed to get fee estimates: Esplora didn't provide an estimate for confirmation in {confirm_in_blocks} blocks")));
         }
         Some(e) => e,
     };

@@ -3,9 +3,9 @@ mod lsp_client;
 #[path = "../print_events_handler/mod.rs"]
 mod print_event_handler;
 
-use eel::callbacks::RemoteStorageCallback;
 use eel::config::Config;
 use eel::errors::LipaResult;
+use eel::interfaces::RemoteStorage;
 use eel::keys_manager::generate_secret;
 use eel::LightningNode;
 use lsp_client::LspClient;
@@ -40,7 +40,7 @@ impl Default for StorageMock {
     }
 }
 
-impl RemoteStorageCallback for StorageMock {
+impl RemoteStorage for StorageMock {
     fn check_health(&self) -> bool {
         self.storage.check_health()
     }

@@ -1,11 +1,11 @@
 #![allow(clippy::let_unit_value)]
 
 mod callbacks;
-mod core_callback_impl;
+mod eel_interface_impl;
 mod native_logger;
 
 use crate::callbacks::{CallbackError, EventsCallback, LspCallback};
-use crate::core_callback_impl::{EventsImpl, LspImpl, StorageMock};
+use crate::eel_interface_impl::{EventsImpl, LspImpl, RemoteStorageMock};
 use eel::config::Config;
 use eel::errors::{LipaError, LipaResult, RuntimeErrorCode};
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
@@ -29,15 +29,11 @@ impl LightningNode {
         lsp_callback: Box<dyn LspCallback>,
         events_callback: Box<dyn EventsCallback>,
     ) -> LipaResult<Self> {
-        let remote_storage_callback = Box::new(StorageMock::new(Arc::new(Storage::new())));
-        let lsp_callback = Box::new(LspImpl { lsp_callback });
-        let events_callback = Box::new(EventsImpl { events_callback });
-        let core_node = eel::LightningNode::new(
-            config,
-            remote_storage_callback,
-            lsp_callback,
-            events_callback,
-        )?;
+        let remote_storage = Box::new(RemoteStorageMock::new(Arc::new(Storage::new())));
+        let lsp_client = Box::new(LspImpl { lsp_callback });
+        let user_event_handler = Box::new(EventsImpl { events_callback });
+        let core_node =
+            eel::LightningNode::new(config, remote_storage, lsp_client, user_event_handler)?;
         Ok(LightningNode { core_node })
     }
 
