@@ -1,5 +1,5 @@
 use eel::errors::{LipaResult, MapToLipaError};
-use eel::interfaces::{EventHandler, Lsp, RemoteStorage};
+use eel::interfaces::{EventHandler, RemoteStorage};
 use std::sync::Arc;
 use storage_mock::Storage;
 
@@ -45,24 +45,6 @@ impl RemoteStorage for RemoteStorageMock {
     fn delete_object(&self, bucket: String, key: String) -> LipaResult<()> {
         self.storage.delete_object(bucket, key);
         Ok(())
-    }
-}
-
-pub(crate) struct LspImpl {
-    pub lsp_callback: Box<dyn crate::callbacks::LspCallback>,
-}
-
-impl Lsp for LspImpl {
-    fn channel_information(&self) -> LipaResult<Vec<u8>> {
-        self.lsp_callback
-            .channel_information()
-            .map_to_permanent_failure("LSP callback failed")
-    }
-
-    fn register_payment(&self, encrypted_payment_info_blob: Vec<u8>) -> LipaResult<()> {
-        self.lsp_callback
-            .register_payment(encrypted_payment_info_blob)
-            .map_to_permanent_failure("LSP callback failed")
     }
 }
 

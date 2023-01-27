@@ -45,6 +45,8 @@ dictionary Config {
     sequence<u8> seed;
     string esplora_api_url;
     string rgs_url;
+    string lsp_url;
+    string lsp_token;
     string local_persistence_path;
 };
 
@@ -149,7 +151,7 @@ dictionary InvoiceDetails {
 interface LightningNode {
     // Initiate the Lightning node and let it run in a background thread
     [Throws=LipaError]
-    constructor([ByRef] Config config, LspCallback lsp_callback, EventsCallback events_callback);
+    constructor(Config config, EventsCallback events_callback);
 
     // Request some basic info about the local node
     NodeInfo get_node_info();
@@ -215,21 +217,6 @@ dictionary LspFee {
   u64 channel_minimum_fee_msat;
   // Parts per myriad (aka basis points) -> 100 is 1%
   u64 channel_fee_permyriad;
-};
-
-// Callback interface for the Lightning Service Provider (LSP) to be implemented by the library consumer.
-// The implementation of the callback consists of building the appropriate LSPD requests, sending them to the
-// respective lipa backend endpoints, and return the response, if any.
-callback interface LspCallback {
-    // Make a ChannelInformationRequest to the ChannelInformation endpoint. The pubkey field should be set empty.
-    // The response to the request should be returned as a byte sequence.
-    [Throws=CallbackError]
-    sequence<u8> channel_information();
-
-    // Make a RegisterPaymentRequest to the RegisterPayment endpoint. The body of the request should be set with
-    //      the provided encrypted_payment_info_blob.
-    [Throws=CallbackError]
-    void register_payment(sequence<u8> encrypted_payment_info_blob);
 };
 
 enum LogLevel {
