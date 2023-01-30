@@ -6,6 +6,7 @@ use esplora_client::blocking::BlockingClient;
 use esplora_client::Builder;
 use esplora_client::TxStatus;
 use log::error;
+use perro::MapToError;
 
 static ESPLORA_TIMEOUT_SECS: u64 = 30;
 
@@ -22,7 +23,7 @@ pub(crate) struct ConfirmedTransaction {
 }
 
 impl EsploraClient {
-    pub fn new(url: &str) -> LipaResult<Self> {
+    pub fn new(url: &str) -> Result<Self> {
         let builder = Builder::new(url).timeout(ESPLORA_TIMEOUT_SECS);
         Ok(Self {
             client: builder.build_blocking().map_to_runtime_error(
@@ -32,7 +33,7 @@ impl EsploraClient {
         })
     }
 
-    fn get_height_by_hash(&self, hash: &BlockHash) -> LipaResult<Option<u32>> {
+    fn get_height_by_hash(&self, hash: &BlockHash) -> Result<Option<u32>> {
         // TODO: Shouldn't we handle `esplora_client::Error::HeaderHashNotFound`?
         Ok(self
             .client
@@ -44,7 +45,7 @@ impl EsploraClient {
             .height)
     }
 
-    pub fn is_tx_confirmed(&self, txid: &Txid) -> LipaResult<bool> {
+    pub fn is_tx_confirmed(&self, txid: &Txid) -> Result<bool> {
         Ok(self
             .client
             .get_tx_status(txid)
@@ -58,7 +59,7 @@ impl EsploraClient {
     pub fn get_header_with_height(
         &self,
         block_hash: &BlockHash,
-    ) -> LipaResult<Option<(BlockHeader, u32)>> {
+    ) -> Result<Option<(BlockHeader, u32)>> {
         if let Some(height) = self.get_height_by_hash(block_hash)? {
             let header = self
                 .client
@@ -73,7 +74,7 @@ impl EsploraClient {
         Ok(None)
     }
 
-    pub fn get_confirmed_tx_by_id(&self, txid: &Txid) -> LipaResult<Option<ConfirmedTransaction>> {
+    pub fn get_confirmed_tx_by_id(&self, txid: &Txid) -> Result<Option<ConfirmedTransaction>> {
         if let Some(tx_status) = self.client.get_tx_status(txid).map_to_runtime_error(
             RuntimeErrorCode::EsploraServiceUnavailable,
             "Esplora failed to get tx status",
@@ -88,7 +89,7 @@ impl EsploraClient {
         &self,
         txid: &Txid,
         index: u64,
-    ) -> LipaResult<Option<ConfirmedTransaction>> {
+    ) -> Result<Option<ConfirmedTransaction>> {
         if let Some(output_status) = self
             .client
             .get_output_status(txid, index)
@@ -115,7 +116,7 @@ impl EsploraClient {
         &self,
         txid: &Txid,
         tx_status: &TxStatus,
-    ) -> LipaResult<Option<ConfirmedTransaction>> {
+    ) -> Result<Option<ConfirmedTransaction>> {
         if tx_status.confirmed {
             if let (Some(block_hash), Some(block_height)) =
                 (tx_status.block_hash, tx_status.block_height)
@@ -160,21 +161,21 @@ impl EsploraClient {
         Ok(None)
     }
 
-    pub fn get_tip_hash(&self) -> LipaResult<BlockHash> {
+    pub fn get_tip_hash(&self) -> Result<BlockHash> {
         self.client.get_tip_hash().map_to_runtime_error(
             RuntimeErrorCode::EsploraServiceUnavailable,
             "Esplora failed to get tip hash",
         )
     }
 
-    pub fn broadcast(&self, tx: &Transaction) -> LipaResult<()> {
+    pub fn broadcast(&self, tx: &Transaction) -> Result<()> {
         self.client.broadcast(tx).map_to_runtime_error(
             RuntimeErrorCode::EsploraServiceUnavailable,
             "Esplora failed to broadcast tx",
         )
     }
 
-    pub fn get_fee_estimates(&self) -> LipaResult<HashMap<String, f64>> {
+    pub fn get_fee_estimates(&self) -> Result<HashMap<String, f64>> {
         self.client.get_fee_estimates().map_to_runtime_error(
             RuntimeErrorCode::EsploraServiceUnavailable,
             "Esplora failed to get fee estimates",

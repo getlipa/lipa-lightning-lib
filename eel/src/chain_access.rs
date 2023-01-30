@@ -38,7 +38,7 @@ impl LipaChainAccess {
         }
     }
 
-    pub(crate) fn sync(&mut self, confirm: &ConfirmWrapper) -> LipaResult<()> {
+    pub(crate) fn sync(&mut self, confirm: &ConfirmWrapper) -> Result<()> {
         loop {
             let tip = self.esplora.get_tip_hash()?;
             let something_new_to_watch = match self.filter.drain() {
@@ -70,11 +70,7 @@ impl LipaChainAccess {
         Ok(())
     }
 
-    fn try_sync_to(
-        &mut self,
-        tip_hash: BlockHash,
-        confirm: &ConfirmWrapper,
-    ) -> LipaResult<SyncResult> {
+    fn try_sync_to(&mut self, tip_hash: BlockHash, confirm: &ConfirmWrapper) -> Result<SyncResult> {
         let (tip_header, tip_height) = match self.esplora.get_header_with_height(&tip_hash)? {
             Some(tip) => tip,
             None => {
@@ -123,7 +119,7 @@ impl LipaChainAccess {
         Ok(SyncResult::Success)
     }
 
-    fn filter_unconfirmed(&self, txids: Vec<(Txid, Option<BlockHash>)>) -> LipaResult<Vec<Txid>> {
+    fn filter_unconfirmed(&self, txids: Vec<(Txid, Option<BlockHash>)>) -> Result<Vec<Txid>> {
         let mut uncofirmed = Vec::new();
         for (txid, _block_hash) in txids {
             if !self.esplora.is_tx_confirmed(&txid)? {
@@ -136,7 +132,7 @@ impl LipaChainAccess {
     fn split_txs_by_status(
         &self,
         txids: HashSet<Txid>,
-    ) -> LipaResult<(Vec<ConfirmedTransaction>, Vec<Txid>)> {
+    ) -> Result<(Vec<ConfirmedTransaction>, Vec<Txid>)> {
         let mut confirmed = Vec::new();
         let mut pending = Vec::new();
 
@@ -157,7 +153,7 @@ impl LipaChainAccess {
     fn get_spent_outputs(
         &self,
         outputs: &HashSet<WatchedOutput>,
-    ) -> LipaResult<Vec<ConfirmedTransaction>> {
+    ) -> Result<Vec<ConfirmedTransaction>> {
         let mut spent_outputs = Vec::new();
         for output in outputs {
             if let Some(tx) = self

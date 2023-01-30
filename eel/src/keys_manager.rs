@@ -1,14 +1,15 @@
-use crate::errors::*;
+use crate::errors::Result;
 use crate::secret::Secret;
 
 use bdk::keys::bip39::Mnemonic;
 use lightning::chain::keysinterface::KeysManager;
+use perro::{invalid_input, MapToError};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::str::FromStr;
 use std::time::SystemTime;
 
-pub(crate) fn init_keys_manager(seed: &Vec<u8>) -> LipaResult<KeysManager> {
+pub(crate) fn init_keys_manager(seed: &Vec<u8>) -> Result<KeysManager> {
     if seed.len() != 32 {
         return Err(invalid_input("Seed must have 32 bytes"));
     }
@@ -20,7 +21,7 @@ pub(crate) fn init_keys_manager(seed: &Vec<u8>) -> LipaResult<KeysManager> {
     Ok(KeysManager::new(&array, now.as_secs(), now.subsec_nanos()))
 }
 
-pub(crate) fn generate_random_bytes<const N: usize>() -> LipaResult<[u8; N]> {
+pub(crate) fn generate_random_bytes<const N: usize>() -> Result<[u8; N]> {
     let mut bytes = [0u8; N];
     OsRng
         .try_fill_bytes(&mut bytes)
@@ -28,7 +29,7 @@ pub(crate) fn generate_random_bytes<const N: usize>() -> LipaResult<[u8; N]> {
     Ok(bytes)
 }
 
-pub fn generate_secret(passphrase: String) -> LipaResult<Secret> {
+pub fn generate_secret(passphrase: String) -> Result<Secret> {
     let entropy = generate_random_bytes::<32>()?;
     let mnemonic =
         Mnemonic::from_entropy(&entropy).map_to_permanent_failure("Failed to mnemonic")?;
@@ -36,7 +37,7 @@ pub fn generate_secret(passphrase: String) -> LipaResult<Secret> {
     Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
 }
 
-pub fn mnemonic_to_secret(mnemonic_string: Vec<String>, passphrase: String) -> LipaResult<Secret> {
+pub fn mnemonic_to_secret(mnemonic_string: Vec<String>, passphrase: String) -> Result<Secret> {
     let mnemonic =
         Mnemonic::from_str(&mnemonic_string.join(" ")).map_to_invalid_input("Invalid mnemonic")?;
 

@@ -5,6 +5,7 @@ use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, BlockSizeUser, KeyIvIni
 use bitcoin::hashes::{sha256, sha512, Hash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::scalar::Scalar;
 use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
+use perro::{MapToError, ResultTrait};
 use std::array::TryFromSliceError;
 
 const CIPH_CURVE_BYTES: [u8; 2] = [0x02, 0xCA]; // 0x02CA = 714
@@ -15,7 +16,7 @@ type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 // Implements Encrypt() from btcsuite/btcd
 // https://pkg.go.dev/github.com/btcsuite/btcd/btcec#Encrypt
 // https://github.com/btcsuite/btcd/blob/v0.22.1/btcec/ciphering.go#L70
-pub(crate) fn encrypt(pubkey: &PublicKey, data: &[u8]) -> LipaResult<Vec<u8>> {
+pub(crate) fn encrypt(pubkey: &PublicKey, data: &[u8]) -> Result<Vec<u8>> {
     let secp = Secp256k1::new();
     let (ephemeral, ephemeral_pubkey) = secp.generate_keypair(&mut rand::thread_rng());
     let init_vector = generate_random_bytes::<16>()?.to_vec();
@@ -38,7 +39,7 @@ fn encrypt_with_randomness(
     pubkey: &PublicKey,
     data: &[u8],
     randomness: &Randomness,
-) -> LipaResult<Vec<u8>> {
+) -> Result<Vec<u8>> {
     let shared_secret = generate_shared_secret(randomness.ephemeral, pubkey)
         .prefix_error("Shared secret generation failed")?;
     let key_encrypt = &shared_secret[..32];
@@ -66,7 +67,7 @@ fn encrypt_with_randomness(
     Ok(result)
 }
 
-fn generate_shared_secret(privkey: SecretKey, pubkey: &PublicKey) -> LipaResult<[u8; 64]> {
+fn generate_shared_secret(privkey: SecretKey, pubkey: &PublicKey) -> Result<[u8; 64]> {
     // Unfortunately we cannot use secp256k1::ecdh::SharedSecret, because it uses
     // sha256, but we need sha512.
 
@@ -78,7 +79,8 @@ fn generate_shared_secret(privkey: SecretKey, pubkey: &PublicKey) -> LipaResult<
         .map_to_permanent_failure("Multiplication failed")?;
     // https://github.com/bitcoin-core/secp256k1/blob/master/src/eckey_impl.h#L43
     let x_coordinate = &tweaked_pubkey.serialize()[1..33];
-    let hash: Result<[u8; 64], TryFromSliceError> = sha512::Hash::hash(x_coordinate)[..].try_into();
+    let hash: std::result::Result<[u8; 64], TryFromSliceError> =
+        sha512::Hash::hash(x_coordinate)[..].try_into();
     hash.map_to_permanent_failure("Sha512 returned less than 64 bytes")
 }
 

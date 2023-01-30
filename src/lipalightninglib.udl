@@ -124,7 +124,7 @@ enum RuntimeErrorCode {
 };
 
 [Error]
-interface LipaError {
+interface LnError {
     // Invalid input.
     // Consider fixing the input and retrying the request.
     InvalidInput(string msg);
@@ -150,25 +150,25 @@ dictionary InvoiceDetails {
 
 interface LightningNode {
     // Initiate the Lightning node and let it run in a background thread
-    [Throws=LipaError]
+    [Throws=LnError]
     constructor(Config config, EventsCallback events_callback);
 
     // Request some basic info about the local node
     NodeInfo get_node_info();
 
     // Get information about the fee charged by the LSP for opening new channels
-    [Throws=LipaError]
+    [Throws=LnError]
     LspFee query_lsp_fee();
 
     // Create an invoice to receive a payment with:
     //    - amount_msat - the smallest amount of millisats required for the node to accept the incoming payment (sender will have to pay fees on top of that amount)
     //    - description - a description to be embedded into the created invoice
-    [Throws=LipaError]
+    [Throws=LnError]
     string create_invoice(u64 amount_msat, string description);
 
     // Validates and, if valid, decodes an invoice returning detailed information
     //    - invoice - a BOLT-11 invoice (normally starts with lnbc)
-    [Throws=LipaError]
+    [Throws=LnError]
     InvoiceDetails decode_invoice(string invoice);
 
     // Starts an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.
@@ -176,7 +176,7 @@ interface LightningNode {
     // After this method returns, the consumer of this library will learn about a successful/failed payment through the
     // callbacks `payment_sent()` and `payment_failed()` in `EventsCallback`.
     //    - invoice - a BOLT-11 invoice (normally starts with lnbc)
-    [Throws=LipaError]
+    [Throws=LnError]
     void pay_invoice(string invoice);
 
     // Call the method when the app goes foreground, such that the user can interact with it.
@@ -254,10 +254,10 @@ namespace lipalightninglib {
     void init_native_logger_once(LogLevel min_level);
 
     // Generate a new mnemonic with an optional passphrase. Provide an empty string to use no passphrase.
-    [Throws=LipaError]
+    [Throws=LnError]
     Secret generate_secret(string passphrase);
 
     // Generate a Secret object (containing the seed). Provide an empty string to use no passphrase.
-    [Throws=LipaError]
+    [Throws=LnError]
     Secret mnemonic_to_secret(sequence<string> mnemonic_string, string passphrase);
 };

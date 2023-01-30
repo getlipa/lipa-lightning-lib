@@ -3,6 +3,7 @@ use crate::types::RapidGossipSync;
 
 use lightning_rapid_gossip_sync::GraphSyncError;
 use log::info;
+use perro::{runtime_error, MapToError};
 use reqwest::blocking::Client;
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,7 +15,7 @@ pub(crate) struct RapidSyncClient {
 }
 
 impl RapidSyncClient {
-    pub fn new(rgs_url: String, rapid_sync: Arc<RapidGossipSync>) -> LipaResult<Self> {
+    pub fn new(rgs_url: String, rapid_sync: Arc<RapidGossipSync>) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
@@ -26,7 +27,7 @@ impl RapidSyncClient {
         })
     }
 
-    pub fn sync(&self) -> LipaResult<()> {
+    pub fn sync(&self) -> Result<()> {
         let last_sync_timestamp = self
             .rapid_sync
             .network_graph()

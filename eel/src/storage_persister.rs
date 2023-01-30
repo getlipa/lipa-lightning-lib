@@ -22,6 +22,7 @@ use lightning::util::persist::Persister;
 use lightning::util::ser::ReadableArgs;
 use lightning_persister::FilesystemPersister;
 use log::{debug, error};
+use perro::MapToError;
 use std::fs;
 use std::io::{BufReader, Error};
 use std::ops::Deref;
@@ -56,7 +57,7 @@ impl StoragePersister {
     pub fn read_channel_monitors<Signer: Sign, K: Deref>(
         &self,
         keys_manager: K,
-    ) -> LipaResult<Vec<(BlockHash, ChannelMonitor<Signer>)>>
+    ) -> Result<Vec<(BlockHash, ChannelMonitor<Signer>)>>
     where
         K::Target: KeysInterface<Signer = Signer> + Sized,
     {
@@ -105,7 +106,7 @@ impl StoragePersister {
         channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>>,
         user_config: UserConfig,
         chain_params: ChainParameters,
-    ) -> LipaResult<(Option<BlockHash>, SimpleArcChannelManager<M, T, F, L>)>
+    ) -> Result<(Option<BlockHash>, SimpleArcChannelManager<M, T, F, L>)>
     where
         M: Watch<InMemorySigner>,
         T: BroadcasterInterface,
@@ -204,7 +205,7 @@ impl StoragePersister {
         &self,
         genesis_hash: BlockHash,
         logger: Arc<LightningLogger>,
-    ) -> LipaResult<NetworkGraph<Arc<LightningLogger>>> {
+    ) -> Result<NetworkGraph<Arc<LightningLogger>>> {
         let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(GRAPH_KEY));
 
         if let Ok(file) = fs::File::open(&path) {
@@ -225,7 +226,7 @@ impl StoragePersister {
         &self,
         graph: Arc<NetworkGraph<Arc<LightningLogger>>>,
         logger: Arc<LightningLogger>,
-    ) -> LipaResult<Scorer> {
+    ) -> Result<Scorer> {
         let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(SCORER_KEY));
 
         let params = ProbabilisticScoringParameters::default();
@@ -290,21 +291,21 @@ where
     fn persist_manager(
         &self,
         channel_manager: &lightning::ln::channelmanager::ChannelManager<M, T, K, F, L>,
-    ) -> Result<(), Error> {
+    ) -> std::result::Result<(), Error> {
         <FilesystemPersister as Persister<'_, M, T, K, F, L, S>>::persist_manager(
             &self.fs_persister,
             channel_manager,
         )
     }
 
-    fn persist_graph(&self, network_graph: &NetworkGraph<L>) -> Result<(), Error> {
+    fn persist_graph(&self, network_graph: &NetworkGraph<L>) -> std::result::Result<(), Error> {
         <FilesystemPersister as Persister<'_, M, T, K, F, L, S>>::persist_graph(
             &self.fs_persister,
             network_graph,
         )
     }
 
-    fn persist_scorer(&self, scorer: &S) -> Result<(), Error> {
+    fn persist_scorer(&self, scorer: &S) -> std::result::Result<(), Error> {
         <FilesystemPersister as Persister<'_, M, T, K, F, L, S>>::persist_scorer(
             &self.fs_persister,
             scorer,

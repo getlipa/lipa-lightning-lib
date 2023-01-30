@@ -2,10 +2,11 @@ mod lspd {
     tonic::include_proto!("lspd");
 }
 
-use crate::errors::{LipaResult, MapToLipaError, RuntimeErrorCode};
+use crate::errors::{Result, RuntimeErrorCode};
 use crate::interfaces::Lsp;
 use lspd::channel_opener_client::ChannelOpenerClient;
 use lspd::{ChannelInformationRequest, RegisterPaymentRequest};
+use perro::MapToError;
 use prost::Message;
 use tokio::runtime::{Builder, Runtime};
 use tonic::metadata::{Ascii, MetadataValue};
@@ -18,7 +19,7 @@ pub struct LspClient {
 }
 
 impl LspClient {
-    pub fn new(address: String, auth_token: String) -> LipaResult<Self> {
+    pub fn new(address: String, auth_token: String) -> Result<Self> {
         let bearer = format!("Bearer {auth_token}")
             .parse()
             .map_to_invalid_input("Invalid LSP auth token")?;
@@ -43,7 +44,7 @@ impl LspClient {
 }
 
 impl Lsp for LspClient {
-    fn channel_information(&self) -> LipaResult<Vec<u8>> {
+    fn channel_information(&self) -> Result<Vec<u8>> {
         let request = self.wrap_request(ChannelInformationRequest {
             pubkey: "".to_string(),
         });
@@ -65,7 +66,7 @@ impl Lsp for LspClient {
             .encode_to_vec())
     }
 
-    fn register_payment(&self, blob: Vec<u8>) -> LipaResult<()> {
+    fn register_payment(&self, blob: Vec<u8>) -> Result<()> {
         let request = self.wrap_request(RegisterPaymentRequest { blob });
         let mut client = self
             .rt

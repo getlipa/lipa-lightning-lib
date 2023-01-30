@@ -1,8 +1,9 @@
-use crate::errors::{permanent_failure, LipaResult};
+use crate::errors::Result;
 use crate::esplora_client::EsploraClient;
 use bitcoin::Network;
 use lightning::chain::chaininterface::{ConfirmationTarget, FeeEstimator as LdkFeeEstimator};
 use log::debug;
+use perro::permanent_failure;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
@@ -45,7 +46,7 @@ impl FeeEstimator {
         }
     }
 
-    pub fn poll_updates(&self) -> LipaResult<()> {
+    pub fn poll_updates(&self) -> Result<()> {
         if self.network != Network::Bitcoin {
             return Ok(());
         }
@@ -83,7 +84,7 @@ impl FeeEstimator {
 fn get_ldk_estimate_from_esplora_estimates(
     esplora_estimates: &HashMap<String, f64>,
     confirm_in_blocks: &str,
-) -> LipaResult<u32> {
+) -> Result<u32> {
     let background_estimate = match esplora_estimates.get(confirm_in_blocks) {
         None => {
             return Err(permanent_failure(format!("Failed to get fee estimates: Esplora didn't provide an estimate for confirmation in {confirm_in_blocks} blocks")));

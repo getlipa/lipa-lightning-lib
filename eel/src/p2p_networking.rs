@@ -1,7 +1,8 @@
-use crate::errors::*;
+use crate::errors::{Result, RuntimeErrorCode};
 use crate::PeerManager;
 use bitcoin::secp256k1::PublicKey;
 use log::{debug, trace};
+use perro::{runtime_error, OptionToError};
 use std::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -9,7 +10,7 @@ use std::task::Poll;
 use std::time::Duration;
 use tokio::time::sleep;
 
-pub(crate) async fn connect_peer(peer: &LnPeer, peer_manager: Arc<PeerManager>) -> LipaResult<()> {
+pub(crate) async fn connect_peer(peer: &LnPeer, peer_manager: Arc<PeerManager>) -> Result<()> {
     if is_connected(peer, &peer_manager) {
         trace!("Peer {} is already connected", peer.pub_key);
         return Ok(());
