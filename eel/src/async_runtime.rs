@@ -1,5 +1,6 @@
-use crate::errors::{LipaResult, MapToLipaError};
+use crate::errors::Result;
 use core::future::Future;
+use perro::MapToError;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -15,7 +16,7 @@ pub(crate) struct Handle {
 }
 
 impl AsyncRuntime {
-    pub fn new() -> LipaResult<Self> {
+    pub fn new() -> Result<Self> {
         let rt = Builder::new_multi_thread()
             .worker_threads(4)
             .thread_name("3l-async-runtime")

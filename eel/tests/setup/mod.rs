@@ -4,7 +4,6 @@ mod mocked_remote_storate;
 mod print_event_handler;
 
 use eel::config::Config;
-use eel::errors::LipaResult;
 use eel::keys_manager::generate_secret;
 use eel::lsp_client::LspClient;
 use eel::LightningNode;
@@ -50,7 +49,7 @@ impl NodeHandle {
         NodeHandle { config, storage }
     }
 
-    pub fn start(&self) -> LipaResult<LightningNode> {
+    pub fn start(&self) -> eel::errors::Result<LightningNode> {
         let lsp_address = "http://127.0.0.1:6666".to_string();
         let lsp_auth_token =
             "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();

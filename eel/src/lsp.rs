@@ -4,7 +4,7 @@ pub mod lspd {
 }
 
 use crate::encryption::encrypt;
-use crate::errors::*;
+use crate::errors::{Result, RuntimeErrorCode};
 use crate::interfaces::Lsp;
 
 use bitcoin::hashes::hex::FromHex;
@@ -13,6 +13,7 @@ use lightning::ln::{PaymentHash, PaymentSecret};
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::RouteHintHop;
 use lspd::{ChannelInformationReply, PaymentInformation};
+use perro::{invalid_input, MapToError, ResultTrait};
 use prost::Message;
 use std::cmp::max;
 use std::net::SocketAddr;
@@ -57,7 +58,7 @@ impl LspClient {
         Self { lsp }
     }
 
-    pub fn query_info(&self) -> LipaResult<LspInfo> {
+    pub fn query_info(&self) -> Result<LspInfo> {
         let response = self.lsp.channel_information().map_to_runtime_error(
             RuntimeErrorCode::LspServiceUnavailable,
             "Failed to contact LSP",
@@ -69,7 +70,7 @@ impl LspClient {
         &self,
         payment_request: &PaymentRequest,
         lsp_info: &LspInfo,
-    ) -> LipaResult<RouteHintHop> {
+    ) -> Result<RouteHintHop> {
         let fee_msat = calculate_fee(payment_request.amount_msat, &lsp_info.fee);
         if fee_msat > payment_request.amount_msat {
             return Err(invalid_input("Payment amount must be bigger than fees"));
@@ -104,7 +105,7 @@ impl LspClient {
     }
 }
 
-fn parse_lsp_info(bytes: &[u8]) -> LipaResult<LspInfo> {
+fn parse_lsp_info(bytes: &[u8]) -> Result<LspInfo> {
     let info = ChannelInformationReply::decode(bytes)
         .map_to_invalid_input("Invalid ChannelInformationReply")?;
 

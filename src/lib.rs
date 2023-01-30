@@ -8,7 +8,7 @@ mod native_logger;
 use crate::callbacks::{CallbackError, EventsCallback};
 use crate::config::Config;
 use crate::eel_interface_impl::{EventsImpl, RemoteStorageMock};
-use eel::errors::{LipaError, LipaResult, RuntimeErrorCode};
+use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
 use eel::lsp::LspFee;
 use eel::lsp_client::LspClient;
@@ -26,7 +26,7 @@ pub struct LightningNode {
 }
 
 impl LightningNode {
-    pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> LipaResult<Self> {
+    pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         let eel_config = eel::config::Config {
             network: config.network,
             seed: config.seed,
@@ -46,19 +46,19 @@ impl LightningNode {
         self.core_node.get_node_info()
     }
 
-    pub fn query_lsp_fee(&self) -> LipaResult<LspFee> {
+    pub fn query_lsp_fee(&self) -> Result<LspFee> {
         self.core_node.query_lsp_fee()
     }
 
-    pub fn create_invoice(&self, amount_msat: u64, description: String) -> LipaResult<String> {
+    pub fn create_invoice(&self, amount_msat: u64, description: String) -> Result<String> {
         self.core_node.create_invoice(amount_msat, description)
     }
 
-    pub fn decode_invoice(&self, invoice: String) -> LipaResult<InvoiceDetails> {
+    pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
         self.core_node.decode_invoice(invoice)
     }
 
-    pub fn pay_invoice(&self, invoice: String) -> LipaResult<()> {
+    pub fn pay_invoice(&self, invoice: String) -> Result<()> {
         self.core_node.pay_invoice(invoice)
     }
 

@@ -67,6 +67,10 @@ use lightning_invoice::payment::{PaymentError, Retry};
 use lightning_invoice::{Currency, Invoice, InvoiceDescription};
 pub use log::Level as LogLevel;
 use log::{info, warn};
+pub use perro::{
+    invalid_input, permanent_failure, runtime_error, MapToError, MapToErrorForUnitType,
+    OptionToError,
+};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -107,7 +111,7 @@ impl LightningNode {
         remote_storage: Box<dyn RemoteStorage>,
         lsp_client: Box<dyn Lsp>,
         user_event_handler: Box<dyn EventHandler>,
-    ) -> LipaResult<Self> {
+    ) -> Result<Self> {
         let rt = AsyncRuntime::new()?;
         let genesis_hash = genesis_block(config.network).header.block_hash();
 
@@ -315,7 +319,7 @@ impl LightningNode {
         }
     }
 
-    pub fn query_lsp_fee(&self) -> LipaResult<LspFee> {
+    pub fn query_lsp_fee(&self) -> Result<LspFee> {
         let lsp_info = self
             .task_manager
             .lock()
@@ -328,7 +332,7 @@ impl LightningNode {
         Ok(lsp_info.fee)
     }
 
-    pub fn create_invoice(&self, amount_msat: u64, description: String) -> LipaResult<String> {
+    pub fn create_invoice(&self, amount_msat: u64, description: String) -> Result<String> {
         let currency = match self.network {
             Network::Bitcoin => Currency::Bitcoin,
             Network::Testnet => Currency::BitcoinTestnet,
@@ -356,7 +360,7 @@ impl LightningNode {
         Ok(signed_invoice.to_string())
     }
 
-    pub fn decode_invoice(&self, invoice: String) -> LipaResult<InvoiceDetails> {
+    pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
         let invoice = Self::parse_validate_invoice(self, &invoice)?;
 
         let description = match invoice.description() {
@@ -379,7 +383,7 @@ impl LightningNode {
         })
     }
 
-    pub fn pay_invoice(&self, invoice: String) -> LipaResult<()> {
+    pub fn pay_invoice(&self, invoice: String) -> Result<()> {
         let invoice = Self::parse_validate_invoice(self, &invoice)?;
 
         let amount_msat = invoice
@@ -426,7 +430,7 @@ impl LightningNode {
             .restart(BACKGROUND_PERIODS);
     }
 
-    fn parse_validate_invoice(&self, invoice: &str) -> LipaResult<Invoice> {
+    fn parse_validate_invoice(&self, invoice: &str) -> Result<Invoice> {
         let invoice = Invoice::from_str(Self::chomp_prefix(invoice.trim()))
             .map_to_invalid_input("Invalid invoice - parse failure")?;
 
@@ -502,7 +506,7 @@ fn init_peer_manager(
     channel_manager: Arc<ChannelManager>,
     keys_manager: &KeysManager,
     logger: Arc<LightningLogger>,
-) -> LipaResult<PeerManager> {
+) -> Result<PeerManager> {
     let ephemeral_bytes = generate_random_bytes::<32>()
         .map_to_permanent_failure("Failed to generate random bytes")?;
     let our_node_secret = keys_manager

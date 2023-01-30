@@ -1,5 +1,6 @@
-use eel::errors::{runtime_error, LipaError, LipaResult, RuntimeErrorCode};
+use eel::errors::{Error, Result, RuntimeErrorCode};
 use eel::interfaces::RemoteStorage;
+use perro::runtime_error;
 use rand::Rng;
 use std::sync::Arc;
 use std::thread::sleep;
@@ -48,7 +49,7 @@ impl MockedRemoteStorage {
         self.config.available = false;
     }
 
-    fn emulate_availability(&self) -> LipaResult<()> {
+    fn emulate_availability(&self) -> Result<()> {
         self.wait_delay();
 
         if !self.config.available {
@@ -72,36 +73,36 @@ impl RemoteStorage for MockedRemoteStorage {
         self.storage.check_health()
     }
 
-    fn list_objects(&self, bucket: String) -> LipaResult<Vec<String>> {
+    fn list_objects(&self, bucket: String) -> Result<Vec<String>> {
         self.emulate_availability()?;
         Ok(self.storage.list_objects(bucket))
     }
 
-    fn object_exists(&self, bucket: String, key: String) -> LipaResult<bool> {
+    fn object_exists(&self, bucket: String, key: String) -> Result<bool> {
         self.emulate_availability()?;
         Ok(self.storage.object_exists(bucket, key))
     }
 
-    fn get_object(&self, bucket: String, key: String) -> LipaResult<Vec<u8>> {
+    fn get_object(&self, bucket: String, key: String) -> Result<Vec<u8>> {
         self.emulate_availability()?;
         Ok(self.storage.get_object(bucket, key))
     }
 
-    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> LipaResult<()> {
+    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> Result<()> {
         self.emulate_availability()?;
         emulate_reliability(self.config.put_availability_percent)?;
         self.storage.put_object(bucket, key, value);
         Ok(())
     }
 
-    fn delete_object(&self, bucket: String, key: String) -> LipaResult<()> {
+    fn delete_object(&self, bucket: String, key: String) -> Result<()> {
         self.emulate_availability()?;
         self.storage.delete_object(bucket, key);
         Ok(())
     }
 }
 
-fn emulate_reliability(reliability_percent: u8) -> LipaResult<()> {
+fn emulate_reliability(reliability_percent: u8) -> Result<()> {
     let random_value: u8 = rand::thread_rng().gen_range(0..101);
     if random_value > reliability_percent {
         return Err(get_emulated_error());
@@ -109,7 +110,7 @@ fn emulate_reliability(reliability_percent: u8) -> LipaResult<()> {
     Ok(())
 }
 
-fn get_emulated_error() -> LipaError {
+fn get_emulated_error() -> Error {
     runtime_error(
         RuntimeErrorCode::GenericError,
         "This is an emulated error, please try again",

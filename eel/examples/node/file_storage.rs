@@ -1,6 +1,7 @@
-use eel::errors::{LipaResult, MapToLipaError, RuntimeErrorCode};
+use eel::errors::{Result, RuntimeErrorCode};
 use eel::interfaces::RemoteStorage;
 use log::debug;
+use perro::MapToError;
 use std::fmt::Debug;
 use std::fs;
 use std::io;
@@ -20,7 +21,7 @@ impl FileStorage {
 }
 
 impl RemoteStorage for FileStorage {
-    fn object_exists(&self, bucket: String, key: String) -> LipaResult<bool> {
+    fn object_exists(&self, bucket: String, key: String) -> Result<bool> {
         debug!("object_exists({}, {})", bucket, key);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
@@ -28,7 +29,7 @@ impl RemoteStorage for FileStorage {
         Ok(path_buf.exists())
     }
 
-    fn get_object(&self, bucket: String, key: String) -> LipaResult<Vec<u8>> {
+    fn get_object(&self, bucket: String, key: String) -> Result<Vec<u8>> {
         debug!("get_object({}, {})", bucket, key);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
@@ -41,7 +42,7 @@ impl RemoteStorage for FileStorage {
         true
     }
 
-    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> LipaResult<()> {
+    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> Result<()> {
         debug!("put_object({}, {}, value.len={})", bucket, key, value.len());
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
@@ -51,13 +52,13 @@ impl RemoteStorage for FileStorage {
         Ok(())
     }
 
-    fn list_objects(&self, bucket: String) -> LipaResult<Vec<String>> {
+    fn list_objects(&self, bucket: String) -> Result<Vec<String>> {
         debug!("list_objects({})", bucket);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
         let list = if let Ok(res) = fs::read_dir(path_buf) {
             res.map(|res| res.map(|e| e.file_name().to_str().unwrap().to_string()))
-                .collect::<Result<Vec<_>, io::Error>>()
+                .collect::<std::result::Result<Vec<_>, io::Error>>()
                 .unwrap()
         } else {
             Vec::new()
@@ -65,7 +66,7 @@ impl RemoteStorage for FileStorage {
         Ok(list)
     }
 
-    fn delete_object(&self, bucket: String, key: String) -> LipaResult<()> {
+    fn delete_object(&self, bucket: String, key: String) -> Result<()> {
         debug!("delete_object({}, {})", bucket, key);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);

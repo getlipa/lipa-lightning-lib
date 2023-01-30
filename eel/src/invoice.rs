@@ -11,6 +11,7 @@ use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{Currency, InvoiceBuilder, RawInvoice};
 use log::info;
+use perro::{invalid_input, MapToError, MapToErrorForUnitType, ResultTrait};
 
 pub struct InvoiceDetails {
     pub amount_msat: Option<u64>,
@@ -27,7 +28,7 @@ pub(crate) fn create_raw_invoice(
     description: String,
     channel_manager: &ChannelManager,
     lsp_client: &LspClient,
-) -> LipaResult<RawInvoice> {
+) -> Result<RawInvoice> {
     // Do we need a new channel to receive this payment?
     let channels_info = get_channels_info(&channel_manager.list_channels());
     let needs_channel_opening = channels_info.inbound_capacity_msat < amount_msat;
