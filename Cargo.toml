@@ -13,7 +13,7 @@ nigiri = []
 [dependencies]
 eel = { path = "eel" }
 log = "0.4.17"
-uniffi = "0.22.0"
+uniffi = "0.23.0"
 storage-mock = { path = "util/storage-mock" }
 thiserror = "1.0.38"
 
@@ -28,4 +28,4 @@ pre-build = ["apt update --no-show-upgraded && apt install --yes protobuf-compil
 
 [build-dependencies]
 camino = "1.1.1"
-uniffi_bindgen = "0.22.0"
+uniffi_bindgen = "0.23.0"
