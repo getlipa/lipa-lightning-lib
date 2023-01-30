@@ -1,5 +1,3 @@
-#[path = "../lsp_client/mod.rs"]
-mod lsp_client;
 #[path = "../mocked_remote_storage/mod.rs"]
 mod mocked_remote_storate;
 #[path = "../print_events_handler/mod.rs"]
@@ -8,8 +6,8 @@ mod print_event_handler;
 use eel::config::Config;
 use eel::errors::LipaResult;
 use eel::keys_manager::generate_secret;
+use eel::lsp_client::LspClient;
 use eel::LightningNode;
-use lsp_client::LspClient;
 use std::fs;
 
 use crate::setup::mocked_remote_storate::MockedRemoteStorage;
@@ -56,7 +54,7 @@ impl NodeHandle {
         let lsp_address = "http://127.0.0.1:6666".to_string();
         let lsp_auth_token =
             "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();
-        let lsp_client = LspClient::build(lsp_address, lsp_auth_token);
+        let lsp_client = LspClient::new(lsp_address, lsp_auth_token)?;
         let events_handler = PrintEventsHandler {};
         let node = LightningNode::new(
             &self.config,

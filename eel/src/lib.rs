@@ -7,6 +7,7 @@ pub mod errors;
 pub mod interfaces;
 pub mod keys_manager;
 pub mod lsp;
+pub mod lsp_client;
 pub mod node_info;
 pub mod p2p_networking;
 pub mod secret;

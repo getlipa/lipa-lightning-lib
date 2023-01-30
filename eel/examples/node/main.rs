@@ -1,7 +1,5 @@
 mod cli;
 mod file_storage;
-#[path = "../../tests/lsp_client/mod.rs"]
-mod lsp_client;
 #[path = "../../tests/print_events_handler/mod.rs"]
 mod print_events_handler;
 
@@ -10,7 +8,6 @@ pub mod lspd {
 }
 
 use file_storage::FileStorage;
-use lsp_client::LspClient;
 
 use crate::print_events_handler::PrintEventsHandler;
 use bitcoin::hashes::hex::ToHex;
@@ -18,6 +15,7 @@ use bitcoin::Network;
 use eel::config::Config;
 use eel::interfaces::{Lsp, RemoteStorage};
 use eel::keys_manager::mnemonic_to_secret;
+use eel::lsp_client::LspClient;
 use eel::LightningNode;
 use log::info;
 use lspd::ChannelInformationReply;
@@ -40,7 +38,7 @@ fn main() {
     info!("Contacting lsp at {} ...", lsp_address);
     let lsp_auth_token =
         "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();
-    let lsp_client = Box::new(LspClient::build(lsp_address, lsp_auth_token));
+    let lsp_client = Box::new(LspClient::new(lsp_address, lsp_auth_token)).unwrap();
     let lsp_info = lsp_client.channel_information().unwrap();
     let lsp_info = ChannelInformationReply::decode(&*lsp_info).unwrap();
     info!("Lsp pubkey: {}", lsp_info.lsp_pubkey.to_hex());
@@ -58,7 +56,7 @@ fn main() {
         local_persistence_path: BASE_DIR.to_string(),
     };
 
-    let node = LightningNode::new(&config, storage, lsp_client, events).unwrap();
+    let node = LightningNode::new(&config, storage, Box::new(lsp_client), events).unwrap();
 
     // Lauch CLI
     sleep(Duration::from_secs(1));

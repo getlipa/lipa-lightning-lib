@@ -1,15 +1,17 @@
 #![allow(clippy::let_unit_value)]
 
 mod callbacks;
+mod config;
 mod eel_interface_impl;
 mod native_logger;
 
-use crate::callbacks::{CallbackError, EventsCallback, LspCallback};
-use crate::eel_interface_impl::{EventsImpl, LspImpl, RemoteStorageMock};
-use eel::config::Config;
+use crate::callbacks::{CallbackError, EventsCallback};
+use crate::config::Config;
+use crate::eel_interface_impl::{EventsImpl, RemoteStorageMock};
 use eel::errors::{LipaError, LipaResult, RuntimeErrorCode};
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
 use eel::lsp::LspFee;
+use eel::lsp_client::LspClient;
 use eel::node_info::{ChannelsInfo, NodeInfo};
 use eel::secret::Secret;
 use eel::InvoiceDetails;
@@ -24,16 +26,19 @@ pub struct LightningNode {
 }
 
 impl LightningNode {
-    pub fn new(
-        config: &Config,
-        lsp_callback: Box<dyn LspCallback>,
-        events_callback: Box<dyn EventsCallback>,
-    ) -> LipaResult<Self> {
+    pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> LipaResult<Self> {
+        let eel_config = eel::config::Config {
+            network: config.network,
+            seed: config.seed,
+            esplora_api_url: config.esplora_api_url,
+            rgs_url: config.rgs_url,
+            local_persistence_path: config.local_persistence_path,
+        };
         let remote_storage = Box::new(RemoteStorageMock::new(Arc::new(Storage::new())));
-        let lsp_client = Box::new(LspImpl { lsp_callback });
+        let lsp_client = Box::new(LspClient::new(config.lsp_url, config.lsp_token)?);
         let user_event_handler = Box::new(EventsImpl { events_callback });
         let core_node =
-            eel::LightningNode::new(config, remote_storage, lsp_client, user_event_handler)?;
+            eel::LightningNode::new(&eel_config, remote_storage, lsp_client, user_event_handler)?;
         Ok(LightningNode { core_node })
     }
 

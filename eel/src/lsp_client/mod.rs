@@ -2,8 +2,8 @@ mod lspd {
     tonic::include_proto!("lspd");
 }
 
-use eel::errors::LipaResult;
-use eel::interfaces::Lsp;
+use crate::errors::{LipaResult, MapToLipaError, RuntimeErrorCode};
+use crate::interfaces::Lsp;
 use lspd::channel_opener_client::ChannelOpenerClient;
 use lspd::{ChannelInformationRequest, RegisterPaymentRequest};
 use prost::Message;
@@ -11,25 +11,30 @@ use tokio::runtime::{Builder, Runtime};
 use tonic::metadata::{Ascii, MetadataValue};
 use tonic::Request;
 
-pub(crate) struct LspClient {
+pub struct LspClient {
     address: String,
     bearer: MetadataValue<Ascii>,
     rt: Runtime,
 }
 
 impl LspClient {
-    pub fn build(address: String, auth_token: String) -> Self {
-        let bearer = format!("Bearer {}", auth_token).parse().unwrap();
-        let rt = Builder::new_multi_thread().enable_all().build().unwrap();
-        Self {
+    pub fn new(address: String, auth_token: String) -> LipaResult<Self> {
+        let bearer = format!("Bearer {auth_token}")
+            .parse()
+            .map_to_invalid_input("Invalid LSP auth token")?;
+        let rt = Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .map_to_permanent_failure("Failed to build a tokio runtime")?;
+        Ok(Self {
             address,
             bearer,
             rt,
-        }
+        })
     }
 
     fn wrap_request<T>(&self, request: T) -> Request<T> {
-        let mut request = tonic::Request::new(request);
+        let mut request = Request::new(request);
         request
             .metadata_mut()
             .insert("authorization", self.bearer.clone());
@@ -45,11 +50,17 @@ impl Lsp for LspClient {
         let mut client = self
             .rt
             .block_on(ChannelOpenerClient::connect(self.address.clone()))
-            .unwrap();
+            .map_to_runtime_error(
+                RuntimeErrorCode::LspServiceUnavailable,
+                "Failed to contact LSP",
+            )?;
         Ok(self
             .rt
             .block_on(client.channel_information(request))
-            .unwrap()
+            .map_to_runtime_error(
+                RuntimeErrorCode::LspServiceUnavailable,
+                "LSP channel information request failed",
+            )?
             .into_inner()
             .encode_to_vec())
     }
@@ -59,8 +70,16 @@ impl Lsp for LspClient {
         let mut client = self
             .rt
             .block_on(ChannelOpenerClient::connect(self.address.clone()))
-            .unwrap();
-        self.rt.block_on(client.register_payment(request)).unwrap();
+            .map_to_runtime_error(
+                RuntimeErrorCode::LspServiceUnavailable,
+                "Failed to contact LSP",
+            )?;
+        self.rt
+            .block_on(client.register_payment(request))
+            .map_to_runtime_error(
+                RuntimeErrorCode::LspServiceUnavailable,
+                "LSP register payment request failed",
+            )?;
         Ok(())
     }
 }
