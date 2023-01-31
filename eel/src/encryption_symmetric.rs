@@ -33,9 +33,10 @@ pub(crate) fn decrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     }
 
     let nonce_start = data.len() - NonceLength::USIZE;
-    let nonce = Nonce::from_slice(&data[nonce_start..]);
+    let (data, nonce) = data.split_at(nonce_start);
+    let nonce = Nonce::from_slice(nonce);
 
-    decrypt_vanilla(&data[..nonce_start], key, nonce)
+    decrypt_vanilla(data, key, nonce)
 }
 
 fn encrypt_vanilla(data: &[u8], key: &[u8], nonce: &Nonce) -> Result<Vec<u8>> {
