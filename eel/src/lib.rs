@@ -58,6 +58,7 @@ use bitcoin::bech32::ToBase32;
 use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::secp256k1::ecdsa::RecoverableSignature;
 pub use bitcoin::Network;
+use cipher::consts::U32;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Recipient};
 use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Watch};
@@ -510,7 +511,7 @@ fn init_peer_manager(
     keys_manager: &KeysManager,
     logger: Arc<LightningLogger>,
 ) -> Result<PeerManager> {
-    let ephemeral_bytes = generate_random_bytes::<32>()
+    let ephemeral_bytes = generate_random_bytes::<U32>()
         .map_to_permanent_failure("Failed to generate random bytes")?;
     let our_node_secret = keys_manager
         .get_node_secret(Recipient::Node)
@@ -523,7 +524,7 @@ fn init_peer_manager(
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs() as u32,
-        &ephemeral_bytes,
+        ephemeral_bytes.as_ref(),
         logger,
     ))
 }

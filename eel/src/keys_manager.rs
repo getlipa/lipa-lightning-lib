@@ -3,6 +3,7 @@ use crate::random;
 use crate::secret::Secret;
 
 use bdk::keys::bip39::Mnemonic;
+use cipher::consts::U32;
 use lightning::chain::keysinterface::KeysManager;
 use perro::{invalid_input, MapToError};
 use std::str::FromStr;
@@ -21,7 +22,7 @@ pub(crate) fn init_keys_manager(seed: &Vec<u8>) -> Result<KeysManager> {
 }
 
 pub fn generate_secret(passphrase: String) -> Result<Secret> {
-    let entropy = random::generate_random_bytes::<32>()?;
+    let entropy = random::generate_random_bytes::<U32>()?;
     let mnemonic =
         Mnemonic::from_entropy(&entropy).map_to_permanent_failure("Failed to mnemonic")?;
 

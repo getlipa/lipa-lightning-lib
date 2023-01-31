@@ -5,6 +5,7 @@ use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, BlockSizeUser, KeyIvIni
 use bitcoin::hashes::{sha256, sha512, Hash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::scalar::Scalar;
 use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
+use cipher::consts::U16;
 use perro::{MapToError, ResultTrait};
 use std::array::TryFromSliceError;
 
@@ -19,7 +20,7 @@ type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 pub(crate) fn encrypt(pubkey: &PublicKey, data: &[u8]) -> Result<Vec<u8>> {
     let secp = Secp256k1::new();
     let (ephemeral, ephemeral_pubkey) = secp.generate_keypair(&mut rand::thread_rng());
-    let init_vector = generate_random_bytes::<16>()?.to_vec();
+    let init_vector = generate_random_bytes::<U16>()?.to_vec();
     assert_eq!(init_vector.len(), Aes256CbcEnc::block_size());
     let randomness = Randomness {
         ephemeral,

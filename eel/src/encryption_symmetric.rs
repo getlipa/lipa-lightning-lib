@@ -3,55 +3,57 @@
 use crate::errors::{Error, Result};
 use crate::random;
 
-use aes::Aes256;
 use aes_gcm::Aes256Gcm;
-use aes_gcm::{aead::Aead, AesGcm, Nonce};
+use aes_gcm::{aead::Aead, Nonce as AesNonce};
 use cipher::consts::U12;
-use cipher::KeyInit;
+use cipher::{KeyInit, Unsigned};
 use perro::MapToError;
 
-pub(crate) fn encrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-    let random_bytes = random::generate_random_bytes::<12>()?;
-    let nonce: &Nonce<U12> = Nonce::from_slice(random_bytes.as_slice());
+type NonceLength = U12;
+type Nonce = AesNonce<NonceLength>;
 
-    let mut ciphertext = encrypt_vanilla(data, key, nonce)?;
-    ciphertext.append(&mut random_bytes.to_vec());
+pub(crate) fn encrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
+    let nonce = random::generate_random_bytes::<NonceLength>()?;
+
+    let mut ciphertext = encrypt_vanilla(data, key, &nonce)?;
+    ciphertext.extend_from_slice(nonce.as_ref());
 
     Ok(ciphertext)
 }
 
 pub(crate) fn decrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-    if data.len() <= 12 {
+    if data.len() <= NonceLength::USIZE {
         return Err(Error::InvalidInput {
             msg: format!(
-                "Ciphertext is only {} bytes long, but appended nonce alone must be 12 bytes.",
-                data.len()
+                "Ciphertext is only {} bytes long, but appended nonce alone must be {} bytes.",
+                data.len(),
+                NonceLength::USIZE,
             ),
         });
     }
 
-    let nonce_start = data.len() - 12;
-    let nonce: &Nonce<U12> = Nonce::from_slice(&data[nonce_start..]);
+    let nonce_start = data.len() - NonceLength::USIZE;
+    let nonce = Nonce::from_slice(&data[nonce_start..]);
 
     decrypt_vanilla(&data[..nonce_start], key, nonce)
 }
 
-fn encrypt_vanilla(data: &[u8], key: &[u8], nonce: &Nonce<U12>) -> Result<Vec<u8>> {
-    let key = bytes_to_key(key)?;
-
-    key.encrypt(nonce, data)
-        .map_to_invalid_input("AES encryption failed")
+fn encrypt_vanilla(data: &[u8], key: &[u8], nonce: &Nonce) -> Result<Vec<u8>> {
+    let cipher = make_cipher(key)?;
+    cipher
+        .encrypt(nonce, data)
+        .map_to_permanent_failure("AES encryption failed")
 }
 
-fn decrypt_vanilla(data: &[u8], key: &[u8], nonce: &Nonce<U12>) -> Result<Vec<u8>> {
-    let key = bytes_to_key(key)?;
-
-    key.decrypt(nonce, data)
+fn decrypt_vanilla(data: &[u8], key: &[u8], nonce: &Nonce) -> Result<Vec<u8>> {
+    let cipher = make_cipher(key)?;
+    cipher
+        .decrypt(nonce, data)
         .map_to_invalid_input("AES decryption failed")
 }
 
-fn bytes_to_key(data: &[u8]) -> Result<AesGcm<Aes256, U12>> {
-    Aes256Gcm::new_from_slice(data).map_to_invalid_input("Invalid AES key")
+fn make_cipher(key: &[u8]) -> Result<Aes256Gcm> {
+    Aes256Gcm::new_from_slice(key).map_to_invalid_input("Invalid AES key")
 }
 
 #[cfg(test)]
@@ -74,7 +76,7 @@ mod tests {
         let nonce = Nonce::from_slice(&DUMMY_NONCE); // 96-bits; unique per message
         let plaintext = PLAINTEXT.to_vec();
 
-        let ciphertext = encrypt_vanilla(&plaintext, &DUMMY_KEY, &nonce).unwrap();
+        let ciphertext = encrypt_vanilla(&plaintext, &DUMMY_KEY, nonce).unwrap();
 
         assert_eq!(ciphertext, CIPHERTEXT.to_vec());
     }
