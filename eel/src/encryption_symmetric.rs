@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::errors::Result;
+use crate::errors::{Error, Result};
 use crate::random;
 
 use aes::Aes256;
@@ -21,6 +21,15 @@ pub(crate) fn encrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
 }
 
 pub(crate) fn decrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
+    if data.len() <= 12 {
+        return Err(Error::InvalidInput {
+            msg: format!(
+                "Ciphertext is only {} bytes long, but appended nonce alone must be 12 bytes.",
+                data.len()
+            ),
+        });
+    }
+
     let nonce_start = data.len() - 12;
     let nonce: &Nonce<U12> = Nonce::from_slice(&data[nonce_start..]);
 
@@ -57,6 +66,7 @@ mod tests {
         16, 10, 61, 154, 215, 95, 155, 208, 24, 204, 222, 98, 207, 64, 239, 40, 5, 198, 188, 161,
         28, 184, 155, 185, 99, 63,
     ];
+    const FLAWED_CIPHERTEXT: [u8; 3] = [48, 10, 49];
 
     #[test]
     fn test_encryption() {
@@ -87,5 +97,12 @@ mod tests {
 
         let result = decrypt(&ciphertext, &DUMMY_KEY).unwrap();
         assert_eq!(result, PLAINTEXT.to_vec());
+    }
+
+    #[test]
+    fn test_flawed_decryption() {
+        let result = decrypt(&FLAWED_CIPHERTEXT, &DUMMY_KEY);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::InvalidInput { .. }));
     }
 }
