@@ -16,6 +16,7 @@ mod async_runtime;
 mod chain_access;
 mod confirm;
 mod encryption;
+mod encryption_symmetric;
 mod esplora_client;
 mod event_handler;
 mod fee_estimator;
