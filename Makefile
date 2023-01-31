@@ -31,6 +31,11 @@ testall: test integrationtests
 
 .PHONY: fmt
 fmt:
+	cargo fmt
+	cargo fmt --manifest-path eel/Cargo.toml
+
+.PHONY: fmt-check
+fmt-check:
 	cargo fmt -- --check
 	cargo fmt --manifest-path eel/Cargo.toml -- --check
 

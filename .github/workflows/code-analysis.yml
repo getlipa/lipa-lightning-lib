@@ -36,7 +36,7 @@ jobs:
           components: rustfmt
       - uses: actions/checkout@v3
       - name: Check code formatting
-        run: make fmt check-mod-test
+        run: make fmt-check check-mod-test
   clippy_check:
     name: Clippy check
     runs-on: ubuntu-latest
