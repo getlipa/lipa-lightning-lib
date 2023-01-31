@@ -8,6 +8,7 @@ nigiri = []
 
 [dependencies]
 aes = "0.8.1"
+aes-gcm = "0.10.1"
 bdk = { version = "0.26.0", default-features = false, features = ["keys-bip39"] }
 bitcoin = "0.29.2"
 cbc = "0.1.2"
@@ -16,10 +17,10 @@ esplora-client = { version = "0.3.0", default-features = false, features = ["blo
 futures = "0.3.24"
 lightning = { version = "0.0.113", features = ["max_level_trace"] }
 lightning-background-processor = "0.0.113"
-lightning-net-tokio = "0.0.113"
-lightning-rapid-gossip-sync = "0.0.113"
-lightning-persister = "0.0.113"
 lightning-invoice = "0.21.0"
+lightning-net-tokio = "0.0.113"
+lightning-persister = "0.0.113"
+lightning-rapid-gossip-sync = "0.0.113"
 log = "0.4.17"
 prost = "0.11.0"
 rand = "0.8.5"
