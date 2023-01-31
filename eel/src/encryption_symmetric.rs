@@ -4,45 +4,50 @@ use crate::errors::Result;
 use crate::random;
 
 use aes::Aes256;
+use aes_gcm::Aes256Gcm;
 use aes_gcm::{aead::Aead, AesGcm, Nonce};
 use cipher::consts::U12;
+use cipher::KeyInit;
 use perro::MapToError;
 
-pub(crate) fn encrypt(data: &[u8], key: &AesGcm<Aes256, U12>) -> Result<Vec<u8>> {
+pub(crate) fn encrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     let random_bytes = random::generate_random_bytes::<12>()?;
     let nonce: &Nonce<U12> = Nonce::from_slice(random_bytes.as_slice());
 
-    let mut ciphertext = encrypt_vanilla(data, nonce, key)?;
+    let mut ciphertext = encrypt_vanilla(data, key, nonce)?;
     ciphertext.append(&mut random_bytes.to_vec());
 
     Ok(ciphertext)
 }
 
-pub(crate) fn decrypt(data: &[u8], key: &AesGcm<Aes256, U12>) -> Result<Vec<u8>> {
+pub(crate) fn decrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     let nonce_start = data.len() - 12;
     let nonce: &Nonce<U12> = Nonce::from_slice(&data[nonce_start..]);
 
-    let plaintext = decrypt_vanilla(&data[..nonce_start], nonce, key)?;
-
-    Ok(plaintext)
+    decrypt_vanilla(&data[..nonce_start], key, nonce)
 }
 
-fn encrypt_vanilla(data: &[u8], nonce: &Nonce<U12>, key: &AesGcm<Aes256, U12>) -> Result<Vec<u8>> {
+fn encrypt_vanilla(data: &[u8], key: &[u8], nonce: &Nonce<U12>) -> Result<Vec<u8>> {
+    let key = bytes_to_key(key)?;
+
     key.encrypt(nonce, data)
-        .map_to_permanent_failure("AES encryption failed")
+        .map_to_invalid_input("AES encryption failed")
 }
 
-fn decrypt_vanilla(data: &[u8], nonce: &Nonce<U12>, key: &AesGcm<Aes256, U12>) -> Result<Vec<u8>> {
+fn decrypt_vanilla(data: &[u8], key: &[u8], nonce: &Nonce<U12>) -> Result<Vec<u8>> {
+    let key = bytes_to_key(key)?;
+
     key.decrypt(nonce, data)
-        .map_to_permanent_failure("AES decryption failed")
+        .map_to_invalid_input("AES decryption failed")
+}
+
+fn bytes_to_key(data: &[u8]) -> Result<AesGcm<Aes256, U12>> {
+    Aes256Gcm::new_from_slice(data).map_to_invalid_input("Invalid AES key")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use aes_gcm::Aes256Gcm;
-    use cipher::KeyInit;
 
     const DUMMY_KEY: [u8; 32] = *b"A 32 byte long, non-random key.."; // 256 bits
     const DUMMY_NONCE: [u8; 12] = *b"mockup nonce"; // 96 bits
@@ -55,36 +60,32 @@ mod tests {
 
     #[test]
     fn test_encryption() {
-        let key = Aes256Gcm::new_from_slice(&DUMMY_KEY).unwrap();
         let nonce = Nonce::from_slice(&DUMMY_NONCE); // 96-bits; unique per message
         let plaintext = PLAINTEXT.to_vec();
 
-        let ciphertext = encrypt_vanilla(&plaintext, &nonce, &key).unwrap();
+        let ciphertext = encrypt_vanilla(&plaintext, &DUMMY_KEY, &nonce).unwrap();
 
         assert_eq!(ciphertext, CIPHERTEXT.to_vec());
     }
 
     #[test]
     fn test_decryption() {
-        let key = Aes256Gcm::new_from_slice(&DUMMY_KEY).unwrap();
         let nonce = Nonce::from_slice(&DUMMY_NONCE); // 96-bits; unique per message
         let ciphertext = CIPHERTEXT.to_vec();
 
-        let result = decrypt_vanilla(&ciphertext, &nonce, &key).unwrap();
+        let result = decrypt_vanilla(&ciphertext, &DUMMY_KEY, nonce).unwrap();
 
         assert_eq!(result, PLAINTEXT.to_vec());
     }
 
     #[test]
     fn test_encryption_and_decryption_with_appended_random_nonce() {
-        let key = Aes256Gcm::new_from_slice(&DUMMY_KEY).unwrap();
-
-        let ciphertext = encrypt(&PLAINTEXT, &key).unwrap();
+        let ciphertext = encrypt(&PLAINTEXT, &DUMMY_KEY).unwrap();
         assert_eq!(ciphertext.len(), CIPHERTEXT.len() + DUMMY_NONCE.len());
         assert_ne!(&ciphertext[..CIPHERTEXT.len()], &CIPHERTEXT);
         assert_ne!(&ciphertext[CIPHERTEXT.len()..], &DUMMY_NONCE);
 
-        let result = decrypt(&ciphertext, &key).unwrap();
+        let result = decrypt(&ciphertext, &DUMMY_KEY).unwrap();
         assert_eq!(result, PLAINTEXT.to_vec());
     }
 }
