@@ -200,7 +200,7 @@ pub mod nigiri {
         }
     }
 
-    pub fn ensure_lspd_running() {
+    pub fn ensure_environment_running() {
         ensure_nigiri_running();
 
         if is_node_synced(NodeInstance::LspdLnd) {
@@ -209,6 +209,8 @@ pub mod nigiri {
             start_lspd();
             wait_for_healthy_lspd();
         }
+
+        nigiri::start_rgs(); // ensure RGS is running
     }
 
     pub fn stop_rgs() {
