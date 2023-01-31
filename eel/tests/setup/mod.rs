@@ -195,8 +195,7 @@ pub mod nigiri {
         if is_node_synced(NodeInstance::NigiriLnd) {
             debug!("Nigiri already running");
         } else {
-            start_nigiri();
-            wait_for_healthy_nigiri();
+            setup_environment_with_lsp();
         }
     }
 
