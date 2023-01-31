@@ -1,5 +1,5 @@
 use crate::errors::*;
-use crate::keys_manager::generate_random_bytes;
+use crate::random::generate_random_bytes;
 
 use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, BlockSizeUser, KeyIvInit};
 use bitcoin::hashes::{sha256, sha512, Hash, HashEngine, Hmac, HmacEngine};

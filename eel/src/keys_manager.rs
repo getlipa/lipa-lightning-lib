@@ -1,11 +1,10 @@
 use crate::errors::Result;
+use crate::random;
 use crate::secret::Secret;
 
 use bdk::keys::bip39::Mnemonic;
 use lightning::chain::keysinterface::KeysManager;
 use perro::{invalid_input, MapToError};
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::str::FromStr;
 use std::time::SystemTime;
 
@@ -21,16 +20,8 @@ pub(crate) fn init_keys_manager(seed: &Vec<u8>) -> Result<KeysManager> {
     Ok(KeysManager::new(&array, now.as_secs(), now.subsec_nanos()))
 }
 
-pub(crate) fn generate_random_bytes<const N: usize>() -> Result<[u8; N]> {
-    let mut bytes = [0u8; N];
-    OsRng
-        .try_fill_bytes(&mut bytes)
-        .map_to_permanent_failure("Failed to generate random bytes")?;
-    Ok(bytes)
-}
-
 pub fn generate_secret(passphrase: String) -> Result<Secret> {
-    let entropy = generate_random_bytes::<32>()?;
+    let entropy = random::generate_random_bytes::<32>()?;
     let mnemonic =
         Mnemonic::from_entropy(&entropy).map_to_permanent_failure("Failed to mnemonic")?;
 
