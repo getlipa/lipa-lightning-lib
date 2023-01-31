@@ -24,7 +24,26 @@ test:
 integrationtests: FILE = *
 integrationtests: TEST = ''
 integrationtests:
-	cargo test --manifest-path eel/Cargo.toml --features nigiri --test '$(FILE)' -- $(TEST)
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
+	cargo test --manifest-path eel/Cargo.toml --features nigiri --package eel --test receiving_payments_test receiving_payments_test
 
 .PHONY: testall
 testall: test integrationtests
