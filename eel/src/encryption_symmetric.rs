@@ -59,6 +59,7 @@ mod tests {
     use super::*;
 
     const DUMMY_KEY: [u8; 32] = *b"A 32 byte long, non-random key.."; // 256 bits
+    const UNSECURE_KEY: [u8; 9] = *b"short key"; // 72 bits
     const DUMMY_NONCE: [u8; 12] = *b"mockup nonce"; // 96 bits
     const PLAINTEXT: [u8; 31] = *b"Not your keys, not your Bitcoin"; // size doesn't matter
     const CIPHERTEXT: [u8; 47] = [
@@ -102,6 +103,13 @@ mod tests {
     #[test]
     fn test_flawed_decryption() {
         let result = decrypt(&FLAWED_CIPHERTEXT, &DUMMY_KEY);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::InvalidInput { .. }));
+    }
+
+    #[test]
+    fn use_of_unsecure_key_forbidden() {
+        let result = encrypt(&PLAINTEXT, &UNSECURE_KEY);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::InvalidInput { .. }));
     }
