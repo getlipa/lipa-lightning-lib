@@ -56,7 +56,7 @@ check-mod-test:
 
 # Quick tests to run before creating a PR.
 .PHONY: pr
-pr: fmt-check buildall test clippy check-mod-test
+pr: fmt buildall test clippy check-mod-test
 
 .PHONY: runnode
 runnode:
