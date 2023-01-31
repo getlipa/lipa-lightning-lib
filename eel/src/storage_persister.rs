@@ -28,8 +28,7 @@ use std::fs;
 use std::io::{BufReader, Cursor};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, Weak};
-use std::thread::sleep;
+use std::sync::{Arc, RwLock, Weak};
 use std::time::Duration;
 
 static MONITORS_BUCKET: &str = "monitors";
@@ -43,7 +42,7 @@ pub(crate) struct StoragePersister {
     storage: Arc<Box<dyn RemoteStorage>>,
     fs_persister: FilesystemPersister,
     runtime_handle: Handle,
-    chain_monitor: Mutex<Weak<ChainMonitor>>,
+    chain_monitor: RwLock<Weak<ChainMonitor>>,
 }
 
 impl StoragePersister {
@@ -58,12 +57,12 @@ impl StoragePersister {
             storage,
             fs_persister,
             runtime_handle,
-            chain_monitor: Mutex::new(Weak::new()),
+            chain_monitor: RwLock::new(Weak::new()),
         }
     }
 
     pub fn add_chain_monitor(&self, chain_monitor: Weak<ChainMonitor>) {
-        let mut mutex_chain_monitor = self.chain_monitor.lock().unwrap();
+        let mut mutex_chain_monitor = self.chain_monitor.write().unwrap();
         *mutex_chain_monitor = chain_monitor;
     }
 
@@ -359,7 +358,7 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
         // Launch background task that handles persisting monitor remotely
         let data = data.encode();
         let storage = Arc::clone(&self.storage);
-        let chain_monitor = match self.chain_monitor.lock().unwrap().upgrade() {
+        let chain_monitor = match { self.chain_monitor.read().unwrap() }.upgrade() {
             None => return ChannelMonitorUpdateStatus::PermanentFailure,
             Some(c) => c,
         };
@@ -429,7 +428,7 @@ async fn persist_monitor_remotely(
             error!("Failed to remotely persist ChannelMonitor {} - ChainMonitor stopped listing this ChannelMonitor as having pending updates", key);
             return;
         }
-        sleep(Duration::from_secs(5));
+        tokio::time::sleep(Duration::from_secs(5)).await;
     }
 
     // Let ChainMonitor know that remote persistence has succeeded
