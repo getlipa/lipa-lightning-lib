@@ -31,6 +31,11 @@ testall: test integrationtests
 
 .PHONY: fmt
 fmt:
+	cargo fmt
+	cargo fmt --manifest-path eel/Cargo.toml
+
+.PHONY: fmt-check
+fmt-check:
 	cargo fmt -- --check
 	cargo fmt --manifest-path eel/Cargo.toml -- --check
 
@@ -51,7 +56,7 @@ check-mod-test:
 
 # Quick tests to run before creating a PR.
 .PHONY: pr
-pr: fmt buildall test clippy check-mod-test
+pr: fmt-check buildall test clippy check-mod-test
 
 .PHONY: runnode
 runnode:
