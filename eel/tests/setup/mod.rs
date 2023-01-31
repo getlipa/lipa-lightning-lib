@@ -191,23 +191,11 @@ pub mod nigiri {
         wait_for_sync(NodeInstance::LspdLnd);
     }
 
-    pub fn ensure_nigiri_running() {
-        if is_node_synced(NodeInstance::NigiriLnd) {
-            debug!("Nigiri already running");
+    pub fn ensure_environment_running() {
+        if is_node_synced(NodeInstance::NigiriLnd) && is_node_synced(NodeInstance::LspdLnd) {
+            debug!("Environment is up and running");
         } else {
-            start_nigiri();
-            wait_for_healthy_nigiri();
-        }
-    }
-
-    pub fn ensure_lspd_running() {
-        ensure_nigiri_running();
-
-        if is_node_synced(NodeInstance::LspdLnd) {
-            debug!("LSPD already running");
-        } else {
-            start_lspd();
-            wait_for_healthy_lspd();
+            setup_environment_with_lsp_rgs();
         }
     }
 
