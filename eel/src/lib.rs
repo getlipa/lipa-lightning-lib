@@ -105,6 +105,12 @@ pub struct LightningNode {
     task_manager: Arc<Mutex<TaskManager>>,
 }
 
+enum StartupVariant {
+    FreshStart,
+    Recovery,
+    Normal,
+}
+
 impl LightningNode {
     pub fn new(
         config: &Config,
@@ -133,6 +139,7 @@ impl LightningNode {
         let persister = Arc::new(StoragePersister::new(
             remote_storage,
             config.local_persistence_path.clone(),
+            rt.handle(),
         ));
         if !persister.check_health() {
             warn!("Remote storage is unhealty");
@@ -150,11 +157,14 @@ impl LightningNode {
             Arc::clone(&persister),
         ));
 
+        persister.add_chain_monitor(Arc::downgrade(&chain_monitor));
+
         // Step 6. Initialize the KeysManager
         let keys_manager = Arc::new(init_keys_manager(&config.seed)?);
 
-        // Step 7. Read ChannelMonitor state from disk
-        let mut channel_monitors = persister.read_channel_monitors(&*keys_manager)?;
+        // Step 7. Read ChannelMonitor state from disk/remote
+        let (startup_variant, mut channel_monitors) =
+            persister.read_channel_monitors(&*keys_manager)?;
 
         // If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
         // on each ChannelMonitor to prepare for chain synchronization in Step 9.
@@ -183,6 +193,7 @@ impl LightningNode {
                 mut_channel_monitors,
                 mobile_node_user_config,
                 chain_params,
+                startup_variant,
             )?;
         let channel_manager = Arc::new(channel_manager);
 
@@ -200,11 +211,7 @@ impl LightningNode {
             let funding_outpoint = channel_monitor.get_funding_txo().0;
             match chain_monitor.watch_channel(funding_outpoint, channel_monitor) {
                 ChannelMonitorUpdateStatus::Completed => {}
-                ChannelMonitorUpdateStatus::InProgress => {
-                    return Err(permanent_failure(
-                        "Failed to give a ChannelMonitor to the ChainMonitor",
-                    ))
-                }
+                ChannelMonitorUpdateStatus::InProgress => {}
                 ChannelMonitorUpdateStatus::PermanentFailure => {
                     return Err(permanent_failure(
                         "Failed to give a ChannelMonitor to the ChainMonitor",
