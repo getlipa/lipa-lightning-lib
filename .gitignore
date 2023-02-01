@@ -1,6 +1,7 @@
 .DS_Store
 .idea
 .ldk
+.ldk_remote
 examples/node/.env
 .3l_local
 .3l_local_test

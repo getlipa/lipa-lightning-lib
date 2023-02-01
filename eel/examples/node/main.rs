@@ -25,11 +25,13 @@ use std::thread::sleep;
 use std::time::Duration;
 
 static BASE_DIR: &str = ".ldk";
+static BASE_DIR_REMOTE: &str = ".ldk_remote";
 static LOG_FILE: &str = "logs.txt";
 
 fn main() {
     // Create dir for node data persistence.
     fs::create_dir_all(BASE_DIR).unwrap();
+    fs::create_dir_all(BASE_DIR_REMOTE).unwrap();
 
     init_logger();
     info!("Logger initialized");
@@ -43,11 +45,12 @@ fn main() {
     let lsp_info = ChannelInformationReply::decode(&*lsp_info).unwrap();
     info!("Lsp pubkey: {}", lsp_info.lsp_pubkey.to_hex());
 
-    let storage = Box::new(FileStorage::new(BASE_DIR));
+    let remote_storage = Box::new(FileStorage::new(BASE_DIR_REMOTE));
 
     let events = Box::new(PrintEventsHandler {});
 
-    let seed = read_or_generate_seed(&storage);
+    let seed_storage = FileStorage::new(BASE_DIR);
+    let seed = read_or_generate_seed(&seed_storage);
     let config = Config {
         network: Network::Regtest,
         seed,
@@ -56,11 +59,11 @@ fn main() {
         local_persistence_path: BASE_DIR.to_string(),
     };
 
-    let node = LightningNode::new(&config, storage, Box::new(lsp_client), events).unwrap();
+    let node = LightningNode::new(&config, remote_storage, Box::new(lsp_client), events).unwrap();
 
     // Lauch CLI
     sleep(Duration::from_secs(1));
-    cli::poll_for_user_input(&node, &format!("{}/{}", BASE_DIR, LOG_FILE));
+    cli::poll_for_user_input(&node, &format!("{BASE_DIR}/{LOG_FILE}"));
 }
 
 fn init_logger() {
