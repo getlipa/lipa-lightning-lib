@@ -14,7 +14,7 @@ use crate::setup::mocked_remote_storate::MockedRemoteStorage;
 use crate::setup::nigiri::{NodeInstance, RGS_CLN_HOST, RGS_CLN_ID, RGS_CLN_PORT};
 use crate::setup::print_event_handler::PrintEventsHandler;
 use bitcoin::Network;
-use simplelog::SimpleLogger;
+use simplelog::{ConfigBuilder, LevelFilter, SimpleLogger};
 use std::sync::Once;
 use std::thread::sleep;
 use std::time::Duration;
@@ -27,13 +27,20 @@ pub struct NodeHandle {
     storage: MockedRemoteStorage,
 }
 
+#[ctor::ctor]
+fn init_logger() {
+    INIT_LOGGER_ONCE.call_once(|| {
+        let config = ConfigBuilder::new()
+            .add_filter_ignore_str("ureq")
+            .add_filter_ignore_str("mio")
+            .build();
+        SimpleLogger::init(LevelFilter::Trace, config).unwrap();
+    });
+}
+
 #[allow(dead_code)]
 impl NodeHandle {
     pub fn new() -> Self {
-        INIT_LOGGER_ONCE.call_once(|| {
-            SimpleLogger::init(simplelog::LevelFilter::Trace, simplelog::Config::default())
-                .unwrap();
-        });
         let storage = MockedRemoteStorage::default();
 
         let _ = fs::remove_dir_all(".3l_local_test");
@@ -131,11 +138,6 @@ pub mod nigiri {
     }
 
     pub fn start_all_clean() {
-        INIT_LOGGER_ONCE.call_once(|| {
-            SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default())
-                .unwrap();
-        });
-
         // Reset Nigiri state to start on a blank slate
         stop();
 
