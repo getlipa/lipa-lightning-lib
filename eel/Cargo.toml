@@ -15,12 +15,18 @@ cbc = "0.1.2"
 cipher = { version = "0.4.3", features = ["block-padding", "alloc"] }
 esplora-client = { version = "0.3.0", default-features = false, features = ["blocking"] }
 futures = "0.3.24"
-lightning = { version = "0.0.113", features = ["max_level_trace"] }
-lightning-background-processor = "0.0.113"
-lightning-invoice = "0.21.0"
-lightning-net-tokio = "0.0.113"
-lightning-persister = "0.0.113"
-lightning-rapid-gossip-sync = "0.0.113"
+#lightning = { version = "0.0.113", features = ["max_level_trace"] }
+#lightning-background-processor = "0.0.113"
+#lightning-invoice = "0.21.0"
+#lightning-net-tokio = "0.0.113"
+#lightning-persister = "0.0.113"
+#lightning-rapid-gossip-sync = "0.0.113"
+lightning = { git = "https://github.com/danielgranhao/rust-lightning", branch = "remove-deadlock-causing-read-lock", features = ["max_level_trace"] }
+lightning-background-processor = { git = "https://github.com/danielgranhao/rust-lightning", branch = "remove-deadlock-causing-read-lock" }
+lightning-invoice = { git = "https://github.com/danielgranhao/rust-lightning", branch = "remove-deadlock-causing-read-lock" }
+lightning-net-tokio = { git = "https://github.com/danielgranhao/rust-lightning", branch = "remove-deadlock-causing-read-lock" }
+lightning-persister = { git = "https://github.com/danielgranhao/rust-lightning", branch = "remove-deadlock-causing-read-lock" }
+lightning-rapid-gossip-sync = { git = "https://github.com/danielgranhao/rust-lightning", branch = "remove-deadlock-causing-read-lock" }
 log = "0.4.17"
 prost = "0.11.0"
 rand = "0.8.5"
