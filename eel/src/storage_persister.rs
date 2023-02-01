@@ -41,7 +41,7 @@ static SCORER_KEY: &str = "scorer";
 pub(crate) struct StoragePersister {
     storage: Arc<Box<dyn RemoteStorage>>,
     fs_persister: FilesystemPersister,
-    runtime_handle: Handle,
+    _runtime_handle: Handle,
     chain_monitor: RwLock<Weak<ChainMonitor>>,
 }
 
@@ -56,7 +56,7 @@ impl StoragePersister {
         Self {
             storage,
             fs_persister,
-            runtime_handle,
+            _runtime_handle: runtime_handle,
             chain_monitor: RwLock::new(Weak::new()),
         }
     }
@@ -363,7 +363,9 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
             Some(c) => c,
         };
 
-        self.runtime_handle.spawn(persist_monitor_remotely(
+        // The idea is to deal with remote persistence using the following code, but a deadlock bug
+        // needs to be fixed first
+        /*self.runtime_handle.spawn(persist_monitor_remotely(
             storage,
             chain_monitor,
             data,
@@ -371,7 +373,9 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
             update_id,
         ));
 
-        ChannelMonitorUpdateStatus::InProgress
+        ChannelMonitorUpdateStatus::InProgress*/
+        sync_persist_monitor_remotely(storage, chain_monitor, data, channel_id);
+        ChannelMonitorUpdateStatus::Completed
     }
 
     fn update_persisted_channel(
@@ -395,7 +399,7 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
 // persist_new_channel() again).
 //
 // We only stop retrying when the ChainMonitor stops stating that the update is pending
-async fn persist_monitor_remotely(
+/*async fn persist_monitor_remotely(
     storage: Arc<Box<dyn RemoteStorage>>,
     chain_monitor: Arc<ChainMonitor>,
     data: Vec<u8>,
@@ -437,6 +441,43 @@ async fn persist_monitor_remotely(
         .is_err()
     {
         error!("Attempted to inform the ChainMonitor about a successfully persisted ChannelMonitor but the ChainMonitor doesn't know about the ChannelMonitor");
+    }
+    debug!("Successfully remotely persisted the ChannelMonitor {}", key);
+}*/
+
+fn sync_persist_monitor_remotely(
+    storage: Arc<Box<dyn RemoteStorage>>,
+    chain_monitor: Arc<ChainMonitor>,
+    data: Vec<u8>,
+    channel_id: OutPoint,
+) {
+    let key = channel_id.to_channel_id().to_hex();
+    loop {
+        match storage.put_object(MONITORS_BUCKET.to_string(), key.clone(), data.clone()) {
+            Ok(_) => break,
+            Err(Error::RuntimeError { .. }) => {
+                error!(
+                    "Temporary failure to remotely persist the ChannelMonitor {}... Retrying...",
+                    key
+                );
+            }
+            Err(e) => {
+                error!(
+                    "Failed to remotely persist the ChannelMonitor {} - {}",
+                    key,
+                    e.to_string()
+                );
+                return;
+            }
+        }
+        if !chain_monitor
+            .list_pending_monitor_updates()
+            .contains_key(&channel_id)
+        {
+            error!("Failed to remotely persist ChannelMonitor {} - ChainMonitor stopped listing this ChannelMonitor as having pending updates", key);
+            return;
+        }
+        std::thread::sleep(Duration::from_secs(5));
     }
     debug!("Successfully remotely persisted the ChannelMonitor {}", key);
 }
