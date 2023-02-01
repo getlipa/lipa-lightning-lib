@@ -470,7 +470,7 @@ impl Drop for LightningNode {
     fn drop(&mut self) {
         self.task_manager.lock().unwrap().request_shutdown_all();
 
-        self.peer_manager.disconnect_all_peers();
+        //self.peer_manager.disconnect_all_peers();
 
         // The background processor implements the drop trait itself.
         // It therefore doesn't have to be stopped manually.
