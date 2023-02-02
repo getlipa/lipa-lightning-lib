@@ -19,7 +19,7 @@ mod p2p_connection_test {
     #[file_parallel(key, "/tmp/3l-int-tests-lock")]
     fn test_p2p_connection() {
         nigiri::ensure_environment_running();
-        let node = NodeHandle::new().start().unwrap();
+        let node = NodeHandle::default().start().unwrap();
 
         sleep(Duration::from_millis(100));
         assert_eq!(node.get_node_info().num_peers, 1);
@@ -31,7 +31,7 @@ mod p2p_connection_test {
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_p2p_connection_with_unreliable_lsp() {
         nigiri::ensure_environment_running();
-        let node = NodeHandle::new().start().unwrap();
+        let node = NodeHandle::default().start().unwrap();
 
         // Test disconnect when LSP is down.
         {
