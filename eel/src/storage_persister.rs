@@ -128,8 +128,10 @@ impl StoragePersister {
             // If we don't have any local ChannelMonitors, but have 1 or more remote ChannelMonitors,
             // we can assume that this is a new app installation and we want to use the remote state.
             if !remote_channel_monitors.is_empty() {
+                info!("This is a Recovery start! No local ChannelMonitors were found, but {} was/were retrieved from remote storage.", remote_channel_monitors.len());
                 return Ok((StartupVariant::Recovery, remote_channel_monitors));
             } else {
+                info!("This is a FreshStart start! No local or remote ChannelMonitors were found.");
                 return Ok((StartupVariant::FreshStart, Vec::new()));
             }
         }
@@ -144,7 +146,7 @@ impl StoragePersister {
                 // The local state is more recent than the remote one. As part of the node startup,
                 // every ChannelMonitor is persisted again so this is likely to get resolved.
                 // Let's log it anyway...
-                info!("The remote storage doesn't know about all channels.");
+                info!("This is a Normal start! Warning: the remote storage doesn't know about all channels.");
                 return Ok((StartupVariant::Normal, local_channel_monitors));
             }
             Ordering::Equal => {}
@@ -179,7 +181,7 @@ impl StoragePersister {
                     // The remote ChannelMonitor isn't up-to-date. As part of the node startup, every
                     // ChannelMonitor is persisted again so this is likely to get resolved.
                     // Let's log it anyway...
-                    info!("The remote version of a channel monitor {} isn't as recent as the local one", local_monitor.get_funding_txo().0.to_channel_id().to_hex());
+                    info!("Warning: the remote version of a channel monitor {} isn't as recent as the local one", local_monitor.get_funding_txo().0.to_channel_id().to_hex());
                 }
                 Ordering::Equal => {}
                 Ordering::Greater => {
@@ -188,7 +190,7 @@ impl StoragePersister {
                 }
             }
         }
-
+        info!("This is a Normal start!");
         Ok((StartupVariant::Normal, local_channel_monitors))
     }
 
