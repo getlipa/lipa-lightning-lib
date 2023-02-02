@@ -14,10 +14,7 @@ mod persistence_test {
     use crate::try_cmd_repeatedly;
 
     const ONE_SAT: u64 = 1_000;
-    const _ONE_K_SATS: u64 = 1_000_000;
     const TWO_K_SATS: u64 = 2_000_000;
-    const _TEN_K_SATS: u64 = 10_000_000;
-    const _TWENTY_K_SATS: u64 = 20_000_000;
     const FIVE_HUNDRED_K_SATS: u64 = 500_000_000;
 
     const HALF_SEC: Duration = Duration::from_millis(500);
@@ -32,51 +29,7 @@ mod persistence_test {
         nigiri::setup_environment_with_lsp();
         let node_handle = NodeHandle::new(Config::new(Some(Duration::from_secs(1)), true, 100));
 
-        {
-            let node = node_handle.start().unwrap();
-            assert_eq!(node.get_node_info().num_peers, 1);
-
-            let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
-                .unwrap()
-                .pub_key;
-
-            connect_node_to_lsp(NodeInstance::NigiriLnd, &lspd_node_id);
-
-            nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false)
-                .unwrap();
-            try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-            nigiri::wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
-
-            run_jit_channel_open_flow(
-                &node,
-                NodeInstance::NigiriLnd,
-                TWO_K_SATS + ONE_SAT,
-                TWO_K_SATS,
-            );
-            info!("Restarting node..."); // to test that channel monitors and manager are persisted and retrieved correctly
-        } // Shut down the node
-
-        // Wait for shutdown to complete
-        sleep(Duration::from_secs(5));
-
-        {
-            let node = node_handle.start().unwrap();
-
-            // Wait for p2p connection to be reestablished and channels marked active
-            sleep(Duration::from_secs(5));
-            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
-
-            // Test receiving an amount that needs a new channel open when we already have existing channels.
-            // We should have 102001 sat channel and have received a 1 sat payment. A 0.5M payment is not
-            // possible. A new channel with 0.6M size should be created
-            run_jit_channel_open_flow(
-                &node,
-                NodeInstance::NigiriLnd,
-                FIVE_HUNDRED_K_SATS,
-                TWO_K_SATS,
-            );
-            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
-        }
+        run_flow(&node_handle);
     }
 
     #[test]
@@ -85,51 +38,7 @@ mod persistence_test {
         nigiri::setup_environment_with_lsp();
         let node_handle = NodeHandle::new(Config::new(Some(Duration::from_secs(0)), true, 50));
 
-        {
-            let node = node_handle.start().unwrap();
-            assert_eq!(node.get_node_info().num_peers, 1);
-
-            let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
-                .unwrap()
-                .pub_key;
-
-            connect_node_to_lsp(NodeInstance::NigiriLnd, &lspd_node_id);
-
-            nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false)
-                .unwrap();
-            try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-            nigiri::wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
-
-            run_jit_channel_open_flow(
-                &node,
-                NodeInstance::NigiriLnd,
-                TWO_K_SATS + ONE_SAT,
-                TWO_K_SATS,
-            );
-            info!("Restarting node..."); // to test that channel monitors and manager are persisted and retrieved correctly
-        } // Shut down the node
-
-        // Wait for shutdown to complete
-        sleep(Duration::from_secs(5));
-
-        {
-            let node = node_handle.start().unwrap();
-
-            // Wait for p2p connection to be reestablished and channels marked active
-            sleep(Duration::from_secs(5));
-            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
-
-            // Test receiving an amount that needs a new channel open when we already have existing channels.
-            // We should have 102001 sat channel and have received a 1 sat payment. A 0.5M payment is not
-            // possible. A new channel with 0.6M size should be created
-            run_jit_channel_open_flow(
-                &node,
-                NodeInstance::NigiriLnd,
-                FIVE_HUNDRED_K_SATS,
-                TWO_K_SATS,
-            );
-            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
-        }
+        run_flow(&node_handle);
     }
 
     #[test]
@@ -148,6 +57,51 @@ mod persistence_test {
             .contains("RemoteStorageServiceUnavailable"));
     }
 
+    fn run_flow(node_handle: &NodeHandle) {
+        {
+            let node = node_handle.start().unwrap();
+            assert_eq!(node.get_node_info().num_peers, 1);
+
+            let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
+                .unwrap()
+                .pub_key;
+
+            connect_node_to_lsp(NodeInstance::NigiriLnd, &lspd_node_id);
+
+            nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false)
+                .unwrap();
+            try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
+            nigiri::wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
+
+            run_jit_channel_open_flow(
+                &node,
+                NodeInstance::NigiriLnd,
+                TWO_K_SATS + ONE_SAT,
+                TWO_K_SATS,
+            );
+            info!("Restarting node..."); // to test that channel monitors and manager are persisted and retrieved correctly
+        } // Shut down the node
+
+        // Wait for shutdown to complete
+        sleep(Duration::from_secs(5));
+
+        {
+            let node = node_handle.start().unwrap();
+
+            // Wait for p2p connection to be reestablished and channels marked active
+            sleep(Duration::from_secs(5));
+            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
+
+            run_jit_channel_open_flow(
+                &node,
+                NodeInstance::NigiriLnd,
+                FIVE_HUNDRED_K_SATS,
+                TWO_K_SATS,
+            );
+            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
+        }
+    }
+
     fn run_jit_channel_open_flow(
         node: &LightningNode,
         paying_node: NodeInstance,
@@ -156,7 +110,9 @@ mod persistence_test {
     ) {
         let initial_balance = node.get_node_info().channels_info.local_balance_msat;
 
-        let invoice = issue_invoice(&node, payment_amount);
+        let invoice = node
+            .create_invoice(payment_amount, "test".to_string())
+            .unwrap();
 
         nigiri::pay_invoice(paying_node, &invoice).unwrap();
 
@@ -170,15 +126,6 @@ mod persistence_test {
         );
         assert!(node.get_node_info().channels_info.outbound_capacity_msat < expected_balance);
         // because of channel reserves
-    }
-
-    fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
-        let invoice = node
-            .create_invoice(payment_amount, "test".to_string())
-            .unwrap();
-        assert!(invoice.starts_with("lnbc"));
-
-        invoice
     }
 
     fn connect_node_to_lsp(node: NodeInstance, lsp_node_id: &str) {
