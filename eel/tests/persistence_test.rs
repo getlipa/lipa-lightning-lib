@@ -6,6 +6,7 @@ mod persistence_test {
     use eel::LightningNode;
     use log::info;
     use serial_test::file_serial;
+    use std::fs;
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -29,7 +30,7 @@ mod persistence_test {
         nigiri::setup_environment_with_lsp();
         let node_handle = NodeHandle::new(Config::new(Some(Duration::from_secs(1)), true, 100));
 
-        run_flow(&node_handle);
+        run_flow_normal_restart(&node_handle);
     }
 
     #[test]
@@ -38,7 +39,16 @@ mod persistence_test {
         nigiri::setup_environment_with_lsp();
         let node_handle = NodeHandle::new(Config::new(Some(Duration::from_secs(0)), true, 50));
 
-        run_flow(&node_handle);
+        run_flow_normal_restart(&node_handle);
+    }
+
+    #[test]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
+    fn recovery() {
+        nigiri::setup_environment_with_lsp();
+        let node_handle = NodeHandle::new(Config::new(Some(Duration::from_secs(0)), true, 100));
+
+        run_flow_recovery_restart(&node_handle);
     }
 
     #[test]
@@ -57,7 +67,27 @@ mod persistence_test {
             .contains("RemoteStorageServiceUnavailable"));
     }
 
-    fn run_flow(node_handle: &NodeHandle) {
+    fn run_flow_normal_restart(node_handle: &NodeHandle) {
+        run_flow_1(node_handle);
+
+        // Wait for shutdown to complete
+        sleep(Duration::from_secs(5));
+
+        run_flow_2(node_handle);
+    }
+
+    fn run_flow_recovery_restart(node_handle: &NodeHandle) {
+        run_flow_1(node_handle);
+
+        // Wait for shutdown to complete
+        sleep(Duration::from_secs(5));
+        // Remove the local state
+        fs::remove_dir_all(".3l_local_test").unwrap();
+
+        run_flow_2(node_handle);
+    }
+
+    fn run_flow_1(node_handle: &NodeHandle) {
         {
             let node = node_handle.start().unwrap();
             assert_eq!(node.get_node_info().num_peers, 1);
@@ -81,10 +111,9 @@ mod persistence_test {
             );
             info!("Restarting node..."); // to test that channel monitors and manager are persisted and retrieved correctly
         } // Shut down the node
+    }
 
-        // Wait for shutdown to complete
-        sleep(Duration::from_secs(5));
-
+    fn run_flow_2(node_handle: &NodeHandle) {
         {
             let node = node_handle.start().unwrap();
 
