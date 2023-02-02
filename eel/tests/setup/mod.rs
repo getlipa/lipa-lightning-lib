@@ -56,7 +56,7 @@ impl NodeHandle {
 
         let config = Config {
             network: Network::Regtest,
-            seed: generate_secret("".to_string()).unwrap().seed,
+            seed: generate_secret("".to_string()).unwrap().get_seed_as_array(),
             esplora_api_url: "http://localhost:30000".to_string(),
             rgs_url: "http://localhost:8080/snapshot/".to_string(),
             local_persistence_path: ".3l_local_test".to_string(),

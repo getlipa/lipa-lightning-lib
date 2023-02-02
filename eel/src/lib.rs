@@ -164,7 +164,7 @@ impl LightningNode {
         persister.add_chain_monitor(Arc::downgrade(&chain_monitor));
 
         // Step 6. Initialize the KeysManager
-        let keys_manager = Arc::new(init_keys_manager(&config.seed)?);
+        let keys_manager = Arc::new(init_keys_manager(&config.get_first_half_of_seed())?);
 
         // Step 7. Read ChannelMonitor state from disk/remote
         let (startup_variant, mut channel_monitors) =

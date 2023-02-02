@@ -4,6 +4,7 @@ mod callbacks;
 mod config;
 mod eel_interface_impl;
 mod native_logger;
+mod sanitize_input;
 
 use crate::callbacks::{CallbackError, EventsCallback};
 use crate::config::Config;
@@ -27,9 +28,10 @@ pub struct LightningNode {
 
 impl LightningNode {
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
+        let seed = sanitize_input::strong_type_seed(&config.seed)?;
         let eel_config = eel::config::Config {
             network: config.network,
-            seed: config.seed,
+            seed,
             esplora_api_url: config.esplora_api_url,
             rgs_url: config.rgs_url,
             local_persistence_path: config.local_persistence_path,
