@@ -141,11 +141,12 @@ impl LightningNode {
         let tx_broadcaster = Arc::new(TxBroadcaster::new(Arc::clone(&esplora_client)));
 
         // Step 4. Initialize Persist
-        let _encryption_key =
+        let encryption_key =
             key_derivation::derive_persistence_encryption_key(&config.seed).unwrap();
         let persister = Arc::new(StoragePersister::new(
             remote_storage,
             config.local_persistence_path.clone(),
+            encryption_key,
             rt.handle(),
         ));
         if !persister.check_health() {
