@@ -12,6 +12,8 @@ use perro::MapToError;
 type NonceLength = U12;
 type Nonce = AesNonce<NonceLength>;
 
+const KEY_SIZE_IN_BYTES: usize = 32;
+
 pub(crate) fn encrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     let nonce = random::generate_random_bytes::<NonceLength>()?;
 
@@ -40,6 +42,9 @@ pub(crate) fn decrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
 }
 
 fn encrypt_vanilla(data: &[u8], key: &[u8], nonce: &Nonce) -> Result<Vec<u8>> {
+    // if all 32 bytes have the same value, something must have gone wrong with the key initialization
+    debug_assert!(!key.iter().all(|&b| b == key[0]));
+
     let cipher = make_cipher(key)?;
     cipher
         .encrypt(nonce, data)
@@ -63,6 +68,7 @@ mod tests {
 
     const DUMMY_KEY: [u8; 32] = *b"A 32 byte long, non-random key.."; // 256 bits
     const UNSECURE_KEY: [u8; 9] = *b"short key"; // 72 bits
+    const BAD_KEY: [u8; KEY_SIZE_IN_BYTES] = [0; KEY_SIZE_IN_BYTES];
     const DUMMY_NONCE: [u8; 12] = *b"mockup nonce"; // 96 bits
     const PLAINTEXT: [u8; 31] = *b"Not your keys, not your Bitcoin"; // size doesn't matter
     const CIPHERTEXT: [u8; 47] = [
@@ -80,6 +86,16 @@ mod tests {
         let ciphertext = encrypt_vanilla(&plaintext, &DUMMY_KEY, nonce).unwrap();
 
         assert_eq!(ciphertext, CIPHERTEXT.to_vec());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_encryption_with_bad_key_should_fail() {
+        // Simulate a key initialization that went wrong by using a key that is all zeroes
+        let nonce = Nonce::from_slice(&DUMMY_NONCE); // 96-bits; unique per message
+        let plaintext = PLAINTEXT.to_vec();
+
+        let _ciphertext = encrypt_vanilla(&plaintext, &BAD_KEY, nonce).unwrap();
     }
 
     #[test]
