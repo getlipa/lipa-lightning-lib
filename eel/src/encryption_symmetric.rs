@@ -12,9 +12,7 @@ use perro::MapToError;
 type NonceLength = U12;
 type Nonce = AesNonce<NonceLength>;
 
-const KEY_SIZE_IN_BYTES: usize = 32;
-
-pub(crate) fn encrypt(data: &[u8], key: &[u8; KEY_SIZE_IN_BYTES]) -> Result<Vec<u8>> {
+pub(crate) fn encrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
     let nonce = random::generate_random_bytes::<NonceLength>()?;
 
     let mut ciphertext = encrypt_vanilla(data, key, &nonce)?;
@@ -23,7 +21,7 @@ pub(crate) fn encrypt(data: &[u8], key: &[u8; KEY_SIZE_IN_BYTES]) -> Result<Vec<
     Ok(ciphertext)
 }
 
-pub(crate) fn decrypt(data: &[u8], key: &[u8; KEY_SIZE_IN_BYTES]) -> Result<Vec<u8>> {
+pub(crate) fn decrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
     if data.len() <= NonceLength::USIZE {
         return Err(Error::InvalidInput {
             msg: format!(
@@ -41,21 +39,21 @@ pub(crate) fn decrypt(data: &[u8], key: &[u8; KEY_SIZE_IN_BYTES]) -> Result<Vec<
     decrypt_vanilla(data, key, nonce)
 }
 
-fn encrypt_vanilla(data: &[u8], key: &[u8; KEY_SIZE_IN_BYTES], nonce: &Nonce) -> Result<Vec<u8>> {
+fn encrypt_vanilla(data: &[u8], key: &[u8; 32], nonce: &Nonce) -> Result<Vec<u8>> {
     let cipher = make_cipher(key)?;
     cipher
         .encrypt(nonce, data)
         .map_to_permanent_failure("AES encryption failed")
 }
 
-fn decrypt_vanilla(data: &[u8], key: &[u8; KEY_SIZE_IN_BYTES], nonce: &Nonce) -> Result<Vec<u8>> {
+fn decrypt_vanilla(data: &[u8], key: &[u8; 32], nonce: &Nonce) -> Result<Vec<u8>> {
     let cipher = make_cipher(key)?;
     cipher
         .decrypt(nonce, data)
         .map_to_invalid_input("AES decryption failed")
 }
 
-fn make_cipher(key: &[u8]) -> Result<Aes256Gcm> {
+fn make_cipher(key: &[u8; 32]) -> Result<Aes256Gcm> {
     Aes256Gcm::new_from_slice(key).map_to_invalid_input("Invalid AES key")
 }
 
@@ -63,7 +61,7 @@ fn make_cipher(key: &[u8]) -> Result<Aes256Gcm> {
 mod tests {
     use super::*;
 
-    const DUMMY_KEY: [u8; KEY_SIZE_IN_BYTES] = *b"A 32 byte long, non-random key.."; // 256 bits
+    const DUMMY_KEY: [u8; 32] = *b"A 32 byte long, non-random key.."; // 256 bits
     const DUMMY_NONCE: [u8; 12] = *b"mockup nonce"; // 96 bits
     const PLAINTEXT: [u8; 31] = *b"Not your keys, not your Bitcoin"; // size doesn't matter
     const CIPHERTEXT: [u8; 47] = [
