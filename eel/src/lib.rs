@@ -22,6 +22,7 @@ mod event_handler;
 mod fee_estimator;
 mod filter;
 mod invoice;
+mod key_derivation;
 mod logger;
 mod random;
 mod rapid_sync_client;
@@ -140,6 +141,8 @@ impl LightningNode {
         let tx_broadcaster = Arc::new(TxBroadcaster::new(Arc::clone(&esplora_client)));
 
         // Step 4. Initialize Persist
+        let _encryption_key =
+            key_derivation::derive_persistence_encryption_key(&config.seed).unwrap();
         let persister = Arc::new(StoragePersister::new(
             remote_storage,
             config.local_persistence_path.clone(),

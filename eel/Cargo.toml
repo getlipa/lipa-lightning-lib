@@ -25,6 +25,8 @@ log = "0.4.17"
 prost = "0.11.0"
 rand = "0.8.5"
 reqwest = { version = "0.11.12", default-features = false, features = ["blocking", "rustls-tls"] }
+# Explicitly depend on secp256k1 for secp256k1::SECP256K1.
+secp256k1 = { version = "0.24.3", features = ["global-context"] }
 thiserror = "1.0.34"
 tokio = { version = "1.21.1", features = ["rt-multi-thread", "time", "sync"] }
 tonic = "0.8.2"
