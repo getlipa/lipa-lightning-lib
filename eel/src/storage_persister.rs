@@ -358,7 +358,7 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
         // Launch background task that handles persisting monitor remotely
         let data = data.encode();
         let storage = Arc::clone(&self.storage);
-        let chain_monitor = match { self.chain_monitor.read().unwrap() }.upgrade() {
+        let _chain_monitor = match { self.chain_monitor.read().unwrap() }.upgrade() {
             None => return ChannelMonitorUpdateStatus::PermanentFailure,
             Some(c) => c,
         };
@@ -374,7 +374,7 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
         ));
 
         ChannelMonitorUpdateStatus::InProgress*/
-        sync_persist_monitor_remotely(storage, chain_monitor, data, channel_id);
+        sync_persist_monitor_remotely(storage, data, channel_id);
         ChannelMonitorUpdateStatus::Completed
     }
 
@@ -447,7 +447,6 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
 
 fn sync_persist_monitor_remotely(
     storage: Arc<Box<dyn RemoteStorage>>,
-    chain_monitor: Arc<ChainMonitor>,
     data: Vec<u8>,
     channel_id: OutPoint,
 ) {
@@ -469,13 +468,6 @@ fn sync_persist_monitor_remotely(
                 );
                 return;
             }
-        }
-        if !chain_monitor
-            .list_pending_monitor_updates()
-            .contains_key(&channel_id)
-        {
-            error!("Failed to remotely persist ChannelMonitor {} - ChainMonitor stopped listing this ChannelMonitor as having pending updates", key);
-            return;
         }
         std::thread::sleep(Duration::from_secs(5));
     }
