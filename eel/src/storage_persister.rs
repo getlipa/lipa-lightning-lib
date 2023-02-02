@@ -469,7 +469,7 @@ fn sync_persist_monitor_remotely(
                 return;
             }
         }
-        std::thread::sleep(Duration::from_secs(5));
+        std::thread::sleep(Duration::from_millis(500));
     }
     debug!("Successfully remotely persisted the ChannelMonitor {}", key);
 }
