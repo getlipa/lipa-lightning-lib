@@ -23,7 +23,7 @@ use lightning::util::persist::Persister;
 use lightning::util::ser::{ReadableArgs, Writeable};
 use lightning_persister::FilesystemPersister;
 use log::{debug, error, info};
-use perro::{permanent_failure, MapToError};
+use perro::{permanent_failure, runtime_error, MapToError};
 use std::fs;
 use std::io::{BufReader, Cursor};
 use std::ops::Deref;
@@ -376,8 +376,11 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
         ));
 
         ChannelMonitorUpdateStatus::InProgress*/
-        sync_persist_monitor_remotely(storage, data, channel_id);
-        ChannelMonitorUpdateStatus::Completed
+        let retries = 20;
+        match sync_persist_monitor_remotely(storage, data, channel_id, retries) {
+            Ok(_) => ChannelMonitorUpdateStatus::Completed,
+            Err(_) => ChannelMonitorUpdateStatus::PermanentFailure,
+        }
     }
 
     fn update_persisted_channel(
@@ -451,14 +454,18 @@ fn sync_persist_monitor_remotely(
     storage: Arc<Box<dyn RemoteStorage>>,
     data: Vec<u8>,
     channel_id: OutPoint,
-) {
+    retries: u32,
+) -> Result<()> {
     let key = channel_id.to_channel_id().to_hex();
-    loop {
+    for _ in 0..retries {
         match storage.put_object(MONITORS_BUCKET.to_string(), key.clone(), data.clone()) {
-            Ok(_) => break,
+            Ok(_) => {
+                debug!("Successfully remotely persisted the ChannelMonitor {}", key);
+                return Ok(());
+            }
             Err(Error::RuntimeError { .. }) => {
                 error!(
-                    "Temporary failure to remotely persist the ChannelMonitor {}... Retrying...",
+                    "Temporary failure to remotely persist the ChannelMonitor {}...",
                     key
                 );
             }
@@ -468,12 +475,18 @@ fn sync_persist_monitor_remotely(
                     key,
                     e.to_string()
                 );
-                return;
+                return Err(runtime_error(
+                    RuntimeErrorCode::GenericError,
+                    "Failed to remotely persist monitor",
+                ));
             }
         }
         std::thread::sleep(Duration::from_millis(500));
     }
-    debug!("Successfully remotely persisted the ChannelMonitor {}", key);
+    Err(runtime_error(
+        RuntimeErrorCode::GenericError,
+        "Failed to remotely persist monitor",
+    ))
 }
 
 impl<'a, M: Deref, T: Deref, K: Deref, F: Deref, L: Deref, S: WriteableScore<'a>>
