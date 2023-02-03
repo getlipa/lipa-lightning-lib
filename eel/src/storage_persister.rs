@@ -489,7 +489,7 @@ fn sync_persist_monitor_remotely(
     channel_id: OutPoint,
     retries: u32,
 ) -> Result<()> {
-    let key = channel_id.to_channel_id().to_hex();
+    let key = format!("{}_{}", channel_id.txid.to_hex(), channel_id.index);
     let encrypted_data = encrypt(&data, encryption_key)?;
 
     for _ in 0..retries {
@@ -607,127 +607,162 @@ where
 
 #[cfg(test)]
 mod tests {
-    /*use super::*;
-
-    use crate::keys_manager::init_keys_manager;
-
-    use crate::async_runtime::AsyncRuntime;
-    use bitcoin::hashes::hex::ToHex;
+    use crate::errors::Error;
+    use crate::storage_persister::StoragePersister;
+    use crate::StartupVariant;
+    use bitcoin::BlockHash;
+    use lightning::chain::channelmonitor::ChannelMonitor;
+    use lightning::chain::keysinterface::{InMemorySigner, KeysManager};
+    use lightning::util::ser::ReadableArgs;
     use std::fs;
-    use std::path::PathBuf;
-    use storage_mock::Storage;
+    use std::io::Cursor;
 
-    #[derive(Debug)]
-    pub struct StorageMock {
-        storage: Arc<Storage>,
-    }
+    const MONITOR_1_STATE_1_PATH: &str = "tests/resources/monitors/state_1/1c4eb9c1d721ae7616ee480a735d175818510326701695ad4163aa00c6a320dd_0";
+    const MONITOR_1_STATE_2_PATH: &str = "tests/resources/monitors/state_2/1c4eb9c1d721ae7616ee480a735d175818510326701695ad4163aa00c6a320dd_0";
+    const MONITOR_1_STATE_3_PATH: &str = "tests/resources/monitors/state_3/1c4eb9c1d721ae7616ee480a735d175818510326701695ad4163aa00c6a320dd_0";
 
-    impl StorageMock {
-        pub fn new(storage: Arc<Storage>) -> Self {
-            Self { storage }
-        }
-    }
+    const MONITOR_2_STATE_1_PATH: &str = "tests/resources/monitors/state_1/e22f85d8e341ba2f0e9d069e6e9585a062b817553f4738264e3019f174b95612_0";
+    const MONITOR_2_STATE_2_PATH: &str = "tests/resources/monitors/state_2/e22f85d8e341ba2f0e9d069e6e9585a062b817553f4738264e3019f174b95612_0";
+    const MONITOR_2_STATE_3_PATH: &str = "tests/resources/monitors/state_3/e22f85d8e341ba2f0e9d069e6e9585a062b817553f4738264e3019f174b95612_0";
 
-    impl RemoteStorage for StorageMock {
-        fn check_health(&self) -> bool {
-            self.storage.check_health()
-        }
+    const MONITOR_3_STATE_3_PATH: &str = "tests/resources/monitors/state_3/aa7e2798a1cdca1e0700b2e5f07fe82002b6d084a9758553c8310b9f702ed61f_0";
 
-        fn list_objects(&self, bucket: String) -> LipaResult<Vec<String>> {
-            Ok(self.storage.list_objects(bucket))
-        }
+    #[test]
+    fn fresh_start() {
+        let mut local_monitors = Vec::new();
+        let mut remote_monitors = Vec::new();
 
-        fn object_exists(&self, bucket: String, key: String) -> LipaResult<bool> {
-            Ok(self.storage.object_exists(bucket, key))
-        }
+        let startup_variant = StoragePersister::infer_startup_variant::<InMemorySigner>(
+            &mut local_monitors,
+            &mut remote_monitors,
+        )
+        .unwrap();
 
-        fn get_object(&self, bucket: String, key: String) -> LipaResult<Vec<u8>> {
-            Ok(self.storage.get_object(bucket, key))
-        }
-
-        fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> LipaResult<()> {
-            self.storage.put_object(bucket, key, value);
-            Ok(())
-        }
-
-        fn delete_object(&self, bucket: String, key: String) -> LipaResult<()> {
-            self.storage.delete_object(bucket, key);
-            Ok(())
-        }
+        assert_eq!(startup_variant, StartupVariant::FreshStart);
     }
 
     #[test]
-    fn test_check_storage_health() {
-        let storage = Arc::new(Storage::new());
-        let rt = AsyncRuntime::new().unwrap();
-        let persister = StoragePersister::new(
-            Box::new(StorageMock::new(storage.clone())),
-            "".to_string(),
-            rt.handle(),
-        );
-        *storage.health.lock().unwrap() = true;
-        assert!(persister.check_health());
+    fn normal_start() {
+        let mut local_monitors = Vec::new();
+        local_monitors.push(read_channel_monitor(MONITOR_2_STATE_1_PATH));
+        local_monitors.push(read_channel_monitor(MONITOR_1_STATE_1_PATH));
 
-        *storage.health.lock().unwrap() = false;
-        assert!(!persister.check_health());
+        let mut remote_monitors = Vec::new();
+        remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_1_PATH));
+        remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_1_PATH));
+
+        let startup_variant = StoragePersister::infer_startup_variant::<InMemorySigner>(
+            &mut local_monitors,
+            &mut remote_monitors,
+        )
+        .unwrap();
+
+        assert_eq!(startup_variant, StartupVariant::Normal);
     }
 
     #[test]
-    fn test_read_channel_monitors() {
-        let storage = Arc::new(Storage::new());
-        let rt = AsyncRuntime::new().unwrap();
-        let persister = StoragePersister::new(
-            Box::new(StorageMock::new(storage.clone())),
-            "".to_string(),
-            rt.handle(),
-        );
-        let keys_manager = init_keys_manager(&[0u8; 32].to_vec()).unwrap();
+    fn recovery_start() {
+        let mut local_monitors = Vec::new();
 
-        assert_eq!(
-            persister
-                .read_channel_monitors(&keys_manager)
-                .unwrap()
-                .len(),
-            0
+        let mut remote_monitors = Vec::new();
+        remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_1_PATH));
+        remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_1_PATH));
+
+        let startup_variant = StoragePersister::infer_startup_variant::<InMemorySigner>(
+            &mut local_monitors,
+            &mut remote_monitors,
+        )
+        .unwrap();
+
+        assert_eq!(startup_variant, StartupVariant::Recovery);
+    }
+
+    #[test]
+    fn local_knows_about_1_more_channel() {
+        let mut local_monitors = Vec::new();
+        local_monitors.push(read_channel_monitor(MONITOR_1_STATE_3_PATH));
+        local_monitors.push(read_channel_monitor(MONITOR_3_STATE_3_PATH));
+        local_monitors.push(read_channel_monitor(MONITOR_2_STATE_3_PATH));
+
+        let mut remote_monitors = Vec::new();
+        remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_2_PATH));
+        remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_2_PATH));
+
+        let startup_variant = StoragePersister::infer_startup_variant::<InMemorySigner>(
+            &mut local_monitors,
+            &mut remote_monitors,
+        )
+        .unwrap();
+
+        assert_eq!(startup_variant, StartupVariant::Normal);
+    }
+
+    #[test]
+    fn remote_knows_about_1_more_channel() {
+        let mut local_monitors = Vec::new();
+        local_monitors.push(read_channel_monitor(MONITOR_1_STATE_2_PATH));
+        local_monitors.push(read_channel_monitor(MONITOR_2_STATE_2_PATH));
+
+        let mut remote_monitors = Vec::new();
+        remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_3_PATH));
+        remote_monitors.push(read_channel_monitor(MONITOR_3_STATE_3_PATH));
+        remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_3_PATH));
+
+        let startup_variant_result = StoragePersister::infer_startup_variant::<InMemorySigner>(
+            &mut local_monitors,
+            &mut remote_monitors,
         );
 
-        // With invalid object.
-        storage.objects.lock().unwrap().borrow_mut().insert(
-            ("monitors".to_string(), "invalid_object".to_string()),
-            Vec::new(),
-        );
-        assert_eq!(
-            persister
-                .read_channel_monitors(&keys_manager)
-                .unwrap()
-                .len(),
-            0
+        assert!(matches!(
+            startup_variant_result,
+            Err(Error::PermanentFailure { .. })
+        ))
+    }
+
+    #[test]
+    fn local_is_more_recent() {
+        let mut local_monitors = Vec::new();
+        local_monitors.push(read_channel_monitor(MONITOR_2_STATE_2_PATH));
+        local_monitors.push(read_channel_monitor(MONITOR_1_STATE_2_PATH));
+
+        let mut remote_monitors = Vec::new();
+        remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_1_PATH));
+        remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_1_PATH));
+
+        let startup_variant = StoragePersister::infer_startup_variant::<InMemorySigner>(
+            &mut local_monitors,
+            &mut remote_monitors,
+        )
+        .unwrap();
+
+        assert_eq!(startup_variant, StartupVariant::Normal);
+    }
+
+    #[test]
+    fn remote_is_more_recent() {
+        let mut local_monitors = Vec::new();
+        local_monitors.push(read_channel_monitor(MONITOR_2_STATE_1_PATH));
+        local_monitors.push(read_channel_monitor(MONITOR_1_STATE_1_PATH));
+
+        let mut remote_monitors = Vec::new();
+        remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_2_PATH));
+        remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_2_PATH));
+
+        let startup_variant_result = StoragePersister::infer_startup_variant::<InMemorySigner>(
+            &mut local_monitors,
+            &mut remote_monitors,
         );
 
-        // With valid object.
-        let mut monitors_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        monitors_path.push("tests/resources/monitors");
-        monitors_path.push("739f39903ea426645bd6650c55a568653c4d3c275bcbda17befc468f64c76a58_1");
-        let data = fs::read(monitors_path).unwrap();
-        storage
-            .objects
-            .lock()
-            .unwrap()
-            .borrow_mut()
-            .insert(("monitors".to_string(), "valid_object".to_string()), data);
-        let monitors = persister.read_channel_monitors(&keys_manager).unwrap();
-        assert_eq!(monitors.len(), 1);
-        let (blockhash, monitor) = &monitors[0];
-        assert_eq!(
-            blockhash.as_hash().to_hex(),
-            "4c1a044c14d1c506431707ad671721cd8b637760ecc26e1975ad71b79721660d"
-        );
-        assert_eq!(monitor.get_latest_update_id(), 0);
-        let txo = monitor.get_funding_txo().0;
-        assert_eq!(
-            txo.txid.as_hash().to_hex(),
-            "739f39903ea426645bd6650c55a568653c4d3c275bcbda17befc468f64c76a58"
-        );
-        assert_eq!(txo.index, 1);
-    }*/
+        assert!(matches!(
+            startup_variant_result,
+            Err(Error::PermanentFailure { .. })
+        ))
+    }
+
+    fn read_channel_monitor(path: &str) -> (BlockHash, ChannelMonitor<InMemorySigner>) {
+        let keys_manager = KeysManager::new(&[0u8; 32], 0, 0);
+        let data = fs::read(path).unwrap();
+        let mut buffer = Cursor::new(&data);
+        <(BlockHash, ChannelMonitor<InMemorySigner>)>::read(&mut buffer, &keys_manager).unwrap()
+    }
 }
