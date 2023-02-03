@@ -2,9 +2,11 @@ mod setup;
 
 #[cfg(feature = "nigiri")]
 mod persistence_test {
-    use crate::setup::mocked_remote_storate::Config;
+    use crate::setup::mocked_remote_storage::Config;
+    use eel::errors::RuntimeErrorCode;
     use eel::LightningNode;
     use log::info;
+    use perro::Error::RuntimeError;
     use serial_test::file_serial;
     use std::fs;
     use std::thread::sleep;
@@ -16,7 +18,7 @@ mod persistence_test {
 
     const ONE_SAT: u64 = 1_000;
     const TWO_K_SATS: u64 = 2_000_000;
-    const FIVE_HUNDRED_K_SATS: u64 = 500_000_000;
+    const HALF_M_SATS: u64 = 500_000_000;
 
     const HALF_SEC: Duration = Duration::from_millis(500);
     const N_RETRIES: u8 = 10;
@@ -59,35 +61,36 @@ mod persistence_test {
         let node_handle = NodeHandle::new(Config::new(None, false, 100));
 
         let node_result = node_handle.start();
-        assert!(node_result.is_err());
-        assert!(node_result
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("RemoteStorageServiceUnavailable"));
+        assert!(matches!(
+            node_result,
+            Err(RuntimeError {
+                code: RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                ..
+            })
+        ));
     }
 
     fn run_flow_normal_restart(node_handle: &NodeHandle) {
-        run_flow_1(node_handle);
+        run_flow_1st_jit_channel(node_handle);
 
-        // Wait for shutdown to complete
+        // Wait for eel-node to shutdown
         sleep(Duration::from_secs(5));
 
-        run_flow_2(node_handle);
+        run_flow_2nd_jit_channel(node_handle);
     }
 
     fn run_flow_recovery_restart(node_handle: &NodeHandle) {
-        run_flow_1(node_handle);
+        run_flow_1st_jit_channel(node_handle);
 
-        // Wait for shutdown to complete
+        // Wait for eel-node to shutdown
         sleep(Duration::from_secs(5));
         // Remove the local state
         fs::remove_dir_all(".3l_local_test").unwrap();
 
-        run_flow_2(node_handle);
+        run_flow_2nd_jit_channel(node_handle);
     }
 
-    fn run_flow_1(node_handle: &NodeHandle) {
+    fn run_flow_1st_jit_channel(node_handle: &NodeHandle) {
         {
             let node = node_handle.start().unwrap();
             assert_eq!(node.get_node_info().num_peers, 1);
@@ -113,7 +116,7 @@ mod persistence_test {
         } // Shut down the node
     }
 
-    fn run_flow_2(node_handle: &NodeHandle) {
+    fn run_flow_2nd_jit_channel(node_handle: &NodeHandle) {
         {
             let node = node_handle.start().unwrap();
 
@@ -121,12 +124,7 @@ mod persistence_test {
             sleep(Duration::from_secs(5));
             assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
 
-            run_jit_channel_open_flow(
-                &node,
-                NodeInstance::NigiriLnd,
-                FIVE_HUNDRED_K_SATS,
-                TWO_K_SATS,
-            );
+            run_jit_channel_open_flow(&node, NodeInstance::NigiriLnd, HALF_M_SATS, TWO_K_SATS);
             assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
         }
     }

@@ -1,5 +1,5 @@
 #[path = "../mocked_remote_storage/mod.rs"]
-pub mod mocked_remote_storate;
+pub mod mocked_remote_storage;
 #[path = "../print_events_handler/mod.rs"]
 mod print_event_handler;
 
@@ -9,7 +9,7 @@ use eel::lsp_client::LspClient;
 use eel::LightningNode;
 use std::fs;
 
-use crate::setup::mocked_remote_storate::MockedRemoteStorage;
+use crate::setup::mocked_remote_storage::MockedRemoteStorage;
 #[cfg(feature = "nigiri")]
 use crate::setup::nigiri::{NodeInstance, RGS_CLN_HOST, RGS_CLN_ID, RGS_CLN_PORT};
 use crate::setup::print_event_handler::PrintEventsHandler;
@@ -49,7 +49,7 @@ fn init_logger() {
 
 #[allow(dead_code)]
 impl NodeHandle {
-    pub fn new(storage_config: mocked_remote_storate::Config) -> Self {
+    pub fn new(storage_config: mocked_remote_storage::Config) -> Self {
         let storage = MockedRemoteStorage::new(Arc::new(Storage::new()), storage_config);
 
         let _ = fs::remove_dir_all(".3l_local_test");
@@ -66,7 +66,7 @@ impl NodeHandle {
     }
 
     pub fn default() -> Self {
-        Self::new(mocked_remote_storate::Config::default())
+        Self::new(mocked_remote_storage::Config::default())
     }
 
     pub fn start(&self) -> eel::errors::Result<LightningNode> {

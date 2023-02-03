@@ -16,7 +16,7 @@ pub struct Config {
 
 impl Config {
     pub fn new(delay: Option<Duration>, available: bool, put_availability_percent: u8) -> Self {
-        Config {
+        Self {
             delay,
             available,
             put_availability_percent,
