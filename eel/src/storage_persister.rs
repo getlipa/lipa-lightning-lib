@@ -545,7 +545,7 @@ where
                 error!("Failed to encrypt the ChannelManager: {}", e.to_string());
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    "Failed to encrypt the ChannelManager",
+                    format!("Failed to encrypt the ChannelManager: {e}"),
                 ));
             }
         };
