@@ -78,13 +78,31 @@ impl StoragePersister {
     where
         K::Target: KeysInterface<Signer = Signer> + Sized,
     {
-        // Get local ChannelMonitors
         let mut local_channel_monitors = self
             .fs_persister
             .read_channelmonitors(&*keys_manager)
             .map_to_permanent_failure("Failed to read channel monitors from disk")?;
 
-        // Get remote ChannelMonitors
+        let mut remote_channel_monitors = self.read_remote_channel_monitors(keys_manager)?;
+
+        let startup_variant =
+            Self::infer_startup_variant(&mut local_channel_monitors, &mut remote_channel_monitors)?;
+        let monitors = match startup_variant {
+            StartupVariant::FreshStart => Vec::new(),
+            StartupVariant::Recovery => remote_channel_monitors,
+            StartupVariant::Normal => local_channel_monitors,
+        };
+
+        Ok((startup_variant, monitors))
+    }
+
+    fn read_remote_channel_monitors<Signer: Sign, K: Deref>(
+        &self,
+        keys_manager: K,
+    ) -> Result<Vec<(BlockHash, ChannelMonitor<Signer>)>>
+    where
+        K::Target: KeysInterface<Signer = Signer> + Sized,
+    {
         let mut remote_channel_monitors = Vec::new();
         for key in self
             .storage
@@ -123,31 +141,34 @@ impl StoragePersister {
                 }
             }
         }
+        Ok(remote_channel_monitors)
+    }
 
-        if local_channel_monitors.is_empty() {
+    fn infer_startup_variant<Signer: Sign>(
+        local_monitors: &mut Vec<(BlockHash, ChannelMonitor<Signer>)>,
+        remote_monitors: &mut Vec<(BlockHash, ChannelMonitor<Signer>)>,
+    ) -> Result<StartupVariant> {
+        if local_monitors.is_empty() {
             // If we don't have any local ChannelMonitors, but have 1 or more remote ChannelMonitors,
-            // we can assume that this is a new app installation and we want to use the remote state.
-            if !remote_channel_monitors.is_empty() {
-                info!("This is a Recovery start! No local ChannelMonitors were found, but {} was/were retrieved from remote storage.", remote_channel_monitors.len());
-                return Ok((StartupVariant::Recovery, remote_channel_monitors));
+            // we can assume that this is a new app installation.
+            if !remote_monitors.is_empty() {
+                info!("This is a Recovery start! No local ChannelMonitors were found, but {} was/were retrieved from remote storage.", remote_monitors.len());
+                return Ok(StartupVariant::Recovery);
             } else {
                 info!("This is a FreshStart start! No local or remote ChannelMonitors were found.");
-                return Ok((StartupVariant::FreshStart, Vec::new()));
+                return Ok(StartupVariant::FreshStart);
             }
         }
 
         // If either the local or the remote state shows the existence of more channels than the other
         // that means that that one is more recent than the other.
-        match remote_channel_monitors
-            .len()
-            .cmp(&local_channel_monitors.len())
-        {
+        match remote_monitors.len().cmp(&local_monitors.len()) {
             Ordering::Less => {
                 // The local state is more recent than the remote one. As part of the node startup,
                 // every ChannelMonitor is persisted again so this is likely to get resolved.
                 // Let's log it anyway...
                 info!("This is a Normal start! Warning: the remote storage doesn't know about all channels.");
-                return Ok((StartupVariant::Normal, local_channel_monitors));
+                return Ok(StartupVariant::Normal);
             }
             Ordering::Equal => {}
             Ordering::Greater => {
@@ -156,16 +177,14 @@ impl StoragePersister {
             }
         }
 
-        debug_assert_eq!(remote_channel_monitors.len(), local_channel_monitors.len());
+        debug_assert_eq!(remote_monitors.len(), local_monitors.len());
 
         // Check if for any channel, the remote ChannelMonitor is more recent than the local one
-        local_channel_monitors
+        local_monitors
             .sort_unstable_by_key(|(_, monitor)| (monitor.get_funding_txo().0.to_channel_id()));
-        remote_channel_monitors
+        remote_monitors
             .sort_unstable_by_key(|(_, monitor)| (monitor.get_funding_txo().0.to_channel_id()));
-        let zipped_monitors = local_channel_monitors
-            .iter()
-            .zip(remote_channel_monitors.iter());
+        let zipped_monitors = local_monitors.iter().zip(remote_monitors.iter());
 
         for ((_, local_monitor), (_, remote_monitor)) in zipped_monitors {
             if remote_monitor.get_funding_txo() != local_monitor.get_funding_txo() {
@@ -191,7 +210,7 @@ impl StoragePersister {
             }
         }
         info!("This is a Normal start!");
-        Ok((StartupVariant::Normal, local_channel_monitors))
+        Ok(StartupVariant::Normal)
     }
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
