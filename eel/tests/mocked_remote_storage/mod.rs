@@ -14,6 +14,20 @@ pub struct Config {
     pub put_availability_percent: u8,
 }
 
+impl Config {
+    pub fn new(delay: Option<Duration>, available: bool, put_availability_percent: u8) -> Self {
+        Self {
+            delay,
+            available,
+            put_availability_percent,
+        }
+    }
+
+    pub fn default() -> Self {
+        Self::new(None, true, 100)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MockedRemoteStorage {
     storage: Arc<Storage>,

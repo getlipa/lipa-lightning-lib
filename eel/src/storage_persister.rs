@@ -23,7 +23,7 @@ use lightning::util::persist::Persister;
 use lightning::util::ser::{ReadableArgs, Writeable};
 use lightning_persister::FilesystemPersister;
 use log::{debug, error, info};
-use perro::{permanent_failure, MapToError};
+use perro::{permanent_failure, runtime_error, MapToError};
 use std::fs;
 use std::io::{BufReader, Cursor};
 use std::ops::Deref;
@@ -128,8 +128,10 @@ impl StoragePersister {
             // If we don't have any local ChannelMonitors, but have 1 or more remote ChannelMonitors,
             // we can assume that this is a new app installation and we want to use the remote state.
             if !remote_channel_monitors.is_empty() {
+                info!("This is a Recovery start! No local ChannelMonitors were found, but {} was/were retrieved from remote storage.", remote_channel_monitors.len());
                 return Ok((StartupVariant::Recovery, remote_channel_monitors));
             } else {
+                info!("This is a FreshStart start! No local or remote ChannelMonitors were found.");
                 return Ok((StartupVariant::FreshStart, Vec::new()));
             }
         }
@@ -144,7 +146,7 @@ impl StoragePersister {
                 // The local state is more recent than the remote one. As part of the node startup,
                 // every ChannelMonitor is persisted again so this is likely to get resolved.
                 // Let's log it anyway...
-                info!("The remote storage doesn't know about all channels.");
+                info!("This is a Normal start! Warning: the remote storage doesn't know about all channels.");
                 return Ok((StartupVariant::Normal, local_channel_monitors));
             }
             Ordering::Equal => {}
@@ -179,7 +181,7 @@ impl StoragePersister {
                     // The remote ChannelMonitor isn't up-to-date. As part of the node startup, every
                     // ChannelMonitor is persisted again so this is likely to get resolved.
                     // Let's log it anyway...
-                    info!("The remote version of a channel monitor {} isn't as recent as the local one", local_monitor.get_funding_txo().0.to_channel_id().to_hex());
+                    info!("Warning: the remote version of a channel monitor {} isn't as recent as the local one", local_monitor.get_funding_txo().0.to_channel_id().to_hex());
                 }
                 Ordering::Equal => {}
                 Ordering::Greater => {
@@ -188,7 +190,7 @@ impl StoragePersister {
                 }
             }
         }
-
+        info!("This is a Normal start!");
         Ok((StartupVariant::Normal, local_channel_monitors))
     }
 
@@ -358,7 +360,7 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
         // Launch background task that handles persisting monitor remotely
         let data = data.encode();
         let storage = Arc::clone(&self.storage);
-        let chain_monitor = match { self.chain_monitor.read().unwrap() }.upgrade() {
+        let _chain_monitor = match { self.chain_monitor.read().unwrap() }.upgrade() {
             None => return ChannelMonitorUpdateStatus::PermanentFailure,
             Some(c) => c,
         };
@@ -374,8 +376,11 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
         ));
 
         ChannelMonitorUpdateStatus::InProgress*/
-        sync_persist_monitor_remotely(storage, chain_monitor, data, channel_id);
-        ChannelMonitorUpdateStatus::Completed
+        let retries = 20;
+        match sync_persist_monitor_remotely(storage, data, channel_id, retries) {
+            Ok(_) => ChannelMonitorUpdateStatus::Completed,
+            Err(_) => ChannelMonitorUpdateStatus::PermanentFailure,
+        }
     }
 
     fn update_persisted_channel(
@@ -447,17 +452,20 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
 
 fn sync_persist_monitor_remotely(
     storage: Arc<Box<dyn RemoteStorage>>,
-    chain_monitor: Arc<ChainMonitor>,
     data: Vec<u8>,
     channel_id: OutPoint,
-) {
+    retries: u32,
+) -> Result<()> {
     let key = channel_id.to_channel_id().to_hex();
-    loop {
+    for _ in 0..retries {
         match storage.put_object(MONITORS_BUCKET.to_string(), key.clone(), data.clone()) {
-            Ok(_) => break,
+            Ok(_) => {
+                debug!("Successfully remotely persisted the ChannelMonitor {}", key);
+                return Ok(());
+            }
             Err(Error::RuntimeError { .. }) => {
                 error!(
-                    "Temporary failure to remotely persist the ChannelMonitor {}... Retrying...",
+                    "Temporary failure to remotely persist the ChannelMonitor {}...",
                     key
                 );
             }
@@ -467,19 +475,18 @@ fn sync_persist_monitor_remotely(
                     key,
                     e.to_string()
                 );
-                return;
+                return Err(runtime_error(
+                    RuntimeErrorCode::GenericError,
+                    "Failed to remotely persist monitor",
+                ));
             }
         }
-        if !chain_monitor
-            .list_pending_monitor_updates()
-            .contains_key(&channel_id)
-        {
-            error!("Failed to remotely persist ChannelMonitor {} - ChainMonitor stopped listing this ChannelMonitor as having pending updates", key);
-            return;
-        }
-        std::thread::sleep(Duration::from_secs(5));
+        std::thread::sleep(Duration::from_millis(500));
     }
-    debug!("Successfully remotely persisted the ChannelMonitor {}", key);
+    Err(runtime_error(
+        RuntimeErrorCode::GenericError,
+        "Failed to remotely persist monitor",
+    ))
 }
 
 impl<'a, M: Deref, T: Deref, K: Deref, F: Deref, L: Deref, S: WriteableScore<'a>>

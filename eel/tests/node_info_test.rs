@@ -12,7 +12,7 @@ mod node_info_test {
     fn test_get_node_info() {
         nigiri::setup_environment_with_lsp();
 
-        let node = NodeHandle::new().start().unwrap();
+        let node = NodeHandle::default().start().unwrap();
         let node_info = node.get_node_info();
 
         assert!(

@@ -18,7 +18,7 @@ mod receiving_payments_test {
     const TWO_K_SATS: u64 = 2_000_000;
     const TEN_K_SATS: u64 = 10_000_000;
     const TWENTY_K_SATS: u64 = 20_000_000;
-    const FIVE_HUNDRED_K_SATS: u64 = 500_000_000;
+    const HALF_M_SATS: u64 = 500_000_000;
 
     const HALF_SEC: Duration = Duration::from_millis(500);
     const N_RETRIES: u8 = 10;
@@ -32,7 +32,7 @@ mod receiving_payments_test {
         // Test receiving an invoice on a node that does not have any channel yet
         // resp, the channel opening is part of the payment process.
         nigiri::setup_environment_with_lsp();
-        let node_handle = NodeHandle::new();
+        let node_handle = NodeHandle::default();
 
         {
             let node = node_handle.start().unwrap();
@@ -71,12 +71,7 @@ mod receiving_payments_test {
             // Test receiving an amount that needs a new channel open when we already have existing channels.
             // We should have 102001 sat channel and have received a 1 sat payment. A 0.5M payment is not
             // possible. A new channel with 0.6M size should be created
-            run_jit_channel_open_flow(
-                &node,
-                NodeInstance::NigiriLnd,
-                FIVE_HUNDRED_K_SATS,
-                TWO_K_SATS,
-            );
+            run_jit_channel_open_flow(&node, NodeInstance::NigiriLnd, HALF_M_SATS, TWO_K_SATS);
             assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
             info!("Restarting node..."); // to test that the graph is persisted and retrieved correctly
         } // Shut down the node
@@ -127,7 +122,7 @@ mod receiving_payments_test {
     fn receive_multiple_payments_for_same_invoice() {
         nigiri::ensure_environment_running();
 
-        let node = NodeHandle::new().start().unwrap();
+        let node = NodeHandle::default().start().unwrap();
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
         assert_eq!(node.get_node_info().num_peers, 1);
 

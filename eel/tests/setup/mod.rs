@@ -1,5 +1,5 @@
 #[path = "../mocked_remote_storage/mod.rs"]
-mod mocked_remote_storate;
+pub mod mocked_remote_storage;
 #[path = "../print_events_handler/mod.rs"]
 mod print_event_handler;
 
@@ -9,15 +9,16 @@ use eel::lsp_client::LspClient;
 use eel::LightningNode;
 use std::fs;
 
-use crate::setup::mocked_remote_storate::MockedRemoteStorage;
+use crate::setup::mocked_remote_storage::MockedRemoteStorage;
 #[cfg(feature = "nigiri")]
 use crate::setup::nigiri::{NodeInstance, RGS_CLN_HOST, RGS_CLN_ID, RGS_CLN_PORT};
 use crate::setup::print_event_handler::PrintEventsHandler;
 use bitcoin::Network;
 use simplelog::{ConfigBuilder, LevelFilter, SimpleLogger};
-use std::sync::Once;
+use std::sync::{Arc, Once};
 use std::thread::sleep;
 use std::time::Duration;
+use storage_mock::Storage;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
 
@@ -33,6 +34,14 @@ fn init_logger() {
         let config = ConfigBuilder::new()
             .add_filter_ignore_str("ureq")
             .add_filter_ignore_str("mio")
+            .add_filter_ignore_str("reqwest")
+            .add_filter_ignore_str("want")
+            .add_filter_ignore_str("h2")
+            .add_filter_ignore_str("tracing")
+            .add_filter_ignore_str("hyper")
+            .add_filter_ignore_str("tonic")
+            .add_filter_ignore_str("tokio_util")
+            .add_filter_ignore_str("tower")
             .build();
         SimpleLogger::init(LevelFilter::Trace, config).unwrap();
     });
@@ -40,8 +49,8 @@ fn init_logger() {
 
 #[allow(dead_code)]
 impl NodeHandle {
-    pub fn new() -> Self {
-        let storage = MockedRemoteStorage::default();
+    pub fn new(storage_config: mocked_remote_storage::Config) -> Self {
+        let storage = MockedRemoteStorage::new(Arc::new(Storage::new()), storage_config);
 
         let _ = fs::remove_dir_all(".3l_local_test");
 
@@ -54,6 +63,10 @@ impl NodeHandle {
         };
 
         NodeHandle { config, storage }
+    }
+
+    pub fn default() -> Self {
+        Self::new(mocked_remote_storage::Config::default())
     }
 
     pub fn start(&self) -> eel::errors::Result<LightningNode> {
@@ -73,6 +86,10 @@ impl NodeHandle {
         sleep(Duration::from_millis(1500));
 
         node
+    }
+
+    pub fn get_storage(&mut self) -> &mut MockedRemoteStorage {
+        &mut self.storage
     }
 }
 
@@ -719,7 +736,7 @@ pub mod nigiri {
     pub fn initiate_node_with_channel(remote_node: NodeInstance) -> LightningNode {
         nigiri::setup_environment_with_lsp();
 
-        let node = NodeHandle::new().start().unwrap();
+        let node = NodeHandle::default().start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
         assert_eq!(node.get_node_info().num_peers, 1);
