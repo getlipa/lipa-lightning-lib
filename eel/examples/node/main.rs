@@ -88,17 +88,37 @@ fn init_logger() {
     .unwrap();
 }
 
-fn read_or_generate_seed(storage: &FileStorage) -> Vec<u8> {
+fn read_or_generate_seed(storage: &FileStorage) -> [u8; 64] {
     let seed_file_name = "seed";
+    let seed = match read_seed(storage, seed_file_name) {
+        Some(seed) => seed,
+        None => {
+            info!("No existent seed found, generating a new one.");
+            generate_seed(storage, seed_file_name)
+        }
+    };
+
+    let mut seed_array = [0u8; 64];
+    seed_array.copy_from_slice(&seed[..64]);
+    seed_array
+}
+
+fn read_seed(storage: &FileStorage, seed_file_name: &str) -> Option<Vec<u8>> {
     if storage
         .object_exists(".".to_string(), seed_file_name.to_string())
         .unwrap()
     {
-        return storage
-            .get_object(".".to_string(), seed_file_name.to_string())
-            .unwrap();
+        return Some(
+            storage
+                .get_object(".".to_string(), seed_file_name.to_string())
+                .unwrap(),
+        );
     }
-    info!("No existent seed found, generating a new one.");
+
+    None
+}
+
+fn generate_seed(storage: &FileStorage, seed_file_name: &str) -> Vec<u8> {
     let passphrase = "".to_string();
     let mnemonic = "kid rent scatter hire lonely deal simple olympic stool juice ketchup situate crouch taste stone badge act minute borrow mail venue lunar walk empower".to_string();
     let mnemonic = mnemonic.split_whitespace().map(String::from).collect();

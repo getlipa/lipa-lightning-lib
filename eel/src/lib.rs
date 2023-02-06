@@ -22,6 +22,7 @@ mod event_handler;
 mod fee_estimator;
 mod filter;
 mod invoice;
+mod key_derivation;
 mod logger;
 mod random;
 mod rapid_sync_client;
@@ -140,9 +141,12 @@ impl LightningNode {
         let tx_broadcaster = Arc::new(TxBroadcaster::new(Arc::clone(&esplora_client)));
 
         // Step 4. Initialize Persist
+        let encryption_key =
+            key_derivation::derive_persistence_encryption_key(&config.seed).unwrap();
         let persister = Arc::new(StoragePersister::new(
             remote_storage,
             config.local_persistence_path.clone(),
+            encryption_key,
             rt.handle(),
         ));
         if !persister.check_health() {
@@ -164,7 +168,7 @@ impl LightningNode {
         persister.add_chain_monitor(Arc::downgrade(&chain_monitor));
 
         // Step 6. Initialize the KeysManager
-        let keys_manager = Arc::new(init_keys_manager(&config.seed)?);
+        let keys_manager = Arc::new(init_keys_manager(&config.get_seed_first_half())?);
 
         // Step 7. Read ChannelMonitor state from disk/remote
         let (startup_variant, mut channel_monitors) =

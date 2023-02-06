@@ -1,3 +1,4 @@
+use crate::encryption_symmetric::{decrypt, encrypt};
 use crate::errors::*;
 use crate::interfaces::RemoteStorage;
 use crate::types::{ChainMonitor, NetworkGraph, Scorer};
@@ -41,6 +42,7 @@ static SCORER_KEY: &str = "scorer";
 pub(crate) struct StoragePersister {
     storage: Arc<Box<dyn RemoteStorage>>,
     fs_persister: FilesystemPersister,
+    encryption_key: [u8; 32],
     _runtime_handle: Handle,
     chain_monitor: RwLock<Weak<ChainMonitor>>,
 }
@@ -49,6 +51,7 @@ impl StoragePersister {
     pub fn new(
         storage: Box<dyn RemoteStorage>,
         local_fs_path: String,
+        encryption_key: [u8; 32],
         runtime_handle: Handle,
     ) -> Self {
         let storage = Arc::new(storage);
@@ -56,6 +59,7 @@ impl StoragePersister {
         Self {
             storage,
             fs_persister,
+            encryption_key,
             _runtime_handle: runtime_handle,
             chain_monitor: RwLock::new(Weak::new()),
         }
@@ -94,13 +98,15 @@ impl StoragePersister {
                 "Failed to get list of ChannelMonitors from remote storage",
             )?
         {
-            let data = self
+            let encrypted_data = self
                 .storage
                 .get_object(MONITORS_BUCKET.to_string(), key.clone())
                 .map_to_runtime_error(
                     RuntimeErrorCode::RemoteStorageServiceUnavailable,
                     format!("Failed to get ChannelMonitor {key} from remote storage"),
                 )?;
+            let data = decrypt(&encrypted_data, &self.encryption_key)
+                .map_to_permanent_failure("Failed to decrypt ChannelMonitor")?;
             let mut buffer = Cursor::new(&data);
             match <(BlockHash, ChannelMonitor<Signer>)>::read(&mut buffer, &*keys_manager) {
                 Ok((blockhash, channel_monitor)) => {
@@ -246,13 +252,14 @@ impl StoragePersister {
                         "Failed to find a remote ChannelManager",
                     )?
                 {
-                    let data = self
+                    let encrypted_data = self
                         .storage
                         .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
                         .map_to_runtime_error(
                             RuntimeErrorCode::RemoteStorageServiceUnavailable,
                             "Failed to read a remote ChannelManager",
                         )?;
+                    let data = decrypt(&encrypted_data, &self.encryption_key)?;
                     let mut buffer = Cursor::new(&data);
                     let (block_hash, channel_manager) = <(
                         BlockHash,
@@ -377,7 +384,13 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
 
         ChannelMonitorUpdateStatus::InProgress*/
         let retries = 20;
-        match sync_persist_monitor_remotely(storage, data, channel_id, retries) {
+        match sync_persist_monitor_remotely(
+            storage,
+            &self.encryption_key,
+            data,
+            channel_id,
+            retries,
+        ) {
             Ok(_) => ChannelMonitorUpdateStatus::Completed,
             Err(_) => ChannelMonitorUpdateStatus::PermanentFailure,
         }
@@ -452,13 +465,20 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
 
 fn sync_persist_monitor_remotely(
     storage: Arc<Box<dyn RemoteStorage>>,
+    encryption_key: &[u8; 32],
     data: Vec<u8>,
     channel_id: OutPoint,
     retries: u32,
 ) -> Result<()> {
     let key = channel_id.to_channel_id().to_hex();
+    let encrypted_data = encrypt(&data, encryption_key)?;
+
     for _ in 0..retries {
-        match storage.put_object(MONITORS_BUCKET.to_string(), key.clone(), data.clone()) {
+        match storage.put_object(
+            MONITORS_BUCKET.to_string(),
+            key.clone(),
+            encrypted_data.clone(),
+        ) {
             Ok(_) => {
                 debug!("Successfully remotely persisted the ChannelMonitor {}", key);
                 return Ok(());
@@ -519,12 +539,22 @@ where
         };
 
         // Persist remotely
+        let encrypted_data = match encrypt(&channel_manager.encode(), &self.encryption_key) {
+            Ok(data) => data,
+            Err(e) => {
+                error!("Failed to encrypt the ChannelManager: {}", e.to_string());
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to encrypt the ChannelManager: {e}"),
+                ));
+            }
+        };
         if self
             .storage
             .put_object(
                 OBJECTS_BUCKET.to_string(),
                 MANAGER_KEY.to_string(),
-                channel_manager.encode(),
+                encrypted_data,
             )
             .is_err()
         {

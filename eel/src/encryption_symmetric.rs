@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::errors::{Error, Result};
 use crate::random;
 
