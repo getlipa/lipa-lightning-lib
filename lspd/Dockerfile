@@ -1,5 +1,7 @@
 FROM golang:1.19-alpine as builder
 
+RUN apk add --no-cache --update alpine-sdk gcc
+
 WORKDIR /usr/src
 COPY . lspd/
 WORKDIR /usr/src/lspd
