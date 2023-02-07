@@ -3,12 +3,12 @@ pub mod lspd {
     tonic::include_proto!("lspd");
 }
 
-use crate::encryption::encrypt;
 use crate::errors::{Result, RuntimeErrorCode};
 use crate::interfaces::Lsp;
 
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::secp256k1::PublicKey;
+use ecies::encrypt;
 use lightning::ln::{PaymentHash, PaymentSecret};
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::RouteHintHop;
@@ -85,8 +85,8 @@ impl LspClient {
         };
 
         let payment_info = payment_info.encode_to_vec();
-        let encrypted_payment_info = encrypt(&lsp_info.pubkey, &payment_info)
-            .prefix_error("Failed to encrypt payment request")?;
+        let encrypted_payment_info = encrypt(&lsp_info.pubkey.serialize(), &payment_info)
+            .map_to_permanent_failure("Failed to encrypt payment request")?;
         self.lsp
             .register_payment(encrypted_payment_info)
             .map_to_runtime_error(
