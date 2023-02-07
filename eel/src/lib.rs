@@ -110,6 +110,7 @@ pub struct LightningNode {
     task_manager: Arc<Mutex<TaskManager>>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum StartupVariant {
     FreshStart,
     Recovery,
