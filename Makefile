@@ -73,6 +73,11 @@ start-dev-env:
 	docker-compose -f lspd/compose.yaml up -d
 	docker-compose -f rgs/compose.yaml up -d
 
+.PHONY: connect-rgs-ln-node
+connect-rgs-ln-node:
+	id=`docker-compose -f rgs/compose.yaml exec rgs-cln lightning-cli --network=regtest getinfo | jq -r .id`; \
+	nigiri cln connect $$id@rgs-cln:9937
+
 .PHONY: stop-dev-env
 stop-dev-env:
 	docker-compose -f rgs/compose.yaml down

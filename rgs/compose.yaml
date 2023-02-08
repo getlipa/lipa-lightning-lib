@@ -79,9 +79,11 @@ services:
       RAPID_GOSSIP_SYNC_SERVER_DB_USER: lipauser
       RAPID_GOSSIP_SYNC_SERVER_DB_PASSWORD: lipapassword
       RAPID_GOSSIP_SYNC_SERVER_DB_NAME: lipadb
+      RAPID_GOSSIP_SYNC_SERVER_NETWORK: Regtest
       BITCOIN_REST_DOMAIN: rgs-bitcoin
       BITCOIN_REST_PORT: 18443
       BITCOIN_REST_PATH: /rest/
+      LN_PEERS: 03f3bf54dd54d3cebb21665f8af405261ca8a241938254a46b1ead7b569199f607@rgs-cln:9937
 
 networks:
   default:
