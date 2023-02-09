@@ -46,8 +46,8 @@ impl LspClient {
         })
     }
 
-    // The function must be async because `Endpoint::connect_lazy()` access
-    // aync runtime.
+    // The function must be async because `Endpoint::connect_lazy()` accesses
+    // the async runtime.
     async fn build_client(
         &self,
     ) -> ChannelOpenerClient<InterceptedService<Channel, AuthInterceptor>> {
