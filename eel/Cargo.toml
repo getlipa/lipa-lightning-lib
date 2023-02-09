@@ -29,7 +29,7 @@ reqwest = { version = "0.11.12", default-features = false, features = ["blocking
 secp256k1 = { version = "0.24.3", features = ["global-context"] }
 thiserror = "1.0.34"
 tokio = { version = "1.21.1", features = ["rt-multi-thread", "time", "sync"] }
-tonic = "0.8.2"
+tonic = "0.8.3"
 
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.0" }
 
@@ -41,4 +41,4 @@ simplelog = { version = "0.12.0", features = ["test"] }
 storage-mock = { path = "../util/storage-mock" }
 
 [build-dependencies]
-tonic-build = "0.8.2"
+tonic-build = "0.8.3"
