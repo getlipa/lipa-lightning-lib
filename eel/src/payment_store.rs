@@ -1,0 +1,202 @@
+use crate::errors::Result;
+use perro::{permanent_failure, MapToError};
+use rusqlite::Connection;
+
+#[allow(dead_code)]
+#[derive(PartialEq, Eq, Debug)]
+pub(crate) enum PaymentType {
+    Receiving,
+    Sending,
+}
+
+#[allow(dead_code)]
+#[derive(PartialEq, Eq, Debug)]
+pub(crate) enum PaymentState {
+    Created,
+    Succeeded,
+    Failed,
+}
+
+#[allow(dead_code)]
+#[derive(PartialEq, Eq, Debug)]
+pub(crate) struct Payment {
+    pub payment_type: PaymentType,
+    pub payment_state: PaymentState,
+    pub hash: Vec<u8>,
+    pub amount_msat: u64,
+    pub invoice: String,
+    pub preimage: Option<Vec<u8>>,
+    pub network_fees_msat: Option<u64>,
+    pub lsp_fees_msat: Option<u64>,
+    pub metadata: Option<Vec<u8>>,
+}
+
+#[allow(dead_code)]
+pub(crate) struct PaymentStore {
+    db_conn: Connection,
+}
+
+#[allow(dead_code)]
+impl PaymentStore {
+    pub fn new(db_path: &str) -> Result<Self> {
+        let db_conn = Connection::open(db_path).map_to_invalid_input("Invalid db path")?;
+
+        apply_migrations(&db_conn)?;
+
+        Ok(PaymentStore { db_conn })
+    }
+
+    pub fn new_incoming_payment(
+        &self,
+        hash: &[u8],
+        preimage: &[u8],
+        amount_msat: u64,
+        lsp_fees_msat: u64,
+        invoice: &str,
+    ) -> Result<()> {
+        self.db_conn
+            .execute(
+                "\
+            INSERT INTO payments (type, hash, preimage, amount_msat, lsp_fees_msat, invoice) \
+            VALUES ('receiving', ?1, ?2, ?3, ?4, ?5)\
+            ",
+                (hash, preimage, amount_msat, lsp_fees_msat, invoice),
+            )
+            .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
+        Ok(())
+    }
+
+    pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
+        let mut statement = self
+            .db_conn
+            .prepare("\
+            SELECT payment_id, type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata \
+            FROM payments \
+            ORDER BY payment_id \
+            LIMIT ?\
+            ")
+            .map_to_permanent_failure("Failed to prepare SQL query")?;
+        let mut rows = statement.query([number_of_payments]).unwrap();
+        let mut payments = Vec::new();
+        while let Some(row) = rows.next().unwrap() {
+            let payment_type: String = row.get(1).unwrap();
+            let payment_type = match payment_type.as_str() {
+                "receiving" => PaymentType::Receiving,
+                "sending" => PaymentType::Sending,
+                _ => return Err(permanent_failure("Unexpected payment type")),
+            };
+            let hash = row.get(2).unwrap();
+            let preimage = row.get(3).unwrap();
+            let amount_msat = row.get(4).unwrap();
+            let network_fees_msat = row.get(5).unwrap();
+            let lsp_fees_msat = row.get(6).unwrap();
+            let invoice = row.get(7).unwrap();
+            let metadata = row.get(8).unwrap();
+            payments.push(Payment {
+                payment_type,
+                payment_state: PaymentState::Created,
+                hash,
+                amount_msat,
+                invoice,
+                preimage,
+                network_fees_msat,
+                lsp_fees_msat,
+                metadata,
+            });
+        }
+        Ok(payments)
+    }
+}
+
+fn apply_migrations(db_conn: &Connection) -> Result<()> {
+    db_conn
+        .execute_batch(
+            "\
+            CREATE TABLE IF NOT EXISTS payments (
+              payment_id integer NOT NULL PRIMARY KEY,
+              type text CHECK( type IN ('receiving', 'sending') ) NOT NULL,
+              hash tinyblob NOT NULL,
+              amount_msat bigint NOT NULL,
+              invoice text NOT NULL,
+              preimage tinyblob,
+              network_fees_msat bigint,
+              lsp_fees_msat bigint,
+              metadata blob
+            );
+            CREATE TABLE IF NOT EXISTS events (
+              event_id integer NOT NULL PRIMARY KEY,
+              payment_id integer NOT NULL,
+              type text CHECK( type in ('created', 'succeeded', 'failed') ) NOT NULL,
+              time timestamp NOT NULL,
+              current_fiat_value int NOT NULL,
+              FOREIGN KEY (payment_id) REFERENCES payments(payment_id)
+            );
+        ",
+        )
+        .map_to_permanent_failure("Failed to set up local payment database")?;
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::payment_store::{
+        apply_migrations, Payment, PaymentState, PaymentStore, PaymentType,
+    };
+    use rusqlite::Connection;
+    use std::fs;
+
+    const TEST_DB_PATH: &str = ".3l_local_test";
+
+    #[test]
+    fn test_migrations() {
+        let db_name = String::from("migrations.db3");
+        reset_db(&db_name);
+        let db_conn = Connection::open(format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+        apply_migrations(&db_conn).unwrap();
+        // Applying migrations on an already setup db is fine
+        let db_conn = Connection::open(format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+        apply_migrations(&db_conn).unwrap();
+    }
+
+    #[test]
+    fn test_new_payment() {
+        let db_name = String::from("new_payment.db3");
+        reset_db(&db_name);
+        let payment_store = PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+
+        let hash = vec![1, 2, 3, 4];
+        let preimage = vec![5, 6, 7, 8];
+        let amount_msat = 100_000_000;
+        let lsp_fees_msat = 2_000_000;
+        let invoice = String::from("lnbcrt1m1p37fe7udqqpp5e2mktq6ykgp0e9uljdrakvcy06wcwtswgwe7yl6jmfry4dke2t2ssp5s3uja8xn7tpeuctc62xqua6slpj40jrwlkuwmluv48g86r888g7s9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqwp6qac7ttkrd6rgwfte70sjtwxfxmpjk6z2h8vgwdnc88clvac7kqqqqyqqqqqqqqqqqqlgqqqqqqgqjqwhtk6ldnue43vtseuajgyypkv20py670vmcea9qrrdcqjrpp0qvr0sqgcldapjmgfeuvj54q6jt2h36a0m9xme3rywacscd3a5ey3fgpgdr8eq");
+
+        payment_store
+            .new_incoming_payment(&hash, &preimage, amount_msat, lsp_fees_msat, &invoice)
+            .unwrap();
+
+        let payments = payment_store.get_latest_payments(100).unwrap();
+
+        assert_eq!(payments.len(), 1);
+        let payment = payments.get(0).unwrap();
+        assert_eq!(
+            payment,
+            &Payment {
+                payment_type: PaymentType::Receiving,
+                payment_state: PaymentState::Created,
+                hash,
+                amount_msat,
+                invoice,
+                preimage: Some(preimage),
+                network_fees_msat: None,
+                lsp_fees_msat: Some(lsp_fees_msat),
+                metadata: None,
+            }
+        )
+    }
+
+    fn reset_db(db_name: &str) {
+        let _ = fs::create_dir(TEST_DB_PATH);
+        let _ = fs::remove_file(format!("{TEST_DB_PATH}/{db_name}"));
+    }
+}

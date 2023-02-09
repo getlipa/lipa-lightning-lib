@@ -22,6 +22,7 @@ mod filter;
 mod invoice;
 mod key_derivation;
 mod logger;
+mod payment_store;
 mod random;
 mod rapid_sync_client;
 mod storage_persister;
@@ -52,7 +53,9 @@ use crate::storage_persister::StoragePersister;
 use crate::task_manager::{RestartIfFailedPeriod, TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, InvoicePayer, PeerManager, RapidGossipSync};
+use std::path::Path;
 
+use crate::payment_store::PaymentStore;
 use bitcoin::bech32::ToBase32;
 use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::secp256k1::ecdsa::RecoverableSignature;
@@ -106,6 +109,7 @@ pub struct LightningNode {
     peer_manager: Arc<PeerManager>,
     invoice_payer: Arc<InvoicePayer>,
     task_manager: Arc<Mutex<TaskManager>>,
+    payment_store: Mutex<PaymentStore>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -313,6 +317,13 @@ impl LightningNode {
             Some(scorer),
         );
 
+        let payment_store_path = Path::new(&config.local_persistence_path).join("payment_db.db3");
+        let payment_store = Mutex::new(PaymentStore::new(
+            payment_store_path
+                .to_str()
+                .ok_or_invalid_input("Invalid local persistence path")?,
+        )?);
+
         Ok(Self {
             network: config.network,
             rt,
@@ -323,6 +334,7 @@ impl LightningNode {
             peer_manager,
             invoice_payer,
             task_manager,
+            payment_store,
         })
     }
 
