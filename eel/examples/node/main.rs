@@ -3,23 +3,16 @@ mod file_storage;
 #[path = "../../tests/print_events_handler/mod.rs"]
 mod print_events_handler;
 
-pub mod lspd {
-    tonic::include_proto!("lspd");
-}
-
 use file_storage::FileStorage;
 
 use crate::print_events_handler::PrintEventsHandler;
-use bitcoin::hashes::hex::ToHex;
+
 use bitcoin::Network;
 use eel::config::Config;
-use eel::interfaces::{Lsp, RemoteStorage};
+use eel::interfaces::RemoteStorage;
 use eel::keys_manager::mnemonic_to_secret;
-use eel::lsp_client::LspClient;
 use eel::LightningNode;
 use log::info;
-use lspd::ChannelInformationReply;
-use prost::Message;
 use std::fs;
 use std::thread::sleep;
 use std::time::Duration;
@@ -36,15 +29,6 @@ fn main() {
     init_logger();
     info!("Logger initialized");
 
-    let lsp_address = "http://127.0.0.1:6666".to_string();
-    info!("Contacting lsp at {} ...", lsp_address);
-    let lsp_auth_token =
-        "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();
-    let lsp_client = Box::new(LspClient::new(lsp_address, lsp_auth_token)).unwrap();
-    let lsp_info = lsp_client.channel_information().unwrap();
-    let lsp_info = ChannelInformationReply::decode(&*lsp_info).unwrap();
-    info!("Lsp pubkey: {}", lsp_info.lsp_pubkey.to_hex());
-
     let remote_storage = Box::new(FileStorage::new(BASE_DIR_REMOTE));
 
     let events = Box::new(PrintEventsHandler {});
@@ -56,10 +40,12 @@ fn main() {
         seed,
         esplora_api_url: "http://localhost:30000".to_string(),
         rgs_url: "http://localhost:8080/snapshot/".to_string(),
+        lsp_url: "http://127.0.0.1:6666".to_string(),
+        lsp_token: "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string(),
         local_persistence_path: BASE_DIR.to_string(),
     };
 
-    let node = LightningNode::new(&config, remote_storage, Box::new(lsp_client), events).unwrap();
+    let node = LightningNode::new(&config, remote_storage, events).unwrap();
 
     // Lauch CLI
     sleep(Duration::from_secs(1));

@@ -12,7 +12,6 @@ use crate::eel_interface_impl::{EventsImpl, RemoteStorageMock};
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
 use eel::lsp::LspFee;
-use eel::lsp_client::LspClient;
 use eel::node_info::{ChannelsInfo, NodeInfo};
 use eel::secret::Secret;
 use eel::InvoiceDetails;
@@ -34,13 +33,13 @@ impl LightningNode {
             seed,
             esplora_api_url: config.esplora_api_url,
             rgs_url: config.rgs_url,
+            lsp_url: config.lsp_url,
+            lsp_token: config.lsp_token,
             local_persistence_path: config.local_persistence_path,
         };
         let remote_storage = Box::new(RemoteStorageMock::new(Arc::new(Storage::new())));
-        let lsp_client = Box::new(LspClient::new(config.lsp_url, config.lsp_token)?);
         let user_event_handler = Box::new(EventsImpl { events_callback });
-        let core_node =
-            eel::LightningNode::new(&eel_config, remote_storage, lsp_client, user_event_handler)?;
+        let core_node = eel::LightningNode::new(&eel_config, remote_storage, user_event_handler)?;
         Ok(LightningNode { core_node })
     }
 
