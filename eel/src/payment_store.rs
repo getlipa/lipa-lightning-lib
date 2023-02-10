@@ -1,15 +1,13 @@
 use crate::errors::Result;
-use perro::{permanent_failure, MapToError};
-use rusqlite::Connection;
+use perro::MapToError;
+use rusqlite::{Connection, Row};
 
-#[allow(dead_code)]
 #[derive(PartialEq, Eq, Debug)]
 pub(crate) enum PaymentType {
     Receiving,
     Sending,
 }
 
-#[allow(dead_code)]
 #[derive(PartialEq, Eq, Debug)]
 pub(crate) enum PaymentState {
     Created,
@@ -17,7 +15,6 @@ pub(crate) enum PaymentState {
     Failed,
 }
 
-#[allow(dead_code)]
 #[derive(PartialEq, Eq, Debug)]
 pub(crate) struct Payment {
     pub payment_type: PaymentType,
@@ -31,7 +28,6 @@ pub(crate) struct Payment {
     pub metadata: Option<Vec<u8>>,
 }
 
-#[allow(dead_code)]
 pub(crate) struct PaymentStore {
     db_conn: Connection,
 }
@@ -79,8 +75,7 @@ impl PaymentStore {
         )
         .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
         tx.commit()
-            .map_to_permanent_failure("Failed to commit new incoming payment transaction")?;
-        Ok(())
+            .map_to_permanent_failure("Failed to commit new incoming payment transaction")
     }
 
     pub fn payment_succeeded(&self, hash: &[u8], amount_fiat: f64) -> Result<()> {
@@ -129,43 +124,51 @@ impl PaymentStore {
             LIMIT ? \
             ")
             .map_to_permanent_failure("Failed to prepare SQL query")?;
-        let mut rows = statement.query([number_of_payments]).unwrap();
+        let payment_iter = statement
+            .query_map([number_of_payments], payment_from_row)
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
+
         let mut payments = Vec::new();
-        while let Some(row) = rows.next().unwrap() {
-            let payment_type: String = row.get(1).unwrap();
-            let payment_type = match payment_type.as_str() {
-                "receiving" => PaymentType::Receiving,
-                "sending" => PaymentType::Sending,
-                _ => return Err(permanent_failure("Unexpected payment type")),
-            };
-            let hash = row.get(2).unwrap();
-            let preimage = row.get(3).unwrap();
-            let amount_msat = row.get(4).unwrap();
-            let network_fees_msat = row.get(5).unwrap();
-            let lsp_fees_msat = row.get(6).unwrap();
-            let invoice = row.get(7).unwrap();
-            let metadata = row.get(8).unwrap();
-            let payment_state: String = row.get(9).unwrap();
-            let payment_state = match payment_state.as_str() {
-                "created" => PaymentState::Created,
-                "succeeded" => PaymentState::Succeeded,
-                "failed" => PaymentState::Failed,
-                _ => return Err(permanent_failure("Unexpected payment state")),
-            };
-            payments.push(Payment {
-                payment_type,
-                payment_state,
-                hash,
-                amount_msat,
-                invoice,
-                preimage,
-                network_fees_msat,
-                lsp_fees_msat,
-                metadata,
-            });
+        for payment in payment_iter {
+            payments.push(payment.map_to_permanent_failure("Corrupted payment db")?);
         }
+
         Ok(payments)
     }
+}
+
+fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
+    let payment_type: String = row.get(1)?;
+    let payment_type = match payment_type.as_str() {
+        "receiving" => PaymentType::Receiving,
+        "sending" => PaymentType::Sending,
+        _ => return Err(rusqlite::Error::ExecuteReturnedResults),
+    };
+    let hash = row.get(2)?;
+    let preimage = row.get(3)?;
+    let amount_msat = row.get(4)?;
+    let network_fees_msat = row.get(5)?;
+    let lsp_fees_msat = row.get(6)?;
+    let invoice = row.get(7)?;
+    let metadata = row.get(8)?;
+    let payment_state: String = row.get(9)?;
+    let payment_state = match payment_state.as_str() {
+        "created" => PaymentState::Created,
+        "succeeded" => PaymentState::Succeeded,
+        "failed" => PaymentState::Failed,
+        _ => return Err(rusqlite::Error::ExecuteReturnedResults),
+    };
+    Ok(Payment {
+        payment_type,
+        payment_state,
+        hash,
+        amount_msat,
+        invoice,
+        preimage,
+        network_fees_msat,
+        lsp_fees_msat,
+        metadata,
+    })
 }
 
 fn apply_migrations(db_conn: &Connection) -> Result<()> {
@@ -193,9 +196,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
             );
         ",
         )
-        .map_to_permanent_failure("Failed to set up local payment database")?;
-
-    Ok(())
+        .map_to_permanent_failure("Failed to set up local payment database")
 }
 
 #[cfg(test)]
