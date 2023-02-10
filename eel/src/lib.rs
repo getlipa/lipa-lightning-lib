@@ -55,7 +55,7 @@ use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, InvoicePayer, PeerManager, RapidGossipSync};
 use std::path::Path;
 
-use crate::payment_store::PaymentStore;
+use crate::payment_store::{Payment, PaymentStore};
 use bitcoin::blockdata::constants::genesis_block;
 pub use bitcoin::Network;
 use cipher::consts::U32;
@@ -432,6 +432,13 @@ impl LightningNode {
             }
         }
         Ok(())
+    }
+
+    pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
+        self.payment_store
+            .lock()
+            .unwrap()
+            .get_latest_payments(number_of_payments)
     }
 
     pub fn foreground(&self) {

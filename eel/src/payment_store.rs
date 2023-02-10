@@ -1,27 +1,29 @@
 use crate::errors::Result;
 use perro::MapToError;
 use rusqlite::{Connection, Row};
+use std::time::SystemTime;
 
 #[derive(PartialEq, Eq, Debug)]
-pub(crate) enum PaymentType {
+pub enum PaymentType {
     Receiving,
     Sending,
 }
 
 #[derive(PartialEq, Eq, Debug)]
-pub(crate) enum PaymentState {
+pub enum PaymentState {
     Created,
     Succeeded,
     Failed,
 }
 
 #[derive(PartialEq, Eq, Debug)]
-pub(crate) struct Payment {
+pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,
     pub hash: Vec<u8>,
     pub amount_msat: u64,
     pub invoice: String,
+    pub timestamp: SystemTime,
     pub preimage: Option<Vec<u8>>,
     pub network_fees_msat: Option<u64>,
     pub lsp_fees_msat: Option<u64>,
@@ -112,7 +114,7 @@ impl PaymentStore {
         let mut statement = self
             .db_conn
             .prepare("\
-            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata, recent_events.type as state \
+            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.time \
             FROM payments \
             JOIN ( \
                 SELECT * \
@@ -120,7 +122,7 @@ impl PaymentStore {
                 GROUP BY payment_id \
                 HAVING MAX(event_id) \
             ) AS recent_events ON payments.payment_id=recent_events.payment_id \
-            ORDER BY payments.payment_id \
+            ORDER BY payments.payment_id DESC \
             LIMIT ? \
             ")
             .map_to_permanent_failure("Failed to prepare SQL query")?;
@@ -158,12 +160,15 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
         "failed" => PaymentState::Failed,
         _ => return Err(rusqlite::Error::ExecuteReturnedResults),
     };
+    let timestamp: chrono::DateTime<chrono::Utc> = row.get(10)?;
+    let timestamp = SystemTime::from(timestamp);
     Ok(Payment {
         payment_type,
         payment_state,
         hash,
         amount_msat,
         invoice,
+        timestamp,
         preimage,
         network_fees_msat,
         lsp_fees_msat,
@@ -201,9 +206,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::payment_store::{
-        apply_migrations, Payment, PaymentState, PaymentStore, PaymentType,
-    };
+    use crate::payment_store::{apply_migrations, PaymentState, PaymentStore, PaymentType};
     use rusqlite::Connection;
     use std::fs;
 
@@ -226,6 +229,9 @@ mod tests {
         reset_db(&db_name);
         let mut payment_store = PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
 
+        let payments = payment_store.get_latest_payments(100).unwrap();
+        assert!(payments.is_empty());
+
         let hash = vec![1, 2, 3, 4];
         let preimage = vec![5, 6, 7, 8];
         let amount_msat = 100_000_000;
@@ -240,60 +246,29 @@ mod tests {
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
-        assert_eq!(
-            payment,
-            &Payment {
-                payment_type: PaymentType::Receiving,
-                payment_state: PaymentState::Created,
-                hash: hash.clone(),
-                amount_msat,
-                invoice: invoice.clone(),
-                preimage: None,
-                network_fees_msat: None,
-                lsp_fees_msat: Some(lsp_fees_msat),
-                metadata: None,
-            }
-        );
+        assert_eq!(payment.payment_type, PaymentType::Receiving);
+        assert_eq!(payment.payment_state, PaymentState::Created);
+        assert_eq!(payment.hash, hash);
+        assert_eq!(payment.amount_msat, amount_msat);
+        assert_eq!(payment.invoice, invoice);
+        assert_eq!(payment.preimage, None);
+        assert_eq!(payment.network_fees_msat, None);
+        assert_eq!(payment.lsp_fees_msat, Some(lsp_fees_msat));
+        assert_eq!(payment.metadata, None);
 
         payment_store.fill_preimage(&hash, &preimage).unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
-        assert_eq!(
-            payment,
-            &Payment {
-                payment_type: PaymentType::Receiving,
-                payment_state: PaymentState::Created,
-                hash: hash.clone(),
-                amount_msat,
-                invoice: invoice.clone(),
-                preimage: Some(preimage.clone()),
-                network_fees_msat: None,
-                lsp_fees_msat: Some(lsp_fees_msat),
-                metadata: None,
-            }
-        );
+        assert_eq!(payment.preimage, Some(preimage));
 
         payment_store.payment_succeeded(&hash, 12334.3).unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
-        assert_eq!(
-            payment,
-            &Payment {
-                payment_type: PaymentType::Receiving,
-                payment_state: PaymentState::Succeeded,
-                hash: hash.clone(),
-                amount_msat,
-                invoice,
-                preimage: Some(preimage),
-                network_fees_msat: None,
-                lsp_fees_msat: Some(lsp_fees_msat),
-                metadata: None,
-            }
-        );
+        assert_eq!(payment.payment_state, PaymentState::Succeeded);
     }
 
     fn reset_db(db_name: &str) {

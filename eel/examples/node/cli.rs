@@ -1,4 +1,6 @@
+use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::PublicKey;
+use chrono::{DateTime, Utc};
 use std::io;
 use std::io::{BufRead, Write};
 
@@ -46,6 +48,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("Error: {}", message);
                     }
                 }
+                "listpayments" => {
+                    if let Err(message) = list_payments(node) {
+                        println!("Error: {}", message);
+                    }
+                }
                 "foreground" => {
                     node.foreground();
                 }
@@ -68,6 +75,8 @@ fn help() {
     println!("invoice <amount in millisats> [description]");
     println!("decodeinvoice");
     println!("payinvoice");
+
+    println!("listpayments");
 
     println!("foreground");
     println!("background");
@@ -179,6 +188,35 @@ fn pay_invoice<'a>(
         Ok(_) => {}
         Err(e) => return Err(e.to_string()),
     };
+
+    Ok(())
+}
+
+fn list_payments(node: &LightningNode) -> Result<(), String> {
+    let payments = match node.get_latest_payments(100) {
+        Ok(p) => p,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    println!("Total of {} payments\n", payments.len());
+
+    for payment in payments {
+        let datetime: DateTime<Utc> = payment.timestamp.into();
+        println!(
+            "Payment with state changed at {}",
+            datetime.format("%d/%m/%Y %T")
+        );
+        println!("      State:              {:?}", payment.payment_state);
+        println!("      Amount msat:        {}", payment.amount_msat);
+        println!("      Network fees msat:  {:?}", payment.network_fees_msat);
+        println!("      LSP fees:           {:?}", payment.lsp_fees_msat);
+        println!("      Hash:               {}", payment.hash.to_hex());
+        println!(
+            "      Preimage:           {:?}",
+            payment.preimage.map(|p| p.to_hex())
+        );
+        println!("      Invoice:            {}", payment.invoice);
+    }
 
     Ok(())
 }
