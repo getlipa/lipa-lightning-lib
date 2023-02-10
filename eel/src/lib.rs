@@ -7,7 +7,6 @@ pub mod errors;
 pub mod interfaces;
 pub mod keys_manager;
 pub mod lsp;
-pub mod lsp_client;
 pub mod node_info;
 pub mod p2p_networking;
 pub mod secret;
@@ -356,13 +355,13 @@ impl LightningNode {
             Network::Regtest => Currency::Regtest,
             Network::Signet => Currency::Signet,
         };
-        let raw_invoice = create_raw_invoice(
+        let raw_invoice = self.rt.handle().block_on(create_raw_invoice(
             amount_msat,
             currency,
             description,
             &self.channel_manager,
             &self.lsp_client,
-        )?;
+        ))?;
         let signature = self
             .keys_manager
             .sign_invoice(

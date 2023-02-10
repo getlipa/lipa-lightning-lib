@@ -22,7 +22,7 @@ pub struct InvoiceDetails {
     pub expiry_interval: Duration,
 }
 
-pub(crate) fn create_raw_invoice(
+pub(crate) async fn create_raw_invoice(
     amount_msat: u64,
     currency: Currency,
     description: String,
@@ -38,6 +38,7 @@ pub(crate) fn create_raw_invoice(
     let (payment_hash, payment_secret, private_routes) = if needs_channel_opening {
         let lsp_info = lsp_client
             .query_info()
+            .await
             .lift_invalid_input()
             .prefix_error("Failed to query LSPD")?;
 
@@ -64,6 +65,7 @@ pub(crate) fn create_raw_invoice(
         };
         let hint_hop = lsp_client
             .register_payment(&payment_request, &lsp_info)
+            .await
             .lift_invalid_input()
             .prefix_error("Failed to register payment")?;
         (

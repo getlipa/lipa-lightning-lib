@@ -15,16 +15,6 @@ pub trait RemoteStorage: Send + Sync + Debug {
     fn delete_object(&self, bucket: String, key: String) -> Result<()>;
 }
 
-pub trait Lsp: Send + Sync {
-    fn channel_information(&self) -> Result<Vec<u8>>;
-
-    /// Register a new incoming payment.
-    ///
-    /// # Return
-    /// Returns non empty string with description in case of an error.
-    fn register_payment(&self, encrypted_payment_info_blob: Vec<u8>) -> Result<()>;
-}
-
 pub trait EventHandler: Send + Sync {
     fn payment_received(&self, payment_hash: String, amount_msat: u64) -> Result<()>;
 
