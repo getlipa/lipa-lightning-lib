@@ -142,8 +142,8 @@ impl TaskManager {
             let lsp_client = Arc::clone(&lsp_client);
             let lsp_info = Arc::clone(&lsp_info);
             async move {
-                match tokio::task::spawn_blocking(move || lsp_client.query_info()).await {
-                    Ok(Ok(new_lsp_info)) => {
+                match lsp_client.query_info().await {
+                    Ok(new_lsp_info) => {
                         if Some(new_lsp_info.clone()) != *lsp_info.lock().unwrap() {
                             debug!("New LSP info received: {:?}", new_lsp_info);
                             *lsp_info.lock().unwrap() = Some(new_lsp_info.clone());
@@ -158,8 +158,7 @@ impl TaskManager {
                             }
                         }
                     }
-                    Ok(Err(e)) => error!("Failed to query LSP: {}", e),
-                    Err(e) => error!("Query LSP task panicked: {}", e),
+                    Err(e) => error!("Failed to query LSP: {}", e),
                 }
             }
         })

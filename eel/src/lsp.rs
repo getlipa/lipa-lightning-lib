@@ -1,10 +1,8 @@
-#[allow(clippy::derive_partial_eq_without_eq)]
 pub mod lspd {
     tonic::include_proto!("lspd");
 }
 
 use crate::errors::{Result, RuntimeErrorCode};
-use crate::interfaces::Lsp;
 
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::secp256k1::PublicKey;
@@ -12,12 +10,21 @@ use ecies::encrypt;
 use lightning::ln::{PaymentHash, PaymentSecret};
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::RouteHintHop;
-use lspd::{ChannelInformationReply, PaymentInformation};
+use lspd::channel_opener_client::ChannelOpenerClient;
+use lspd::{
+    ChannelInformationReply, ChannelInformationRequest, PaymentInformation, RegisterPaymentRequest,
+};
 use perro::{invalid_input, MapToError, ResultTrait};
 use prost::Message;
 use std::cmp::max;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use tonic::metadata::{Ascii, MetadataValue};
+use tonic::service::interceptor::InterceptedService;
+use tonic::service::Interceptor;
+use tonic::transport::channel::Endpoint;
+use tonic::transport::Channel;
+use tonic::{Request, Status};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LspFee {
@@ -50,24 +57,49 @@ pub(crate) struct PaymentRequest {
 }
 
 pub(crate) struct LspClient {
-    lsp: Box<dyn Lsp>,
+    endpoint: Endpoint,
+    interceptor: AuthInterceptor,
 }
 
 impl LspClient {
     pub fn new(address: String, auth_token: String) -> Result<Self> {
-        let lsp = Box::new(crate::lsp_client::LspClient::new(address, auth_token)?);
-        Ok(Self { lsp })
+        let bearer = format!("Bearer {auth_token}")
+            .parse()
+            .map_to_invalid_input("Invalid LSP auth token")?;
+        let interceptor = AuthInterceptor::new(bearer);
+
+        let endpoint = Channel::from_shared(address)
+            .map_to_invalid_input("Invalid gRPC URL")?
+            .connect_timeout(std::time::Duration::from_secs(30))
+            .timeout(std::time::Duration::from_secs(30));
+
+        Ok(Self {
+            endpoint,
+            interceptor,
+        })
     }
 
-    pub fn query_info(&self) -> Result<LspInfo> {
-        let response = self.lsp.channel_information().map_to_runtime_error(
-            RuntimeErrorCode::LspServiceUnavailable,
-            "Failed to contact LSP",
-        )?;
+    pub async fn query_info(&self) -> Result<LspInfo> {
+        let request = Request::new(ChannelInformationRequest {
+            pubkey: "".to_string(),
+        });
+
+        let response = self
+            .connect_client()
+            .await?
+            .channel_information(request)
+            .await
+            .map_to_runtime_error(
+                RuntimeErrorCode::LspServiceUnavailable,
+                "LSP channel information request failed",
+            )?
+            .into_inner()
+            .encode_to_vec();
+
         parse_lsp_info(&response).prefix_error("Invalid LSP response")
     }
 
-    pub fn register_payment(
+    pub async fn register_payment(
         &self,
         payment_request: &PaymentRequest,
         lsp_info: &LspInfo,
@@ -86,13 +118,17 @@ impl LspClient {
         };
 
         let payment_info = payment_info.encode_to_vec();
-        let encrypted_payment_info = encrypt(&lsp_info.pubkey.serialize(), &payment_info)
+        let blob = encrypt(&lsp_info.pubkey.serialize(), &payment_info)
             .map_to_permanent_failure("Failed to encrypt payment request")?;
-        self.lsp
-            .register_payment(encrypted_payment_info)
+        let request = Request::new(RegisterPaymentRequest { blob });
+
+        self.connect_client()
+            .await?
+            .register_payment(request)
+            .await
             .map_to_runtime_error(
                 RuntimeErrorCode::LspServiceUnavailable,
-                "Failed to contact LSP",
+                "LSP register payment request failed",
             )?;
 
         Ok(RouteHintHop {
@@ -103,6 +139,19 @@ impl LspClient {
             htlc_minimum_msat: lsp_info.node_info.htlc_minimum_msat,
             htlc_maximum_msat: lsp_info.node_info.htlc_maximum_msat,
         })
+    }
+
+    async fn connect_client(
+        &self,
+    ) -> Result<ChannelOpenerClient<InterceptedService<Channel, AuthInterceptor>>> {
+        let channel = self.endpoint.connect().await.map_to_runtime_error(
+            RuntimeErrorCode::LspServiceUnavailable,
+            "Failed to connect to LSP",
+        )?;
+        Ok(ChannelOpenerClient::with_interceptor(
+            channel,
+            self.interceptor.clone(),
+        ))
     }
 }
 
@@ -146,6 +195,26 @@ fn parse_lsp_info(bytes: &[u8]) -> Result<LspInfo> {
 pub(crate) fn calculate_fee(value_msat: u64, fee: &LspFee) -> u64 {
     let fee_value = value_msat * fee.channel_fee_permyriad / 10_000 / 1_000 * 1_000;
     max(fee_value, fee.channel_minimum_fee_msat)
+}
+
+#[derive(Clone)]
+struct AuthInterceptor {
+    bearer: MetadataValue<Ascii>,
+}
+
+impl AuthInterceptor {
+    fn new(bearer: MetadataValue<Ascii>) -> Self {
+        Self { bearer }
+    }
+}
+
+impl Interceptor for AuthInterceptor {
+    fn call(&mut self, mut request: Request<()>) -> std::result::Result<Request<()>, Status> {
+        request
+            .metadata_mut()
+            .insert("authorization", self.bearer.clone());
+        Ok(request)
+    }
 }
 
 #[cfg(test)]
