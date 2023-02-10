@@ -48,7 +48,6 @@ impl PaymentStore {
         &mut self,
         hash: &[u8],
         amount_msat: u64,
-        amount_fiat: f64,
         lsp_fees_msat: u64,
         invoice: &str,
     ) -> Result<()> {
@@ -66,29 +65,25 @@ impl PaymentStore {
         .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
         tx.execute(
             "\
-            INSERT INTO events (payment_id, type, time, current_fiat_value) \
-            VALUES (?1, 'created', ?2, ?3) \
+            INSERT INTO events (payment_id, type) \
+            VALUES (?1, ?2) \
             ",
-            (
-                tx.last_insert_rowid(),
-                chrono::offset::Utc::now(),
-                amount_fiat,
-            ),
+            (tx.last_insert_rowid(), "created"),
         )
         .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
         tx.commit()
             .map_to_permanent_failure("Failed to commit new incoming payment transaction")
     }
 
-    pub fn payment_succeeded(&self, hash: &[u8], amount_fiat: f64) -> Result<()> {
+    pub fn payment_succeeded(&self, hash: &[u8]) -> Result<()> {
         self.db_conn
             .execute(
                 "\
-                INSERT INTO events (payment_id, type, time, current_fiat_value) \
+                INSERT INTO events (payment_id, type) \
                 VALUES (
-                    (SELECT payment_id FROM payments WHERE hash=?1), 'succeeded', ?2, ?3)
+                    (SELECT payment_id FROM payments WHERE hash=?1), ?2)
                 ",
-                (hash, chrono::offset::Utc::now(), amount_fiat),
+                (hash, "succeeded"),
             )
             .map_to_invalid_input("Failed to add payment confirmed event to payments db")?;
 
@@ -114,7 +109,7 @@ impl PaymentStore {
         let mut statement = self
             .db_conn
             .prepare("\
-            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.time \
+            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at \
             FROM payments \
             JOIN ( \
                 SELECT * \
@@ -181,22 +176,21 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
         .execute_batch(
             "\
             CREATE TABLE IF NOT EXISTS payments (
-              payment_id integer NOT NULL PRIMARY KEY,
-              type text CHECK( type IN ('receiving', 'sending') ) NOT NULL,
-              hash tinyblob NOT NULL,
-              amount_msat bigint NOT NULL,
-              invoice text NOT NULL,
-              preimage tinyblob,
-              network_fees_msat bigint,
-              lsp_fees_msat bigint,
-              metadata blob
+              payment_id INTEGER NOT NULL PRIMARY KEY,
+              type TEXT CHECK( type IN ('receiving', 'sending') ) NOT NULL,
+              hash BLOB NOT NULL,
+              amount_msat INTEGER NOT NULL,
+              invoice TEXT NOT NULL,
+              preimage BLOB,
+              network_fees_msat INTEGER,
+              lsp_fees_msat INTEGER,
+              metadata BLOB
             );
             CREATE TABLE IF NOT EXISTS events (
-              event_id integer NOT NULL PRIMARY KEY,
-              payment_id integer NOT NULL,
-              type text CHECK( type in ('created', 'succeeded', 'failed') ) NOT NULL,
-              time timestamp NOT NULL,
-              current_fiat_value real NOT NULL,
+              event_id INTEGER NOT NULL PRIMARY KEY,
+              payment_id INTEGER NOT NULL,
+              type TEXT CHECK( type in ('created', 'succeeded', 'failed') ) NOT NULL,
+              inserted_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
               FOREIGN KEY (payment_id) REFERENCES payments(payment_id)
             );
         ",
@@ -235,12 +229,11 @@ mod tests {
         let hash = vec![1, 2, 3, 4];
         let preimage = vec![5, 6, 7, 8];
         let amount_msat = 100_000_000;
-        let amount_fiat = 123.52;
         let lsp_fees_msat = 2_000_000;
         let invoice = String::from("lnbcrt1m1p37fe7udqqpp5e2mktq6ykgp0e9uljdrakvcy06wcwtswgwe7yl6jmfry4dke2t2ssp5s3uja8xn7tpeuctc62xqua6slpj40jrwlkuwmluv48g86r888g7s9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqwp6qac7ttkrd6rgwfte70sjtwxfxmpjk6z2h8vgwdnc88clvac7kqqqqyqqqqqqqqqqqqlgqqqqqqgqjqwhtk6ldnue43vtseuajgyypkv20py670vmcea9qrrdcqjrpp0qvr0sqgcldapjmgfeuvj54q6jt2h36a0m9xme3rywacscd3a5ey3fgpgdr8eq");
 
         payment_store
-            .new_incoming_payment(&hash, amount_msat, amount_fiat, lsp_fees_msat, &invoice)
+            .new_incoming_payment(&hash, amount_msat, lsp_fees_msat, &invoice)
             .unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
@@ -263,7 +256,7 @@ mod tests {
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.preimage, Some(preimage));
 
-        payment_store.payment_succeeded(&hash, 12334.3).unwrap();
+        payment_store.payment_succeeded(&hash).unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 1);

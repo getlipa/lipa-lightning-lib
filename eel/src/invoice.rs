@@ -122,15 +122,8 @@ pub(crate) async fn create_invoice(
         .sign(|_| Ok::<RecoverableSignature, ()>(signature))
         .map_to_permanent_failure("Failed to sign invoice")?;
 
-    // TODO: store fiat value
     payment_store
-        .new_incoming_payment(
-            &payment_hash,
-            amount_msat,
-            0.0,
-            lsp_fee,
-            &invoice.to_string(),
-        )
+        .new_incoming_payment(&payment_hash, amount_msat, lsp_fee, &invoice.to_string())
         .map_to_permanent_failure("Failed to store new payment in payment db")?;
 
     Ok(invoice)

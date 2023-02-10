@@ -121,7 +121,7 @@ impl EventHandler for LipaEventHandler {
                             .payment_store
                             .lock()
                             .unwrap()
-                            .payment_succeeded(payment_hash.0.as_slice(), 0.0)
+                            .payment_succeeded(payment_hash.0.as_slice())
                             .is_err()
                         {
                             error!("Failed to persist in the payment db that the receiving payment with hash {:?} has succeeded", payment_hash);
