@@ -49,7 +49,6 @@ impl PaymentStore {
     pub fn new_incoming_payment(
         &mut self,
         hash: &[u8],
-        preimage: &[u8],
         amount_msat: u64,
         amount_fiat: f64,
         lsp_fees_msat: u64,
@@ -61,10 +60,10 @@ impl PaymentStore {
             .map_to_permanent_failure("Failed to begin SQL transaction")?;
         tx.execute(
             "\
-            INSERT INTO payments (type, hash, preimage, amount_msat, lsp_fees_msat, invoice) \
-            VALUES ('receiving', ?1, ?2, ?3, ?4, ?5)\
+            INSERT INTO payments (type, hash, amount_msat, lsp_fees_msat, invoice) \
+            VALUES ('receiving', ?1, ?2, ?3, ?4)\
             ",
-            (hash, preimage, amount_msat, lsp_fees_msat, invoice),
+            (hash, amount_msat, lsp_fees_msat, invoice),
         )
         .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
         tx.execute(
@@ -95,6 +94,7 @@ impl PaymentStore {
                 (hash, chrono::offset::Utc::now(), amount_fiat),
             )
             .map_to_invalid_input("Failed to add payment confirmed event to payments db")?;
+
         Ok(())
     }
 
@@ -211,21 +211,13 @@ mod tests {
         let mut payment_store = PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
 
         let hash = vec![1, 2, 3, 4];
-        let preimage = vec![5, 6, 7, 8];
         let amount_msat = 100_000_000;
         let amount_fiat = 123.52;
         let lsp_fees_msat = 2_000_000;
         let invoice = String::from("lnbcrt1m1p37fe7udqqpp5e2mktq6ykgp0e9uljdrakvcy06wcwtswgwe7yl6jmfry4dke2t2ssp5s3uja8xn7tpeuctc62xqua6slpj40jrwlkuwmluv48g86r888g7s9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqwp6qac7ttkrd6rgwfte70sjtwxfxmpjk6z2h8vgwdnc88clvac7kqqqqyqqqqqqqqqqqqlgqqqqqqgqjqwhtk6ldnue43vtseuajgyypkv20py670vmcea9qrrdcqjrpp0qvr0sqgcldapjmgfeuvj54q6jt2h36a0m9xme3rywacscd3a5ey3fgpgdr8eq");
 
         payment_store
-            .new_incoming_payment(
-                &hash,
-                &preimage,
-                amount_msat,
-                amount_fiat,
-                lsp_fees_msat,
-                &invoice,
-            )
+            .new_incoming_payment(&hash, amount_msat, amount_fiat, lsp_fees_msat, &invoice)
             .unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
@@ -240,7 +232,7 @@ mod tests {
                 hash: hash.clone(),
                 amount_msat,
                 invoice: invoice.clone(),
-                preimage: Some(preimage.clone()),
+                preimage: None,
                 network_fees_msat: None,
                 lsp_fees_msat: Some(lsp_fees_msat),
                 metadata: None,
@@ -261,7 +253,7 @@ mod tests {
                 hash: hash.clone(),
                 amount_msat,
                 invoice,
-                preimage: Some(preimage.clone()),
+                preimage: None,
                 network_fees_msat: None,
                 lsp_fees_msat: Some(lsp_fees_msat),
                 metadata: None,

@@ -1,4 +1,6 @@
+use crate::errors::Result;
 use crate::interfaces;
+use crate::payment_store::PaymentStore;
 use crate::task_manager::TaskManager;
 use crate::types::ChannelManager;
 
@@ -11,6 +13,7 @@ pub(crate) struct LipaEventHandler {
     channel_manager: Arc<ChannelManager>,
     task_manager: Arc<Mutex<TaskManager>>,
     user_event_handler: Box<dyn interfaces::EventHandler>,
+    payment_store: Mutex<PaymentStore>,
 }
 
 impl LipaEventHandler {
@@ -18,12 +21,15 @@ impl LipaEventHandler {
         channel_manager: Arc<ChannelManager>,
         task_manager: Arc<Mutex<TaskManager>>,
         user_event_handler: Box<dyn interfaces::EventHandler>,
-    ) -> Self {
-        Self {
+        payment_store_path: &str,
+    ) -> Result<Self> {
+        let payment_store = Mutex::new(PaymentStore::new(payment_store_path)?);
+        Ok(Self {
             channel_manager,
             task_manager,
             user_event_handler,
-        }
+            payment_store,
+        })
     }
 }
 
@@ -99,6 +105,15 @@ impl EventHandler for LipaEventHandler {
                             "Registered incoming invoice payment for {} msat with hash {:?}",
                             amount_msat, payment_hash
                         );
+                        if self
+                            .payment_store
+                            .lock()
+                            .unwrap()
+                            .payment_succeeded(payment_hash.0.as_slice(), 0.0)
+                            .is_err()
+                        {
+                            error!("Failed to persist in the payment db that the receiving payment with hash {:?} has succeeded", payment_hash);
+                        }
                         // TODO: Handle unwrap()
                         self.user_event_handler
                             .payment_received(payment_hash.0.to_hex(), amount_msat)

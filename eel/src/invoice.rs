@@ -2,16 +2,20 @@ use crate::errors::*;
 use crate::lsp::{LspClient, PaymentRequest};
 use crate::node_info::get_channels_info;
 use crate::types::ChannelManager;
+use bitcoin::bech32::ToBase32;
 use std::time::{Duration, SystemTime};
 
 use crate::lsp;
+use crate::payment_store::PaymentStore;
 use bitcoin::hashes::{sha256, Hash};
+use lightning::chain::keysinterface::{KeysInterface, KeysManager, Recipient};
 use lightning::ln::channelmanager::ChannelDetails;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
-use lightning_invoice::{Currency, InvoiceBuilder, RawInvoice};
+use lightning_invoice::{Currency, InvoiceBuilder, SignedRawInvoice};
 use log::info;
 use perro::{invalid_input, MapToError, MapToErrorForUnitType, ResultTrait};
+use secp256k1::ecdsa::RecoverableSignature;
 
 pub struct InvoiceDetails {
     pub amount_msat: Option<u64>,
@@ -22,20 +26,22 @@ pub struct InvoiceDetails {
     pub expiry_interval: Duration,
 }
 
-pub(crate) async fn create_raw_invoice(
+pub(crate) async fn create_invoice(
     amount_msat: u64,
     currency: Currency,
     description: String,
     channel_manager: &ChannelManager,
     lsp_client: &LspClient,
-) -> Result<RawInvoice> {
+    keys_manager: &KeysManager,
+    payment_store: &mut PaymentStore,
+) -> Result<SignedRawInvoice> {
     // Do we need a new channel to receive this payment?
     let channels_info = get_channels_info(&channel_manager.list_channels());
     let needs_channel_opening = channels_info.inbound_capacity_msat < amount_msat;
 
     let payee_pubkey = channel_manager.get_our_node_id();
 
-    let (payment_hash, payment_secret, private_routes) = if needs_channel_opening {
+    let (payment_hash, payment_secret, private_routes, lsp_fee) = if needs_channel_opening {
         let lsp_info = lsp_client
             .query_info()
             .await
@@ -72,6 +78,7 @@ pub(crate) async fn create_raw_invoice(
             payment_hash,
             payment_secret,
             vec![RouteHint(vec![hint_hop])],
+            lsp_fee,
         )
     } else {
         let (payment_hash, payment_secret) = channel_manager
@@ -82,6 +89,7 @@ pub(crate) async fn create_raw_invoice(
             payment_hash,
             payment_secret,
             construct_private_routes(&channel_manager.list_usable_channels()),
+            0,
         )
     };
 
@@ -99,9 +107,33 @@ pub(crate) async fn create_raw_invoice(
         builder = builder.private_route(private_route);
     }
 
-    builder
+    let raw_invoice = builder
         .build_raw()
-        .map_to_permanent_failure("Failed to construct invoice")
+        .map_to_permanent_failure("Failed to construct invoice")?;
+
+    let signature = keys_manager
+        .sign_invoice(
+            raw_invoice.hrp.to_string().as_bytes(),
+            &raw_invoice.data.to_base32(),
+            Recipient::Node,
+        )
+        .map_to_permanent_failure("Failed to sign invoice")?;
+    let invoice = raw_invoice
+        .sign(|_| Ok::<RecoverableSignature, ()>(signature))
+        .map_to_permanent_failure("Failed to sign invoice")?;
+
+    // TODO: store fiat value
+    payment_store
+        .new_incoming_payment(
+            &payment_hash,
+            amount_msat,
+            0.0,
+            lsp_fee,
+            &invoice.to_string(),
+        )
+        .map_to_permanent_failure("Failed to store new payment in payment db")?;
+
+    Ok(invoice)
 }
 
 fn construct_private_routes(channels: &Vec<ChannelDetails>) -> Vec<RouteHint> {

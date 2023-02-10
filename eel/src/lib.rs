@@ -41,7 +41,7 @@ use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;
 use crate::interfaces::{EventHandler, RemoteStorage};
-use crate::invoice::create_raw_invoice;
+use crate::invoice::create_invoice;
 pub use crate::invoice::InvoiceDetails;
 use crate::keys_manager::init_keys_manager;
 use crate::logger::LightningLogger;
@@ -56,9 +56,7 @@ use crate::types::{ChainMonitor, ChannelManager, InvoicePayer, PeerManager, Rapi
 use std::path::Path;
 
 use crate::payment_store::PaymentStore;
-use bitcoin::bech32::ToBase32;
 use bitcoin::blockdata::constants::genesis_block;
-use bitcoin::secp256k1::ecdsa::RecoverableSignature;
 pub use bitcoin::Network;
 use cipher::consts::U32;
 use lightning::chain::channelmonitor::ChannelMonitor;
@@ -268,12 +266,20 @@ impl LightningNode {
         )));
         task_manager.lock().unwrap().restart(FOREGROUND_PERIODS);
 
+        let payment_store_path = Path::new(&config.local_persistence_path).join("payment_db.db3");
+        let payment_store_path = payment_store_path
+            .to_str()
+            .ok_or_invalid_input("Invalid local persistence path")?;
+
+        let payment_store = Mutex::new(PaymentStore::new(payment_store_path)?);
+
         // Step 15. Initialize an EventHandler
         let event_handler = Arc::new(LipaEventHandler::new(
             Arc::clone(&channel_manager),
             Arc::clone(&task_manager),
             user_event_handler,
-        ));
+            payment_store_path,
+        )?);
 
         // Step 16. Initialize the ProbabilisticScorer
         let scorer = Arc::new(Mutex::new(
@@ -316,13 +322,6 @@ impl LightningNode {
             logger,
             Some(scorer),
         );
-
-        let payment_store_path = Path::new(&config.local_persistence_path).join("payment_db.db3");
-        let payment_store = Mutex::new(PaymentStore::new(
-            payment_store_path
-                .to_str()
-                .ok_or_invalid_input("Invalid local persistence path")?,
-        )?);
 
         Ok(Self {
             network: config.network,
@@ -367,24 +366,15 @@ impl LightningNode {
             Network::Regtest => Currency::Regtest,
             Network::Signet => Currency::Signet,
         };
-        let raw_invoice = self.rt.handle().block_on(create_raw_invoice(
+        let signed_invoice = self.rt.handle().block_on(create_invoice(
             amount_msat,
             currency,
             description,
             &self.channel_manager,
             &self.lsp_client,
+            &self.keys_manager,
+            &mut self.payment_store.lock().unwrap(),
         ))?;
-        let signature = self
-            .keys_manager
-            .sign_invoice(
-                raw_invoice.hrp.to_string().as_bytes(),
-                &raw_invoice.data.to_base32(),
-                Recipient::Node,
-            )
-            .map_to_permanent_failure("Failed to sign invoice")?;
-        let signed_invoice = raw_invoice
-            .sign(|_| Ok::<RecoverableSignature, ()>(signature))
-            .map_to_permanent_failure("Failed to sign invoice")?;
         Ok(signed_invoice.to_string())
     }
 
