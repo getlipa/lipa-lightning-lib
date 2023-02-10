@@ -67,6 +67,18 @@ impl EventHandler for LipaEventHandler {
                             "Registered incoming invoice payment for {} msat with hash {:?}",
                             amount_msat, payment_hash
                         );
+                        if self
+                            .payment_store
+                            .lock()
+                            .unwrap()
+                            .fill_preimage(payment_hash.0.as_slice(), payment_preimage.0.as_slice())
+                            .is_err()
+                        {
+                            error!(
+                                "Failed to fill preimage in the payment db for payment hash {:?}",
+                                payment_hash
+                            );
+                        }
                         self.channel_manager.claim_funds(payment_preimage);
                     }
                     PaymentPurpose::InvoicePayment {

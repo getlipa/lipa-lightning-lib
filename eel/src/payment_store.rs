@@ -98,6 +98,21 @@ impl PaymentStore {
         Ok(())
     }
 
+    pub fn fill_preimage(&self, hash: &[u8], preimage: &[u8]) -> Result<()> {
+        self.db_conn
+            .execute(
+                "\
+            UPDATE payments \
+            SET preimage=?1 \
+            WHERE hash=?2 \
+            ",
+                (preimage, hash),
+            )
+            .map_to_invalid_input("Failed to insert preimage into payment db")?;
+
+        Ok(())
+    }
+
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
         let mut statement = self
             .db_conn
@@ -211,6 +226,7 @@ mod tests {
         let mut payment_store = PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
 
         let hash = vec![1, 2, 3, 4];
+        let preimage = vec![5, 6, 7, 8];
         let amount_msat = 100_000_000;
         let amount_fiat = 123.52;
         let lsp_fees_msat = 2_000_000;
@@ -221,7 +237,6 @@ mod tests {
             .unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
-
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
         assert_eq!(
@@ -239,10 +254,29 @@ mod tests {
             }
         );
 
+        payment_store.fill_preimage(&hash, &preimage).unwrap();
+
+        let payments = payment_store.get_latest_payments(100).unwrap();
+        assert_eq!(payments.len(), 1);
+        let payment = payments.get(0).unwrap();
+        assert_eq!(
+            payment,
+            &Payment {
+                payment_type: PaymentType::Receiving,
+                payment_state: PaymentState::Created,
+                hash: hash.clone(),
+                amount_msat,
+                invoice: invoice.clone(),
+                preimage: Some(preimage.clone()),
+                network_fees_msat: None,
+                lsp_fees_msat: Some(lsp_fees_msat),
+                metadata: None,
+            }
+        );
+
         payment_store.payment_succeeded(&hash, 12334.3).unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
-
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
         assert_eq!(
@@ -253,7 +287,7 @@ mod tests {
                 hash: hash.clone(),
                 amount_msat,
                 invoice,
-                preimage: None,
+                preimage: Some(preimage),
                 network_fees_msat: None,
                 lsp_fees_msat: Some(lsp_fees_msat),
                 metadata: None,
