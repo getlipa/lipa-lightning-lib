@@ -5,7 +5,6 @@ mod print_event_handler;
 
 use eel::config::Config;
 use eel::keys_manager::generate_secret;
-use eel::lsp_client::LspClient;
 use eel::LightningNode;
 use std::fs;
 
@@ -59,6 +58,9 @@ impl NodeHandle {
             seed: generate_secret("".to_string()).unwrap().get_seed_as_array(),
             esplora_api_url: "http://localhost:30000".to_string(),
             rgs_url: "http://localhost:8080/snapshot/".to_string(),
+            lsp_url: "http://127.0.0.1:6666".to_string(),
+            lsp_token: "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l"
+                .to_string(),
             local_persistence_path: ".3l_local_test".to_string(),
         };
 
@@ -70,15 +72,10 @@ impl NodeHandle {
     }
 
     pub fn start(&self) -> eel::errors::Result<LightningNode> {
-        let lsp_address = "http://127.0.0.1:6666".to_string();
-        let lsp_auth_token =
-            "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string();
-        let lsp_client = LspClient::new(lsp_address, lsp_auth_token)?;
         let events_handler = PrintEventsHandler {};
         let node = LightningNode::new(
             &self.config,
             Box::new(self.storage.clone()),
-            Box::new(lsp_client),
             Box::new(events_handler),
         );
 

@@ -5,6 +5,7 @@ check:
 .PHONY: checkall
 checkall:
 	cargo check --all-targets --all-features
+	cargo check --manifest-path eel/Cargo.toml --all-targets --all-features
 
 .PHONY: build
 build:
@@ -13,6 +14,7 @@ build:
 .PHONY: buildall
 buildall:
 	cargo build --all-targets --all-features
+	cargo build --manifest-path eel/Cargo.toml --all-targets --all-features
 
 .PHONY: test
 test: TEST = ''

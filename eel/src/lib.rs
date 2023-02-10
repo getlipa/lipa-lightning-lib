@@ -40,7 +40,7 @@ use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;
-use crate::interfaces::{EventHandler, Lsp, RemoteStorage};
+use crate::interfaces::{EventHandler, RemoteStorage};
 use crate::invoice::create_raw_invoice;
 pub use crate::invoice::InvoiceDetails;
 use crate::keys_manager::init_keys_manager;
@@ -120,7 +120,6 @@ impl LightningNode {
     pub fn new(
         config: &Config,
         remote_storage: Box<dyn RemoteStorage>,
-        lsp_client: Box<dyn Lsp>,
         user_event_handler: Box<dyn EventHandler>,
     ) -> Result<Self> {
         let rt = AsyncRuntime::new()?;
@@ -249,7 +248,10 @@ impl LightningNode {
         // Step 14. Keep LDK Up-to-date with Chain Info
         // Implemented in TaskManager.
 
-        let lsp_client = Arc::new(LspClient::new(lsp_client));
+        let lsp_client = Arc::new(LspClient::new(
+            config.lsp_url.clone(),
+            config.lsp_token.clone(),
+        )?);
 
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),

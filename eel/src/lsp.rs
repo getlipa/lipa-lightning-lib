@@ -54,8 +54,9 @@ pub(crate) struct LspClient {
 }
 
 impl LspClient {
-    pub fn new(lsp: Box<dyn Lsp>) -> Self {
-        Self { lsp }
+    pub fn new(address: String, auth_token: String) -> Result<Self> {
+        let lsp = Box::new(crate::lsp_client::LspClient::new(address, auth_token)?);
+        Ok(Self { lsp })
     }
 
     pub fn query_info(&self) -> Result<LspInfo> {
