@@ -19,6 +19,8 @@ use std::thread::sleep;
 use std::time::Duration;
 use storage_mock::Storage;
 
+const LOCAL_PERSISTENCE_PATH: &str = ".3l_local_test";
+
 static INIT_LOGGER_ONCE: Once = Once::new();
 
 #[allow(dead_code)]
@@ -51,7 +53,8 @@ impl NodeHandle {
     pub fn new(storage_config: mocked_remote_storage::Config) -> Self {
         let storage = MockedRemoteStorage::new(Arc::new(Storage::new()), storage_config);
 
-        let _ = fs::remove_dir_all(".3l_local_test");
+        let _ = fs::remove_dir_all(LOCAL_PERSISTENCE_PATH);
+        fs::create_dir(LOCAL_PERSISTENCE_PATH).unwrap();
 
         let config = Config {
             network: Network::Regtest,
@@ -61,7 +64,7 @@ impl NodeHandle {
             lsp_url: "http://127.0.0.1:6666".to_string(),
             lsp_token: "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l"
                 .to_string(),
-            local_persistence_path: ".3l_local_test".to_string(),
+            local_persistence_path: LOCAL_PERSISTENCE_PATH.to_string(),
         };
 
         NodeHandle { config, storage }
