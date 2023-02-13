@@ -205,6 +205,7 @@ mod tests {
         // Test abort task.
         handle.blocking_shutdown();
 
+        std::thread::sleep(Duration::from_secs(1));
         assert!(handle.is_finished());
         // The task iteration is always complete, we cannot observe an odd number.
         assert_eq!(data.load(Ordering::SeqCst) % 2, 0);

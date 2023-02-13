@@ -66,7 +66,6 @@ pub(crate) struct PaymentStore {
     db_conn: Connection,
 }
 
-#[allow(dead_code)]
 impl PaymentStore {
     pub fn new(db_path: &str) -> Result<Self> {
         let db_conn = Connection::open(db_path).map_to_invalid_input("Invalid db path")?;
@@ -113,7 +112,52 @@ impl PaymentStore {
             .map_to_permanent_failure("Failed to commit new incoming payment transaction")
     }
 
-    pub fn payment_succeeded(&self, hash: &[u8]) -> Result<()> {
+    pub fn new_outgoing_payment(
+        &mut self,
+        hash: &[u8],
+        amount_msat: u64,
+        invoice: &str,
+    ) -> Result<()> {
+        let tx = self
+            .db_conn
+            .transaction()
+            .map_to_permanent_failure("Failed to begin SQL transaction")?;
+        tx.execute(
+            "\
+            INSERT INTO payments (type, hash, amount_msat, invoice) \
+            VALUES ('sending', ?1, ?2, ?3)\
+            ",
+            (hash, amount_msat, invoice),
+        )
+        .map_to_invalid_input("Failed to add new outgoing payment to payments db")?;
+        tx.execute(
+            "\
+            INSERT INTO events (payment_id, type) \
+            VALUES (?1, ?2) \
+            ",
+            (tx.last_insert_rowid(), "created"),
+        )
+        .map_to_invalid_input("Failed to add new outgoing payment to payments db")?;
+        tx.commit()
+            .map_to_permanent_failure("Failed to commit new outgoing payment transaction")
+    }
+
+    pub fn incoming_payment_succeeded(&self, hash: &[u8]) -> Result<()> {
+        self.insert_payment_succeded_event(hash)
+    }
+
+    pub fn outgoing_payment_succeeded(
+        &self,
+        hash: &[u8],
+        preimage: &[u8],
+        network_fees_msat: u64,
+    ) -> Result<()> {
+        self.insert_payment_succeded_event(hash)?;
+        self.fill_preimage(hash, preimage)?;
+        self.fill_network_fees(hash, network_fees_msat)
+    }
+
+    fn insert_payment_succeded_event(&self, hash: &[u8]) -> Result<()> {
         self.db_conn
             .execute(
                 "\
@@ -124,6 +168,21 @@ impl PaymentStore {
                 (hash, PAYMENT_STATE_SUCCEEDED),
             )
             .map_to_invalid_input("Failed to add payment confirmed event to payments db")?;
+
+        Ok(())
+    }
+
+    pub fn payment_failed(&self, hash: &[u8]) -> Result<()> {
+        self.db_conn
+            .execute(
+                "\
+                INSERT INTO events (payment_id, type) \
+                VALUES (
+                    (SELECT payment_id FROM payments WHERE hash=?1), ?2)
+                ",
+                (hash, "failed"),
+            )
+            .map_to_invalid_input("Failed to add payment failed event to payments db")?;
 
         Ok(())
     }
@@ -139,6 +198,21 @@ impl PaymentStore {
                 (preimage, hash),
             )
             .map_to_invalid_input("Failed to insert preimage into payment db")?;
+
+        Ok(())
+    }
+
+    fn fill_network_fees(&self, hash: &[u8], network_fees_msat: u64) -> Result<()> {
+        self.db_conn
+            .execute(
+                "\
+            UPDATE payments \
+            SET network_fees_msat=?1 \
+            WHERE hash=?2 \
+            ",
+                (network_fees_msat, hash),
+            )
+            .map_to_invalid_input("Failed to insert network fee into payment db")?;
 
         Ok(())
     }
@@ -257,6 +331,7 @@ mod tests {
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert!(payments.is_empty());
 
+        // New incoming payment
         let hash = vec![1, 2, 3, 4];
         let preimage = vec![5, 6, 7, 8];
         let amount_msat = 100_000_000;
@@ -287,12 +362,76 @@ mod tests {
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.preimage, Some(preimage));
 
-        payment_store.payment_succeeded(&hash).unwrap();
+        payment_store.incoming_payment_succeeded(&hash).unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Succeeded);
+
+        // New outgoing payment that fails
+        let hash = vec![5, 6, 7, 8];
+        let _preimage = vec![1, 2, 3, 4];
+        let amount_msat = 5_000_000;
+        let _network_fees_msat = 2_000;
+        let invoice = String::from("lnbcrt50u1p37590hdqqpp5wkf8saa4g3ejjhyh89uf5svhlus0ajrz0f9dm6tqnwxtupq3lyeqsp528valrymd092ev6s0srcwcnc3eufhnv453fzj7m5nscj2ejzvx7q9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqfky0rtekx6249z2dgvs4wc474q7yg3sx2u7hlvpua5ep5zla3akzqqqqyqqqqqqqqqqqqlgqqqqqqgqjq7n9ukth32d98unkxe692hgd7ke2vskmfz8d2s0part2ycd4vqneq3qgrj2jkvkq2vraa29xsll9lajgdq33yn76ny4h3wacsfxrdudcp575kp6");
+
+        payment_store
+            .new_outgoing_payment(&hash, amount_msat, &invoice)
+            .unwrap();
+
+        let payments = payment_store.get_latest_payments(100).unwrap();
+        assert_eq!(payments.len(), 2);
+        let payment = payments.get(0).unwrap();
+        assert_eq!(payment.payment_type, PaymentType::Sending);
+        assert_eq!(payment.payment_state, PaymentState::Created);
+        assert_eq!(payment.hash, hash);
+        assert_eq!(payment.amount_msat, amount_msat);
+        assert_eq!(payment.invoice, invoice);
+        assert_eq!(payment.preimage, None);
+        assert_eq!(payment.network_fees_msat, None);
+        assert_eq!(payment.lsp_fees_msat, None);
+        assert_eq!(payment.metadata, None);
+
+        payment_store.payment_failed(&hash).unwrap();
+        let payments = payment_store.get_latest_payments(100).unwrap();
+        assert_eq!(payments.len(), 2);
+        let payment = payments.get(0).unwrap();
+        assert_eq!(payment.payment_state, PaymentState::Failed);
+
+        // New outgoing payment that succeedes
+        let hash = vec![1, 3, 5, 7];
+        let preimage = vec![2, 4, 6, 8];
+        let amount_msat = 10_000_000;
+        let network_fees_msat = 500;
+        let invoice = String::from("lnbcrt100u1p375x7sdqqpp57argaznwm93lk9tvtpgj5mjr2pqh6gr4yp3rcsuzcv3xvz7hvg2ssp5edk06za3w47ww4x20zvja82ysql87ekn8zzvgg67ylkpt8pnjfws9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqfky0rtekx6249z2dgvs4wc474q7yg3sx2u7hlvpua5ep5zla3akzqqqqyqqqqqqqqqqqqlgqqqqqqgqjqgdqgl6n4qmkchkuvdzjjlun8lc524g57qwn2ctwxywdckxucwccjf692rynl4rnjq2qnepntg28umsvcdrthmn9fnlezu0kskmpujzcpvsvuml");
+
+        payment_store
+            .new_outgoing_payment(&hash, amount_msat, &invoice)
+            .unwrap();
+
+        let payments = payment_store.get_latest_payments(100).unwrap();
+        assert_eq!(payments.len(), 3);
+        let payment = payments.get(0).unwrap();
+        assert_eq!(payment.payment_type, PaymentType::Sending);
+        assert_eq!(payment.payment_state, PaymentState::Created);
+        assert_eq!(payment.hash, hash);
+        assert_eq!(payment.amount_msat, amount_msat);
+        assert_eq!(payment.invoice, invoice);
+        assert_eq!(payment.preimage, None);
+        assert_eq!(payment.network_fees_msat, None);
+        assert_eq!(payment.lsp_fees_msat, None);
+        assert_eq!(payment.metadata, None);
+
+        payment_store
+            .outgoing_payment_succeeded(&hash, &preimage, network_fees_msat)
+            .unwrap();
+        let payments = payment_store.get_latest_payments(100).unwrap();
+        assert_eq!(payments.len(), 3);
+        let payment = payments.get(0).unwrap();
+        assert_eq!(payment.payment_state, PaymentState::Succeeded);
+        assert_eq!(payment.preimage, Some(preimage));
+        assert_eq!(payment.network_fees_msat, Some(network_fees_msat));
     }
 
     fn reset_db(db_name: &str) {
