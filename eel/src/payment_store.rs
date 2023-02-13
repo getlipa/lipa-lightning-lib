@@ -3,10 +3,29 @@ use perro::MapToError;
 use rusqlite::{Connection, Row};
 use std::time::SystemTime;
 
+const PAYMENT_TYPE_RECEIVING: u8 = 0;
+const PAYMENT_TYPE_SENDING: u8 = 1;
+
+const PAYMENT_STATE_CREATED: u8 = 0;
+const PAYMENT_STATE_SUCCEEDED: u8 = 1;
+const PAYMENT_STATE_FAILED: u8 = 2;
+
 #[derive(PartialEq, Eq, Debug)]
 pub enum PaymentType {
     Receiving,
     Sending,
+}
+
+impl TryFrom<u8> for PaymentType {
+    type Error = ();
+
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
+        match value {
+            PAYMENT_TYPE_RECEIVING => Ok(PaymentType::Receiving),
+            PAYMENT_TYPE_SENDING => Ok(PaymentType::Sending),
+            _ => Err(()),
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -14,6 +33,19 @@ pub enum PaymentState {
     Created,
     Succeeded,
     Failed,
+}
+
+impl TryFrom<u8> for PaymentState {
+    type Error = ();
+
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
+        match value {
+            PAYMENT_STATE_CREATED => Ok(PaymentState::Created),
+            PAYMENT_STATE_SUCCEEDED => Ok(PaymentState::Succeeded),
+            PAYMENT_STATE_FAILED => Ok(PaymentState::Failed),
+            _ => Err(()),
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -58,9 +90,15 @@ impl PaymentStore {
         tx.execute(
             "\
             INSERT INTO payments (type, hash, amount_msat, lsp_fees_msat, invoice) \
-            VALUES ('receiving', ?1, ?2, ?3, ?4)\
+            VALUES (?1, ?2, ?3, ?4, ?5)\
             ",
-            (hash, amount_msat, lsp_fees_msat, invoice),
+            (
+                PAYMENT_TYPE_RECEIVING,
+                hash,
+                amount_msat,
+                lsp_fees_msat,
+                invoice,
+            ),
         )
         .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
         tx.execute(
@@ -68,7 +106,7 @@ impl PaymentStore {
             INSERT INTO events (payment_id, type) \
             VALUES (?1, ?2) \
             ",
-            (tx.last_insert_rowid(), "created"),
+            (tx.last_insert_rowid(), PAYMENT_STATE_CREATED),
         )
         .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
         tx.commit()
@@ -83,7 +121,7 @@ impl PaymentStore {
                 VALUES (
                     (SELECT payment_id FROM payments WHERE hash=?1), ?2)
                 ",
-                (hash, "succeeded"),
+                (hash, PAYMENT_STATE_SUCCEEDED),
             )
             .map_to_invalid_input("Failed to add payment confirmed event to payments db")?;
 
@@ -135,12 +173,9 @@ impl PaymentStore {
 }
 
 fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
-    let payment_type: String = row.get(1)?;
-    let payment_type = match payment_type.as_str() {
-        "receiving" => PaymentType::Receiving,
-        "sending" => PaymentType::Sending,
-        _ => return Err(rusqlite::Error::ExecuteReturnedResults),
-    };
+    let payment_type: u8 = row.get(1)?;
+    let payment_type =
+        PaymentType::try_from(payment_type).map_err(|_| rusqlite::Error::InvalidQuery)?;
     let hash = row.get(2)?;
     let preimage = row.get(3)?;
     let amount_msat = row.get(4)?;
@@ -148,13 +183,9 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let lsp_fees_msat = row.get(6)?;
     let invoice = row.get(7)?;
     let metadata = row.get(8)?;
-    let payment_state: String = row.get(9)?;
-    let payment_state = match payment_state.as_str() {
-        "created" => PaymentState::Created,
-        "succeeded" => PaymentState::Succeeded,
-        "failed" => PaymentState::Failed,
-        _ => return Err(rusqlite::Error::ExecuteReturnedResults),
-    };
+    let payment_state: u8 = row.get(9)?;
+    let payment_state =
+        PaymentState::try_from(payment_state).map_err(|_| rusqlite::Error::InvalidQuery)?;
     let timestamp: chrono::DateTime<chrono::Utc> = row.get(10)?;
     let timestamp = SystemTime::from(timestamp);
     Ok(Payment {
@@ -177,7 +208,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
             "\
             CREATE TABLE IF NOT EXISTS payments (
               payment_id INTEGER NOT NULL PRIMARY KEY,
-              type TEXT CHECK( type IN ('receiving', 'sending') ) NOT NULL,
+              type INTEGER CHECK( type IN (0, 1) ) NOT NULL,
               hash BLOB NOT NULL,
               amount_msat INTEGER NOT NULL,
               invoice TEXT NOT NULL,
@@ -189,7 +220,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
             CREATE TABLE IF NOT EXISTS events (
               event_id INTEGER NOT NULL PRIMARY KEY,
               payment_id INTEGER NOT NULL,
-              type TEXT CHECK( type in ('created', 'succeeded', 'failed') ) NOT NULL,
+              type INTEGER CHECK( type in (0, 1, 2) ) NOT NULL,
               inserted_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
               FOREIGN KEY (payment_id) REFERENCES payments(payment_id)
             );
