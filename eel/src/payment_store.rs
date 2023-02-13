@@ -125,9 +125,9 @@ impl PaymentStore {
         tx.execute(
             "\
             INSERT INTO payments (type, hash, amount_msat, invoice) \
-            VALUES ('sending', ?1, ?2, ?3)\
+            VALUES (?1, ?2, ?3, ?4)\
             ",
-            (hash, amount_msat, invoice),
+            (PAYMENT_TYPE_SENDING, hash, amount_msat, invoice),
         )
         .map_to_invalid_input("Failed to add new outgoing payment to payments db")?;
         tx.execute(
@@ -135,7 +135,7 @@ impl PaymentStore {
             INSERT INTO events (payment_id, type) \
             VALUES (?1, ?2) \
             ",
-            (tx.last_insert_rowid(), "created"),
+            (tx.last_insert_rowid(), PAYMENT_STATE_CREATED),
         )
         .map_to_invalid_input("Failed to add new outgoing payment to payments db")?;
         tx.commit()
@@ -180,7 +180,7 @@ impl PaymentStore {
                 VALUES (
                     (SELECT payment_id FROM payments WHERE hash=?1), ?2)
                 ",
-                (hash, "failed"),
+                (hash, PAYMENT_STATE_FAILED),
             )
             .map_to_invalid_input("Failed to add payment failed event to payments db")?;
 
