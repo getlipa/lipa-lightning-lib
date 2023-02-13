@@ -216,6 +216,7 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
             "      Preimage:           {:?}",
             payment.preimage.map(|p| p.to_hex())
         );
+        println!("      Description:        {}", payment.description);
         println!("      Invoice:            {}", payment.invoice);
     }
 

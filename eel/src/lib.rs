@@ -57,6 +57,7 @@ use std::path::Path;
 
 use crate::payment_store::{Payment, PaymentStore};
 use bitcoin::blockdata::constants::genesis_block;
+use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
 use cipher::consts::U32;
 use lightning::chain::channelmonitor::ChannelMonitor;
@@ -408,12 +409,18 @@ impl LightningNode {
 	    .amount_milli_satoshis()
 	    .ok_or_invalid_input("Invalid invoice - invoice is a zero value invoice and paying such invoice is not supported yet")?;
 
+        let description = match invoice_struct.description() {
+            InvoiceDescription::Direct(d) => d.clone().into_inner(),
+            InvoiceDescription::Hash(h) => h.0.to_hex(),
+        };
+
         match self.invoice_payer.pay_invoice(&invoice_struct) {
             Ok(_payment_id) => {
                 info!("Initiated payment of {} msats", amount_msat);
                 self.payment_store.lock().unwrap().new_outgoing_payment(
                     invoice_struct.payment_hash(),
                     amount_msat,
+                    &description,
                     &invoice,
                 )?;
             }
@@ -426,6 +433,7 @@ impl LightningNode {
                     payment_store.new_outgoing_payment(
                         invoice_struct.payment_hash(),
                         amount_msat,
+                        &description,
                         &invoice,
                     )?;
                     payment_store.payment_failed(invoice_struct.payment_hash())?;
@@ -442,6 +450,7 @@ impl LightningNode {
                     payment_store.new_outgoing_payment(
                         invoice_struct.payment_hash(),
                         amount_msat,
+                        &description,
                         &invoice,
                     )?;
                     payment_store.payment_failed(invoice_struct.payment_hash())?;

@@ -96,7 +96,7 @@ pub(crate) async fn create_invoice(
     let payment_hash = sha256::Hash::from_slice(&payment_hash.0)
         .map_to_permanent_failure("Failed to convert payment hash")?;
     let mut builder = InvoiceBuilder::new(currency)
-        .description(description)
+        .description(description.clone())
         .payment_hash(payment_hash)
         .payment_secret(payment_secret)
         .payee_pub_key(payee_pubkey)
@@ -123,7 +123,13 @@ pub(crate) async fn create_invoice(
         .map_to_permanent_failure("Failed to sign invoice")?;
 
     payment_store
-        .new_incoming_payment(&payment_hash, amount_msat, lsp_fee, &invoice.to_string())
+        .new_incoming_payment(
+            &payment_hash,
+            amount_msat,
+            lsp_fee,
+            &description,
+            &invoice.to_string(),
+        )
         .map_to_permanent_failure("Failed to store new payment in payment db")?;
 
     Ok(invoice)
