@@ -11,6 +11,7 @@ aes = "0.8.1"
 aes-gcm = "0.10.1"
 bdk = { version = "0.26.0", default-features = false, features = ["keys-bip39"] }
 bitcoin = "0.29.2"
+chrono = { version = "0.4.23", default-features = false }
 cipher = { version = "0.4.3", features = ["block-padding", "alloc"] }
 ecies = { version = "0.2.3", default-features = false, features = ["pure"] }
 esplora-client = { version = "0.3.0", default-features = false, features = ["blocking"] }
@@ -22,16 +23,16 @@ lightning-net-tokio = "0.0.113"
 lightning-persister = "0.0.113"
 lightning-rapid-gossip-sync = "0.0.113"
 log = "0.4.17"
+num_enum = "0.5.9"
 prost = "0.11.0"
 rand = "0.8.5"
 reqwest = { version = "0.11.12", default-features = false, features = ["blocking", "rustls-tls"] }
+rusqlite = { version = "0.28.0", features = ["bundled", "chrono"] }
 # Explicitly depend on secp256k1 for secp256k1::SECP256K1.
 secp256k1 = { version = "0.24.3", features = ["global-context"] }
 thiserror = "1.0.34"
 tokio = { version = "1.21.1", features = ["rt-multi-thread", "time", "sync"] }
 tonic = "0.8.3"
-rusqlite = { version = "0.28.0", features = ["bundled", "chrono"] }
-chrono = { version = "0.4.23", default-features = false }
 
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.0" }
 
