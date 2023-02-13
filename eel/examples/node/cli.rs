@@ -203,7 +203,8 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
     for payment in payments {
         let datetime: DateTime<Utc> = payment.timestamp.into();
         println!(
-            "Payment with state changed at {}",
+            "{:?} payment with state changed at {}",
+            payment.payment_type,
             datetime.format("%d/%m/%Y %T")
         );
         println!("      State:              {:?}", payment.payment_state);

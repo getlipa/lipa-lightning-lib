@@ -402,34 +402,55 @@ impl LightningNode {
     }
 
     pub fn pay_invoice(&self, invoice: String) -> Result<()> {
-        let invoice = Self::parse_validate_invoice(self, &invoice)?;
+        let invoice_struct = Self::parse_validate_invoice(self, &invoice)?;
 
-        let amount_msat = invoice
+        let amount_msat = invoice_struct
 	    .amount_milli_satoshis()
 	    .ok_or_invalid_input("Invalid invoice - invoice is a zero value invoice and paying such invoice is not supported yet")?;
 
-        match self.invoice_payer.pay_invoice(&invoice) {
+        match self.invoice_payer.pay_invoice(&invoice_struct) {
             Ok(_payment_id) => {
                 info!("Initiated payment of {} msats", amount_msat);
+                self.payment_store.lock().unwrap().new_outgoing_payment(
+                    invoice_struct.payment_hash(),
+                    amount_msat,
+                    &invoice,
+                )?;
             }
-            Err(e) => {
-                return match e {
-                    PaymentError::Invoice(e) => {
-                        Err(invalid_input(format!("Invalid invoice - {e}")))
-                    }
-                    PaymentError::Routing(e) => Err(runtime_error(
+            Err(e) => match e {
+                PaymentError::Invoice(e) => {
+                    return Err(invalid_input(format!("Invalid invoice - {e}")))
+                }
+                PaymentError::Routing(e) => {
+                    let mut payment_store = self.payment_store.lock().unwrap();
+                    payment_store.new_outgoing_payment(
+                        invoice_struct.payment_hash(),
+                        amount_msat,
+                        &invoice,
+                    )?;
+                    payment_store.payment_failed(invoice_struct.payment_hash())?;
+                    return Err(runtime_error(
                         RuntimeErrorCode::NoRouteFound,
                         format!(
                             "Failed to find a route - {} - Recommended action: {:?}",
                             e.err, e.action
                         ),
-                    )),
-                    PaymentError::Sending(e) => Err(runtime_error(
+                    ));
+                }
+                PaymentError::Sending(e) => {
+                    let mut payment_store = self.payment_store.lock().unwrap();
+                    payment_store.new_outgoing_payment(
+                        invoice_struct.payment_hash(),
+                        amount_msat,
+                        &invoice,
+                    )?;
+                    payment_store.payment_failed(invoice_struct.payment_hash())?;
+                    return Err(runtime_error(
                         RuntimeErrorCode::SendFailure,
                         format!("Failed to send payment - {e:?}"),
-                    )),
+                    ));
                 }
-            }
+            },
         }
         Ok(())
     }

@@ -64,8 +64,9 @@ impl EventHandler for LipaEventHandler {
                         ..
                     } => {
                         info!(
-                            "Registered incoming invoice payment for {} msat with hash {:?}",
-                            amount_msat, payment_hash
+                            "Registered incoming invoice payment for {} msat with hash {}",
+                            amount_msat,
+                            payment_hash.0.to_hex()
                         );
                         if self
                             .payment_store
@@ -75,8 +76,8 @@ impl EventHandler for LipaEventHandler {
                             .is_err()
                         {
                             error!(
-                                "Failed to fill preimage in the payment db for payment hash {:?}",
-                                payment_hash
+                                "Failed to fill preimage in the payment db for payment hash {}",
+                                payment_hash.0.to_hex()
                             );
                         }
                         self.channel_manager.claim_funds(payment_preimage);
@@ -86,15 +87,16 @@ impl EventHandler for LipaEventHandler {
                         ..
                     } => {
                         error!(
-                            "Registered incoming invoice payment for {} msat with hash {:?}, but no preimage was found",
-                            amount_msat, payment_hash
+                            "Registered incoming invoice payment for {} msat with hash {}, but no preimage was found",
+                            amount_msat, payment_hash.0.to_hex()
                         );
                         self.channel_manager.fail_htlc_backwards(&payment_hash);
                     }
                     PaymentPurpose::SpontaneousPayment(payment_preimage) => {
                         info!(
-                            "Registered incoming spontaneous payment for {} msat with hash {:?}",
-                            amount_msat, payment_hash
+                            "Registered incoming spontaneous payment for {} msat with hash {}",
+                            amount_msat,
+                            payment_hash.0.to_hex()
                         );
                         self.channel_manager.claim_funds(payment_preimage);
                     }
@@ -114,17 +116,18 @@ impl EventHandler for LipaEventHandler {
                 match purpose {
                     PaymentPurpose::InvoicePayment { .. } => {
                         info!(
-                            "Registered incoming invoice payment for {} msat with hash {:?}",
-                            amount_msat, payment_hash
+                            "Registered incoming invoice payment for {} msat with hash {}",
+                            amount_msat,
+                            payment_hash.0.to_hex()
                         );
                         if self
                             .payment_store
                             .lock()
                             .unwrap()
-                            .payment_succeeded(payment_hash.0.as_slice())
+                            .incoming_payment_succeeded(payment_hash.0.as_slice())
                             .is_err()
                         {
-                            error!("Failed to persist in the payment db that the receiving payment with hash {:?} has succeeded", payment_hash);
+                            error!("Failed to persist in the payment db that the receiving payment with hash {} has succeeded", payment_hash.0.to_hex());
                         }
                         // TODO: Handle unwrap()
                         self.user_event_handler
@@ -133,8 +136,9 @@ impl EventHandler for LipaEventHandler {
                     }
                     PaymentPurpose::SpontaneousPayment(_) => {
                         info!(
-                            "Claimed incoming spontaneous payment for {} msat with hash {:?}",
-                            amount_msat, payment_hash
+                            "Claimed incoming spontaneous payment for {} msat with hash {}",
+                            amount_msat,
+                            payment_hash.0.to_hex()
                         );
                         // TODO: inform consumer of this library about a claimed spontaneous payment
                         //      We can leave this for later as spontaneous payments are not a
@@ -155,6 +159,19 @@ impl EventHandler for LipaEventHandler {
                     payment_hash.0.to_hex(),
                     fee_paid_msat,
                 );
+                if self
+                    .payment_store
+                    .lock()
+                    .unwrap()
+                    .outgoing_payment_succeeded(
+                        payment_hash.0.as_slice(),
+                        payment_preimage.0.as_slice(),
+                        fee_paid_msat,
+                    )
+                    .is_err()
+                {
+                    error!("Failed to persist in the payment db that sending payment with hash {} has succeeded", payment_hash.0.to_hex());
+                }
                 // TODO: Handle unwrap()
                 self.user_event_handler
                     .payment_sent(
@@ -168,10 +185,16 @@ impl EventHandler for LipaEventHandler {
                 payment_id: _,
                 payment_hash,
             } => {
-                info!(
-                    "EVENT: PaymentFailed - preimage: {}",
-                    payment_hash.0.to_hex()
-                );
+                info!("EVENT: PaymentFailed - hash: {}", payment_hash.0.to_hex());
+                if self
+                    .payment_store
+                    .lock()
+                    .unwrap()
+                    .payment_failed(payment_hash.0.as_slice())
+                    .is_err()
+                {
+                    error!("Failed to persist in the payment db that sending payment with hash {} has failed", payment_hash.0.to_hex());
+                }
                 // TODO: Handle unwrap()
                 self.user_event_handler
                     .payment_failed(payment_hash.0.to_hex())
