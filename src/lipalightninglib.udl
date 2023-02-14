@@ -148,6 +148,32 @@ dictionary InvoiceDetails {
     duration expiry_interval; // The interval after which the invoice expires (invoice_timestamp + expiry_interval = timestamp of expiration)
 };
 
+enum PaymentType {
+    "Receiving",
+    "Sending",
+};
+
+enum PaymentState {
+    "Created",
+    "Succeeded",
+    "Failed",
+};
+
+// Information about an incoming or outgoing payment
+dictionary Payment {
+    PaymentType payment_type;
+    PaymentState payment_state;
+    string hash; // Hex representation of payment hash
+    u64 amount_msat;
+    string invoice;
+    timestamp timestamp; // The moment of the last state change (moment of creation if state is `Created`, moment of success if `Successful`, etc)
+    string description; // The description embedded in the invoice. Given the length limit of this data, sometimes a hex hash of the description is provided instead.
+    string? preimage; // Hex representation of the preimage. Is only guaranteed be present on successful payments
+    u64? network_fees_msat; // Routing fees paid in an `Sending` payment. Will only be present if payment was successful.
+    u64? lsp_fees_msat; // LSP fees paid in a `Receiving` payment. Will always be present for `Receiving` payments but the amount is only paid if successful.
+    sequence<u8>? metadata;
+};
+
 interface LightningNode {
     // Initiate the Lightning node and let it run in a background thread
     [Throws=LnError]
@@ -178,6 +204,11 @@ interface LightningNode {
     //    - invoice - a BOLT-11 invoice (normally starts with lnbc)
     [Throws=LnError]
     void pay_invoice(string invoice);
+
+    // Get a list of the latest payments
+    //    - number_of_payments - the maximum number of payments that will be returned
+    [Throws=LnError]
+    sequence<Payment> get_latest_payments(u32 number_of_payments);
 
     // Call the method when the app goes foreground, such that the user can interact with it.
     // The library starts running the background tasks more frequently to improve user experience.

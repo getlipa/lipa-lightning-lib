@@ -9,6 +9,7 @@ pub mod keys_manager;
 pub mod lsp;
 pub mod node_info;
 pub mod p2p_networking;
+pub mod payment_store;
 pub mod secret;
 
 mod async_runtime;
@@ -22,7 +23,6 @@ mod filter;
 mod invoice;
 mod key_derivation;
 mod logger;
-mod payment_store;
 mod random;
 mod rapid_sync_client;
 mod storage_persister;

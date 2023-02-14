@@ -13,6 +13,7 @@ use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
 use eel::lsp::LspFee;
 use eel::node_info::{ChannelsInfo, NodeInfo};
+use eel::payment_store::{Payment, PaymentState, PaymentType};
 use eel::secret::Secret;
 use eel::InvoiceDetails;
 use eel::LogLevel;
@@ -61,6 +62,10 @@ impl LightningNode {
 
     pub fn pay_invoice(&self, invoice: String) -> Result<()> {
         self.core_node.pay_invoice(invoice)
+    }
+
+    pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
+        self.core_node.get_latest_payments(number_of_payments)
     }
 
     pub fn foreground(&self) {
