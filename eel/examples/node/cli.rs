@@ -1,4 +1,3 @@
-use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::PublicKey;
 use chrono::{DateTime, Utc};
 use std::io;
@@ -211,11 +210,8 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
         println!("      Amount msat:        {}", payment.amount_msat);
         println!("      Network fees msat:  {:?}", payment.network_fees_msat);
         println!("      LSP fees:           {:?}", payment.lsp_fees_msat);
-        println!("      Hash:               {}", payment.hash.to_hex());
-        println!(
-            "      Preimage:           {:?}",
-            payment.preimage.map(|p| p.to_hex())
-        );
+        println!("      Hash:               {}", payment.hash);
+        println!("      Preimage:           {:?}", payment.preimage);
         println!("      Description:        {}", payment.description);
         println!("      Invoice:            {}", payment.invoice);
     }

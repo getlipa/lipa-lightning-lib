@@ -1,4 +1,5 @@
 use crate::errors::Result;
+use bitcoin::hashes::hex::ToHex;
 use num_enum::TryFromPrimitive;
 use perro::MapToError;
 use rusqlite::{Connection, Row};
@@ -24,12 +25,12 @@ pub enum PaymentState {
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,
-    pub hash: Vec<u8>,
+    pub hash: String,
     pub amount_msat: u64,
     pub invoice: String,
     pub timestamp: SystemTime,
     pub description: String,
-    pub preimage: Option<Vec<u8>>,
+    pub preimage: Option<String>,
     pub network_fees_msat: Option<u64>,
     pub lsp_fees_msat: Option<u64>,
     pub metadata: Option<Vec<u8>>,
@@ -232,8 +233,10 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let payment_type: u8 = row.get(1)?;
     let payment_type =
         PaymentType::try_from(payment_type).map_err(|_| rusqlite::Error::InvalidQuery)?;
-    let hash = row.get(2)?;
-    let preimage = row.get(3)?;
+    let hash: Vec<u8> = row.get(2)?;
+    let hash = hash.to_hex();
+    let preimage: Option<Vec<u8>> = row.get(3)?;
+    let preimage = preimage.map(|p| p.to_hex());
     let amount_msat = row.get(4)?;
     let network_fees_msat = row.get(5)?;
     let lsp_fees_msat = row.get(6)?;
@@ -291,6 +294,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use crate::payment_store::{apply_migrations, PaymentState, PaymentStore, PaymentType};
+    use bitcoin::hashes::hex::ToHex;
     use rusqlite::Connection;
     use std::fs;
 
@@ -333,7 +337,7 @@ mod tests {
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_type, PaymentType::Receiving);
         assert_eq!(payment.payment_state, PaymentState::Created);
-        assert_eq!(payment.hash, hash);
+        assert_eq!(payment.hash, hash.to_hex());
         assert_eq!(payment.amount_msat, amount_msat);
         assert_eq!(payment.invoice, invoice);
         assert_eq!(payment.description, description);
@@ -347,7 +351,7 @@ mod tests {
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
-        assert_eq!(payment.preimage, Some(preimage));
+        assert_eq!(payment.preimage, Some(preimage.to_hex()));
 
         payment_store.incoming_payment_succeeded(&hash).unwrap();
 
@@ -373,7 +377,7 @@ mod tests {
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_type, PaymentType::Sending);
         assert_eq!(payment.payment_state, PaymentState::Created);
-        assert_eq!(payment.hash, hash);
+        assert_eq!(payment.hash, hash.to_hex());
         assert_eq!(payment.amount_msat, amount_msat);
         assert_eq!(payment.invoice, invoice);
         assert_eq!(payment.description, description);
@@ -405,7 +409,7 @@ mod tests {
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_type, PaymentType::Sending);
         assert_eq!(payment.payment_state, PaymentState::Created);
-        assert_eq!(payment.hash, hash);
+        assert_eq!(payment.hash, hash.to_hex());
         assert_eq!(payment.amount_msat, amount_msat);
         assert_eq!(payment.invoice, invoice);
         assert_eq!(payment.description, description);
@@ -421,7 +425,7 @@ mod tests {
         assert_eq!(payments.len(), 3);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Succeeded);
-        assert_eq!(payment.preimage, Some(preimage));
+        assert_eq!(payment.preimage, Some(preimage.to_hex()));
         assert_eq!(payment.network_fees_msat, Some(network_fees_msat));
     }
 
