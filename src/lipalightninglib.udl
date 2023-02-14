@@ -171,7 +171,7 @@ dictionary Payment {
     string? preimage; // Hex representation of the preimage. Is only guaranteed be present on successful payments
     u64? network_fees_msat; // Routing fees paid in an `Sending` payment. Will only be present if payment was successful.
     u64? lsp_fees_msat; // LSP fees paid in a `Receiving` payment. Will always be present for `Receiving` payments but the amount is only paid if successful.
-    sequence<u8>? metadata;
+    sequence<u8> metadata;
 };
 
 interface LightningNode {
@@ -189,8 +189,10 @@ interface LightningNode {
     // Create an invoice to receive a payment with:
     //    - amount_msat - the smallest amount of millisats required for the node to accept the incoming payment (sender will have to pay fees on top of that amount)
     //    - description - a description to be embedded into the created invoice
+    //    - metadata - a blob of metadata that gets tied up to this payment. It can be used by the user of this library
+    //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
     [Throws=LnError]
-    string create_invoice(u64 amount_msat, string description);
+    string create_invoice(u64 amount_msat, string description, sequence<u8> metadata);
 
     // Validates and, if valid, decodes an invoice returning detailed information
     //    - invoice - a BOLT-11 invoice (normally starts with lnbc)
@@ -202,8 +204,10 @@ interface LightningNode {
     // After this method returns, the consumer of this library will learn about a successful/failed payment through the
     // callbacks `payment_sent()` and `payment_failed()` in `EventsCallback`.
     //    - invoice - a BOLT-11 invoice (normally starts with lnbc)
+    //    - metadata - a blob of metadata that gets tied up to this payment. It can be used by the user of this library
+    //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
     [Throws=LnError]
-    void pay_invoice(string invoice);
+    void pay_invoice(string invoice, sequence<u8> metadata);
 
     // Get a list of the latest payments
     //    - number_of_payments - the maximum number of payments that will be returned

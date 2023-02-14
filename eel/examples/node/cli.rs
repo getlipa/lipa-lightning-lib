@@ -136,7 +136,7 @@ fn create_invoice<'a>(
         .map_err(|_| "amount should be an integer number".to_string())?;
     let description = words.collect::<Vec<_>>().join(" ");
     let invoice = node
-        .create_invoice(amount, description)
+        .create_invoice(amount, description, &[])
         .map_err(|e| e.to_string())?;
     println!("{}", invoice);
     Ok(())
@@ -183,7 +183,7 @@ fn pay_invoice<'a>(
         .next()
         .ok_or_else(|| "invoice is required".to_string())?;
 
-    match node.pay_invoice(invoice.to_string()) {
+    match node.pay_invoice(invoice.to_string(), &[]) {
         Ok(_) => {}
         Err(e) => return Err(e.to_string()),
     };

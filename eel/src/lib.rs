@@ -360,7 +360,12 @@ impl LightningNode {
         Ok(lsp_info.fee)
     }
 
-    pub fn create_invoice(&self, amount_msat: u64, description: String) -> Result<String> {
+    pub fn create_invoice(
+        &self,
+        amount_msat: u64,
+        description: String,
+        metadata: &[u8],
+    ) -> Result<String> {
         let currency = match self.network {
             Network::Bitcoin => Currency::Bitcoin,
             Network::Testnet => Currency::BitcoinTestnet,
@@ -375,6 +380,7 @@ impl LightningNode {
             &self.lsp_client,
             &self.keys_manager,
             &mut self.payment_store.lock().unwrap(),
+            metadata,
         ))?;
         Ok(signed_invoice.to_string())
     }
@@ -402,7 +408,7 @@ impl LightningNode {
         })
     }
 
-    pub fn pay_invoice(&self, invoice: String) -> Result<()> {
+    pub fn pay_invoice(&self, invoice: String, metadata: &[u8]) -> Result<()> {
         let invoice_struct = Self::parse_validate_invoice(self, &invoice)?;
 
         let amount_msat = invoice_struct
@@ -422,6 +428,7 @@ impl LightningNode {
                     amount_msat,
                     &description,
                     &invoice,
+                    metadata,
                 )?;
             }
             Err(e) => match e {
@@ -435,6 +442,7 @@ impl LightningNode {
                         amount_msat,
                         &description,
                         &invoice,
+                        &metadata,
                     )?;
                     payment_store.payment_failed(invoice_struct.payment_hash())?;
                     return Err(runtime_error(
@@ -452,6 +460,7 @@ impl LightningNode {
                         amount_msat,
                         &description,
                         &invoice,
+                        &metadata,
                     )?;
                     payment_store.payment_failed(invoice_struct.payment_hash())?;
                     return Err(runtime_error(

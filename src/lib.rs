@@ -52,16 +52,22 @@ impl LightningNode {
         self.core_node.query_lsp_fee()
     }
 
-    pub fn create_invoice(&self, amount_msat: u64, description: String) -> Result<String> {
-        self.core_node.create_invoice(amount_msat, description)
+    pub fn create_invoice(
+        &self,
+        amount_msat: u64,
+        description: String,
+        metadata: Vec<u8>,
+    ) -> Result<String> {
+        self.core_node
+            .create_invoice(amount_msat, description, &metadata)
     }
 
     pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
         self.core_node.decode_invoice(invoice)
     }
 
-    pub fn pay_invoice(&self, invoice: String) -> Result<()> {
-        self.core_node.pay_invoice(invoice)
+    pub fn pay_invoice(&self, invoice: String, metadata: Vec<u8>) -> Result<()> {
+        self.core_node.pay_invoice(invoice, &metadata)
     }
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {

@@ -34,6 +34,7 @@ pub(crate) async fn create_invoice(
     lsp_client: &LspClient,
     keys_manager: &KeysManager,
     payment_store: &mut PaymentStore,
+    metadata: &[u8],
 ) -> Result<SignedRawInvoice> {
     // Do we need a new channel to receive this payment?
     let channels_info = get_channels_info(&channel_manager.list_channels());
@@ -129,6 +130,7 @@ pub(crate) async fn create_invoice(
             lsp_fee,
             &description,
             &invoice.to_string(),
+            &metadata,
         )
         .map_to_permanent_failure("Failed to store new payment in payment db")?;
 

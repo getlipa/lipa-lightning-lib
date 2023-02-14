@@ -33,7 +33,7 @@ pub struct Payment {
     pub preimage: Option<String>,
     pub network_fees_msat: Option<u64>,
     pub lsp_fees_msat: Option<u64>,
-    pub metadata: Option<Vec<u8>>,
+    pub metadata: Vec<u8>,
 }
 
 pub(crate) struct PaymentStore {
@@ -56,6 +56,7 @@ impl PaymentStore {
         lsp_fees_msat: u64,
         description: &str,
         invoice: &str,
+        metadata: &[u8],
     ) -> Result<()> {
         let tx = self
             .db_conn
@@ -63,8 +64,8 @@ impl PaymentStore {
             .map_to_permanent_failure("Failed to begin SQL transaction")?;
         tx.execute(
             "\
-            INSERT INTO payments (type, hash, amount_msat, lsp_fees_msat, description, invoice) \
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)\
+            INSERT INTO payments (type, hash, amount_msat, lsp_fees_msat, description, invoice, metadata) \
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)\
             ",
             (
                 PaymentType::Receiving as u8,
@@ -73,6 +74,7 @@ impl PaymentStore {
                 lsp_fees_msat,
                 description,
                 invoice,
+                metadata
             ),
         )
         .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
@@ -94,6 +96,7 @@ impl PaymentStore {
         amount_msat: u64,
         description: &str,
         invoice: &str,
+        metadata: &[u8],
     ) -> Result<()> {
         let tx = self
             .db_conn
@@ -101,8 +104,8 @@ impl PaymentStore {
             .map_to_permanent_failure("Failed to begin SQL transaction")?;
         tx.execute(
             "\
-            INSERT INTO payments (type, hash, amount_msat, description, invoice) \
-            VALUES (?1, ?2, ?3, ?4, ?5)\
+            INSERT INTO payments (type, hash, amount_msat, description, invoice, metadata) \
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)\
             ",
             (
                 PaymentType::Sending as u8,
@@ -110,6 +113,7 @@ impl PaymentStore {
                 amount_msat,
                 description,
                 invoice,
+                metadata,
             ),
         )
         .map_to_invalid_input("Failed to add new outgoing payment to payments db")?;
@@ -327,9 +331,17 @@ mod tests {
         let lsp_fees_msat = 2_000_000;
         let description = String::from("Test description 1");
         let invoice = String::from("lnbcrt1m1p37fe7udqqpp5e2mktq6ykgp0e9uljdrakvcy06wcwtswgwe7yl6jmfry4dke2t2ssp5s3uja8xn7tpeuctc62xqua6slpj40jrwlkuwmluv48g86r888g7s9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqwp6qac7ttkrd6rgwfte70sjtwxfxmpjk6z2h8vgwdnc88clvac7kqqqqyqqqqqqqqqqqqlgqqqqqqgqjqwhtk6ldnue43vtseuajgyypkv20py670vmcea9qrrdcqjrpp0qvr0sqgcldapjmgfeuvj54q6jt2h36a0m9xme3rywacscd3a5ey3fgpgdr8eq");
+        let metadata = vec![1, 3, 2, 4, 3];
 
         payment_store
-            .new_incoming_payment(&hash, amount_msat, lsp_fees_msat, &description, &invoice)
+            .new_incoming_payment(
+                &hash,
+                amount_msat,
+                lsp_fees_msat,
+                &description,
+                &invoice,
+                &metadata,
+            )
             .unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
@@ -344,7 +356,7 @@ mod tests {
         assert_eq!(payment.preimage, None);
         assert_eq!(payment.network_fees_msat, None);
         assert_eq!(payment.lsp_fees_msat, Some(lsp_fees_msat));
-        assert_eq!(payment.metadata, None);
+        assert_eq!(payment.metadata, metadata);
 
         payment_store.fill_preimage(&hash, &preimage).unwrap();
 
@@ -367,9 +379,10 @@ mod tests {
         let _network_fees_msat = 2_000;
         let description = String::from("Test description 2");
         let invoice = String::from("lnbcrt50u1p37590hdqqpp5wkf8saa4g3ejjhyh89uf5svhlus0ajrz0f9dm6tqnwxtupq3lyeqsp528valrymd092ev6s0srcwcnc3eufhnv453fzj7m5nscj2ejzvx7q9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqfky0rtekx6249z2dgvs4wc474q7yg3sx2u7hlvpua5ep5zla3akzqqqqyqqqqqqqqqqqqlgqqqqqqgqjq7n9ukth32d98unkxe692hgd7ke2vskmfz8d2s0part2ycd4vqneq3qgrj2jkvkq2vraa29xsll9lajgdq33yn76ny4h3wacsfxrdudcp575kp6");
+        let metadata = vec![1, 2, 3, 4, 5];
 
         payment_store
-            .new_outgoing_payment(&hash, amount_msat, &description, &invoice)
+            .new_outgoing_payment(&hash, amount_msat, &description, &invoice, &metadata)
             .unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
@@ -384,7 +397,7 @@ mod tests {
         assert_eq!(payment.preimage, None);
         assert_eq!(payment.network_fees_msat, None);
         assert_eq!(payment.lsp_fees_msat, None);
-        assert_eq!(payment.metadata, None);
+        assert_eq!(payment.metadata, metadata);
 
         payment_store.payment_failed(&hash).unwrap();
         let payments = payment_store.get_latest_payments(100).unwrap();
@@ -399,9 +412,10 @@ mod tests {
         let network_fees_msat = 500;
         let description = String::from("Test description 3");
         let invoice = String::from("lnbcrt100u1p375x7sdqqpp57argaznwm93lk9tvtpgj5mjr2pqh6gr4yp3rcsuzcv3xvz7hvg2ssp5edk06za3w47ww4x20zvja82ysql87ekn8zzvgg67ylkpt8pnjfws9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqfky0rtekx6249z2dgvs4wc474q7yg3sx2u7hlvpua5ep5zla3akzqqqqyqqqqqqqqqqqqlgqqqqqqgqjqgdqgl6n4qmkchkuvdzjjlun8lc524g57qwn2ctwxywdckxucwccjf692rynl4rnjq2qnepntg28umsvcdrthmn9fnlezu0kskmpujzcpvsvuml");
+        let metadata = vec![5, 4, 3, 2, 1];
 
         payment_store
-            .new_outgoing_payment(&hash, amount_msat, &description, &invoice)
+            .new_outgoing_payment(&hash, amount_msat, &description, &invoice, &metadata)
             .unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
@@ -416,7 +430,7 @@ mod tests {
         assert_eq!(payment.preimage, None);
         assert_eq!(payment.network_fees_msat, None);
         assert_eq!(payment.lsp_fees_msat, None);
-        assert_eq!(payment.metadata, None);
+        assert_eq!(payment.metadata, metadata);
 
         payment_store
             .outgoing_payment_succeeded(&hash, &preimage, network_fees_msat)
