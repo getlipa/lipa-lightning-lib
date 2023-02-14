@@ -28,6 +28,7 @@ pub struct Payment {
     pub amount_msat: u64,
     pub invoice: String,
     pub timestamp: SystemTime,
+    pub description: String,
     pub preimage: Option<Vec<u8>>,
     pub network_fees_msat: Option<u64>,
     pub lsp_fees_msat: Option<u64>,
@@ -52,6 +53,7 @@ impl PaymentStore {
         hash: &[u8],
         amount_msat: u64,
         lsp_fees_msat: u64,
+        description: &str,
         invoice: &str,
     ) -> Result<()> {
         let tx = self
@@ -60,14 +62,15 @@ impl PaymentStore {
             .map_to_permanent_failure("Failed to begin SQL transaction")?;
         tx.execute(
             "\
-            INSERT INTO payments (type, hash, amount_msat, lsp_fees_msat, invoice) \
-            VALUES (?1, ?2, ?3, ?4, ?5)\
+            INSERT INTO payments (type, hash, amount_msat, lsp_fees_msat, description, invoice) \
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)\
             ",
             (
                 PaymentType::Receiving as u8,
                 hash,
                 amount_msat,
                 lsp_fees_msat,
+                description,
                 invoice,
             ),
         )
@@ -88,6 +91,7 @@ impl PaymentStore {
         &mut self,
         hash: &[u8],
         amount_msat: u64,
+        description: &str,
         invoice: &str,
     ) -> Result<()> {
         let tx = self
@@ -96,10 +100,16 @@ impl PaymentStore {
             .map_to_permanent_failure("Failed to begin SQL transaction")?;
         tx.execute(
             "\
-            INSERT INTO payments (type, hash, amount_msat, invoice) \
-            VALUES (?1, ?2, ?3, ?4)\
+            INSERT INTO payments (type, hash, amount_msat, description, invoice) \
+            VALUES (?1, ?2, ?3, ?4, ?5)\
             ",
-            (PaymentType::Sending as u8, hash, amount_msat, invoice),
+            (
+                PaymentType::Sending as u8,
+                hash,
+                amount_msat,
+                description,
+                invoice,
+            ),
         )
         .map_to_invalid_input("Failed to add new outgoing payment to payments db")?;
         tx.execute(
@@ -193,7 +203,7 @@ impl PaymentStore {
         let mut statement = self
             .db_conn
             .prepare("\
-            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at \
+            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, description \
             FROM payments \
             JOIN ( \
                 SELECT * \
@@ -234,6 +244,7 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
         PaymentState::try_from(payment_state).map_err(|_| rusqlite::Error::InvalidQuery)?;
     let timestamp: chrono::DateTime<chrono::Utc> = row.get(10)?;
     let timestamp = SystemTime::from(timestamp);
+    let description = row.get(11)?;
     Ok(Payment {
         payment_type,
         payment_state,
@@ -241,6 +252,7 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
         amount_msat,
         invoice,
         timestamp,
+        description,
         preimage,
         network_fees_msat,
         lsp_fees_msat,
@@ -258,6 +270,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
               hash BLOB NOT NULL,
               amount_msat INTEGER NOT NULL,
               invoice TEXT NOT NULL,
+              description TEXT NOT NULL,
               preimage BLOB,
               network_fees_msat INTEGER,
               lsp_fees_msat INTEGER,
@@ -308,10 +321,11 @@ mod tests {
         let preimage = vec![5, 6, 7, 8];
         let amount_msat = 100_000_000;
         let lsp_fees_msat = 2_000_000;
+        let description = String::from("Test description 1");
         let invoice = String::from("lnbcrt1m1p37fe7udqqpp5e2mktq6ykgp0e9uljdrakvcy06wcwtswgwe7yl6jmfry4dke2t2ssp5s3uja8xn7tpeuctc62xqua6slpj40jrwlkuwmluv48g86r888g7s9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqwp6qac7ttkrd6rgwfte70sjtwxfxmpjk6z2h8vgwdnc88clvac7kqqqqyqqqqqqqqqqqqlgqqqqqqgqjqwhtk6ldnue43vtseuajgyypkv20py670vmcea9qrrdcqjrpp0qvr0sqgcldapjmgfeuvj54q6jt2h36a0m9xme3rywacscd3a5ey3fgpgdr8eq");
 
         payment_store
-            .new_incoming_payment(&hash, amount_msat, lsp_fees_msat, &invoice)
+            .new_incoming_payment(&hash, amount_msat, lsp_fees_msat, &description, &invoice)
             .unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
@@ -322,6 +336,7 @@ mod tests {
         assert_eq!(payment.hash, hash);
         assert_eq!(payment.amount_msat, amount_msat);
         assert_eq!(payment.invoice, invoice);
+        assert_eq!(payment.description, description);
         assert_eq!(payment.preimage, None);
         assert_eq!(payment.network_fees_msat, None);
         assert_eq!(payment.lsp_fees_msat, Some(lsp_fees_msat));
@@ -346,10 +361,11 @@ mod tests {
         let _preimage = vec![1, 2, 3, 4];
         let amount_msat = 5_000_000;
         let _network_fees_msat = 2_000;
+        let description = String::from("Test description 2");
         let invoice = String::from("lnbcrt50u1p37590hdqqpp5wkf8saa4g3ejjhyh89uf5svhlus0ajrz0f9dm6tqnwxtupq3lyeqsp528valrymd092ev6s0srcwcnc3eufhnv453fzj7m5nscj2ejzvx7q9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqfky0rtekx6249z2dgvs4wc474q7yg3sx2u7hlvpua5ep5zla3akzqqqqyqqqqqqqqqqqqlgqqqqqqgqjq7n9ukth32d98unkxe692hgd7ke2vskmfz8d2s0part2ycd4vqneq3qgrj2jkvkq2vraa29xsll9lajgdq33yn76ny4h3wacsfxrdudcp575kp6");
 
         payment_store
-            .new_outgoing_payment(&hash, amount_msat, &invoice)
+            .new_outgoing_payment(&hash, amount_msat, &description, &invoice)
             .unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
@@ -360,6 +376,7 @@ mod tests {
         assert_eq!(payment.hash, hash);
         assert_eq!(payment.amount_msat, amount_msat);
         assert_eq!(payment.invoice, invoice);
+        assert_eq!(payment.description, description);
         assert_eq!(payment.preimage, None);
         assert_eq!(payment.network_fees_msat, None);
         assert_eq!(payment.lsp_fees_msat, None);
@@ -376,10 +393,11 @@ mod tests {
         let preimage = vec![2, 4, 6, 8];
         let amount_msat = 10_000_000;
         let network_fees_msat = 500;
+        let description = String::from("Test description 3");
         let invoice = String::from("lnbcrt100u1p375x7sdqqpp57argaznwm93lk9tvtpgj5mjr2pqh6gr4yp3rcsuzcv3xvz7hvg2ssp5edk06za3w47ww4x20zvja82ysql87ekn8zzvgg67ylkpt8pnjfws9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqfky0rtekx6249z2dgvs4wc474q7yg3sx2u7hlvpua5ep5zla3akzqqqqyqqqqqqqqqqqqlgqqqqqqgqjqgdqgl6n4qmkchkuvdzjjlun8lc524g57qwn2ctwxywdckxucwccjf692rynl4rnjq2qnepntg28umsvcdrthmn9fnlezu0kskmpujzcpvsvuml");
 
         payment_store
-            .new_outgoing_payment(&hash, amount_msat, &invoice)
+            .new_outgoing_payment(&hash, amount_msat, &description, &invoice)
             .unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
@@ -390,6 +408,7 @@ mod tests {
         assert_eq!(payment.hash, hash);
         assert_eq!(payment.amount_msat, amount_msat);
         assert_eq!(payment.invoice, invoice);
+        assert_eq!(payment.description, description);
         assert_eq!(payment.preimage, None);
         assert_eq!(payment.network_fees_msat, None);
         assert_eq!(payment.lsp_fees_msat, None);
