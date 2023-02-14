@@ -28,7 +28,7 @@ pub struct Payment {
     pub hash: String,
     pub amount_msat: u64,
     pub invoice: String,
-    pub timestamp: SystemTime,
+    pub latest_state_change_at: SystemTime,
     pub description: String,
     pub preimage: Option<String>,
     pub network_fees_msat: Option<u64>,
@@ -245,8 +245,8 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let payment_state: u8 = row.get(9)?;
     let payment_state =
         PaymentState::try_from(payment_state).map_err(|_| rusqlite::Error::InvalidQuery)?;
-    let timestamp: chrono::DateTime<chrono::Utc> = row.get(10)?;
-    let timestamp = SystemTime::from(timestamp);
+    let latest_state_change_at: chrono::DateTime<chrono::Utc> = row.get(10)?;
+    let latest_state_change_at = SystemTime::from(latest_state_change_at);
     let description = row.get(11)?;
     Ok(Payment {
         payment_type,
@@ -254,7 +254,7 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
         hash,
         amount_msat,
         invoice,
-        timestamp,
+        latest_state_change_at,
         description,
         preimage,
         network_fees_msat,

@@ -166,7 +166,7 @@ dictionary Payment {
     string hash; // Hex representation of payment hash
     u64 amount_msat;
     string invoice;
-    timestamp timestamp; // The moment of the last state change (moment of creation if state is `Created`, moment of success if `Successful`, etc)
+    timestamp latest_state_change_at;
     string description; // The description embedded in the invoice. Given the length limit of this data, sometimes a hex hash of the description is provided instead.
     string? preimage; // Hex representation of the preimage. Is only guaranteed be present on successful payments
     u64? network_fees_msat; // Routing fees paid in an `Sending` payment. Will only be present if payment was successful.

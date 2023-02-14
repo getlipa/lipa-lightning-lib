@@ -200,7 +200,7 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
     println!("Total of {} payments\n", payments.len());
 
     for payment in payments {
-        let datetime: DateTime<Utc> = payment.timestamp.into();
+        let datetime: DateTime<Utc> = payment.latest_state_change_at.into();
         println!(
             "{:?} payment with state changed at {}",
             payment.payment_type,
