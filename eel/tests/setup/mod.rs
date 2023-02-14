@@ -193,17 +193,17 @@ pub mod nigiri {
 
     pub fn stop_lspd() {
         debug!("LSPD stopping ...");
-        exec_in_dir(&["docker-compose", "down"], "../lspd");
+        exec_in_dir(&["docker-compose", "down"], env!("LSPD_HOME"));
     }
 
     pub fn pause_lspd() {
         debug!("LSPD stopping ...");
-        exec_in_dir(&["docker-compose", "stop"], "../lspd");
+        exec_in_dir(&["docker-compose", "stop"], env!("LSPD_HOME"));
     }
 
     pub fn start_lspd() {
         debug!("LSPD starting ...");
-        exec_in_dir(&["docker-compose", "up", "-d", "lspd"], "../lspd");
+        exec_in_dir(&["docker-compose", "up", "-d", "lspd"], env!("LSPD_HOME"));
     }
 
     pub fn wait_for_healthy_lspd() {
@@ -220,12 +220,12 @@ pub mod nigiri {
 
     pub fn stop_rgs() {
         debug!("RGS server stopping ...");
-        exec_in_dir(&["docker-compose", "down"], "../rgs");
+        exec_in_dir(&["docker-compose", "down"], env!("RGS_HOME"));
     }
 
     fn start_rgs() {
         debug!("RGS server starting ...");
-        exec_in_dir(&["docker-compose", "up", "-d", "rgs"], "../rgs");
+        exec_in_dir(&["docker-compose", "up", "-d", "rgs"], env!("RGS_HOME"));
     }
 
     fn start_nigiri() {

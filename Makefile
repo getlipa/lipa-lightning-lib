@@ -26,7 +26,7 @@ test:
 integrationtests: FILE = *
 integrationtests: TEST = ''
 integrationtests:
-	cargo test --manifest-path eel/Cargo.toml --features nigiri --test '$(FILE)' -- $(TEST)
+	LSPD_HOME=../lspd RGS_HOME=../rgs cargo test --manifest-path eel/Cargo.toml --features nigiri --test '$(FILE)' -- $(TEST)
 
 .PHONY: testall
 testall: test integrationtests
