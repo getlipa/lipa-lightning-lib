@@ -28,6 +28,7 @@ pub struct Payment {
     pub hash: String,
     pub amount_msat: u64,
     pub invoice: String,
+    pub created_at: SystemTime,
     pub latest_state_change_at: SystemTime,
     pub description: String,
     pub preimage: Option<String>,
@@ -208,7 +209,7 @@ impl PaymentStore {
         let mut statement = self
             .db_conn
             .prepare("\
-            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, description \
+            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, description, creation_events.inserted_at \
             FROM payments \
             JOIN ( \
                 SELECT * \
@@ -216,6 +217,12 @@ impl PaymentStore {
                 GROUP BY payment_id \
                 HAVING MAX(event_id) \
             ) AS recent_events ON payments.payment_id=recent_events.payment_id \
+            JOIN ( \
+                SELECT * \
+                FROM events \
+                GROUP BY payment_id \
+                HAVING MIN(event_id) \
+            ) AS creation_events ON payments.payment_id=creation_events.payment_id \
             ORDER BY payments.payment_id DESC \
             LIMIT ? \
             ")
@@ -252,12 +259,15 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let latest_state_change_at: chrono::DateTime<chrono::Utc> = row.get(10)?;
     let latest_state_change_at = SystemTime::from(latest_state_change_at);
     let description = row.get(11)?;
+    let created_at: chrono::DateTime<chrono::Utc> = row.get(12)?;
+    let created_at = SystemTime::from(created_at);
     Ok(Payment {
         payment_type,
         payment_state,
         hash,
         amount_msat,
         invoice,
+        created_at,
         latest_state_change_at,
         description,
         preimage,
@@ -301,6 +311,8 @@ mod tests {
     use bitcoin::hashes::hex::ToHex;
     use rusqlite::Connection;
     use std::fs;
+    use std::thread::sleep;
+    use std::time::Duration;
 
     const TEST_DB_PATH: &str = ".3l_local_test";
 
@@ -358,6 +370,9 @@ mod tests {
         assert_eq!(payment.lsp_fees_msat, Some(lsp_fees_msat));
         assert_eq!(payment.metadata, metadata);
 
+        assert_eq!(payment.created_at, payment.latest_state_change_at);
+        let created_at = payment.created_at;
+
         payment_store.fill_preimage(&hash, &preimage).unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
@@ -365,12 +380,18 @@ mod tests {
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.preimage, Some(preimage.to_hex()));
 
+        // To be able to test the difference between created_at and latest_state_change_at
+        sleep(Duration::from_secs(1));
+
         payment_store.incoming_payment_succeeded(&hash).unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Succeeded);
+        assert_eq!(payment.created_at, created_at);
+        assert_ne!(payment.created_at, payment.latest_state_change_at);
+        assert!(payment.created_at < payment.latest_state_change_at);
 
         // New outgoing payment that fails
         let hash = vec![5, 6, 7, 8];
@@ -399,11 +420,20 @@ mod tests {
         assert_eq!(payment.lsp_fees_msat, None);
         assert_eq!(payment.metadata, metadata);
 
+        assert_eq!(payment.created_at, payment.latest_state_change_at);
+        let created_at = payment.created_at;
+
+        // To be able to test the difference between created_at and latest_state_change_at
+        sleep(Duration::from_secs(1));
+
         payment_store.payment_failed(&hash).unwrap();
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 2);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Failed);
+        assert_eq!(payment.created_at, created_at);
+        assert_ne!(payment.created_at, payment.latest_state_change_at);
+        assert!(payment.created_at < payment.latest_state_change_at);
 
         // New outgoing payment that succeedes
         let hash = vec![1, 3, 5, 7];
@@ -432,6 +462,12 @@ mod tests {
         assert_eq!(payment.lsp_fees_msat, None);
         assert_eq!(payment.metadata, metadata);
 
+        assert_eq!(payment.created_at, payment.latest_state_change_at);
+        let created_at = payment.created_at;
+
+        // To be able to test the difference between created_at and latest_state_change_at
+        sleep(Duration::from_secs(1));
+
         payment_store
             .outgoing_payment_succeeded(&hash, &preimage, network_fees_msat)
             .unwrap();
@@ -441,6 +477,9 @@ mod tests {
         assert_eq!(payment.payment_state, PaymentState::Succeeded);
         assert_eq!(payment.preimage, Some(preimage.to_hex()));
         assert_eq!(payment.network_fees_msat, Some(network_fees_msat));
+        assert_eq!(payment.created_at, created_at);
+        assert_ne!(payment.created_at, payment.latest_state_change_at);
+        assert!(payment.created_at < payment.latest_state_change_at);
     }
 
     fn reset_db(db_name: &str) {

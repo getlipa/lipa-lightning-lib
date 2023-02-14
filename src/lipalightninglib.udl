@@ -166,6 +166,7 @@ dictionary Payment {
     string hash; // Hex representation of payment hash
     u64 amount_msat;
     string invoice;
+    timestamp created_at;
     timestamp latest_state_change_at;
     string description; // The description embedded in the invoice. Given the length limit of this data, sometimes a hex hash of the description is provided instead.
     string? preimage; // Hex representation of the preimage. Is only guaranteed be present on successful payments
