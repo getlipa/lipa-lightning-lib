@@ -240,14 +240,14 @@ pub mod nigiri {
     }
 
     pub fn wait_for_sync(node: NodeInstance) {
-        for _ in 0..20 {
+        for _ in 0..40 {
             if is_node_synced(node) {
                 return;
             }
             sleep(Duration::from_millis(500));
         }
 
-        panic!("Failed to start {:?}. Not synced after 10 sec.", node);
+        panic!("Failed to start {:?}. Not synced after 20 sec.", node);
     }
 
     pub fn is_node_synced(node: NodeInstance) -> bool {
