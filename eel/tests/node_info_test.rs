@@ -3,12 +3,12 @@ mod setup;
 #[cfg(feature = "nigiri")]
 mod node_info_test {
     use bitcoin::secp256k1::PublicKey;
-    use serial_test::file_parallel;
+    use serial_test::file_serial;
 
     use crate::setup::{nigiri, NodeHandle};
 
     #[test]
-    #[file_parallel(key, "/tmp/3l-int-tests-lock")]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_get_node_info() {
         nigiri::setup_environment_with_lsp();
 
