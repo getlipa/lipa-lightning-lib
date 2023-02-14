@@ -41,8 +41,8 @@ use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;
 use crate::interfaces::{EventHandler, RemoteStorage};
-use crate::invoice::create_invoice;
 pub use crate::invoice::InvoiceDetails;
+use crate::invoice::{create_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
 use crate::logger::LightningLogger;
 use crate::lsp::{LspClient, LspFee};
@@ -364,7 +364,7 @@ impl LightningNode {
         &self,
         amount_msat: u64,
         description: String,
-        metadata: &[u8],
+        metadata: Vec<u8>,
     ) -> Result<String> {
         let currency = match self.network {
             Network::Bitcoin => Currency::Bitcoin,
@@ -373,14 +373,16 @@ impl LightningNode {
             Network::Signet => Currency::Signet,
         };
         let signed_invoice = self.rt.handle().block_on(create_invoice(
-            amount_msat,
-            currency,
-            description,
+            CreateInvoiceParams {
+                amount_msat,
+                currency,
+                description,
+                metadata,
+            },
             &self.channel_manager,
             &self.lsp_client,
             &self.keys_manager,
             &mut self.payment_store.lock().unwrap(),
-            metadata,
         ))?;
         Ok(signed_invoice.to_string())
     }
@@ -408,7 +410,7 @@ impl LightningNode {
         })
     }
 
-    pub fn pay_invoice(&self, invoice: String, metadata: &[u8]) -> Result<()> {
+    pub fn pay_invoice(&self, invoice: String, metadata: Vec<u8>) -> Result<()> {
         let invoice_struct = Self::parse_validate_invoice(self, &invoice)?;
 
         let amount_msat = invoice_struct
@@ -428,7 +430,7 @@ impl LightningNode {
                     amount_msat,
                     &description,
                     &invoice,
-                    metadata,
+                    &metadata,
                 )?;
             }
             Err(e) => match e {
