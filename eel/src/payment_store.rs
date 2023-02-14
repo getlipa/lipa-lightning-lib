@@ -1,51 +1,23 @@
 use crate::errors::Result;
+use num_enum::TryFromPrimitive;
 use perro::MapToError;
 use rusqlite::{Connection, Row};
+use std::convert::TryFrom;
 use std::time::SystemTime;
 
-const PAYMENT_TYPE_RECEIVING: u8 = 0;
-const PAYMENT_TYPE_SENDING: u8 = 1;
-
-const PAYMENT_STATE_CREATED: u8 = 0;
-const PAYMENT_STATE_SUCCEEDED: u8 = 1;
-const PAYMENT_STATE_FAILED: u8 = 2;
-
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, TryFromPrimitive)]
+#[repr(u8)]
 pub enum PaymentType {
     Receiving,
     Sending,
 }
 
-impl TryFrom<u8> for PaymentType {
-    type Error = ();
-
-    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
-        match value {
-            PAYMENT_TYPE_RECEIVING => Ok(PaymentType::Receiving),
-            PAYMENT_TYPE_SENDING => Ok(PaymentType::Sending),
-            _ => Err(()),
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, TryFromPrimitive)]
+#[repr(u8)]
 pub enum PaymentState {
     Created,
     Succeeded,
     Failed,
-}
-
-impl TryFrom<u8> for PaymentState {
-    type Error = ();
-
-    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
-        match value {
-            PAYMENT_STATE_CREATED => Ok(PaymentState::Created),
-            PAYMENT_STATE_SUCCEEDED => Ok(PaymentState::Succeeded),
-            PAYMENT_STATE_FAILED => Ok(PaymentState::Failed),
-            _ => Err(()),
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -92,7 +64,7 @@ impl PaymentStore {
             VALUES (?1, ?2, ?3, ?4, ?5)\
             ",
             (
-                PAYMENT_TYPE_RECEIVING,
+                PaymentType::Receiving as u8,
                 hash,
                 amount_msat,
                 lsp_fees_msat,
@@ -105,7 +77,7 @@ impl PaymentStore {
             INSERT INTO events (payment_id, type) \
             VALUES (?1, ?2) \
             ",
-            (tx.last_insert_rowid(), PAYMENT_STATE_CREATED),
+            (tx.last_insert_rowid(), PaymentState::Created as u8),
         )
         .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
         tx.commit()
@@ -127,7 +99,7 @@ impl PaymentStore {
             INSERT INTO payments (type, hash, amount_msat, invoice) \
             VALUES (?1, ?2, ?3, ?4)\
             ",
-            (PAYMENT_TYPE_SENDING, hash, amount_msat, invoice),
+            (PaymentType::Sending as u8, hash, amount_msat, invoice),
         )
         .map_to_invalid_input("Failed to add new outgoing payment to payments db")?;
         tx.execute(
@@ -135,7 +107,7 @@ impl PaymentStore {
             INSERT INTO events (payment_id, type) \
             VALUES (?1, ?2) \
             ",
-            (tx.last_insert_rowid(), PAYMENT_STATE_CREATED),
+            (tx.last_insert_rowid(), PaymentState::Created as u8),
         )
         .map_to_invalid_input("Failed to add new outgoing payment to payments db")?;
         tx.commit()
@@ -165,7 +137,7 @@ impl PaymentStore {
                 VALUES (
                     (SELECT payment_id FROM payments WHERE hash=?1), ?2)
                 ",
-                (hash, PAYMENT_STATE_SUCCEEDED),
+                (hash, PaymentState::Succeeded as u8),
             )
             .map_to_invalid_input("Failed to add payment confirmed event to payments db")?;
 
@@ -180,7 +152,7 @@ impl PaymentStore {
                 VALUES (
                     (SELECT payment_id FROM payments WHERE hash=?1), ?2)
                 ",
-                (hash, PAYMENT_STATE_FAILED),
+                (hash, PaymentState::Failed as u8),
             )
             .map_to_invalid_input("Failed to add payment failed event to payments db")?;
 
