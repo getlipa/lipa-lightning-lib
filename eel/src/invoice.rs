@@ -26,15 +26,22 @@ pub struct InvoiceDetails {
     pub expiry_interval: Duration,
 }
 
+pub(crate) struct CreateInvoiceParams {
+    pub amount_msat: u64,
+    pub currency: Currency,
+    pub description: String,
+    pub metadata: String,
+}
+
 pub(crate) async fn create_invoice(
-    amount_msat: u64,
-    currency: Currency,
-    description: String,
+    params: CreateInvoiceParams,
     channel_manager: &ChannelManager,
     lsp_client: &LspClient,
     keys_manager: &KeysManager,
     payment_store: &mut PaymentStore,
 ) -> Result<SignedRawInvoice> {
+    let amount_msat = params.amount_msat;
+
     // Do we need a new channel to receive this payment?
     let channels_info = get_channels_info(&channel_manager.list_channels());
     let needs_channel_opening = channels_info.inbound_capacity_msat < amount_msat;
@@ -95,8 +102,8 @@ pub(crate) async fn create_invoice(
 
     let payment_hash = sha256::Hash::from_slice(&payment_hash.0)
         .map_to_permanent_failure("Failed to convert payment hash")?;
-    let mut builder = InvoiceBuilder::new(currency)
-        .description(description.clone())
+    let mut builder = InvoiceBuilder::new(params.currency)
+        .description(params.description.clone())
         .payment_hash(payment_hash)
         .payment_secret(payment_secret)
         .payee_pub_key(payee_pubkey)
@@ -127,8 +134,9 @@ pub(crate) async fn create_invoice(
             &payment_hash,
             amount_msat,
             lsp_fee,
-            &description,
+            &params.description,
             &invoice.to_string(),
+            &params.metadata,
         )
         .map_to_permanent_failure("Failed to store new payment in payment db")?;
 

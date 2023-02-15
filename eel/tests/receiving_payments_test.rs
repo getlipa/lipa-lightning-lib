@@ -195,7 +195,7 @@ mod receiving_payments_test {
 
     fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
         let invoice = node
-            .create_invoice(payment_amount, "test".to_string())
+            .create_invoice(payment_amount, "test".to_string(), String::new())
             .unwrap();
         assert!(invoice.starts_with("lnbc"));
 

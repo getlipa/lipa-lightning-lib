@@ -27,7 +27,7 @@ mod sending_payments_test {
         assert!(node.get_node_info().channels_info.inbound_capacity_msat > REBALANCE_AMOUNT);
 
         let invoice = node
-            .create_invoice(REBALANCE_AMOUNT, "test".to_string())
+            .create_invoice(REBALANCE_AMOUNT, "test".to_string(), String::new())
             .unwrap();
         assert!(invoice.starts_with("lnbc"));
 
@@ -47,7 +47,7 @@ mod sending_payments_test {
 
         let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
 
-        node.pay_invoice(invoice).unwrap();
+        node.pay_invoice(invoice, String::new()).unwrap();
         sleep(Duration::from_secs(2));
 
         let final_balance = nigiri::query_node_balance(LspdLnd).unwrap();

@@ -13,6 +13,7 @@ use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
 use eel::lsp::LspFee;
 use eel::node_info::{ChannelsInfo, NodeInfo};
+use eel::payment_store::{Payment, PaymentState, PaymentType};
 use eel::secret::Secret;
 use eel::InvoiceDetails;
 use eel::LogLevel;
@@ -51,16 +52,26 @@ impl LightningNode {
         self.core_node.query_lsp_fee()
     }
 
-    pub fn create_invoice(&self, amount_msat: u64, description: String) -> Result<String> {
-        self.core_node.create_invoice(amount_msat, description)
+    pub fn create_invoice(
+        &self,
+        amount_msat: u64,
+        description: String,
+        metadata: String,
+    ) -> Result<String> {
+        self.core_node
+            .create_invoice(amount_msat, description, metadata)
     }
 
     pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
         self.core_node.decode_invoice(invoice)
     }
 
-    pub fn pay_invoice(&self, invoice: String) -> Result<()> {
-        self.core_node.pay_invoice(invoice)
+    pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
+        self.core_node.pay_invoice(invoice, metadata)
+    }
+
+    pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
+        self.core_node.get_latest_payments(number_of_payments)
     }
 
     pub fn foreground(&self) {

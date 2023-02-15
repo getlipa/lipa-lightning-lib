@@ -1,4 +1,3 @@
-use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::PublicKey;
 use chrono::{DateTime, Utc};
 use std::io;
@@ -137,7 +136,7 @@ fn create_invoice<'a>(
         .map_err(|_| "amount should be an integer number".to_string())?;
     let description = words.collect::<Vec<_>>().join(" ");
     let invoice = node
-        .create_invoice(amount, description)
+        .create_invoice(amount, description, String::new())
         .map_err(|e| e.to_string())?;
     println!("{}", invoice);
     Ok(())
@@ -184,7 +183,7 @@ fn pay_invoice<'a>(
         .next()
         .ok_or_else(|| "invoice is required".to_string())?;
 
-    match node.pay_invoice(invoice.to_string()) {
+    match node.pay_invoice(invoice.to_string(), String::new()) {
         Ok(_) => {}
         Err(e) => return Err(e.to_string()),
     };
@@ -201,21 +200,20 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
     println!("Total of {} payments\n", payments.len());
 
     for payment in payments {
-        let datetime: DateTime<Utc> = payment.timestamp.into();
+        let created_at: DateTime<Utc> = payment.created_at.into();
+        let latest_state_change_at: DateTime<Utc> = payment.latest_state_change_at.into();
         println!(
-            "{:?} payment with state changed at {}",
+            "{:?} payment with created at {} and with latest state change at {}",
             payment.payment_type,
-            datetime.format("%d/%m/%Y %T")
+            created_at.format("%d/%m/%Y %T"),
+            latest_state_change_at.format("%d/%m/%Y %T")
         );
         println!("      State:              {:?}", payment.payment_state);
         println!("      Amount msat:        {}", payment.amount_msat);
         println!("      Network fees msat:  {:?}", payment.network_fees_msat);
         println!("      LSP fees:           {:?}", payment.lsp_fees_msat);
-        println!("      Hash:               {}", payment.hash.to_hex());
-        println!(
-            "      Preimage:           {:?}",
-            payment.preimage.map(|p| p.to_hex())
-        );
+        println!("      Hash:               {}", payment.hash);
+        println!("      Preimage:           {:?}", payment.preimage);
         println!("      Description:        {}", payment.description);
         println!("      Invoice:            {}", payment.invoice);
     }
