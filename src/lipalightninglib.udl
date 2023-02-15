@@ -215,6 +215,11 @@ interface LightningNode {
     [Throws=LnError]
     sequence<Payment> get_latest_payments(u32 number_of_payments);
 
+    // Get a payment given its payment hash
+    //    - hash - hex representation of payment hash
+    [Throws=LnError]
+    Payment get_payment(string hash);
+
     // Call the method when the app goes foreground, such that the user can interact with it.
     // The library starts running the background tasks more frequently to improve user experience.
     void foreground();
