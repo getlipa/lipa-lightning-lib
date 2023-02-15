@@ -319,7 +319,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
             SELECT *
             FROM events
             JOIN (
-                SELECT payment_id, MIN(event_id) AS min_event_id
+                SELECT MIN(event_id) AS min_event_id
                 FROM events
                 GROUP BY payment_id
             ) AS min_ids ON min_event_id=events.event_id;
@@ -328,7 +328,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
             SELECT *
             FROM events
             JOIN (
-                SELECT payment_id, MAX(event_id) AS max_event_id
+                SELECT MAX(event_id) AS max_event_id
                 FROM events
                 GROUP BY payment_id
             ) AS max_ids ON max_event_id=events.event_id;
