@@ -364,7 +364,7 @@ impl LightningNode {
         &self,
         amount_msat: u64,
         description: String,
-        metadata: Vec<u8>,
+        metadata: String,
     ) -> Result<String> {
         let currency = match self.network {
             Network::Bitcoin => Currency::Bitcoin,
@@ -410,7 +410,7 @@ impl LightningNode {
         })
     }
 
-    pub fn pay_invoice(&self, invoice: String, metadata: Vec<u8>) -> Result<()> {
+    pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
         let invoice_struct = Self::parse_validate_invoice(self, &invoice)?;
 
         let amount_msat = invoice_struct

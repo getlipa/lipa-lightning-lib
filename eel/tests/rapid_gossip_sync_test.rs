@@ -68,7 +68,7 @@ mod rapid_gossip_sync_test {
 
             // Pay from NigiriCln to 3L to create outbound liquidity
             let invoice_cln = node
-                .create_invoice(HUNDRED_K_SATS, "test".to_string(), vec![])
+                .create_invoice(HUNDRED_K_SATS, "test".to_string(), String::new())
                 .unwrap();
             assert!(invoice_cln.starts_with("lnbc"));
 
@@ -110,7 +110,7 @@ mod rapid_gossip_sync_test {
 
             // Pay from NigiriLnd to 3L to create outbound liquidity (LspdLnd -> NigiriLnd)
             let invoice_lnd = node
-                .create_invoice(HUNDRED_K_SATS, "test".to_string(), vec![])
+                .create_invoice(HUNDRED_K_SATS, "test".to_string(), String::new())
                 .unwrap();
             assert!(invoice_lnd.starts_with("lnbc"));
 
@@ -141,7 +141,7 @@ mod rapid_gossip_sync_test {
     fn send_payment_flow(node: &LightningNode, target: NodeInstance, amount_msat: u64) {
         let invoice = nigiri::issue_invoice(target, "test", amount_msat, 3600).unwrap();
         let initial_balance = nigiri::query_node_balance(target).unwrap();
-        node.pay_invoice(invoice, vec![]).unwrap();
+        node.pay_invoice(invoice, String::new()).unwrap();
         sleep(Duration::from_secs(2));
         let final_balance = nigiri::query_node_balance(target).unwrap();
         assert_eq!(final_balance - initial_balance, amount_msat);

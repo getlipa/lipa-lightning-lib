@@ -30,7 +30,7 @@ pub(crate) struct CreateInvoiceParams {
     pub amount_msat: u64,
     pub currency: Currency,
     pub description: String,
-    pub metadata: Vec<u8>,
+    pub metadata: String,
 }
 
 pub(crate) async fn create_invoice(

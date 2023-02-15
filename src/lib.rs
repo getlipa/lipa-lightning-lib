@@ -56,7 +56,7 @@ impl LightningNode {
         &self,
         amount_msat: u64,
         description: String,
-        metadata: Vec<u8>,
+        metadata: String,
     ) -> Result<String> {
         self.core_node
             .create_invoice(amount_msat, description, metadata)
@@ -66,7 +66,7 @@ impl LightningNode {
         self.core_node.decode_invoice(invoice)
     }
 
-    pub fn pay_invoice(&self, invoice: String, metadata: Vec<u8>) -> Result<()> {
+    pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
         self.core_node.pay_invoice(invoice, metadata)
     }
 
