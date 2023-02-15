@@ -1,7 +1,7 @@
 use crate::errors::Result;
 use bitcoin::hashes::hex::ToHex;
 use num_enum::TryFromPrimitive;
-use perro::MapToError;
+use perro::{MapToError, OptionToError};
 use rusqlite::{Connection, Row};
 use std::convert::TryFrom;
 use std::time::SystemTime;
@@ -211,18 +211,8 @@ impl PaymentStore {
             .prepare("\
             SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, description, creation_events.inserted_at \
             FROM payments \
-            JOIN ( \
-                SELECT * \
-                FROM events \
-                GROUP BY payment_id \
-                HAVING MAX(event_id) \
-            ) AS recent_events ON payments.payment_id=recent_events.payment_id \
-            JOIN ( \
-                SELECT * \
-                FROM events \
-                GROUP BY payment_id \
-                HAVING MIN(event_id) \
-            ) AS creation_events ON payments.payment_id=creation_events.payment_id \
+            JOIN recent_events ON payments.payment_id=recent_events.payment_id \
+            JOIN creation_events ON payments.payment_id=creation_events.payment_id \
             ORDER BY payments.payment_id DESC \
             LIMIT ? \
             ")
@@ -237,6 +227,30 @@ impl PaymentStore {
         }
 
         Ok(payments)
+    }
+
+    pub fn get_payment(&self, hash: &[u8]) -> Result<Payment> {
+        let mut statement = self
+            .db_conn
+            .prepare("\
+            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, description, creation_events.inserted_at \
+            FROM payments \
+            JOIN recent_events ON payments.payment_id=recent_events.payment_id \
+            JOIN creation_events ON payments.payment_id=creation_events.payment_id \
+            WHERE payments.hash=? \
+            ")
+            .map_to_permanent_failure("Failed to prepare SQL query")?;
+        let mut payment_iter = statement
+            .query_map([hash], payment_from_row)
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
+
+        let payment = payment_iter
+            .next()
+            .ok_or_invalid_input(
+                "Invalid hash: no payment with the provided payment hash was found",
+            )?
+            .map_to_permanent_failure("Corrupted payment db")?;
+        Ok(payment)
     }
 }
 
@@ -284,7 +298,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
             CREATE TABLE IF NOT EXISTS payments (
               payment_id INTEGER NOT NULL PRIMARY KEY,
               type INTEGER CHECK( type IN (0, 1) ) NOT NULL,
-              hash BLOB NOT NULL,
+              hash BLOB NOT NULL UNIQUE,
               amount_msat INTEGER NOT NULL,
               invoice TEXT NOT NULL,
               description TEXT NOT NULL,
@@ -300,6 +314,24 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
               inserted_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
               FOREIGN KEY (payment_id) REFERENCES payments(payment_id)
             );
+            CREATE VIEW IF NOT EXISTS creation_events
+            AS
+            SELECT *
+            FROM events
+            JOIN (
+                SELECT MIN(event_id) AS min_event_id
+                FROM events
+                GROUP BY payment_id
+            ) AS min_ids ON min_event_id=events.event_id;
+            CREATE VIEW IF NOT EXISTS recent_events
+            AS
+            SELECT *
+            FROM events
+            JOIN (
+                SELECT MAX(event_id) AS max_event_id
+                FROM events
+                GROUP BY payment_id
+            ) AS max_ids ON max_event_id=events.event_id;
         ",
         )
         .map_to_permanent_failure("Failed to set up local payment database")
@@ -480,6 +512,9 @@ mod tests {
         assert_eq!(payment.created_at, created_at);
         assert_ne!(payment.created_at, payment.latest_state_change_at);
         assert!(payment.created_at < payment.latest_state_change_at);
+
+        let payment_by_hash = payment_store.get_payment(&hash).unwrap();
+        assert_eq!(payment, &payment_by_hash);
     }
 
     fn reset_db(db_name: &str) {

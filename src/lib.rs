@@ -74,6 +74,10 @@ impl LightningNode {
         self.core_node.get_latest_payments(number_of_payments)
     }
 
+    pub fn get_payment(&self, hash: String) -> Result<Payment> {
+        self.core_node.get_payment(&hash)
+    }
+
     pub fn foreground(&self) {
         self.core_node.foreground()
     }

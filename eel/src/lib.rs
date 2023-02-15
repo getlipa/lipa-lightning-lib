@@ -57,7 +57,7 @@ use std::path::Path;
 
 use crate::payment_store::{Payment, PaymentStore};
 use bitcoin::blockdata::constants::genesis_block;
-use bitcoin::hashes::hex::ToHex;
+use bitcoin::hashes::hex::{FromHex, ToHex};
 pub use bitcoin::Network;
 use cipher::consts::U32;
 use lightning::chain::channelmonitor::ChannelMonitor;
@@ -480,6 +480,13 @@ impl LightningNode {
             .lock()
             .unwrap()
             .get_latest_payments(number_of_payments)
+    }
+
+    pub fn get_payment(&self, hash: &str) -> Result<Payment> {
+        self.payment_store
+            .lock()
+            .unwrap()
+            .get_payment(&Vec::from_hex(hash).map_to_invalid_input("Invalid hash")?)
     }
 
     pub fn foreground(&self) {
