@@ -22,8 +22,9 @@ impl LipaEventHandler {
         task_manager: Arc<Mutex<TaskManager>>,
         user_event_handler: Box<dyn interfaces::EventHandler>,
         payment_store_path: &str,
+        timezone_id: &str,
     ) -> Result<Self> {
-        let payment_store = Mutex::new(PaymentStore::new(payment_store_path)?);
+        let payment_store = Mutex::new(PaymentStore::new(payment_store_path, timezone_id)?);
         Ok(Self {
             channel_manager,
             task_manager,

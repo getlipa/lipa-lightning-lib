@@ -22,14 +22,20 @@ pub enum PaymentState {
 }
 
 #[derive(PartialEq, Eq, Debug)]
+pub struct TzTime {
+    pub timestamp: SystemTime,
+    pub timezone_id: String,
+}
+
+#[derive(PartialEq, Eq, Debug)]
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,
     pub hash: String,
     pub amount_msat: u64,
     pub invoice: String,
-    pub created_at: SystemTime,
-    pub latest_state_change_at: SystemTime,
+    pub created_at: TzTime,
+    pub latest_state_change_at: TzTime,
     pub description: String,
     pub preimage: Option<String>,
     pub network_fees_msat: Option<u64>,
@@ -39,15 +45,19 @@ pub struct Payment {
 
 pub(crate) struct PaymentStore {
     db_conn: Connection,
+    timezone_id: String,
 }
 
 impl PaymentStore {
-    pub fn new(db_path: &str) -> Result<Self> {
+    pub fn new(db_path: &str, timezone_id: &str) -> Result<Self> {
         let db_conn = Connection::open(db_path).map_to_invalid_input("Invalid db path")?;
 
         apply_migrations(&db_conn)?;
 
-        Ok(PaymentStore { db_conn })
+        Ok(PaymentStore {
+            db_conn,
+            timezone_id: String::from(timezone_id),
+        })
     }
 
     pub fn new_incoming_payment(
@@ -81,10 +91,14 @@ impl PaymentStore {
         .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
         tx.execute(
             "\
-            INSERT INTO events (payment_id, type) \
-            VALUES (?1, ?2) \
+            INSERT INTO events (payment_id, type, timezone_id) \
+            VALUES (?1, ?2, ?3) \
             ",
-            (tx.last_insert_rowid(), PaymentState::Created as u8),
+            (
+                tx.last_insert_rowid(),
+                PaymentState::Created as u8,
+                &self.timezone_id,
+            ),
         )
         .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
         tx.commit()
@@ -120,10 +134,14 @@ impl PaymentStore {
         .map_to_invalid_input("Failed to add new outgoing payment to payments db")?;
         tx.execute(
             "\
-            INSERT INTO events (payment_id, type) \
-            VALUES (?1, ?2) \
+            INSERT INTO events (payment_id, type, timezone_id) \
+            VALUES (?1, ?2, ?3) \
             ",
-            (tx.last_insert_rowid(), PaymentState::Created as u8),
+            (
+                tx.last_insert_rowid(),
+                PaymentState::Created as u8,
+                &self.timezone_id,
+            ),
         )
         .map_to_invalid_input("Failed to add new outgoing payment to payments db")?;
         tx.commit()
@@ -149,11 +167,11 @@ impl PaymentStore {
         self.db_conn
             .execute(
                 "\
-                INSERT INTO events (payment_id, type) \
+                INSERT INTO events (payment_id, type, timezone_id) \
                 VALUES (
-                    (SELECT payment_id FROM payments WHERE hash=?1), ?2)
+                    (SELECT payment_id FROM payments WHERE hash=?1), ?2, ?3)
                 ",
-                (hash, PaymentState::Succeeded as u8),
+                (hash, PaymentState::Succeeded as u8, &self.timezone_id),
             )
             .map_to_invalid_input("Failed to add payment confirmed event to payments db")?;
 
@@ -164,11 +182,11 @@ impl PaymentStore {
         self.db_conn
             .execute(
                 "\
-                INSERT INTO events (payment_id, type) \
+                INSERT INTO events (payment_id, type, timezone_id) \
                 VALUES (
-                    (SELECT payment_id FROM payments WHERE hash=?1), ?2)
+                    (SELECT payment_id FROM payments WHERE hash=?1), ?2, ?3)
                 ",
-                (hash, PaymentState::Failed as u8),
+                (hash, PaymentState::Failed as u8, &self.timezone_id),
             )
             .map_to_invalid_input("Failed to add payment failed event to payments db")?;
 
@@ -209,7 +227,9 @@ impl PaymentStore {
         let mut statement = self
             .db_conn
             .prepare("\
-            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, description, creation_events.inserted_at \
+            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, \
+            lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
+            recent_events.timezone_id, description, creation_events.inserted_at, creation_events.timezone_id \
             FROM payments \
             JOIN recent_events ON payments.payment_id=recent_events.payment_id \
             JOIN creation_events ON payments.payment_id=creation_events.payment_id \
@@ -233,7 +253,9 @@ impl PaymentStore {
         let mut statement = self
             .db_conn
             .prepare("\
-            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, description, creation_events.inserted_at \
+            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, \
+            lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
+            recent_events.timezone_id, description, creation_events.inserted_at, creation_events.timezone_id \
             FROM payments \
             JOIN recent_events ON payments.payment_id=recent_events.payment_id \
             JOIN creation_events ON payments.payment_id=creation_events.payment_id \
@@ -291,11 +313,19 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let payment_state: u8 = row.get(9)?;
     let payment_state =
         PaymentState::try_from(payment_state).map_err(|_| rusqlite::Error::InvalidQuery)?;
-    let latest_state_change_at: chrono::DateTime<chrono::Utc> = row.get(10)?;
-    let latest_state_change_at = SystemTime::from(latest_state_change_at);
-    let description = row.get(11)?;
-    let created_at: chrono::DateTime<chrono::Utc> = row.get(12)?;
-    let created_at = SystemTime::from(created_at);
+    let latest_state_change_at_timestamp: chrono::DateTime<chrono::Utc> = row.get(10)?;
+    let latest_state_change_at_timezone_id = row.get(11)?;
+    let latest_state_change_at = TzTime {
+        timestamp: SystemTime::from(latest_state_change_at_timestamp),
+        timezone_id: latest_state_change_at_timezone_id,
+    };
+    let description = row.get(12)?;
+    let created_at_timestamp: chrono::DateTime<chrono::Utc> = row.get(13)?;
+    let created_at_timezone_id = row.get(14)?;
+    let created_at = TzTime {
+        timestamp: SystemTime::from(created_at_timestamp),
+        timezone_id: created_at_timezone_id,
+    };
     Ok(Payment {
         payment_type,
         payment_state,
@@ -333,6 +363,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
               payment_id INTEGER NOT NULL,
               type INTEGER CHECK( type in (0, 1, 2) ) NOT NULL,
               inserted_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              timezone_id TEXT NOT NULL,
               FOREIGN KEY (payment_id) REFERENCES payments(payment_id)
             );
             CREATE VIEW IF NOT EXISTS creation_events
@@ -368,6 +399,7 @@ mod tests {
     use std::time::Duration;
 
     const TEST_DB_PATH: &str = ".3l_local_test";
+    const TEST_TZ_ID: &str = "test_timezone_id";
 
     #[test]
     fn test_migrations() {
@@ -384,7 +416,8 @@ mod tests {
     fn test_payment_exists() {
         let db_name = String::from("payment_exists.db3");
         reset_db(&db_name);
-        let mut payment_store = PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+        let mut payment_store =
+            PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}"), TEST_TZ_ID).unwrap();
 
         let hash = vec![1, 2, 3, 4];
         let _preimage = vec![5, 6, 7, 8];
@@ -414,7 +447,8 @@ mod tests {
     fn test_payment_storage_flow() {
         let db_name = String::from("new_payment.db3");
         reset_db(&db_name);
-        let mut payment_store = PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+        let mut payment_store =
+            PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}"), TEST_TZ_ID).unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert!(payments.is_empty());
@@ -453,8 +487,9 @@ mod tests {
         assert_eq!(payment.lsp_fees_msat, Some(lsp_fees_msat));
         assert_eq!(payment.metadata, metadata);
 
+        assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at, payment.latest_state_change_at);
-        let created_at = payment.created_at;
+        let created_at = payment.created_at.timestamp;
 
         payment_store.fill_preimage(&hash, &preimage).unwrap();
 
@@ -472,9 +507,14 @@ mod tests {
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Succeeded);
-        assert_eq!(payment.created_at, created_at);
-        assert_ne!(payment.created_at, payment.latest_state_change_at);
-        assert!(payment.created_at < payment.latest_state_change_at);
+        assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
+        assert_eq!(payment.latest_state_change_at.timezone_id, TEST_TZ_ID);
+        assert_eq!(payment.created_at.timestamp, created_at);
+        assert_ne!(
+            payment.created_at.timestamp,
+            payment.latest_state_change_at.timestamp
+        );
+        assert!(payment.created_at.timestamp < payment.latest_state_change_at.timestamp);
 
         // New outgoing payment that fails
         let hash = vec![5, 6, 7, 8];
@@ -503,8 +543,9 @@ mod tests {
         assert_eq!(payment.lsp_fees_msat, None);
         assert_eq!(payment.metadata, metadata);
 
+        assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at, payment.latest_state_change_at);
-        let created_at = payment.created_at;
+        let created_at = payment.created_at.timestamp;
 
         // To be able to test the difference between created_at and latest_state_change_at
         sleep(Duration::from_secs(1));
@@ -514,9 +555,14 @@ mod tests {
         assert_eq!(payments.len(), 2);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Failed);
-        assert_eq!(payment.created_at, created_at);
-        assert_ne!(payment.created_at, payment.latest_state_change_at);
-        assert!(payment.created_at < payment.latest_state_change_at);
+        assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
+        assert_eq!(payment.latest_state_change_at.timezone_id, TEST_TZ_ID);
+        assert_eq!(payment.created_at.timestamp, created_at);
+        assert_ne!(
+            payment.created_at.timestamp,
+            payment.latest_state_change_at.timestamp
+        );
+        assert!(payment.created_at.timestamp < payment.latest_state_change_at.timestamp);
 
         // New outgoing payment that succeedes
         let hash = vec![1, 3, 5, 7];
@@ -545,8 +591,9 @@ mod tests {
         assert_eq!(payment.lsp_fees_msat, None);
         assert_eq!(payment.metadata, metadata);
 
+        assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at, payment.latest_state_change_at);
-        let created_at = payment.created_at;
+        let created_at = payment.created_at.timestamp;
 
         // To be able to test the difference between created_at and latest_state_change_at
         sleep(Duration::from_secs(1));
@@ -560,9 +607,14 @@ mod tests {
         assert_eq!(payment.payment_state, PaymentState::Succeeded);
         assert_eq!(payment.preimage, Some(preimage.to_hex()));
         assert_eq!(payment.network_fees_msat, Some(network_fees_msat));
-        assert_eq!(payment.created_at, created_at);
-        assert_ne!(payment.created_at, payment.latest_state_change_at);
-        assert!(payment.created_at < payment.latest_state_change_at);
+        assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
+        assert_eq!(payment.latest_state_change_at.timezone_id, TEST_TZ_ID);
+        assert_eq!(payment.created_at.timestamp, created_at);
+        assert_ne!(
+            payment.created_at.timestamp,
+            payment.latest_state_change_at.timestamp
+        );
+        assert!(payment.created_at.timestamp < payment.latest_state_change_at.timestamp);
 
         let payment_by_hash = payment_store.get_payment(&hash).unwrap();
         assert_eq!(payment, &payment_by_hash);

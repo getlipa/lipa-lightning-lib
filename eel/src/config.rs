@@ -8,6 +8,7 @@ pub struct Config {
     pub lsp_url: String,
     pub lsp_token: String,
     pub local_persistence_path: String,
+    pub timezone_id: String,
 }
 
 impl Config {

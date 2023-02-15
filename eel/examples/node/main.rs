@@ -43,6 +43,7 @@ fn main() {
         lsp_url: "http://127.0.0.1:6666".to_string(),
         lsp_token: "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string(),
         local_persistence_path: BASE_DIR.to_string(),
+        timezone_id: String::from("example_timezone_id"),
     };
 
     let node = LightningNode::new(&config, remote_storage, events).unwrap();

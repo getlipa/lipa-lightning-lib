@@ -40,6 +40,7 @@ enum Network {
 //     - "https://rapidsync.lightningdevkit.org/snapshot/" for Mainnet (PROD)
 //     - *WIP* for Testnet
 // * local_persistence_path - a path on the local filesystem where this library will directly persist data
+// * timezone_id - a timezone identifier that will become associated with every timestamp recorded in 3L's payment database.
 dictionary Config {
     Network network;
     sequence<u8> seed;
@@ -48,6 +49,7 @@ dictionary Config {
     string lsp_url;
     string lsp_token;
     string local_persistence_path;
+    string timezone_id;
 };
 
 [Error]
@@ -160,6 +162,12 @@ enum PaymentState {
     "Failed",
 };
 
+// A UTC timestamp accompanied by the ID of the timezone on which it was recorded
+dictionary TzTime {
+    timestamp timestamp;
+    string timezone_id;
+};
+
 // Information about an incoming or outgoing payment
 dictionary Payment {
     PaymentType payment_type;
@@ -167,8 +175,8 @@ dictionary Payment {
     string hash; // Hex representation of payment hash
     u64 amount_msat;
     string invoice;
-    timestamp created_at;
-    timestamp latest_state_change_at;
+    TzTime created_at;
+    TzTime latest_state_change_at;
     string description; // The description embedded in the invoice. Given the length limit of this data, sometimes a hex hash of the description is provided instead.
     string? preimage; // Hex representation of the preimage. Is only guaranteed be present on successful payments
     u64? network_fees_msat; // Routing fees paid in an `Sending` payment. Will only be present if payment was successful.
