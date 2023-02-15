@@ -252,6 +252,27 @@ impl PaymentStore {
             .map_to_permanent_failure("Corrupted payment db")?;
         Ok(payment)
     }
+
+    pub fn payment_exists(&self, hash: &[u8]) -> Result<bool> {
+        let mut statement = self
+            .db_conn
+            .prepare(
+                "\
+            SELECT payment_id \
+            FROM payments \
+            WHERE payments.hash=? \
+            ",
+            )
+            .map_to_permanent_failure("Failed to prepare SQL query")?;
+        let mut payment_iter = statement
+            .query([hash])
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
+
+        Ok(payment_iter
+            .next()
+            .map_to_permanent_failure("Corrupted payment db")?
+            .is_some())
+    }
 }
 
 fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
@@ -357,6 +378,36 @@ mod tests {
         // Applying migrations on an already setup db is fine
         let db_conn = Connection::open(format!("{TEST_DB_PATH}/{db_name}")).unwrap();
         apply_migrations(&db_conn).unwrap();
+    }
+
+    #[test]
+    fn test_payment_exists() {
+        let db_name = String::from("payment_exists.db3");
+        reset_db(&db_name);
+        let mut payment_store = PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+
+        let hash = vec![1, 2, 3, 4];
+        let _preimage = vec![5, 6, 7, 8];
+        let amount_msat = 100_000_000;
+        let lsp_fees_msat = 2_000_000;
+        let description = String::from("Test description 1");
+        let invoice = String::from("lnbcrt1m1p37fe7udqqpp5e2mktq6ykgp0e9uljdrakvcy06wcwtswgwe7yl6jmfry4dke2t2ssp5s3uja8xn7tpeuctc62xqua6slpj40jrwlkuwmluv48g86r888g7s9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqwp6qac7ttkrd6rgwfte70sjtwxfxmpjk6z2h8vgwdnc88clvac7kqqqqyqqqqqqqqqqqqlgqqqqqqgqjqwhtk6ldnue43vtseuajgyypkv20py670vmcea9qrrdcqjrpp0qvr0sqgcldapjmgfeuvj54q6jt2h36a0m9xme3rywacscd3a5ey3fgpgdr8eq");
+        let metadata = String::from("Test metadata 1");
+
+        assert!(!payment_store.payment_exists(&hash).unwrap());
+
+        payment_store
+            .new_incoming_payment(
+                &hash,
+                amount_msat,
+                lsp_fees_msat,
+                &description,
+                &invoice,
+                &metadata,
+            )
+            .unwrap();
+
+        assert!(payment_store.payment_exists(&hash).unwrap());
     }
 
     #[test]
