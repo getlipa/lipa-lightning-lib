@@ -27,6 +27,17 @@ enum Network {
     "Regtest",
 };
 
+// An object that holds timezone configuration values necessary for 3L to do timestamp annotation. These values get tied
+// together with every timestamp persisted in the local payment database.
+//
+// Fields:
+// * timezone_id - string identifier whose format is completely arbitrary and can be chosen by the user
+// * timezone_utc_offset_secs - offset from the UTC timezone in seconds
+dictionary TzConfig {
+    string timezone_id;
+    i32 timezone_utc_offset_secs;
+};
+
 // An object that holds all configuration needed to start a LightningNode instance.
 //
 // Fields:
@@ -40,7 +51,7 @@ enum Network {
 //     - "https://rapidsync.lightningdevkit.org/snapshot/" for Mainnet (PROD)
 //     - *WIP* for Testnet
 // * local_persistence_path - a path on the local filesystem where this library will directly persist data
-// * timezone_id - a timezone identifier that will become associated with every timestamp recorded in 3L's payment database.
+// * timezone_config - a timezone configuration object
 dictionary Config {
     Network network;
     sequence<u8> seed;
@@ -49,7 +60,7 @@ dictionary Config {
     string lsp_url;
     string lsp_token;
     string local_persistence_path;
-    string timezone_id;
+    TzConfig timezone_config;
 };
 
 [Error]
@@ -162,10 +173,11 @@ enum PaymentState {
     "Failed",
 };
 
-// A UTC timestamp accompanied by the ID of the timezone on which it was recorded
+// A UTC timestamp accompanied by the ID of the timezone on which it was recorded and the respective UTC offset
 dictionary TzTime {
     timestamp timestamp;
     string timezone_id;
+    i32 timezone_utc_offset_secs;
 };
 
 // Information about an incoming or outgoing payment

@@ -1,5 +1,11 @@
 use bitcoin::Network;
 
+#[derive(Clone, Debug)]
+pub struct TzConfig {
+    pub timezone_id: String,
+    pub timezone_utc_offset_secs: i32,
+}
+
 pub struct Config {
     pub network: Network,
     pub seed: [u8; 64],
@@ -8,7 +14,7 @@ pub struct Config {
     pub lsp_url: String,
     pub lsp_token: String,
     pub local_persistence_path: String,
-    pub timezone_id: String,
+    pub timezone_config: TzConfig,
 }
 
 impl Config {
