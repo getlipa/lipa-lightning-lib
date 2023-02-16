@@ -8,7 +8,7 @@ use file_storage::FileStorage;
 use crate::print_events_handler::PrintEventsHandler;
 
 use bitcoin::Network;
-use eel::config::Config;
+use eel::config::{Config, TzConfig};
 use eel::interfaces::RemoteStorage;
 use eel::keys_manager::mnemonic_to_secret;
 use eel::LightningNode;
@@ -43,6 +43,10 @@ fn main() {
         lsp_url: "http://127.0.0.1:6666".to_string(),
         lsp_token: "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string(),
         local_persistence_path: BASE_DIR.to_string(),
+        timezone_config: TzConfig {
+            timezone_id: String::from("example_timezone_id"),
+            timezone_utc_offset_secs: 1234,
+        },
     };
 
     let node = LightningNode::new(&config, remote_storage, events).unwrap();

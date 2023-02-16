@@ -5,6 +5,7 @@ use uniffi_lipalightninglib::Config;
 use uniffi_lipalightninglib::LightningNode;
 
 use core::time::Duration;
+use eel::config::TzConfig;
 use eel::errors::RuntimeErrorCode;
 use std::fs;
 use std::thread::sleep;
@@ -33,6 +34,10 @@ impl NodeHandle {
                 lsp_url: eel_config.lsp_url,
                 lsp_token: eel_config.lsp_token,
                 local_persistence_path: eel_config.local_persistence_path,
+                timezone_config: TzConfig {
+                    timezone_id: String::from("int_test_timezone_id"),
+                    timezone_utc_offset_secs: 1234,
+                },
             },
         }
     }

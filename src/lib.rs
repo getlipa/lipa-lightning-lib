@@ -9,11 +9,12 @@ mod sanitize_input;
 pub use crate::callbacks::{CallbackError, EventsCallback};
 pub use crate::config::Config;
 use crate::eel_interface_impl::{EventsImpl, RemoteStorageMock};
+use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
 use eel::lsp::LspFee;
 use eel::node_info::{ChannelsInfo, NodeInfo};
-use eel::payment_store::{Payment, PaymentState, PaymentType};
+use eel::payment_store::{Payment, PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
 use eel::InvoiceDetails;
 use eel::LogLevel;
@@ -37,6 +38,7 @@ impl LightningNode {
             lsp_url: config.lsp_url,
             lsp_token: config.lsp_token,
             local_persistence_path: config.local_persistence_path,
+            timezone_config: config.timezone_config,
         };
         let remote_storage = Box::new(RemoteStorageMock::new(Arc::new(Storage::new())));
         let user_event_handler = Box::new(EventsImpl { events_callback });

@@ -4,6 +4,7 @@ use crate::payment_store::PaymentStore;
 use crate::task_manager::TaskManager;
 use crate::types::ChannelManager;
 
+use crate::config::TzConfig;
 use bitcoin::hashes::hex::ToHex;
 use lightning::util::events::{Event, EventHandler, PaymentPurpose};
 use log::{error, info, trace};
@@ -22,8 +23,9 @@ impl LipaEventHandler {
         task_manager: Arc<Mutex<TaskManager>>,
         user_event_handler: Box<dyn interfaces::EventHandler>,
         payment_store_path: &str,
+        timezone_config: TzConfig,
     ) -> Result<Self> {
-        let payment_store = Mutex::new(PaymentStore::new(payment_store_path)?);
+        let payment_store = Mutex::new(PaymentStore::new(payment_store_path, timezone_config)?);
         Ok(Self {
             channel_manager,
             task_manager,

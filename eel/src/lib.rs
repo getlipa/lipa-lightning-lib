@@ -272,7 +272,10 @@ impl LightningNode {
             .to_str()
             .ok_or_invalid_input("Invalid local persistence path")?;
 
-        let payment_store = Mutex::new(PaymentStore::new(payment_store_path)?);
+        let payment_store = Mutex::new(PaymentStore::new(
+            payment_store_path,
+            config.timezone_config.clone(),
+        )?);
 
         // Step 15. Initialize an EventHandler
         let event_handler = Arc::new(LipaEventHandler::new(
@@ -280,6 +283,7 @@ impl LightningNode {
             Arc::clone(&task_manager),
             user_event_handler,
             payment_store_path,
+            config.timezone_config.clone(),
         )?);
 
         // Step 16. Initialize the ProbabilisticScorer
