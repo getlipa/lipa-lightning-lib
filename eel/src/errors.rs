@@ -9,6 +9,7 @@ pub enum RuntimeErrorCode {
     RemoteStorageServiceUnavailable,
     NoRouteFound,
     SendFailure,
+    AlreadyUsedInvoice,
     GenericError,
 }
 
