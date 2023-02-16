@@ -1,18 +1,23 @@
+#[path = "print_events_handler/mod.rs"]
+mod print_events_handler;
+#[path = "../eel/tests/setup/mod.rs"]
 mod setup;
+mod setup_3l;
 
 #[cfg(feature = "nigiri")]
 mod node_info_test {
+    use crate::setup::nigiri;
+    use crate::setup_3l::NodeHandle;
+
     use bitcoin::secp256k1::PublicKey;
     use serial_test::file_serial;
-
-    use crate::setup::{nigiri, NodeHandle};
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_get_node_info() {
         nigiri::setup_environment_with_lsp();
 
-        let node = NodeHandle::default().start().unwrap();
+        let node = NodeHandle::new().start().unwrap();
         let node_info = node.get_node_info();
 
         assert!(

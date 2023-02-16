@@ -1,5 +1,6 @@
 use eel::Network;
 
+#[derive(Debug, Clone)]
 pub struct Config {
     pub network: Network,
     pub seed: Vec<u8>,

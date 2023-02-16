@@ -1,25 +1,24 @@
+#[path = "../config/mod.rs"]
+pub mod config;
 #[path = "../mocked_remote_storage/mod.rs"]
 pub mod mocked_remote_storage;
 #[path = "../print_events_handler/mod.rs"]
 mod print_event_handler;
 
-use eel::config::Config;
-use eel::keys_manager::generate_secret;
 use eel::LightningNode;
 use std::fs;
 
+use crate::setup::config::{get_testing_config, LOCAL_PERSISTENCE_PATH};
 use crate::setup::mocked_remote_storage::MockedRemoteStorage;
 #[cfg(feature = "nigiri")]
 use crate::setup::nigiri::{NodeInstance, RGS_CLN_HOST, RGS_CLN_ID, RGS_CLN_PORT};
 use crate::setup::print_event_handler::PrintEventsHandler;
-use bitcoin::Network;
+use eel::config::Config;
 use simplelog::{ConfigBuilder, LevelFilter, SimpleLogger};
 use std::sync::{Arc, Once};
 use std::thread::sleep;
 use std::time::Duration;
 use storage_mock::Storage;
-
-const LOCAL_PERSISTENCE_PATH: &str = ".3l_local_test";
 
 static INIT_LOGGER_ONCE: Once = Once::new();
 
@@ -56,18 +55,10 @@ impl NodeHandle {
         let _ = fs::remove_dir_all(LOCAL_PERSISTENCE_PATH);
         fs::create_dir(LOCAL_PERSISTENCE_PATH).unwrap();
 
-        let config = Config {
-            network: Network::Regtest,
-            seed: generate_secret("".to_string()).unwrap().get_seed_as_array(),
-            esplora_api_url: "http://localhost:30000".to_string(),
-            rgs_url: "http://localhost:8080/snapshot/".to_string(),
-            lsp_url: "http://127.0.0.1:6666".to_string(),
-            lsp_token: "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l"
-                .to_string(),
-            local_persistence_path: LOCAL_PERSISTENCE_PATH.to_string(),
-        };
-
-        NodeHandle { config, storage }
+        NodeHandle {
+            config: get_testing_config(),
+            storage,
+        }
     }
 
     pub fn default() -> Self {
@@ -193,17 +184,17 @@ pub mod nigiri {
 
     pub fn stop_lspd() {
         debug!("LSPD stopping ...");
-        exec_in_dir(&["docker-compose", "down"], "../lspd");
+        exec_in_dir(&["docker-compose", "down"], env!("LSPD_HOME"));
     }
 
     pub fn pause_lspd() {
         debug!("LSPD stopping ...");
-        exec_in_dir(&["docker-compose", "stop"], "../lspd");
+        exec_in_dir(&["docker-compose", "stop"], env!("LSPD_HOME"));
     }
 
     pub fn start_lspd() {
         debug!("LSPD starting ...");
-        exec_in_dir(&["docker-compose", "up", "-d", "lspd"], "../lspd");
+        exec_in_dir(&["docker-compose", "up", "-d", "lspd"], env!("LSPD_HOME"));
     }
 
     pub fn wait_for_healthy_lspd() {
@@ -220,12 +211,12 @@ pub mod nigiri {
 
     pub fn stop_rgs() {
         debug!("RGS server stopping ...");
-        exec_in_dir(&["docker-compose", "down"], "../rgs");
+        exec_in_dir(&["docker-compose", "down"], env!("RGS_HOME"));
     }
 
     fn start_rgs() {
         debug!("RGS server starting ...");
-        exec_in_dir(&["docker-compose", "up", "-d", "rgs"], "../rgs");
+        exec_in_dir(&["docker-compose", "up", "-d", "rgs"], env!("RGS_HOME"));
     }
 
     fn start_nigiri() {
@@ -240,14 +231,14 @@ pub mod nigiri {
     }
 
     pub fn wait_for_sync(node: NodeInstance) {
-        for _ in 0..20 {
+        for _ in 0..40 {
             if is_node_synced(node) {
                 return;
             }
             sleep(Duration::from_millis(500));
         }
 
-        panic!("Failed to start {:?}. Not synced after 10 sec.", node);
+        panic!("Failed to start {:?}. Not synced after 20 sec.", node);
     }
 
     pub fn is_node_synced(node: NodeInstance) -> bool {

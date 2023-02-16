@@ -4,7 +4,7 @@ check:
 
 .PHONY: checkall
 checkall:
-	cargo check --all-targets --all-features
+	LSPD_HOME==../lspd RGS_HOME=../rgs cargo check --all-targets --all-features
 
 .PHONY: build
 build:
@@ -12,7 +12,7 @@ build:
 
 .PHONY: buildall
 buildall:
-	cargo build --all-targets --all-features
+	LSPD_HOME==../lspd RGS_HOME=../rgs cargo build --all-targets --all-features
 
 .PHONY: test
 test: TEST = ''
@@ -23,7 +23,7 @@ test:
 integrationtests: FILE = *
 integrationtests: TEST = ''
 integrationtests:
-	cargo test --features nigiri --test '$(FILE)' -- $(TEST)
+	LSPD_HOME=../lspd RGS_HOME=../rgs cargo test --features nigiri --test '$(FILE)' -- $(TEST)
 
 .PHONY: testall
 testall: test integrationtests
