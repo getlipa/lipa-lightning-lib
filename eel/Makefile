@@ -23,7 +23,7 @@ test:
 integrationtests: FILE = *
 integrationtests: TEST = ''
 integrationtests:
-	cargo test --features nigiri --test '$(FILE)' -- $(TEST)
+	LSPD_HOME=../lspd RGS_HOME=../rgs cargo test --features nigiri --test '$(FILE)' -- $(TEST)
 
 .PHONY: testall
 testall: test integrationtests
