@@ -447,6 +447,7 @@ impl LightningNode {
                     &description,
                     &invoice,
                     &metadata,
+                    None,
                 )?;
             }
             Err(e) => match e {
@@ -461,6 +462,7 @@ impl LightningNode {
                         &description,
                         &invoice,
                         &metadata,
+                        None,
                     )?;
                     payment_store.payment_failed(invoice_struct.payment_hash())?;
                     return Err(runtime_error(
@@ -479,6 +481,7 @@ impl LightningNode {
                         &description,
                         &invoice,
                         &metadata,
+                        None,
                     )?;
                     payment_store.payment_failed(invoice_struct.payment_hash())?;
                     return Err(runtime_error(

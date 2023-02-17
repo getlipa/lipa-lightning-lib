@@ -137,6 +137,7 @@ pub(crate) async fn create_invoice(
             &params.description,
             &invoice.to_string(),
             &params.metadata,
+            None,
         )
         .map_to_permanent_failure("Failed to store new payment in payment db")?;
 
