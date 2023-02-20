@@ -403,14 +403,14 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
 
         ChannelMonitorUpdateStatus::InProgress*/
         let retries = 20;
-        match sync_persist_monitor_remotely(
-            storage,
-            &self.encryption_key,
-            data,
-            channel_id,
-            retries,
-        ) {
-            Ok(_) => ChannelMonitorUpdateStatus::Completed,
+        let encryption_key = self.encryption_key;
+        match std::thread::spawn(move || {
+            sync_persist_monitor_remotely(storage, &encryption_key, data, channel_id, retries)
+        })
+        .join()
+        {
+            Ok(Ok(_)) => ChannelMonitorUpdateStatus::Completed,
+            Ok(Err(_)) => ChannelMonitorUpdateStatus::PermanentFailure,
             Err(_) => ChannelMonitorUpdateStatus::PermanentFailure,
         }
     }
