@@ -5,11 +5,13 @@ use std::sync::Mutex;
 #[derive(Debug)]
 pub struct Storage {
     // Put the map into RefCell to allow mutation by immutable ref in MemoryStorage::put_object().
+    #[allow(clippy::type_complexity)]
     pub objects: Mutex<RefCell<HashMap<(String, String), Vec<u8>>>>,
     pub health: Mutex<bool>,
 }
 
 impl Storage {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             objects: Mutex::new(RefCell::new(HashMap::new())),
