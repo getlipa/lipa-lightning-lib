@@ -1,61 +1,52 @@
 .PHONY: check
 check:
-	cargo check
+	cargo check --workspace
 
 .PHONY: checkall
 checkall:
-	LSPD_HOME=lspd RGS_HOME=rgs cargo check --all-targets --all-features
-	LSPD_HOME=../lspd RGS_HOME=../rgs cargo check --manifest-path eel/Cargo.toml --all-targets --all-features
+	cargo check --workspace --all-targets --all-features
 
 .PHONY: build
 build:
-	cargo build
+	cargo build --workspace
 
 .PHONY: buildall
 buildall:
-	LSPD_HOME=lspd RGS_HOME=rgs cargo build --all-targets --all-features
-	LSPD_HOME=../lspd RGS_HOME=../rgs cargo build --manifest-path eel/Cargo.toml --all-targets --all-features
+	cargo build --workspace --all-targets --all-features
 
 .PHONY: clean
 clean:
 	cargo clean
-	cargo clean --manifest-path eel/Cargo.toml
 
 .PHONY: test
 test: TEST = ''
 test:
-	cargo test --lib --verbose -- $(TEST)
-	cargo test --manifest-path eel/Cargo.toml --lib --verbose -- $(TEST)
+	cargo test --workspace --lib --verbose -- $(TEST)
 
 .PHONY: integrationtests
 integrationtests: FILE = *
 integrationtests: TEST = ''
 integrationtests:
-	LSPD_HOME=lspd RGS_HOME=rgs cargo test --features nigiri --test '$(FILE)' -- $(TEST)
-	LSPD_HOME=../lspd RGS_HOME=../rgs cargo test --manifest-path eel/Cargo.toml --features nigiri --test '$(FILE)' -- $(TEST)
+	cargo test --workspace --features nigiri --test '$(FILE)' -- $(TEST)
 
 .PHONY: testall
 testall: test integrationtests
 
 .PHONY: fmt
 fmt:
-	cargo fmt
-	cargo fmt --manifest-path eel/Cargo.toml
+	cargo fmt --all
 
 .PHONY: fmt-check
 fmt-check:
-	cargo fmt -- --check
-	cargo fmt --manifest-path eel/Cargo.toml -- --check
+	cargo fmt --all -- --check
 
 .PHONY: clippy
 clippy:
 	cargo clippy -- -D warnings
-	cargo clippy --manifest-path eel/Cargo.toml -- -D warnings
 
 .PHONY: udeps
 udeps:
 	cargo +nightly udeps
-	cargo +nightly udeps --manifest-path eel/Cargo.toml
 
 # Check that we stick to `mod tests {` style.
 .PHONY: check-mod-test

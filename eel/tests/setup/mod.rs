@@ -184,17 +184,17 @@ pub mod nigiri {
 
     pub fn stop_lspd() {
         debug!("LSPD stopping ...");
-        exec_in_dir(&["docker-compose", "down"], env!("LSPD_HOME"));
+        exec_in_dir(&["docker-compose", "down"], &lspd_home());
     }
 
     pub fn pause_lspd() {
         debug!("LSPD stopping ...");
-        exec_in_dir(&["docker-compose", "stop"], env!("LSPD_HOME"));
+        exec_in_dir(&["docker-compose", "stop"], &lspd_home());
     }
 
     pub fn start_lspd() {
         debug!("LSPD starting ...");
-        exec_in_dir(&["docker-compose", "up", "-d", "lspd"], env!("LSPD_HOME"));
+        exec_in_dir(&["docker-compose", "up", "-d", "lspd"], &lspd_home());
     }
 
     pub fn wait_for_healthy_lspd() {
@@ -211,12 +211,12 @@ pub mod nigiri {
 
     pub fn stop_rgs() {
         debug!("RGS server stopping ...");
-        exec_in_dir(&["docker-compose", "down"], env!("RGS_HOME"));
+        exec_in_dir(&["docker-compose", "down"], &rgs_home());
     }
 
     fn start_rgs() {
         debug!("RGS server starting ...");
-        exec_in_dir(&["docker-compose", "up", "-d", "rgs"], env!("RGS_HOME"));
+        exec_in_dir(&["docker-compose", "up", "-d", "rgs"], &rgs_home());
     }
 
     fn start_nigiri() {
@@ -818,5 +818,13 @@ pub mod nigiri {
             .into_iter()
             .filter(|channel| self_node_id.eq(channel["source"].as_str().unwrap()))
             .collect()
+    }
+
+    fn lspd_home() -> String {
+        [env!("PWD"), "/lspd"].concat()
+    }
+
+    fn rgs_home() -> String {
+        [env!("PWD"), "/rgs"].concat()
     }
 }
