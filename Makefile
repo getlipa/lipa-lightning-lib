@@ -16,6 +16,11 @@ buildall:
 	LSPD_HOME=lspd RGS_HOME=rgs cargo build --all-targets --all-features
 	LSPD_HOME=../lspd RGS_HOME=../rgs cargo build --manifest-path eel/Cargo.toml --all-targets --all-features
 
+.PHONY: clean
+clean:
+	cargo clean
+	cargo clean --manifest-path eel/Cargo.toml
+
 .PHONY: test
 test: TEST = ''
 test:
