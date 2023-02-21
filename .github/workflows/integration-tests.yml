@@ -32,6 +32,6 @@ jobs:
           use_liquid: false
           use_ln: true
       - name: Set environment variables
-        run: echo "GRAPHQL_API_URL=${{ secrets.GRAPHQL_API_URL }}" >> $GITHUB_ENV
+        run: echo "BACKEND_BASE_URL=${{ secrets.BACKEND_BASE_URL }}" >> $GITHUB_ENV
       - name: Run integration tests
         run: make integrationtests

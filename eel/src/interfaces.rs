@@ -1,7 +1,6 @@
 use crate::errors::Result;
-use std::fmt::Debug;
 
-pub trait RemoteStorage: Send + Sync + Debug {
+pub trait RemoteStorage: Send + Sync {
     fn check_health(&self) -> bool;
 
     fn list_objects(&self, bucket: String) -> Result<Vec<String>>;

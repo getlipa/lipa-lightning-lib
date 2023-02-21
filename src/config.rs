@@ -13,4 +13,5 @@ pub struct Config {
     pub local_persistence_path: String,
     pub timezone_config: TzConfig,
     pub graphql_url: String,
+    pub backend_health_url: String,
 }

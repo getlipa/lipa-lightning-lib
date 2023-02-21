@@ -64,7 +64,7 @@ mod persistence_test {
         assert!(matches!(
             node_result,
             Err(RuntimeError {
-                code: RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                code: RuntimeErrorCode::RemoteStorageError,
                 ..
             })
         ));

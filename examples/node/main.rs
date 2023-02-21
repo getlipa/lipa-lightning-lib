@@ -46,6 +46,7 @@ fn main() {
             timezone_utc_offset_secs: 1234,
         },
         graphql_url: get_backend_url(),
+        backend_health_url: get_backend_health_url(),
     };
 
     let node = LightningNode::new(config, events).unwrap();
@@ -86,5 +87,23 @@ fn generate_seed() -> Vec<u8> {
 }
 
 fn get_backend_url() -> String {
-    env::var("GRAPHQL_API_URL").expect("GRAPHQL_API_URL environment variable is not set")
+    format!("{}/v1/graphql", get_base_url())
+}
+
+fn get_backend_health_url() -> String {
+    format!("{}/healthz", get_base_url())
+}
+
+fn get_base_url() -> String {
+    let base_url =
+        env::var("BACKEND_BASE_URL").expect("BACKEND_BASE_URL environment variable is not set");
+    sanitize_backend_base_url(&base_url);
+
+    base_url
+}
+
+fn sanitize_backend_base_url(url: &str) {
+    if url.contains("healthz") || url.contains("graphql") {
+        panic!("Make sure the BACKEND_BASE_URL environment variable does not include any path like '/v1/graphql'. It's a base URL.");
+    }
 }

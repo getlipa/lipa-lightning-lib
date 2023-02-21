@@ -1,54 +1,106 @@
 use eel::errors::{Result, RuntimeErrorCode};
 use eel::interfaces::{EventHandler, RemoteStorage};
 use eel::MapToError;
+
+use honey_badger::Auth;
+use mole::ChannelStatePersistenceClient;
 use perro::runtime_error;
 use std::sync::Arc;
-use storage_mock::Storage;
 
-#[derive(Debug, Clone)]
-pub(crate) struct RemoteStorageMock {
-    storage: Arc<Storage>,
+const MONITORS_BUCKET: &str = "monitors";
+const OBJECTS_BUCKET: &str = "objects";
+const MANAGER_KEY: &str = "manager";
+
+pub(crate) struct RemoteStorageGraphql {
+    remote_csp_client: ChannelStatePersistenceClient,
 }
 
-impl RemoteStorageMock {
-    pub fn new(storage: Arc<Storage>) -> Self {
-        Self { storage }
+impl RemoteStorageGraphql {
+    pub fn new(backend_url: String, backend_health_url: String, auth: Arc<Auth>) -> Result<Self> {
+        Ok(Self {
+            remote_csp_client: ChannelStatePersistenceClient::new(
+                backend_url,
+                backend_health_url,
+                auth,
+            ),
+        })
     }
 }
 
-impl Default for RemoteStorageMock {
-    fn default() -> Self {
-        Self::new(Arc::new(Storage::new()))
-    }
-}
-
-impl RemoteStorage for RemoteStorageMock {
+impl RemoteStorage for RemoteStorageGraphql {
     fn check_health(&self) -> bool {
-        self.storage.check_health()
+        self.remote_csp_client.check_health()
     }
 
     fn list_objects(&self, bucket: String) -> Result<Vec<String>> {
-        Ok(self.storage.list_objects(bucket))
-    }
-
-    fn get_object(&self, bucket: String, key: String) -> Result<Vec<u8>> {
-        match self.storage.get_object(bucket.clone(), key.clone()) {
-            Some(value) => Ok(value),
-            None => Err(runtime_error(
-                RuntimeErrorCode::ObjectNotFound,
-                format!("Could not read object {key} from bucket {bucket}"),
+        match bucket.as_str() {
+            MONITORS_BUCKET => self.remote_csp_client.get_channel_monitor_ids().map_to_runtime_error(
+                RuntimeErrorCode::RemoteStorageError,
+                "Failed to read list of channel monitors from remote storage....."),
+            OBJECTS_BUCKET => unimplemented!("List objects does not have any purpose for the manager for now, as there is only one manager and we want to fetch that one."),
+            _ => Err(runtime_error(
+                RuntimeErrorCode::RemoteStorageError,
+                format!("Retrieving data of type {bucket} from remote storage is not supported."),
             )),
         }
     }
 
-    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> Result<()> {
-        self.storage.put_object(bucket, key, value);
-        Ok(())
+    fn get_object(&self, bucket: String, key: String) -> Result<Vec<u8>> {
+        match bucket.as_str() {
+            MONITORS_BUCKET => self
+                .remote_csp_client
+                .read_channel_monitor(&key)
+                .map_to_runtime_error(
+                    RuntimeErrorCode::RemoteStorageError,
+                    "Failed read channel monitor from remote storage.",
+                ),
+            OBJECTS_BUCKET => self
+                .remote_csp_client
+                .read_channel_manager()
+                .map_to_runtime_error(
+                    RuntimeErrorCode::RemoteStorageError,
+                    "Failed to read channel manager from remote storage.",
+                ),
+            _ => unimplemented!(
+                "Retrieving data of type {bucket} from remote storage is not supported."
+            ),
+        }
     }
 
-    fn delete_object(&self, bucket: String, key: String) -> Result<()> {
-        self.storage.delete_object(bucket, key);
-        Ok(())
+    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> Result<()> {
+        match bucket.as_str() {
+            MONITORS_BUCKET => self
+                .remote_csp_client
+                .write_channel_monitor(
+                    &key,
+                    &value,
+                    env!("CARGO_PKG_VERSION"), // Version of 3L
+                    &Vec::<u8>::new(),         // Field may be used in the future
+                )
+                .map_to_runtime_error(
+                    RuntimeErrorCode::RemoteStorageError,
+                    "Failed to write channel manager to remote storage.",
+                ),
+            OBJECTS_BUCKET => {
+                if key == MANAGER_KEY {
+                    self.remote_csp_client
+                        .write_channel_manager(&value)
+                        .map_to_runtime_error(
+                            RuntimeErrorCode::RemoteStorageError,
+                            "Failed to write channel manager to remote storage.",
+                        )
+                } else {
+                    unimplemented!("Storing arbitrary {OBJECTS_BUCKET} is not yet supported!");
+                }
+            }
+            _ => {
+                unimplemented!("Storing data of type {bucket} to remote storage is not supported.")
+            }
+        }
+    }
+
+    fn delete_object(&self, _bucket: String, _key: String) -> Result<()> {
+        unimplemented!("Deleting objects is not yet supported!");
     }
 }
 

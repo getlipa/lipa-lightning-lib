@@ -1,5 +1,8 @@
 #![allow(clippy::let_unit_value)]
 
+extern crate core;
+
+mod auth;
 mod callbacks;
 mod config;
 mod eel_interface_impl;
@@ -9,7 +12,7 @@ mod sanitize_input;
 
 pub use crate::callbacks::{CallbackError, EventsCallback};
 pub use crate::config::Config;
-use crate::eel_interface_impl::{EventsImpl, RemoteStorageMock};
+use crate::eel_interface_impl::{EventsImpl, RemoteStorageGraphql};
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 use std::fs;
 
@@ -30,7 +33,6 @@ use honey_badger::{Auth, AuthLevel};
 use native_logger::init_native_logger_once;
 use perro::{MapToError, ResultTrait};
 use std::sync::Arc;
-use storage_mock::Storage;
 
 const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 
@@ -47,6 +49,9 @@ impl LightningNode {
         ))?;
 
         let seed = sanitize_input::strong_type_seed(&config.seed)?;
+
+        let auth = auth::Auth::new(config.graphql_url.clone(), &seed)?;
+
         let eel_config = eel::config::Config {
             network: config.network,
             seed,
@@ -58,7 +63,11 @@ impl LightningNode {
             local_persistence_path: config.local_persistence_path,
             timezone_config: config.timezone_config,
         };
-        let remote_storage = Box::new(RemoteStorageMock::new(Arc::new(Storage::new())));
+        let remote_storage = Box::new(RemoteStorageGraphql::new(
+            config.graphql_url.clone(),
+            config.backend_health_url,
+            auth.get_instace(),
+        )?);
         let user_event_handler = Box::new(EventsImpl { events_callback });
 
         let auth = Arc::new(build_auth(&seed, config.graphql_url.clone())?);
