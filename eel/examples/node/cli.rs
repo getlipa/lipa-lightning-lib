@@ -1,7 +1,9 @@
 use bitcoin::secp256k1::PublicKey;
 use chrono::{DateTime, Utc};
-use std::io;
-use std::io::{BufRead, Write};
+use rustyline::config::Builder;
+use rustyline::history::DefaultHistory;
+use rustyline::Editor;
+use std::path::Path;
 
 use crate::LightningNode;
 
@@ -13,15 +15,18 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
         "Local Node ID is: {}",
         PublicKey::from_slice(&node.get_node_info().node_pubkey).unwrap()
     );
-    let stdin = io::stdin();
-    let mut line_reader = stdin.lock().lines();
+
+    let config = Builder::new().auto_add_history(true).build();
+    let mut rl = Editor::<(), DefaultHistory>::with_config(config).unwrap();
+    let history_path = Path::new("./.ldk/cli_history");
+    let _ = rl.load_history(history_path);
+
     loop {
-        print!("> ");
-        io::stdout().flush().unwrap(); // Without flushing, the `>` doesn't print
-        let line = match line_reader.next() {
-            Some(l) => l.unwrap(),
-            None => break,
+        let line = match rl.readline(">> ") {
+            Ok(line) => line,
+            Err(_) => break,
         };
+
         let mut words = line.split_whitespace();
         if let Some(word) = words.next() {
             match word {
@@ -65,22 +70,23 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
             }
         }
     }
+    let _ = rl.append_history(history_path);
 }
 
 fn help() {
-    println!("nodeinfo");
-    println!("lspfee");
-
-    println!("invoice <amount in millisats> [description]");
-    println!("decodeinvoice");
-    println!("payinvoice");
-
-    println!("listpayments");
-
-    println!("foreground");
-    println!("background");
-
-    println!("stop");
+    println!("  nodeinfo");
+    println!("  lspfee");
+    println!("");
+    println!("  invoice <amount in millisats> [description]");
+    println!("  decodeinvoice <invoice>");
+    println!("  payinvoice <invoice>");
+    println!("");
+    println!("  listpayments");
+    println!("");
+    println!("  foreground");
+    println!("  background");
+    println!("");
+    println!("  stop");
 }
 
 fn lsp_fee(node: &LightningNode) {
