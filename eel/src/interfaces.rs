@@ -29,3 +29,7 @@ pub trait EventHandler: Send + Sync {
 
     fn payment_failed(&self, payment_hash: String) -> Result<()>;
 }
+
+pub trait ExchangeRateProvider: Send + Sync {
+    fn query_exchange_rate(&self, code: String) -> Result<u32>;
+}
