@@ -7,6 +7,7 @@ use uniffi_lipalightninglib::LightningNode;
 use core::time::Duration;
 use eel::config::TzConfig;
 use eel::errors::RuntimeErrorCode;
+use std::env;
 use std::fs;
 use std::thread::sleep;
 
@@ -29,6 +30,7 @@ impl NodeHandle {
             config: Config {
                 network: eel_config.network,
                 seed: eel_config.seed.to_vec(),
+                fiat_currency: "EUR".to_string(),
                 esplora_api_url: eel_config.esplora_api_url,
                 rgs_url: eel_config.rgs_url,
                 lsp_url: eel_config.lsp_url,
@@ -38,6 +40,7 @@ impl NodeHandle {
                     timezone_id: String::from("int_test_timezone_id"),
                     timezone_utc_offset_secs: 1234,
                 },
+                graphql_url: get_backend_url(),
             },
         }
     }
@@ -51,4 +54,8 @@ impl NodeHandle {
 
         node
     }
+}
+
+fn get_backend_url() -> String {
+    env::var("GRAPHQL_API_URL").expect("GRAPHQL_API_URL environment variable is not set")
 }

@@ -19,14 +19,17 @@ nigiri = []
 eel = { path = "eel" }
 log = "0.4.17"
 uniffi = "0.23.0"
-storage-mock = { path = "util/storage-mock" }
 thiserror = "1.0.38"
+
+chameleon = { git = "https://github.com/getlipa/wild" }
+honey-badger = { git = "https://github.com/getlipa/wild" }
+perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.0" }
+storage-mock = { path = "util/storage-mock" }
 
 [dev-dependencies]
 bitcoin = "0.29.2"
 ctor = "0.1.26"
 esplora-client = { version = "0.3.0", default-features = false, features = ["blocking"] }
-perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.0" }
 rand = "0.8.5"
 serde_json = "1.0"
 serial_test = { version =  "1.0.0", features = ["file_locks"] }

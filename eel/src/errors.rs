@@ -3,13 +3,16 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, PartialEq, Eq)]
 pub enum RuntimeErrorCode {
     EsploraServiceUnavailable,
-    RgsServiceUnavailable,
-    RgsUpdateError,
+    ExchangeRateProviderUnavailable,
     LspServiceUnavailable,
     RemoteStorageServiceUnavailable,
-    NoRouteFound,
-    SendFailure,
+    RgsServiceUnavailable,
+
     AlreadyUsedInvoice,
+    NoRouteFound,
+    RgsUpdateError,
+    SendFailure,
+
     GenericError,
 }
 

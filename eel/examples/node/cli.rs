@@ -1,6 +1,7 @@
 use bitcoin::secp256k1::PublicKey;
 use chrono::{DateTime, Utc};
 use rustyline::config::Builder;
+use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use rustyline::Editor;
 use std::path::Path;
@@ -24,7 +25,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     loop {
         let line = match rl.readline(">> ") {
             Ok(line) => line,
-            Err(_) => break,
+            Err(ReadlineError::Eof) => break,
+            Err(e) => {
+                println!("{e}");
+                continue;
+            }
         };
 
         let mut words = line.split_whitespace();
@@ -36,6 +41,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 }
                 "lspfee" => {
                     lsp_fee(node);
+                }
+                "exchangerate" => {
+                    if let Err(message) = get_exchange_rate(node, &mut words) {
+                        println!("Error: {}", message);
+                    }
                 }
                 "invoice" => {
                     if let Err(message) = create_invoice(node, &mut words) {
@@ -76,6 +86,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
 fn help() {
     println!("  nodeinfo");
     println!("  lspfee");
+    println!("  exchangerate <currency code>");
     println!("");
     println!("  invoice <amount in millisats> [description]");
     println!("  decodeinvoice <invoice>");
@@ -128,6 +139,20 @@ fn node_info(node: &LightningNode) {
         "Outbound capacity in msat: {}",
         node_info.channels_info.outbound_capacity_msat
     );
+}
+
+fn get_exchange_rate<'a>(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &'a str>,
+) -> Result<(), String> {
+    let code = words
+        .next()
+        .ok_or_else(|| "currency code is required".to_string())?;
+    let rate = node
+        .get_exchange_rate(code.to_string())
+        .map_err(|e| e.to_string())?;
+    println!("{}", rate);
+    Ok(())
 }
 
 fn create_invoice<'a>(

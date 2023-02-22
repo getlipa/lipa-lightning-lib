@@ -3,12 +3,15 @@
 mod callbacks;
 mod config;
 mod eel_interface_impl;
+mod exchange_rate_provider;
 mod native_logger;
 mod sanitize_input;
 
 pub use crate::callbacks::{CallbackError, EventsCallback};
 pub use crate::config::Config;
 use crate::eel_interface_impl::{EventsImpl, RemoteStorageMock};
+use crate::exchange_rate_provider::ExchangeRateProviderImpl;
+
 use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
@@ -19,7 +22,10 @@ use eel::secret::Secret;
 use eel::InvoiceDetails;
 use eel::LogLevel;
 pub use eel::Network;
+use honey_badger::secrets::generate_keypair;
+use honey_badger::{Auth, AuthLevel};
 use native_logger::init_native_logger_once;
+use perro::MapToError;
 use std::sync::Arc;
 use storage_mock::Storage;
 
@@ -42,7 +48,30 @@ impl LightningNode {
         };
         let remote_storage = Box::new(RemoteStorageMock::new(Arc::new(Storage::new())));
         let user_event_handler = Box::new(EventsImpl { events_callback });
-        let core_node = eel::LightningNode::new(&eel_config, remote_storage, user_event_handler)?;
+
+        // TODO: Derive keys.
+        let wkeys = generate_keypair();
+        let keys = generate_keypair();
+        let auth = Auth::new(
+            config.graphql_url.clone(),
+            AuthLevel::Pseudonymous,
+            wkeys,
+            keys,
+        )
+        .map_to_runtime_error(
+            RuntimeErrorCode::GenericError,
+            "Failed to build auth client",
+        )?;
+        let auth = Arc::new(auth);
+        let exchange_rate_provider =
+            Box::new(ExchangeRateProviderImpl::new(config.graphql_url, auth));
+
+        let core_node = eel::LightningNode::new(
+            &eel_config,
+            remote_storage,
+            user_event_handler,
+            exchange_rate_provider,
+        )?;
         Ok(LightningNode { core_node })
     }
 
@@ -86,6 +115,15 @@ impl LightningNode {
 
     pub fn background(&self) {
         self.core_node.background()
+    }
+
+    pub fn list_currency_codes(&self) -> Result<Vec<String>> {
+        // TODO: Implement.
+        Ok(Vec::new())
+    }
+
+    pub fn get_exchange_rate(&self, code: String) -> Result<u32> {
+        self.core_node.get_exchange_rate(code)
     }
 }
 

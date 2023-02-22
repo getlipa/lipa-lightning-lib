@@ -5,16 +5,18 @@ pub mod mocked_remote_storage;
 #[path = "../print_events_handler/mod.rs"]
 mod print_event_handler;
 
+use eel::config::Config;
+use eel::interfaces::ExchangeRateProvider;
 use eel::LightningNode;
-use std::fs;
 
 use crate::setup::config::{get_testing_config, LOCAL_PERSISTENCE_PATH};
 use crate::setup::mocked_remote_storage::MockedRemoteStorage;
 #[cfg(feature = "nigiri")]
 use crate::setup::nigiri::{NodeInstance, RGS_CLN_HOST, RGS_CLN_ID, RGS_CLN_PORT};
 use crate::setup::print_event_handler::PrintEventsHandler;
-use eel::config::Config;
+
 use simplelog::{ConfigBuilder, LevelFilter, SimpleLogger};
+use std::fs;
 use std::sync::{Arc, Once};
 use std::thread::sleep;
 use std::time::Duration;
@@ -47,6 +49,13 @@ fn init_logger() {
     });
 }
 
+struct ExchangeRateProviderMock;
+impl ExchangeRateProvider for ExchangeRateProviderMock {
+    fn query_exchange_rate(&self, _code: String) -> eel::errors::Result<u32> {
+        Ok(1234)
+    }
+}
+
 #[allow(dead_code)]
 impl NodeHandle {
     pub fn new(storage_config: mocked_remote_storage::Config) -> Self {
@@ -71,6 +80,7 @@ impl NodeHandle {
             &self.config,
             Box::new(self.storage.clone()),
             Box::new(events_handler),
+            Box::new(ExchangeRateProviderMock {}),
         );
 
         // Wait for the the P2P background task to connect to the LSP

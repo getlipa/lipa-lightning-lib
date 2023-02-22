@@ -9,7 +9,7 @@ use crate::print_events_handler::PrintEventsHandler;
 
 use bitcoin::Network;
 use eel::config::{Config, TzConfig};
-use eel::interfaces::RemoteStorage;
+use eel::interfaces::{ExchangeRateProvider, RemoteStorage};
 use eel::keys_manager::mnemonic_to_secret;
 use eel::LightningNode;
 use log::info;
@@ -49,7 +49,9 @@ fn main() {
         },
     };
 
-    let node = LightningNode::new(&config, remote_storage, events).unwrap();
+    let exchange_rate_provider = Box::new(ExchangeRateProviderMock {});
+
+    let node = LightningNode::new(&config, remote_storage, events, exchange_rate_provider).unwrap();
 
     // Lauch CLI
     sleep(Duration::from_secs(1));
@@ -130,4 +132,11 @@ fn generate_seed(storage: &FileStorage, seed_file_name: &str) -> Vec<u8> {
         )
         .unwrap();
     secret.seed
+}
+
+struct ExchangeRateProviderMock;
+impl ExchangeRateProvider for ExchangeRateProviderMock {
+    fn query_exchange_rate(&self, _code: String) -> eel::errors::Result<u32> {
+        Ok(1234)
+    }
 }

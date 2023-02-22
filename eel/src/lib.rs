@@ -40,7 +40,7 @@ use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;
-use crate::interfaces::{EventHandler, RemoteStorage};
+use crate::interfaces::{EventHandler, ExchangeRateProvider, RemoteStorage};
 pub use crate::invoice::InvoiceDetails;
 use crate::invoice::{create_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
@@ -100,6 +100,7 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
 #[allow(dead_code)]
 pub struct LightningNode {
     network: Network,
+    exchange_rate_provider: Box<dyn ExchangeRateProvider>,
     rt: AsyncRuntime,
     lsp_client: Arc<LspClient>,
     keys_manager: Arc<KeysManager>,
@@ -123,6 +124,7 @@ impl LightningNode {
         config: &Config,
         remote_storage: Box<dyn RemoteStorage>,
         user_event_handler: Box<dyn EventHandler>,
+        exchange_rate_provider: Box<dyn ExchangeRateProvider>,
     ) -> Result<Self> {
         let rt = AsyncRuntime::new()?;
         let genesis_hash = genesis_block(config.network).header.block_hash();
@@ -330,6 +332,7 @@ impl LightningNode {
 
         Ok(Self {
             network: config.network,
+            exchange_rate_provider,
             rt,
             lsp_client,
             keys_manager,
@@ -520,6 +523,11 @@ impl LightningNode {
             .lock()
             .unwrap()
             .restart(BACKGROUND_PERIODS);
+    }
+
+    pub fn get_exchange_rate(&self, code: String) -> Result<u32> {
+        // TODO: Update in a background task and return cached value.
+        self.exchange_rate_provider.query_exchange_rate(code)
     }
 
     fn parse_validate_invoice(&self, invoice: &str) -> Result<Invoice> {
