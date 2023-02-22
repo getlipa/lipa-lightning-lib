@@ -1,5 +1,6 @@
 use bitcoin::secp256k1::PublicKey;
 use chrono::{DateTime, Utc};
+use colored::Colorize;
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -22,12 +23,13 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     let history_path = Path::new("./.ldk/cli_history");
     let _ = rl.load_history(history_path);
 
+    let prompt = "eel ⚡ ".bold().yellow().to_string();
     loop {
-        let line = match rl.readline(">> ") {
+        let line = match rl.readline(&prompt) {
             Ok(line) => line,
             Err(ReadlineError::Eof) => break,
             Err(e) => {
-                println!("{e}");
+                println!("{}", e.to_string().red());
                 continue;
             }
         };
@@ -44,27 +46,27 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 }
                 "exchangerate" => {
                     if let Err(message) = get_exchange_rate(node, &mut words) {
-                        println!("Error: {}", message);
+                        println!("{}", message.red());
                     }
                 }
                 "invoice" => {
                     if let Err(message) = create_invoice(node, &mut words) {
-                        println!("Error: {}", message);
+                        println!("{}", message.red());
                     }
                 }
                 "decodeinvoice" => {
                     if let Err(message) = decode_invoice(node, &mut words) {
-                        println!("Error: {}", message);
+                        println!("{}", message.red());
                     }
                 }
                 "payinvoice" => {
                     if let Err(message) = pay_invoice(node, &mut words) {
-                        println!("Error: {}", message);
+                        println!("{}", message.red());
                     }
                 }
                 "listpayments" => {
                     if let Err(message) = list_payments(node) {
-                        println!("Error: {}", message);
+                        println!("{}", message.red());
                     }
                 }
                 "foreground" => {
@@ -76,7 +78,10 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 "stop" => {
                     break;
                 }
-                _ => println!("Unknown command. See `\"help\" for available commands."),
+                _ => println!(
+                    "{}",
+                    "Unknown command. See \"help\" for available commands.".red()
+                ),
             }
         }
     }
@@ -147,7 +152,7 @@ fn get_exchange_rate<'a>(
 ) -> Result<(), String> {
     let code = words
         .next()
-        .ok_or_else(|| "currency code is required".to_string())?;
+        .ok_or_else(|| "Error: currency code is required".to_string())?;
     let rate = node
         .get_exchange_rate(code.to_string())
         .map_err(|e| e.to_string())?;
@@ -161,10 +166,10 @@ fn create_invoice<'a>(
 ) -> Result<(), String> {
     let amount = words
         .next()
-        .ok_or_else(|| "amount in millisats is required".to_string())?;
+        .ok_or_else(|| "Error: amount in millisats is required".to_string())?;
     let amount: u64 = amount
         .parse()
-        .map_err(|_| "amount should be an integer number".to_string())?;
+        .map_err(|_| "Error: amount should be an integer number".to_string())?;
     let description = words.collect::<Vec<_>>().join(" ");
     let invoice = node
         .create_invoice(amount, description, String::new())
@@ -179,7 +184,7 @@ fn decode_invoice<'a>(
 ) -> Result<(), String> {
     let invoice = words
         .next()
-        .ok_or_else(|| "invoice is required".to_string())?;
+        .ok_or_else(|| "Error: invoice is required".to_string())?;
 
     let invoice_details = match node.decode_invoice(invoice.to_string()) {
         Ok(id) => id,
