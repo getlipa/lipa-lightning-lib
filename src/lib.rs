@@ -14,6 +14,7 @@ use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 
 pub use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
+pub use eel::interfaces::ExchangeRate;
 use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
 use eel::lsp::LspFee;
@@ -42,6 +43,7 @@ impl LightningNode {
         let eel_config = eel::config::Config {
             network: config.network,
             seed,
+            fiat_currency: config.fiat_currency,
             esplora_api_url: config.esplora_api_url,
             rgs_url: config.rgs_url,
             lsp_url: config.lsp_url,
@@ -112,8 +114,8 @@ impl LightningNode {
         Ok(Vec::new())
     }
 
-    pub fn get_exchange_rate(&self, code: String) -> Result<u32> {
-        self.core_node.get_exchange_rate(code)
+    pub fn get_exchange_rates(&self) -> Result<ExchangeRate> {
+        self.core_node.get_exchange_rates()
     }
 }
 

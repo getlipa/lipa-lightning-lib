@@ -269,9 +269,14 @@ interface LightningNode {
     [Throws=LnError]
     sequence<string> list_currency_codes();
 
-    // Get an exchange rate for the configured fiat currency as sats per major unit.
     [Throws=LnError]
-    u32 get_exchange_rate(string code);
+    ExchangeRate get_exchange_rates();
+};
+
+// Exchange rates as sats per major unit.
+dictionary ExchangeRate {
+    u32 default_currency;
+    u32 usd;
 };
 
 dictionary ChannelsInfo {

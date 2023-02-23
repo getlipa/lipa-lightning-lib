@@ -8,6 +8,7 @@ pub fn get_testing_config() -> Config {
     Config {
         network: Network::Regtest,
         seed: generate_secret("".to_string()).unwrap().get_seed_as_array(),
+        fiat_currency: "EUR".to_string(),
         esplora_api_url: "http://localhost:30000".to_string(),
         rgs_url: "http://localhost:8080/snapshot/".to_string(),
         lsp_url: "http://127.0.0.1:6666".to_string(),

@@ -9,7 +9,11 @@ use std::path::Path;
 
 use crate::LightningNode;
 
-pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
+pub(crate) fn poll_for_user_input(
+    node: &LightningNode,
+    log_file_path: &str,
+    fiat_currency: String,
+) {
     println!("{}", "Eel Example Node".yellow().bold());
     println!("Detailed logs are available at {}", log_file_path);
     println!("To stop the node, please type \"stop\" for a graceful shutdown.");
@@ -44,8 +48,8 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 "lspfee" => {
                     lsp_fee(node);
                 }
-                "exchangerate" => {
-                    if let Err(message) = get_exchange_rate(node, &mut words) {
+                "exchangerates" => {
+                    if let Err(message) = get_exchange_rates(node, &fiat_currency) {
                         println!("{}", message.red());
                     }
                 }
@@ -91,7 +95,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
 fn help() {
     println!("  nodeinfo");
     println!("  lspfee");
-    println!("  exchangerate <currency code>");
+    println!("  exchangerates");
     println!("");
     println!("  invoice <amount in millisats> [description]");
     println!("  decodeinvoice <invoice>");
@@ -146,17 +150,10 @@ fn node_info(node: &LightningNode) {
     );
 }
 
-fn get_exchange_rate<'a>(
-    node: &LightningNode,
-    words: &mut dyn Iterator<Item = &'a str>,
-) -> Result<(), String> {
-    let code = words
-        .next()
-        .ok_or_else(|| "Error: currency code is required".to_string())?;
-    let rate = node
-        .get_exchange_rate(code.to_string())
-        .map_err(|e| e.to_string())?;
-    println!("{}", rate);
+fn get_exchange_rates(node: &LightningNode, fiat_currency: &str) -> Result<(), String> {
+    let rates = node.get_exchange_rates().map_err(|e| e.to_string())?;
+    println!("{fiat_currency}: {} sats", rates.default_currency);
+    println!("USD: {} sats", rates.usd);
     Ok(())
 }
 

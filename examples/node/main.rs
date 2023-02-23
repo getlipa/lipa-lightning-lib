@@ -27,11 +27,15 @@ fn main() {
 
     let events = Box::new(PrintEventsHandler {});
 
+    let mut args = env::args();
+    let _ = args.next();
+    let fiat_currency = args.next().unwrap_or("EUR".to_string());
+
     let seed = generate_seed();
     let config = Config {
         network: Network::Regtest,
         seed,
-        fiat_currency: "EUR".to_string(),
+        fiat_currency: fiat_currency.clone(),
         esplora_api_url: "http://localhost:30000".to_string(),
         rgs_url: "http://localhost:8080/snapshot/".to_string(),
         lsp_url: "http://127.0.0.1:6666".to_string(),
@@ -48,7 +52,7 @@ fn main() {
 
     // Lauch CLI
     sleep(Duration::from_secs(1));
-    cli::poll_for_user_input(&node, &format!("{BASE_DIR}/{LOG_FILE}"));
+    cli::poll_for_user_input(&node, &format!("{BASE_DIR}/{LOG_FILE}"), fiat_currency);
 }
 
 fn init_logger() {

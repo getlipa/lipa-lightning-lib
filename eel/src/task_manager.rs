@@ -1,7 +1,9 @@
 use crate::async_runtime::{Handle, RepeatingTaskHandle};
 use crate::chain_access::LipaChainAccess;
 use crate::confirm::ConfirmWrapper;
+use crate::errors::Result;
 use crate::fee_estimator::FeeEstimator;
+use crate::interfaces::{ExchangeRate, ExchangeRateProvider};
 use crate::lsp::{LspClient, LspInfo};
 use crate::p2p_networking::{connect_peer, LnPeer};
 use crate::rapid_sync_client::RapidSyncClient;
@@ -20,6 +22,7 @@ pub(crate) struct TaskPeriods {
     pub reconnect_to_lsp: Duration,
     pub update_fees: Option<Duration>,
     pub update_graph: Option<RestartIfFailedPeriod>,
+    pub update_exchange_rates: Option<Duration>,
 }
 
 pub(crate) struct TaskManager {
@@ -36,6 +39,10 @@ pub(crate) struct TaskManager {
     chain_monitor: Arc<ChainMonitor>,
     chain_access: Arc<Mutex<LipaChainAccess>>,
 
+    fiat_currency: String,
+    exchange_rate_provider: Arc<dyn ExchangeRateProvider>,
+    exchange_rates: Arc<Mutex<Option<ExchangeRate>>>,
+
     task_handles: Vec<RepeatingTaskHandle>,
 }
 
@@ -50,6 +57,8 @@ impl TaskManager {
         channel_manager: Arc<ChannelManager>,
         chain_monitor: Arc<ChainMonitor>,
         chain_access: Arc<Mutex<LipaChainAccess>>,
+        fiat_currency: String,
+        exchange_rate_provider: Box<dyn ExchangeRateProvider>,
     ) -> Self {
         Self {
             runtime_handle,
@@ -61,12 +70,19 @@ impl TaskManager {
             channel_manager,
             chain_monitor,
             chain_access,
+            fiat_currency,
+            exchange_rate_provider: Arc::from(exchange_rate_provider),
+            exchange_rates: Arc::new(Mutex::new(None)),
             task_handles: Vec::new(),
         }
     }
 
     pub fn get_lsp_info(&self) -> Option<LspInfo> {
         (*self.lsp_info.lock().unwrap()).clone()
+    }
+
+    pub fn get_exchange_rates(&self) -> Option<ExchangeRate> {
+        (*self.exchange_rates.lock().unwrap()).clone()
     }
 
     pub fn request_shutdown_all(&mut self) {
@@ -102,6 +118,12 @@ impl TaskManager {
         // until the app gets to the foreground again.
         if let Some(period) = periods.update_graph {
             self.task_handles.push(self.start_graph_update(period));
+        }
+
+        // Update exchange rates.
+        if let Some(period) = periods.update_exchange_rates {
+            self.task_handles
+                .push(self.start_exchange_rate_update(period));
         }
 
         // TODO: Reconnect to channels' peers.
@@ -213,6 +235,41 @@ impl TaskManager {
                     Err(e) => {
                         error!("Update graph task panicked: {}", e);
                         Some(period)
+                    }
+                }
+            }
+        })
+    }
+
+    fn start_exchange_rate_update(&self, period: Duration) -> RepeatingTaskHandle {
+        let fiat_currency = self.fiat_currency.clone();
+        let exchange_rate_provider = Arc::clone(&self.exchange_rate_provider);
+        let exchange_rates = Arc::clone(&self.exchange_rates);
+        self.runtime_handle.spawn_repeating_task(period, move || {
+            let fiat_currency = fiat_currency.clone();
+            let exchange_rate_provider = Arc::clone(&exchange_rate_provider);
+            let exchange_rates = Arc::clone(&exchange_rates);
+            async move {
+                match tokio::task::spawn_blocking(move || {
+                    let default_currency =
+                        exchange_rate_provider.query_exchange_rate(fiat_currency)?;
+                    let usd = exchange_rate_provider.query_exchange_rate("USD".to_string())?;
+                    let rates = ExchangeRate {
+                        default_currency,
+                        usd,
+                    };
+                    Ok(rates) as Result<ExchangeRate>
+                })
+                .await
+                {
+                    Ok(Ok(rates)) => {
+                        *exchange_rates.lock().unwrap() = Some(rates);
+                    }
+                    Ok(Err(e)) => {
+                        error!("Failed to update exchange rates: {e}");
+                    }
+                    Err(e) => {
+                        error!("Update exchange rates task panicked: {e}");
                     }
                 }
             }

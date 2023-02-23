@@ -9,6 +9,7 @@ pub struct TzConfig {
 pub struct Config {
     pub network: Network,
     pub seed: [u8; 64],
+    pub fiat_currency: String,
     pub esplora_api_url: String,
     pub rgs_url: String,
     pub lsp_url: String,

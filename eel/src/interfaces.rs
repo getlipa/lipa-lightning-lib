@@ -30,6 +30,12 @@ pub trait EventHandler: Send + Sync {
     fn payment_failed(&self, payment_hash: String) -> Result<()>;
 }
 
+#[derive(Clone)]
+pub struct ExchangeRate {
+    pub default_currency: u32,
+    pub usd: u32,
+}
+
 pub trait ExchangeRateProvider: Send + Sync {
     fn query_exchange_rate(&self, code: String) -> Result<u32>;
 }
