@@ -1,9 +1,12 @@
-.DS_Store
-.idea
-.ldk
-.ldk_remote
+.3l_cli_history
 .3l_local
 .3l_local_test
+.3l_node
+.DS_Store
+.eel_cli_history
+.eel_node
+.eel_remote
+.idea
 
 bindings
 

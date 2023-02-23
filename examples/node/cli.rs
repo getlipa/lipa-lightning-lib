@@ -1,16 +1,18 @@
+use crate::hinter::{CommandHint, CommandHinter};
 use bitcoin::secp256k1::PublicKey;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
-use rustyline::config::Builder;
+use rustyline::config::{Builder, CompletionType};
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use rustyline::Editor;
+use std::collections::HashSet;
 use std::path::Path;
 
 use crate::LightningNode;
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
-    println!("{}", "Eel Example Node".yellow().bold());
+    println!("{}", "3L Example Node".blue().bold());
     println!("Detailed logs are available at {}", log_file_path);
     println!("To stop the node, please type \"stop\" for a graceful shutdown.");
     println!(
@@ -18,12 +20,9 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
         PublicKey::from_slice(&node.get_node_info().node_pubkey).unwrap()
     );
 
-    let config = Builder::new().auto_add_history(true).build();
-    let mut rl = Editor::<(), DefaultHistory>::with_config(config).unwrap();
-    let history_path = Path::new(".eel_cli_history");
-    let _ = rl.load_history(history_path);
-
-    let prompt = "eel ϟ ".bold().yellow().to_string();
+    let prompt = "3L ϟ ".bold().blue().to_string();
+    let history_path = Path::new(".3l_cli_history");
+    let mut rl = setup_editor(&history_path);
     loop {
         let line = match rl.readline(&prompt) {
             Ok(line) => line,
@@ -86,6 +85,43 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
         }
     }
     let _ = rl.append_history(history_path);
+}
+
+fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
+    let config = Builder::new()
+        .auto_add_history(true)
+        .completion_type(CompletionType::List)
+        .build();
+
+    let mut hints = HashSet::new();
+    hints.insert(CommandHint::new("nodeinfo", "nodeinfo"));
+    hints.insert(CommandHint::new("lspfee", "lspfee"));
+    hints.insert(CommandHint::new(
+        "exchangerate <currency code>",
+        "exchangerate ",
+    ));
+
+    hints.insert(CommandHint::new(
+        "invoice <amount in millisats> [description]",
+        "invoice ",
+    ));
+    hints.insert(CommandHint::new(
+        "decodeinvoice <invoice>",
+        "decodeinvoice ",
+    ));
+    hints.insert(CommandHint::new("payinvoice <invoice>", "payinvoice "));
+
+    hints.insert(CommandHint::new("listpayments", "listpayments"));
+    hints.insert(CommandHint::new("foreground", "foreground"));
+    hints.insert(CommandHint::new("background", "background"));
+    hints.insert(CommandHint::new("stop", "stop"));
+    hints.insert(CommandHint::new("help", "help"));
+    let hinter = CommandHinter { hints };
+
+    let mut rl = Editor::<CommandHinter, DefaultHistory>::with_config(config).unwrap();
+    rl.set_helper(Some(hinter));
+    let _ = rl.load_history(history_path);
+    rl
 }
 
 fn help() {

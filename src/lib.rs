@@ -12,7 +12,7 @@ pub use crate::config::Config;
 use crate::eel_interface_impl::{EventsImpl, RemoteStorageMock};
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 
-use eel::config::TzConfig;
+pub use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
 use eel::lsp::LspFee;
