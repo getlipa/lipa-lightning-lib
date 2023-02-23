@@ -23,7 +23,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     let history_path = Path::new("./.ldk/cli_history");
     let _ = rl.load_history(history_path);
 
-    let prompt = "eel ⚡ ".bold().yellow().to_string();
+    let prompt = "eel ϟ ".bold().yellow().to_string();
     loop {
         let line = match rl.readline(&prompt) {
             Ok(line) => line,
