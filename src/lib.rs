@@ -14,6 +14,7 @@ use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 
 use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
+use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
 use eel::lsp::LspFee;
 use eel::node_info::{ChannelsInfo, NodeInfo};
@@ -22,12 +23,14 @@ use eel::secret::Secret;
 use eel::InvoiceDetails;
 use eel::LogLevel;
 pub use eel::Network;
-use honey_badger::secrets::generate_keypair;
+use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel};
 use native_logger::init_native_logger_once;
-use perro::MapToError;
+use perro::{MapToError, ResultTrait};
 use std::sync::Arc;
 use storage_mock::Storage;
+
+const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 
 pub struct LightningNode {
     core_node: eel::LightningNode,
@@ -49,20 +52,7 @@ impl LightningNode {
         let remote_storage = Box::new(RemoteStorageMock::new(Arc::new(Storage::new())));
         let user_event_handler = Box::new(EventsImpl { events_callback });
 
-        // TODO: Derive keys.
-        let wkeys = generate_keypair();
-        let keys = generate_keypair();
-        let auth = Auth::new(
-            config.graphql_url.clone(),
-            AuthLevel::Pseudonymous,
-            wkeys,
-            keys,
-        )
-        .map_to_runtime_error(
-            RuntimeErrorCode::GenericError,
-            "Failed to build auth client",
-        )?;
-        let auth = Arc::new(auth);
+        let auth = Arc::new(build_auth(&seed, config.graphql_url.clone())?);
         let exchange_rate_provider =
             Box::new(ExchangeRateProviderImpl::new(config.graphql_url, auth));
 
@@ -125,6 +115,24 @@ impl LightningNode {
     pub fn get_exchange_rate(&self, code: String) -> Result<u32> {
         self.core_node.get_exchange_rate(code)
     }
+}
+
+fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
+    let auth_keys = derive_key_pair_hex(seed, BACKEND_AUTH_DERIVATION_PATH).lift_invalid_input()?;
+    let auth_keys = KeyPair {
+        secret_key: auth_keys.secret_key,
+        public_key: auth_keys.public_key,
+    };
+    Auth::new(
+        graphql_url,
+        AuthLevel::Pseudonymous,
+        auth_keys,
+        generate_keypair(),
+    )
+    .map_to_runtime_error(
+        RuntimeErrorCode::GenericError,
+        "Failed to build auth client",
+    )
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
