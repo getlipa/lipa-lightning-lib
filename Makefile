@@ -57,9 +57,13 @@ check-mod-test:
 .PHONY: pr
 pr: fmt buildall test clippy check-mod-test
 
-.PHONY: runnode
-runnode:
+.PHONY: run-eel
+run-eel:
 	cargo run --manifest-path eel/Cargo.toml --example node
+
+.PHONY: run-3l
+run-3l:
+	cargo run --example node
 
 .PHONY: build-dev-env
 build-dev-env:
