@@ -40,12 +40,12 @@ pub fn derive_key_pair(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair
     let derivation_path = DerivationPath::from_str(derivation_path)
         .map_to_invalid_input("Invalid derivation path")?;
 
-    let auth_xpriv = master_xpriv
+    let derived_xpriv = master_xpriv
         .derive_priv(SECP256K1, &derivation_path)
         .map_to_permanent_failure("Failed to derive keys")?;
 
-    let secret_key = auth_xpriv.private_key.secret_bytes();
-    let public_key = PublicKey::from_secret_key(SECP256K1, &auth_xpriv.private_key)
+    let secret_key = derived_xpriv.private_key.secret_bytes();
+    let public_key = PublicKey::from_secret_key(SECP256K1, &derived_xpriv.private_key)
         .to_public_key()
         .to_bytes();
 
