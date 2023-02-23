@@ -6,7 +6,7 @@ use bitcoin::bech32::ToBase32;
 use std::time::{Duration, SystemTime};
 
 use crate::lsp;
-use crate::payment_store::PaymentStore;
+use crate::payment_store::{FiatValue, PaymentStore};
 use bitcoin::hashes::{sha256, Hash};
 use lightning::chain::keysinterface::{KeysInterface, KeysManager, Recipient};
 use lightning::ln::channelmanager::ChannelDetails;
@@ -39,6 +39,7 @@ pub(crate) async fn create_invoice(
     lsp_client: &LspClient,
     keys_manager: &KeysManager,
     payment_store: &mut PaymentStore,
+    fiat_value: Option<FiatValue>,
 ) -> Result<SignedRawInvoice> {
     let amount_msat = params.amount_msat;
 
@@ -137,7 +138,7 @@ pub(crate) async fn create_invoice(
             &params.description,
             &invoice.to_string(),
             &params.metadata,
-            None,
+            fiat_value,
         )
         .map_to_permanent_failure("Failed to store new payment in payment db")?;
 

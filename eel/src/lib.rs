@@ -390,6 +390,7 @@ impl LightningNode {
             &self.lsp_client,
             &self.keys_manager,
             &mut self.payment_store.lock().unwrap(),
+            None,
         ))?;
         Ok(signed_invoice.to_string())
     }
