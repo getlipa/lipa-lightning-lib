@@ -35,6 +35,17 @@ pub struct FiatValue {
     pub amount: u64,
 }
 
+impl FiatValue {
+    pub fn from_amount_msat(amount_msat: u64, fiat: &str, sats_per_major_fiat_unit: u32) -> Self {
+        // fiat amount in thousandths of the major fiat unit
+        let amount = amount_msat / (sats_per_major_fiat_unit as u64);
+        FiatValue {
+            fiat: fiat.to_string(),
+            amount,
+        }
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub struct Payment {
     pub payment_type: PaymentType,
@@ -740,5 +751,23 @@ mod tests {
     fn reset_db(db_name: &str) {
         let _ = fs::create_dir(TEST_DB_PATH);
         let _ = fs::remove_file(format!("{TEST_DB_PATH}/{db_name}"));
+    }
+
+    #[test]
+    fn test_fiat_value_from_exchange_rate() {
+        assert_eq!(FiatValue::from_amount_msat(1_000, "EUR", 5_000).amount, 0);
+        assert_eq!(FiatValue::from_amount_msat(10_000, "EUR", 5_000).amount, 2);
+        assert_eq!(
+            FiatValue::from_amount_msat(100_000, "EUR", 5_000).amount,
+            20
+        );
+        assert_eq!(
+            FiatValue::from_amount_msat(1_000_000, "EUR", 5_000).amount,
+            200
+        );
+        assert_eq!(
+            FiatValue::from_amount_msat(10_000_000, "EUR", 5_000).amount,
+            2_000
+        );
     }
 }
