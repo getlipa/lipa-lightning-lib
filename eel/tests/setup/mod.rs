@@ -77,7 +77,7 @@ impl NodeHandle {
     pub fn start(&self) -> eel::errors::Result<LightningNode> {
         let events_handler = PrintEventsHandler {};
         let node = LightningNode::new(
-            &self.config,
+            self.config.clone(),
             Box::new(self.storage.clone()),
             Box::new(events_handler),
             Box::new(ExchangeRateProviderMock {}),
