@@ -19,7 +19,7 @@ use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
 use eel::lsp::LspFee;
 use eel::node_info::{ChannelsInfo, NodeInfo};
-use eel::payment_store::{FiatValue, Payment, PaymentState, PaymentType, TzTime};
+use eel::payment_store::{FiatValues, Payment, PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
 use eel::InvoiceDetails;
 use eel::LogLevel;
@@ -59,7 +59,7 @@ impl LightningNode {
             Box::new(ExchangeRateProviderImpl::new(config.graphql_url, auth));
 
         let core_node = eel::LightningNode::new(
-            &eel_config,
+            eel_config,
             remote_storage,
             user_event_handler,
             exchange_rate_provider,

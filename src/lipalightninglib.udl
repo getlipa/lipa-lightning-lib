@@ -187,11 +187,13 @@ dictionary TzTime {
     i32 timezone_utc_offset_secs;
 };
 
-// A fiat value composed by a fiat string identifier and an amount. The amount is stored in thousandths of the fiat currency.
+// A pair of fiat values composed by a fiat string identifier, the corresponding amount, and an usd amount.
+// The amounts are stored in thousandths of the fiat currency.
 //      Example: 1.23 EUR would result in the `amount` 1230
-dictionary FiatValue {
+dictionary FiatValues {
     string fiat;
     u64 amount;
+    u64 amount_usd;
 };
 
 // Information about an incoming or outgoing payment
@@ -207,7 +209,7 @@ dictionary Payment {
     string? preimage; // Hex representation of the preimage. Is only guaranteed be present on successful payments
     u64? network_fees_msat; // Routing fees paid in an `Sending` payment. Will only be present if payment was successful.
     u64? lsp_fees_msat; // LSP fees paid in a `Receiving` payment. Will always be present for `Receiving` payments but the amount is only paid if successful.
-    FiatValue? fiat_value;
+    FiatValues? fiat_values;
     string metadata;
 };
 

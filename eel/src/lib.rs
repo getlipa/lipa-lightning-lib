@@ -55,7 +55,7 @@ use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, InvoicePayer, PeerManager, RapidGossipSync};
 use std::path::Path;
 
-use crate::payment_store::{Payment, PaymentStore};
+use crate::payment_store::{FiatValues, Payment, PaymentStore};
 use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::hashes::hex::{FromHex, ToHex};
 pub use bitcoin::Network;
@@ -101,7 +101,7 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
 
 #[allow(dead_code)]
 pub struct LightningNode {
-    network: Network,
+    config: Config,
     rt: AsyncRuntime,
     lsp_client: Arc<LspClient>,
     keys_manager: Arc<KeysManager>,
@@ -122,7 +122,7 @@ enum StartupVariant {
 
 impl LightningNode {
     pub fn new(
-        config: &Config,
+        config: Config,
         remote_storage: Box<dyn RemoteStorage>,
         user_event_handler: Box<dyn EventHandler>,
         exchange_rate_provider: Box<dyn ExchangeRateProvider>,
@@ -130,7 +130,7 @@ impl LightningNode {
         let rt = AsyncRuntime::new()?;
         let genesis_hash = genesis_block(config.network).header.block_hash();
 
-        let esplora_client = Arc::new(EsploraClient::new(&config.esplora_api_url.clone())?);
+        let esplora_client = Arc::new(EsploraClient::new(&config.esplora_api_url)?);
 
         // Step 1. Initialize the FeeEstimator
         let fee_estimator = Arc::new(FeeEstimator::new(
@@ -334,7 +334,7 @@ impl LightningNode {
         );
 
         Ok(Self {
-            network: config.network,
+            config,
             rt,
             lsp_client,
             keys_manager,
@@ -375,11 +375,19 @@ impl LightningNode {
         description: String,
         metadata: String,
     ) -> Result<String> {
-        let currency = match self.network {
+        let currency = match self.config.network {
             Network::Bitcoin => Currency::Bitcoin,
             Network::Testnet => Currency::BitcoinTestnet,
             Network::Regtest => Currency::Regtest,
             Network::Signet => Currency::Signet,
+        };
+        let fiat_values = match self.get_exchange_rates() {
+            Ok(e) => Some(FiatValues::from_amount_msat(
+                amount_msat,
+                &self.config.fiat_currency,
+                &e,
+            )),
+            Err(_) => None,
         };
         let signed_invoice = self.rt.handle().block_on(create_invoice(
             CreateInvoiceParams {
@@ -392,7 +400,7 @@ impl LightningNode {
             &self.lsp_client,
             &self.keys_manager,
             &mut self.payment_store.lock().unwrap(),
-            None,
+            fiat_values,
         ))?;
         Ok(signed_invoice.to_string())
     }
@@ -444,6 +452,15 @@ impl LightningNode {
             InvoiceDescription::Hash(h) => h.0.to_hex(),
         };
 
+        let fiat_values = match self.get_exchange_rates() {
+            Ok(e) => Some(FiatValues::from_amount_msat(
+                amount_msat,
+                &self.config.fiat_currency,
+                &e,
+            )),
+            Err(_) => None,
+        };
+
         match self.invoice_payer.pay_invoice(&invoice_struct) {
             Ok(_payment_id) => {
                 info!("Initiated payment of {} msats", amount_msat);
@@ -453,7 +470,7 @@ impl LightningNode {
                     &description,
                     &invoice,
                     &metadata,
-                    None,
+                    fiat_values,
                 )?;
             }
             Err(e) => match e {
@@ -468,7 +485,7 @@ impl LightningNode {
                         &description,
                         &invoice,
                         &metadata,
-                        None,
+                        fiat_values,
                     )?;
                     payment_store.payment_failed(invoice_struct.payment_hash())?;
                     return Err(runtime_error(
@@ -487,7 +504,7 @@ impl LightningNode {
                         &description,
                         &invoice,
                         &metadata,
-                        None,
+                        fiat_values,
                     )?;
                     payment_store.payment_failed(invoice_struct.payment_hash())?;
                     return Err(runtime_error(
@@ -551,7 +568,7 @@ impl LightningNode {
             Currency::Signet => Network::Signet,
         };
 
-        if network != self.network {
+        if network != self.config.network {
             return Err(invalid_input("Invalid invoice - network mismatch"));
         }
 

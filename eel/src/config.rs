@@ -6,6 +6,7 @@ pub struct TzConfig {
     pub timezone_utc_offset_secs: i32,
 }
 
+#[derive(Clone)]
 pub struct Config {
     pub network: Network,
     pub seed: [u8; 64],

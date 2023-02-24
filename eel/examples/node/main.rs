@@ -53,7 +53,7 @@ fn main() {
 
     let exchange_rate_provider = Box::new(ExchangeRateProviderMock {});
 
-    let node = LightningNode::new(&config, remote_storage, events, exchange_rate_provider).unwrap();
+    let node = LightningNode::new(config, remote_storage, events, exchange_rate_provider).unwrap();
 
     // Lauch CLI
     sleep(Duration::from_secs(1));
