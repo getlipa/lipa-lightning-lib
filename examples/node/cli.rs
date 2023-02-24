@@ -52,6 +52,11 @@ pub(crate) fn poll_for_user_input(
                         println!("{}", message.red());
                     }
                 }
+                "listcurrencies" => {
+                    if let Err(message) = list_currency_codes(node) {
+                        println!("{}", message.red());
+                    }
+                }
                 "invoice" => {
                     if let Err(message) = create_invoice(node, &mut words) {
                         println!("{}", message.red());
@@ -101,6 +106,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("nodeinfo", "nodeinfo"));
     hints.insert(CommandHint::new("lspfee", "lspfee"));
     hints.insert(CommandHint::new("exchangerates", "exchangerates"));
+    hints.insert(CommandHint::new("listcurrencies", "listcurrencies"));
 
     hints.insert(CommandHint::new(
         "invoice <amount in millisats> [description]",
@@ -129,6 +135,7 @@ fn help() {
     println!("  nodeinfo");
     println!("  lspfee");
     println!("  exchangerates");
+    println!("  listcurrencies");
     println!("");
     println!("  invoice <amount in millisats> [description]");
     println!("  decodeinvoice <invoice>");
@@ -187,6 +194,12 @@ fn get_exchange_rates(node: &LightningNode, fiat_currency: &str) -> Result<(), S
     let rates = node.get_exchange_rates().map_err(|e| e.to_string())?;
     println!("{fiat_currency}: {} sats", rates.default_currency);
     println!("USD: {} sats", rates.usd);
+    Ok(())
+}
+
+fn list_currency_codes(node: &LightningNode) -> Result<(), String> {
+    let codes = node.list_currency_codes().map_err(|e| e.to_string())?;
+    println!("Supported currencies: {codes:?}");
     Ok(())
 }
 
