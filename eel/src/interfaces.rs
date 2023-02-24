@@ -31,7 +31,7 @@ pub trait EventHandler: Send + Sync {
 }
 
 #[derive(Clone)]
-pub struct ExchangeRate {
+pub struct ExchangeRates {
     pub default_currency: u32,
     pub usd: u32,
 }

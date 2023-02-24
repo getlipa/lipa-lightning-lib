@@ -3,7 +3,7 @@ use crate::chain_access::LipaChainAccess;
 use crate::confirm::ConfirmWrapper;
 use crate::errors::Result;
 use crate::fee_estimator::FeeEstimator;
-use crate::interfaces::{ExchangeRate, ExchangeRateProvider};
+use crate::interfaces::{ExchangeRateProvider, ExchangeRates};
 use crate::lsp::{LspClient, LspInfo};
 use crate::p2p_networking::{connect_peer, LnPeer};
 use crate::rapid_sync_client::RapidSyncClient;
@@ -41,7 +41,7 @@ pub(crate) struct TaskManager {
 
     fiat_currency: String,
     exchange_rate_provider: Arc<dyn ExchangeRateProvider>,
-    exchange_rates: Arc<Mutex<Option<ExchangeRate>>>,
+    exchange_rates: Arc<Mutex<Option<ExchangeRates>>>,
 
     task_handles: Vec<RepeatingTaskHandle>,
 }
@@ -81,7 +81,7 @@ impl TaskManager {
         (*self.lsp_info.lock().unwrap()).clone()
     }
 
-    pub fn get_exchange_rates(&self) -> Option<ExchangeRate> {
+    pub fn get_exchange_rates(&self) -> Option<ExchangeRates> {
         (*self.exchange_rates.lock().unwrap()).clone()
     }
 
@@ -254,11 +254,11 @@ impl TaskManager {
                     let default_currency =
                         exchange_rate_provider.query_exchange_rate(fiat_currency)?;
                     let usd = exchange_rate_provider.query_exchange_rate("USD".to_string())?;
-                    let rates = ExchangeRate {
+                    let rates = ExchangeRates {
                         default_currency,
                         usd,
                     };
-                    Ok(rates) as Result<ExchangeRate>
+                    Ok(rates) as Result<ExchangeRates>
                 })
                 .await
                 {

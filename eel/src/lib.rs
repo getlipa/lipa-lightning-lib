@@ -40,7 +40,7 @@ use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;
-use crate::interfaces::{EventHandler, ExchangeRate, ExchangeRateProvider, RemoteStorage};
+use crate::interfaces::{EventHandler, ExchangeRateProvider, ExchangeRates, RemoteStorage};
 pub use crate::invoice::InvoiceDetails;
 use crate::invoice::{create_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
@@ -528,7 +528,7 @@ impl LightningNode {
             .restart(BACKGROUND_PERIODS);
     }
 
-    pub fn get_exchange_rates(&self) -> Result<ExchangeRate> {
+    pub fn get_exchange_rates(&self) -> Result<ExchangeRates> {
         self.task_manager
             .lock()
             .unwrap()

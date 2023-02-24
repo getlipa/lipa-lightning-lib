@@ -270,11 +270,11 @@ interface LightningNode {
     sequence<string> list_currency_codes();
 
     [Throws=LnError]
-    ExchangeRate get_exchange_rates();
+    ExchangeRates get_exchange_rates();
 };
 
 // Exchange rates as sats per major unit.
-dictionary ExchangeRate {
+dictionary ExchangeRates {
     u32 default_currency;
     u32 usd;
 };
