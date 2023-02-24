@@ -75,6 +75,7 @@ start-dev-env:
 	nigiri start --ln
 	docker-compose -f lspd/compose.yaml up -d
 	docker-compose -f rgs/compose.yaml up -d
+	$(MAKE) connect-rgs-ln-node
 
 .PHONY: connect-rgs-ln-node
 connect-rgs-ln-node:
