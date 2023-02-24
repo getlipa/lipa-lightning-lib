@@ -34,6 +34,7 @@ use storage_mock::Storage;
 const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 
 pub struct LightningNode {
+    exchange_rate_provider: ExchangeRateProviderImpl,
     core_node: eel::LightningNode,
 }
 
@@ -55,8 +56,10 @@ impl LightningNode {
         let user_event_handler = Box::new(EventsImpl { events_callback });
 
         let auth = Arc::new(build_auth(&seed, config.graphql_url.clone())?);
-        let exchange_rate_provider =
-            Box::new(ExchangeRateProviderImpl::new(config.graphql_url, auth));
+        let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
+            config.graphql_url.clone(),
+            Arc::clone(&auth),
+        ));
 
         let core_node = eel::LightningNode::new(
             &eel_config,
@@ -64,7 +67,13 @@ impl LightningNode {
             user_event_handler,
             exchange_rate_provider,
         )?;
-        Ok(LightningNode { core_node })
+
+        let exchange_rate_provider = ExchangeRateProviderImpl::new(config.graphql_url, auth);
+
+        Ok(LightningNode {
+            exchange_rate_provider,
+            core_node,
+        })
     }
 
     pub fn get_node_info(&self) -> NodeInfo {
@@ -110,8 +119,7 @@ impl LightningNode {
     }
 
     pub fn list_currency_codes(&self) -> Result<Vec<String>> {
-        // TODO: Implement.
-        Ok(Vec::new())
+        self.exchange_rate_provider.list_currency_codes()
     }
 
     pub fn get_exchange_rates(&self) -> Result<ExchangeRates> {

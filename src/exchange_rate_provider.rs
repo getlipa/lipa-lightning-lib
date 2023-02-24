@@ -12,6 +12,12 @@ impl ExchangeRateProviderImpl {
         let provider = chameleon::ExchangeRateProvider::new(graphql_url, auth);
         Self { provider }
     }
+
+    pub fn list_currency_codes(&self) -> Result<Vec<String>> {
+        self.provider
+            .list_currency_codes()
+            .map_err(map_runtime_error)
+    }
 }
 
 impl ExchangeRateProvider for ExchangeRateProviderImpl {
