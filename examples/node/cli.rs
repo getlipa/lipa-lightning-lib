@@ -11,7 +11,11 @@ use std::path::Path;
 
 use crate::LightningNode;
 
-pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
+pub(crate) fn poll_for_user_input(
+    node: &LightningNode,
+    log_file_path: &str,
+    fiat_currency: String,
+) {
     println!("{}", "3L Example Node".blue().bold());
     println!("Detailed logs are available at {}", log_file_path);
     println!("To stop the node, please type \"stop\" for a graceful shutdown.");
@@ -43,8 +47,8 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 "lspfee" => {
                     lsp_fee(node);
                 }
-                "exchangerate" => {
-                    if let Err(message) = get_exchange_rate(node, &mut words) {
+                "exchangerates" => {
+                    if let Err(message) = get_exchange_rates(node, &fiat_currency) {
                         println!("{}", message.red());
                     }
                 }
@@ -96,10 +100,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     let mut hints = HashSet::new();
     hints.insert(CommandHint::new("nodeinfo", "nodeinfo"));
     hints.insert(CommandHint::new("lspfee", "lspfee"));
-    hints.insert(CommandHint::new(
-        "exchangerate <currency code>",
-        "exchangerate ",
-    ));
+    hints.insert(CommandHint::new("exchangerates", "exchangerates"));
 
     hints.insert(CommandHint::new(
         "invoice <amount in millisats> [description]",
@@ -127,7 +128,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
 fn help() {
     println!("  nodeinfo");
     println!("  lspfee");
-    println!("  exchangerate <currency code>");
+    println!("  exchangerates");
     println!("");
     println!("  invoice <amount in millisats> [description]");
     println!("  decodeinvoice <invoice>");
@@ -182,17 +183,10 @@ fn node_info(node: &LightningNode) {
     );
 }
 
-fn get_exchange_rate<'a>(
-    node: &LightningNode,
-    words: &mut dyn Iterator<Item = &'a str>,
-) -> Result<(), String> {
-    let code = words
-        .next()
-        .ok_or_else(|| "Error: currency code is required".to_string())?;
-    let rate = node
-        .get_exchange_rate(code.to_string())
-        .map_err(|e| e.to_string())?;
-    println!("{}", rate);
+fn get_exchange_rates(node: &LightningNode, fiat_currency: &str) -> Result<(), String> {
+    let rates = node.get_exchange_rates().map_err(|e| e.to_string())?;
+    println!("{fiat_currency}: {} sats", rates.default_currency);
+    println!("USD: {} sats", rates.usd);
     Ok(())
 }
 

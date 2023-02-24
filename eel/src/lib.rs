@@ -40,7 +40,7 @@ use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::filter::FilterImpl;
-use crate::interfaces::{EventHandler, ExchangeRateProvider, RemoteStorage};
+use crate::interfaces::{EventHandler, ExchangeRateProvider, ExchangeRates, RemoteStorage};
 pub use crate::invoice::InvoiceDetails;
 use crate::invoice::{create_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
@@ -87,6 +87,7 @@ const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     reconnect_to_lsp: Duration::from_secs(10),
     update_fees: Some(Duration::from_secs(5 * 60)),
     update_graph: Some(RestartIfFailedPeriod::from_secs(2 * 60)),
+    update_exchange_rates: Some(Duration::from_secs(10 * 60)),
 };
 
 const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
@@ -95,12 +96,12 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
     reconnect_to_lsp: Duration::from_secs(60),
     update_fees: None,
     update_graph: None,
+    update_exchange_rates: None,
 };
 
 #[allow(dead_code)]
 pub struct LightningNode {
     network: Network,
-    exchange_rate_provider: Box<dyn ExchangeRateProvider>,
     rt: AsyncRuntime,
     lsp_client: Arc<LspClient>,
     keys_manager: Arc<KeysManager>,
@@ -266,6 +267,8 @@ impl LightningNode {
             Arc::clone(&channel_manager),
             Arc::clone(&chain_monitor),
             Arc::clone(&chain_access),
+            config.fiat_currency.clone(),
+            exchange_rate_provider,
         )));
         task_manager.lock().unwrap().restart(FOREGROUND_PERIODS);
 
@@ -332,7 +335,6 @@ impl LightningNode {
 
         Ok(Self {
             network: config.network,
-            exchange_rate_provider,
             rt,
             lsp_client,
             keys_manager,
@@ -526,9 +528,15 @@ impl LightningNode {
             .restart(BACKGROUND_PERIODS);
     }
 
-    pub fn get_exchange_rate(&self, code: String) -> Result<u32> {
-        // TODO: Update in a background task and return cached value.
-        self.exchange_rate_provider.query_exchange_rate(code)
+    pub fn get_exchange_rates(&self) -> Result<ExchangeRates> {
+        self.task_manager
+            .lock()
+            .unwrap()
+            .get_exchange_rates()
+            .ok_or_runtime_error(
+                RuntimeErrorCode::ExchangeRateProviderUnavailable,
+                "Failed to get exchange rates",
+            )
     }
 
     fn parse_validate_invoice(&self, invoice: &str) -> Result<Invoice> {

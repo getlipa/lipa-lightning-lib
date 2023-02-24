@@ -32,12 +32,14 @@ fn main() {
     let remote_storage = Box::new(FileStorage::new(BASE_DIR_REMOTE));
 
     let events = Box::new(PrintEventsHandler {});
+    let fiat_currency = "EUR".to_string();
 
     let seed_storage = FileStorage::new(BASE_DIR);
     let seed = read_or_generate_seed(&seed_storage);
     let config = Config {
         network: Network::Regtest,
         seed,
+        fiat_currency: fiat_currency.clone(),
         esplora_api_url: "http://localhost:30000".to_string(),
         rgs_url: "http://localhost:8080/snapshot/".to_string(),
         lsp_url: "http://127.0.0.1:6666".to_string(),
@@ -55,7 +57,7 @@ fn main() {
 
     // Lauch CLI
     sleep(Duration::from_secs(1));
-    cli::poll_for_user_input(&node, &format!("{BASE_DIR}/{LOG_FILE}"));
+    cli::poll_for_user_input(&node, &format!("{BASE_DIR}/{LOG_FILE}"), fiat_currency);
 }
 
 fn init_logger() {

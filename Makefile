@@ -62,8 +62,9 @@ run-eel:
 	cargo run --manifest-path eel/Cargo.toml --example node
 
 .PHONY: run-3l
+run-3l: ARGS =
 run-3l:
-	cargo run --example node
+	cargo run --example node -- $(ARGS)
 
 .PHONY: build-dev-env
 build-dev-env:
