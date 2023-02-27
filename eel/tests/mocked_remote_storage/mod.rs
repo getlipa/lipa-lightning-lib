@@ -92,14 +92,15 @@ impl RemoteStorage for MockedRemoteStorage {
         Ok(self.storage.list_objects(bucket))
     }
 
-    fn object_exists(&self, bucket: String, key: String) -> Result<bool> {
-        self.emulate_availability()?;
-        Ok(self.storage.object_exists(bucket, key))
-    }
-
     fn get_object(&self, bucket: String, key: String) -> Result<Vec<u8>> {
         self.emulate_availability()?;
-        Ok(self.storage.get_object(bucket, key))
+        match self.storage.get_object(bucket, key) {
+            Some(value) => Ok(value),
+            None => Err(runtime_error(
+                RuntimeErrorCode::ObjectNotFound,
+                "Could not read object '{key}' from bucket '{bucket}'",
+            )),
+        }
     }
 
     fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> Result<()> {

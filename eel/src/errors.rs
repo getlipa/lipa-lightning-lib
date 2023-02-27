@@ -14,6 +14,7 @@ pub enum RuntimeErrorCode {
     SendFailure,
 
     GenericError,
+    ObjectNotFound,
 }
 
 impl Display for RuntimeErrorCode {

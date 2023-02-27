@@ -6,8 +6,6 @@ pub trait RemoteStorage: Send + Sync + Debug {
 
     fn list_objects(&self, bucket: String) -> Result<Vec<String>>;
 
-    fn object_exists(&self, bucket: String, key: String) -> Result<bool>;
-
     fn get_object(&self, bucket: String, key: String) -> Result<Vec<u8>>;
 
     fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> Result<()>;
