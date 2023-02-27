@@ -324,7 +324,7 @@ impl LightningNode {
         // more difficult but will not provide any benefits.
         let background_processor = BackgroundProcessor::start(
             persister,
-            event_handler,
+            Arc::clone(&invoice_payer),
             chain_monitor,
             Arc::clone(&channel_manager),
             GossipSync::rapid(rapid_sync),
