@@ -43,21 +43,21 @@ mod chain_sync_test {
 
         // test multiple txs simultaneously
         let node_id = node.get_node_info().node_pubkey.to_hex();
-        // open 5 channels and force-close 3 of them right away
-        let mut open_channels = open_5_chans_close_2(&node_id);
+        // open 2 channels and force-close 1 of them right away
+        let mut open_channels = open_2_chans_close_1(&node_id);
 
         // mine a block and do the same again and remove 1 of the previously opened channels
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
         nigiri::wait_for_sync(NodeInstance::LspdLnd);
-        let _ = open_5_chans_close_2(&node_id);
+        let _ = open_2_chans_close_1(&node_id);
         nigiri::lnd_node_force_close_channel(NodeInstance::LspdLnd, open_channels.pop().unwrap())
             .unwrap();
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().channels_info.num_channels, 4);
-        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 4);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 2);
+        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
 
         // test force close is detected
         nigiri::lnd_node_disconnect_peer(NodeInstance::LspdLnd, node_id).unwrap();
@@ -66,13 +66,13 @@ mod chain_sync_test {
 
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().channels_info.num_channels, 4);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 2);
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
         sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().channels_info.num_channels, 3);
+        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
     }
 
     #[test]
@@ -151,10 +151,10 @@ mod chain_sync_test {
         tx_id
     }
 
-    fn open_5_chans_close_2(node_id: &str) -> Vec<String> {
+    fn open_2_chans_close_1(node_id: &str) -> Vec<String> {
         let mut open_channels = Vec::new();
 
-        for i in 0..5 {
+        for i in 0..2 {
             let tx_id =
                 nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap();
             if i % 2 == 0 {

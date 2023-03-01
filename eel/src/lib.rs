@@ -52,7 +52,7 @@ use crate::rapid_sync_client::RapidSyncClient;
 use crate::storage_persister::StoragePersister;
 use crate::task_manager::{RestartIfFailedPeriod, TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
-use crate::types::{ChainMonitor, ChannelManager, InvoicePayer, PeerManager, RapidGossipSync};
+use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router};
 use std::path::Path;
 
 use crate::payment_store::{FiatValues, Payment, PaymentStore};
@@ -61,14 +61,13 @@ use bitcoin::hashes::hex::{FromHex, ToHex};
 pub use bitcoin::Network;
 use cipher::consts::U32;
 use lightning::chain::channelmonitor::ChannelMonitor;
-use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Recipient};
+use lightning::chain::keysinterface::{EntropySource, InMemorySigner, KeysManager};
 use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Watch};
-use lightning::ln::channelmanager::ChainParameters;
+use lightning::ln::channelmanager::{ChainParameters, Retry, RetryableSendFailure};
 use lightning::ln::peer_handler::IgnoringMessageHandler;
-use lightning::routing::router::DefaultRouter;
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
-use lightning_invoice::payment::{PaymentError, Retry};
+use lightning_invoice::payment::{pay_invoice, PaymentError};
 use lightning_invoice::{Currency, Invoice, InvoiceDescription};
 pub use log::Level as LogLevel;
 use log::{info, warn};
@@ -108,7 +107,6 @@ pub struct LightningNode {
     background_processor: BackgroundProcessor,
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
-    invoice_payer: Arc<InvoicePayer>,
     task_manager: Arc<Mutex<TaskManager>>,
     payment_store: Mutex<PaymentStore>,
 }
@@ -176,7 +174,7 @@ impl LightningNode {
 
         // Step 7. Read ChannelMonitor state from disk/remote
         let (startup_variant, mut channel_monitors) =
-            persister.read_channel_monitors(&*keys_manager)?;
+            persister.read_channel_monitors(&*keys_manager, &*keys_manager)?;
 
         // If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
         // on each ChannelMonitor to prepare for chain synchronization in Step 9.
@@ -184,10 +182,30 @@ impl LightningNode {
             channel_monitor.load_outputs_to_watch(&filter);
         }
 
+        // Step 11: Optional: Initialize rapid sync
+        let graph = Arc::new(persister.read_or_init_graph(config.network, Arc::clone(&logger))?);
+        let rapid_sync = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
+        let rapid_sync_client = Arc::new(RapidSyncClient::new(
+            config.rgs_url.clone(),
+            Arc::clone(&rapid_sync),
+        )?);
+
+        // Step 16. Initialize the ProbabilisticScorer
+        let scorer = Arc::new(Mutex::new(
+            persister.read_or_init_scorer(Arc::clone(&graph), Arc::clone(&logger))?,
+        ));
+
+        let router = Arc::new(Router::new(
+            Arc::clone(&graph),
+            Arc::clone(&logger),
+            keys_manager.get_secure_random_bytes(),
+            Arc::clone(&scorer),
+        ));
+
         // Step 8. Initialize the ChannelManager
         let mobile_node_user_config = build_mobile_node_user_config();
         // TODO: Init properly.
-        let best_block = BestBlock::from_genesis(config.network);
+        let best_block = BestBlock::from_network(config.network);
         let chain_params = ChainParameters {
             network: config.network,
             best_block,
@@ -202,6 +220,7 @@ impl LightningNode {
                 Arc::clone(&keys_manager),
                 Arc::clone(&fee_estimator),
                 Arc::clone(&logger),
+                Arc::clone(&router),
                 mut_channel_monitors,
                 mobile_node_user_config,
                 chain_params,
@@ -232,18 +251,10 @@ impl LightningNode {
             }
         }
 
-        // Step 11: Optional: Initialize rapid sync
-        let graph = Arc::new(persister.read_or_init_graph(genesis_hash, Arc::clone(&logger))?);
-        let rapid_sync = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
-        let rapid_sync_client = Arc::new(RapidSyncClient::new(
-            config.rgs_url.clone(),
-            Arc::clone(&rapid_sync),
-        )?);
-
         // Step 12. Initialize the PeerManager
         let peer_manager = Arc::new(init_peer_manager(
             Arc::clone(&channel_manager),
-            &keys_manager,
+            Arc::clone(&keys_manager),
             Arc::clone(&logger),
         )?);
 
@@ -291,26 +302,6 @@ impl LightningNode {
             config.timezone_config.clone(),
         )?);
 
-        // Step 16. Initialize the ProbabilisticScorer
-        let scorer = Arc::new(Mutex::new(
-            persister.read_or_init_scorer(Arc::clone(&graph), Arc::clone(&logger))?,
-        ));
-
-        // Step 17. Initialize the InvoicePayer
-        let router = DefaultRouter::new(
-            graph,
-            Arc::clone(&logger),
-            keys_manager.get_secure_random_bytes(),
-            Arc::clone(&scorer),
-        );
-        let invoice_payer = Arc::new(InvoicePayer::new(
-            Arc::clone(&channel_manager),
-            router,
-            Arc::clone(&logger),
-            Arc::clone(&event_handler),
-            Retry::Timeout(Duration::from_secs(10)),
-        ));
-
         // Step 18. Initialize the Persister
         // Persister trait already implemented and instantiated ("persister")
 
@@ -324,7 +315,7 @@ impl LightningNode {
         // more difficult but will not provide any benefits.
         let background_processor = BackgroundProcessor::start(
             persister,
-            Arc::clone(&invoice_payer),
+            Arc::clone(&event_handler),
             chain_monitor,
             Arc::clone(&channel_manager),
             GossipSync::rapid(rapid_sync),
@@ -341,7 +332,6 @@ impl LightningNode {
             background_processor,
             channel_manager: Arc::clone(&channel_manager),
             peer_manager,
-            invoice_payer,
             task_manager,
             payment_store,
         })
@@ -461,7 +451,11 @@ impl LightningNode {
             Err(_) => None,
         };
 
-        match self.invoice_payer.pay_invoice(&invoice_struct) {
+        match pay_invoice(
+            &invoice_struct,
+            Retry::Timeout(Duration::from_secs(10)),
+            &self.channel_manager,
+        ) {
             Ok(_payment_id) => {
                 info!("Initiated payment of {} msats", amount_msat);
                 self.payment_store.lock().unwrap().new_outgoing_payment(
@@ -473,46 +467,39 @@ impl LightningNode {
                     fiat_values,
                 )?;
             }
-            Err(e) => match e {
-                PaymentError::Invoice(e) => {
-                    return Err(invalid_input(format!("Invalid invoice - {e}")))
+            Err(e) => {
+                return match e {
+                    PaymentError::Invoice(e) => {
+                        Err(invalid_input(format!("Invalid invoice - {e}")))
+                    }
+                    PaymentError::Sending(e) => {
+                        let mut payment_store = self.payment_store.lock().unwrap();
+                        payment_store.new_outgoing_payment(
+                            invoice_struct.payment_hash(),
+                            amount_msat,
+                            &description,
+                            &invoice,
+                            &metadata,
+                            fiat_values,
+                        )?;
+                        payment_store.payment_failed(invoice_struct.payment_hash())?;
+                        match e {
+                            RetryableSendFailure::PaymentExpired => Err(runtime_error(
+                                RuntimeErrorCode::SendFailure,
+                                format!("Failed to send payment - {e:?}"),
+                            )),
+                            RetryableSendFailure::RouteNotFound => Err(runtime_error(
+                                RuntimeErrorCode::NoRouteFound,
+                                "Failed to find a route",
+                            )),
+                            RetryableSendFailure::DuplicatePayment => Err(runtime_error(
+                                RuntimeErrorCode::SendFailure,
+                                format!("Failed to send payment - {e:?}"),
+                            )),
+                        }
+                    }
                 }
-                PaymentError::Routing(e) => {
-                    let mut payment_store = self.payment_store.lock().unwrap();
-                    payment_store.new_outgoing_payment(
-                        invoice_struct.payment_hash(),
-                        amount_msat,
-                        &description,
-                        &invoice,
-                        &metadata,
-                        fiat_values,
-                    )?;
-                    payment_store.payment_failed(invoice_struct.payment_hash())?;
-                    return Err(runtime_error(
-                        RuntimeErrorCode::NoRouteFound,
-                        format!(
-                            "Failed to find a route - {} - Recommended action: {:?}",
-                            e.err, e.action
-                        ),
-                    ));
-                }
-                PaymentError::Sending(e) => {
-                    let mut payment_store = self.payment_store.lock().unwrap();
-                    payment_store.new_outgoing_payment(
-                        invoice_struct.payment_hash(),
-                        amount_msat,
-                        &description,
-                        &invoice,
-                        &metadata,
-                        fiat_values,
-                    )?;
-                    payment_store.payment_failed(invoice_struct.payment_hash())?;
-                    return Err(runtime_error(
-                        RuntimeErrorCode::SendFailure,
-                        format!("Failed to send payment - {e:?}"),
-                    ));
-                }
-            },
+            }
         }
         Ok(())
     }
@@ -630,23 +617,20 @@ fn build_mobile_node_user_config() -> UserConfig {
 
 fn init_peer_manager(
     channel_manager: Arc<ChannelManager>,
-    keys_manager: &KeysManager,
+    keys_manager: Arc<KeysManager>,
     logger: Arc<LightningLogger>,
 ) -> Result<PeerManager> {
     let ephemeral_bytes = generate_random_bytes::<U32>()
         .map_to_permanent_failure("Failed to generate random bytes")?;
-    let our_node_secret = keys_manager
-        .get_node_secret(Recipient::Node)
-        .map_to_permanent_failure("Failed to get our own node secret")?;
     Ok(PeerManager::new_channel_only(
         channel_manager,
         IgnoringMessageHandler {},
-        our_node_secret,
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs() as u32,
         ephemeral_bytes.as_ref(),
         logger,
+        keys_manager,
     ))
 }
