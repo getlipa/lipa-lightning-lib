@@ -24,6 +24,7 @@ use lightning::util::persist::Persister;
 use lightning::util::ser::{ReadableArgs, Writeable};
 use lightning_persister::FilesystemPersister;
 use log::{debug, error, info};
+use perro::Error::RuntimeError;
 use perro::{permanent_failure, runtime_error, MapToError};
 use std::fs;
 use std::io::{BufReader, Cursor};
@@ -263,19 +264,15 @@ impl StoragePersister {
             }
             StartupVariant::Recovery => {
                 // Try to get ChannelManager from remote
-                let encrypted_data = self
+                let encrypted_data = match self
                     .storage
-                    .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
-                    .map_to_runtime_error(
-                        RuntimeErrorCode::RemoteStorageServiceUnavailable,
-                        "Failed to read a remote ChannelManager",
-                    )?;
-
-                if encrypted_data.is_empty() {
-                    Err(permanent_failure(
-                        "Failed to find remote ChannelManager even though this was determined to be a Recovery start",
-                    ))?;
-                }
+                    .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string()) {
+                    Ok(data) => data,
+                    Err(RuntimeError {code: RuntimeErrorCode::ObjectNotFound, ..}) => return Err(permanent_failure(
+                        "Failed to find remote ChannelManager even though this was determined to be a Recovery start (which means it could be found before).",
+                    )),
+                    Err(e) => return Err(e),
+                };
 
                 let data = decrypt(&encrypted_data, &self.encryption_key)?;
                 let mut buffer = Cursor::new(&data);
@@ -496,7 +493,7 @@ fn sync_persist_monitor_remotely(
                 debug!("Successfully remotely persisted the ChannelMonitor {}", key);
                 return Ok(());
             }
-            Err(Error::RuntimeError { .. }) => {
+            Err(RuntimeError { .. }) => {
                 error!(
                     "Temporary failure to remotely persist the ChannelMonitor {}...",
                     key
