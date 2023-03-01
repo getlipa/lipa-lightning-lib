@@ -24,6 +24,7 @@ use lightning::util::persist::Persister;
 use lightning::util::ser::{ReadableArgs, Writeable};
 use lightning_persister::FilesystemPersister;
 use log::{debug, error, info};
+use perro::Error::RuntimeError;
 use perro::{permanent_failure, runtime_error, MapToError};
 use std::fs;
 use std::io::{BufReader, Cursor};
@@ -263,34 +264,24 @@ impl StoragePersister {
             }
             StartupVariant::Recovery => {
                 // Try to get ChannelManager from remote
-                if self
+                let encrypted_data = match self
                     .storage
-                    .object_exists(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
-                    .map_to_runtime_error(
-                        RuntimeErrorCode::RemoteStorageServiceUnavailable,
-                        "Failed to find a remote ChannelManager",
-                    )?
-                {
-                    let encrypted_data = self
-                        .storage
-                        .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
-                        .map_to_runtime_error(
-                            RuntimeErrorCode::RemoteStorageServiceUnavailable,
-                            "Failed to read a remote ChannelManager",
-                        )?;
-                    let data = decrypt(&encrypted_data, &self.encryption_key)?;
-                    let mut buffer = Cursor::new(&data);
-                    let (block_hash, channel_manager) = <(
+                    .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string()) {
+                    Ok(data) => data,
+                    Err(RuntimeError {code: RuntimeErrorCode::ObjectNotFound, ..}) => return Err(permanent_failure(
+                        "Failed to find remote ChannelManager even though this was determined to be a Recovery start (which means it could be found before).",
+                    )),
+                    Err(e) => return Err(e),
+                };
+
+                let data = decrypt(&encrypted_data, &self.encryption_key)?;
+                let mut buffer = Cursor::new(&data);
+                let (block_hash, channel_manager) = <(
                         BlockHash,
                         SimpleArcChannelManager<M, T, F, L>,
                     )>::read(&mut buffer, read_args)
                         .map_to_permanent_failure("Failed to parse a previously remotely persisted ChannelManager. Could it have been corrupted?")?;
-                    Ok((Some(block_hash), channel_manager))
-                } else {
-                    Err(permanent_failure(
-                        "Failed to find remote ChannelManager during recovery process",
-                    ))
-                }
+                Ok((Some(block_hash), channel_manager))
             }
             StartupVariant::Normal => {
                 // Get ChannelManager from local filesystem
@@ -502,7 +493,7 @@ fn sync_persist_monitor_remotely(
                 debug!("Successfully remotely persisted the ChannelMonitor {}", key);
                 return Ok(());
             }
-            Err(Error::RuntimeError { .. }) => {
+            Err(RuntimeError { .. }) => {
                 error!(
                     "Temporary failure to remotely persist the ChannelMonitor {}...",
                     key

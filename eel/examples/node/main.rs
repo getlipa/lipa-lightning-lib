@@ -98,18 +98,10 @@ fn read_or_generate_seed(storage: &FileStorage) -> [u8; 64] {
 }
 
 fn read_seed(storage: &FileStorage, seed_file_name: &str) -> Option<Vec<u8>> {
-    if storage
-        .object_exists(".".to_string(), seed_file_name.to_string())
-        .unwrap()
-    {
-        return Some(
-            storage
-                .get_object(".".to_string(), seed_file_name.to_string())
-                .unwrap(),
-        );
+    match storage.get_object(".".to_string(), seed_file_name.to_string()) {
+        Ok(seed) => Some(seed),
+        Err(_) => None,
     }
-
-    None
 }
 
 fn generate_seed(storage: &FileStorage, seed_file_name: &str) -> Vec<u8> {

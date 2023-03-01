@@ -1,7 +1,7 @@
 use eel::errors::{Result, RuntimeErrorCode};
 use eel::interfaces::RemoteStorage;
 use log::debug;
-use perro::MapToError;
+use perro::{runtime_error, MapToError};
 use std::fmt::Debug;
 use std::fs;
 use std::io;
@@ -21,19 +21,19 @@ impl FileStorage {
 }
 
 impl RemoteStorage for FileStorage {
-    fn object_exists(&self, bucket: String, key: String) -> Result<bool> {
-        debug!("object_exists({}, {})", bucket, key);
-        let mut path_buf = self.base_path_buf.clone();
-        path_buf.push(bucket);
-        path_buf.push(key);
-        Ok(path_buf.exists())
-    }
-
     fn get_object(&self, bucket: String, key: String) -> Result<Vec<u8>> {
         debug!("get_object({}, {})", bucket, key);
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
         path_buf.push(key);
+
+        if !path_buf.exists() {
+            return Err(runtime_error(
+                RuntimeErrorCode::ObjectNotFound,
+                format!("Could not read file: {:?}", path_buf),
+            ));
+        }
+
         Ok(fs::read(path_buf).unwrap())
     }
 

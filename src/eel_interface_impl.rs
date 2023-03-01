@@ -1,6 +1,7 @@
-use eel::errors::Result;
+use eel::errors::{Result, RuntimeErrorCode};
 use eel::interfaces::{EventHandler, RemoteStorage};
 use eel::MapToError;
+use perro::runtime_error;
 use std::sync::Arc;
 use storage_mock::Storage;
 
@@ -30,12 +31,14 @@ impl RemoteStorage for RemoteStorageMock {
         Ok(self.storage.list_objects(bucket))
     }
 
-    fn object_exists(&self, bucket: String, key: String) -> Result<bool> {
-        Ok(self.storage.object_exists(bucket, key))
-    }
-
     fn get_object(&self, bucket: String, key: String) -> Result<Vec<u8>> {
-        Ok(self.storage.get_object(bucket, key))
+        match self.storage.get_object(bucket.clone(), key.clone()) {
+            Some(value) => Ok(value),
+            None => Err(runtime_error(
+                RuntimeErrorCode::ObjectNotFound,
+                format!("Could not read object {key} from bucket {bucket}"),
+            )),
+        }
     }
 
     fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> Result<()> {
