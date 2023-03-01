@@ -11,6 +11,7 @@ pub use crate::callbacks::{CallbackError, EventsCallback};
 pub use crate::config::Config;
 use crate::eel_interface_impl::{EventsImpl, RemoteStorageMock};
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
+use std::fs;
 
 pub use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
@@ -40,6 +41,11 @@ pub struct LightningNode {
 
 impl LightningNode {
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
+        fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
+            "Failed to create directory: {}",
+            config.local_persistence_path,
+        ))?;
+
         let seed = sanitize_input::strong_type_seed(&config.seed)?;
         let eel_config = eel::config::Config {
             network: config.network,
