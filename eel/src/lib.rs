@@ -155,10 +155,10 @@ impl LightningNode {
             warn!("Remote storage is unhealty");
         }
 
-        // Step x. Initialize the Transaction Filter
+        // Step 5. Initialize the Transaction Filter
         let filter = Arc::new(FilterImpl::new());
 
-        // Step 5. Initialize the ChainMonitor
+        // Step 6. Initialize the ChainMonitor
         let chain_monitor = Arc::new(ChainMonitor::new(
             Some(Arc::clone(&filter)),
             Arc::clone(&tx_broadcaster),
@@ -167,34 +167,32 @@ impl LightningNode {
             Arc::clone(&persister),
         ));
 
+        // Step 7. Provide the ChainMonitor to Persist
         persister.add_chain_monitor(Arc::downgrade(&chain_monitor));
 
-        // Step 6. Initialize the KeysManager
+        // Step 8. Initialize the KeysManager
         let keys_manager = Arc::new(init_keys_manager(&config.get_seed_first_half())?);
 
-        // Step 7. Read ChannelMonitor state from disk/remote
+        // Step 9. Read ChannelMonitor state from disk/remote
         let (startup_variant, mut channel_monitors) =
             persister.read_channel_monitors(&*keys_manager, &*keys_manager)?;
 
-        // If you are using Electrum or BIP 157/158, you must call load_outputs_to_watch
-        // on each ChannelMonitor to prepare for chain synchronization in Step 9.
-        for (_, channel_monitor) in channel_monitors.iter() {
-            channel_monitor.load_outputs_to_watch(&filter);
-        }
-
-        // Step 11: Optional: Initialize rapid sync
+        // Step 10: Initialize the NetworkGraph
         let graph = Arc::new(persister.read_or_init_graph(config.network, Arc::clone(&logger))?);
+
+        // Step 11: Initialize the RapidSyncClient
         let rapid_sync = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
         let rapid_sync_client = Arc::new(RapidSyncClient::new(
             config.rgs_url.clone(),
             Arc::clone(&rapid_sync),
         )?);
 
-        // Step 16. Initialize the ProbabilisticScorer
+        // Step 12: Initialize the ProbabilisticScorer
         let scorer = Arc::new(Mutex::new(
             persister.read_or_init_scorer(Arc::clone(&graph), Arc::clone(&logger))?,
         ));
 
+        // Step 13: Initialize the Router
         let router = Arc::new(Router::new(
             Arc::clone(&graph),
             Arc::clone(&logger),
@@ -202,7 +200,13 @@ impl LightningNode {
             Arc::clone(&scorer),
         ));
 
-        // Step 8. Initialize the ChannelManager
+        // (needed when using Electrum or BIP 157/158)
+        // Step 14: Prepare ChannelMonitors for chain sync
+        for (_, channel_monitor) in channel_monitors.iter() {
+            channel_monitor.load_outputs_to_watch(&filter);
+        }
+
+        // Step 15: Initialize the ChannelManager
         let mobile_node_user_config = build_mobile_node_user_config();
         // TODO: Init properly.
         let best_block = BestBlock::from_network(config.network);
@@ -228,7 +232,7 @@ impl LightningNode {
             )?;
         let channel_manager = Arc::new(channel_manager);
 
-        // Step 9. Sync ChannelMonitors and ChannelManager to chain tip
+        // Step 16. Sync ChannelMonitors and ChannelManager to chain tip
         let confirm = ConfirmWrapper::new(vec![&*channel_manager, &*chain_monitor]);
         let chain_access = Arc::new(Mutex::new(LipaChainAccess::new(
             esplora_client,
@@ -237,7 +241,7 @@ impl LightningNode {
         )));
         chain_access.lock().unwrap().sync(&confirm)?;
 
-        // Step 10. Give ChannelMonitors to ChainMonitor
+        // Step 17. Give ChannelMonitors to ChainMonitor
         for (_, channel_monitor) in channel_monitors {
             let funding_outpoint = channel_monitor.get_funding_txo().0;
             match chain_monitor.watch_channel(funding_outpoint, channel_monitor) {
@@ -251,24 +255,20 @@ impl LightningNode {
             }
         }
 
-        // Step 12. Initialize the PeerManager
+        // Step 18. Initialize the PeerManager
         let peer_manager = Arc::new(init_peer_manager(
             Arc::clone(&channel_manager),
             Arc::clone(&keys_manager),
             Arc::clone(&logger),
         )?);
 
-        // Step 13. Initialize Networking
-        // Skip it, since the node does not listen to incoming connections.
-
-        // Step 14. Keep LDK Up-to-date with Chain Info
-        // Implemented in TaskManager.
-
+        // Step 19: Initialize the LspClient
         let lsp_client = Arc::new(LspClient::new(
             config.lsp_url.clone(),
             config.lsp_token.clone(),
         )?);
 
+        // Step 20: Initialize the TaskManager
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),
             Arc::clone(&lsp_client),
@@ -283,17 +283,17 @@ impl LightningNode {
         )));
         task_manager.lock().unwrap().restart(FOREGROUND_PERIODS);
 
+        // Step 21: Initialize the PaymentStore
         let payment_store_path = Path::new(&config.local_persistence_path).join("payment_db.db3");
         let payment_store_path = payment_store_path
             .to_str()
             .ok_or_invalid_input("Invalid local persistence path")?;
-
         let payment_store = Mutex::new(PaymentStore::new(
             payment_store_path,
             config.timezone_config.clone(),
         )?);
 
-        // Step 15. Initialize an EventHandler
+        // Step 22. Initialize an EventHandler
         let event_handler = Arc::new(LipaEventHandler::new(
             Arc::clone(&channel_manager),
             Arc::clone(&task_manager),
@@ -302,10 +302,7 @@ impl LightningNode {
             config.timezone_config.clone(),
         )?);
 
-        // Step 18. Initialize the Persister
-        // Persister trait already implemented and instantiated ("persister")
-
-        // Step 19. Start Background Processing
+        // Step 23. Start Background Processing
         // The fact that we do not restart the background process assumes that
         // it will never fail. However it may fail:
         //  1. on persisting channel manager, but it never fails since we ignore
