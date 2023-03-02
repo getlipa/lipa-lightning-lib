@@ -5,7 +5,6 @@ use crate::types::{ChainMonitor, ChannelManager, NetworkGraph, Router, Scorer};
 use crate::{LightningLogger, StartupVariant};
 use std::cmp::Ordering;
 
-use crate::async_runtime::Handle;
 use crate::tx_broadcaster::TxBroadcaster;
 use bitcoin::hash_types::BlockHash;
 use bitcoin::hashes::hex::ToHex;
@@ -31,12 +30,13 @@ use lightning::util::ser::{ReadableArgs, Writeable};
 use lightning_persister::FilesystemPersister;
 use log::{debug, error, info};
 use perro::Error::RuntimeError;
-use perro::{permanent_failure, runtime_error, MapToError};
+use perro::{permanent_failure, MapToError};
 use std::fs;
 use std::io::{BufReader, Cursor};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, Weak};
+use std::thread::sleep;
 use std::time::Duration;
 
 static MONITORS_BUCKET: &str = "monitors";
@@ -50,7 +50,6 @@ pub(crate) struct StoragePersister {
     storage: Arc<Box<dyn RemoteStorage>>,
     fs_persister: FilesystemPersister,
     encryption_key: [u8; 32],
-    _runtime_handle: Handle,
     chain_monitor: RwLock<Weak<ChainMonitor>>,
 }
 
@@ -59,7 +58,6 @@ impl StoragePersister {
         storage: Box<dyn RemoteStorage>,
         local_fs_path: String,
         encryption_key: [u8; 32],
-        runtime_handle: Handle,
     ) -> Self {
         let storage = Arc::new(storage);
         let fs_persister = FilesystemPersister::new(local_fs_path);
@@ -67,7 +65,6 @@ impl StoragePersister {
             storage,
             fs_persister,
             encryption_key,
-            _runtime_handle: runtime_handle,
             chain_monitor: RwLock::new(Weak::new()),
         }
     }
@@ -416,33 +413,32 @@ impl<ChannelSigner: WriteableEcdsaChannelSigner> Persist<ChannelSigner> for Stor
         // Launch background task that handles persisting monitor remotely
         let data = data.encode();
         let storage = Arc::clone(&self.storage);
-        let _chain_monitor = match { self.chain_monitor.read().unwrap() }.upgrade() {
+        let chain_monitor = match { self.chain_monitor.read().unwrap() }.upgrade() {
             None => return ChannelMonitorUpdateStatus::PermanentFailure,
             Some(c) => c,
         };
+        let encrypted_data = match encrypt(&data, &self.encryption_key) {
+            Ok(d) => d,
+            Err(_) => {
+                error!("Failed to encrypt ChannelMonitor data");
+                return ChannelMonitorUpdateStatus::PermanentFailure;
+            }
+        };
 
-        // The idea is to deal with remote persistence using the following code, but a deadlock bug
-        // needs to be fixed first
-        /*self.runtime_handle.spawn(persist_monitor_remotely(
-            storage,
-            chain_monitor,
-            data,
-            channel_id,
-            update_id,
-        ));
+        // Launch thread instead of tokio task due to the use of blocking reqwest in our
+        // RemoteStorage implementation.
+        // TODO: potentially switch to a tokio task when we rethink our sync/async model
+        std::thread::spawn(move || {
+            persist_monitor_remotely(
+                storage,
+                chain_monitor,
+                encrypted_data,
+                channel_id,
+                update_id,
+            )
+        });
 
-        ChannelMonitorUpdateStatus::InProgress*/
-        let retries = 20;
-        let encryption_key = self.encryption_key;
-        match std::thread::spawn(move || {
-            sync_persist_monitor_remotely(storage, &encryption_key, data, channel_id, retries)
-        })
-        .join()
-        {
-            Ok(Ok(_)) => ChannelMonitorUpdateStatus::Completed,
-            Ok(Err(_)) => ChannelMonitorUpdateStatus::PermanentFailure,
-            Err(_) => ChannelMonitorUpdateStatus::PermanentFailure,
-        }
+        ChannelMonitorUpdateStatus::InProgress
     }
 
     fn update_persisted_channel(
@@ -466,18 +462,22 @@ impl<ChannelSigner: WriteableEcdsaChannelSigner> Persist<ChannelSigner> for Stor
 // persist_new_channel() again).
 //
 // We only stop retrying when the ChainMonitor stops stating that the update is pending
-/*async fn persist_monitor_remotely(
+fn persist_monitor_remotely(
     storage: Arc<Box<dyn RemoteStorage>>,
     chain_monitor: Arc<ChainMonitor>,
-    data: Vec<u8>,
+    encrypted_data: Vec<u8>,
     channel_id: OutPoint,
     update_id: MonitorUpdateId,
 ) {
-    let key = channel_id.to_channel_id().to_hex();
+    let key = format!("{}{:04x}", channel_id.txid.to_hex(), channel_id.index);
     loop {
-        match storage.put_object(MONITORS_BUCKET.to_string(), key.clone(), data.clone()) {
+        match storage.put_object(
+            MONITORS_BUCKET.to_string(),
+            key.clone(),
+            encrypted_data.clone(),
+        ) {
             Ok(_) => break,
-            Err(Error::RuntimeError { .. }) => {
+            Err(RuntimeError { .. }) => {
                 error!(
                     "Temporary failure to remotely persist the ChannelMonitor {}... Retrying...",
                     key
@@ -499,7 +499,7 @@ impl<ChannelSigner: WriteableEcdsaChannelSigner> Persist<ChannelSigner> for Stor
             error!("Failed to remotely persist ChannelMonitor {} - ChainMonitor stopped listing this ChannelMonitor as having pending updates", key);
             return;
         }
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        sleep(Duration::from_secs(5));
     }
 
     // Let ChainMonitor know that remote persistence has succeeded
@@ -510,55 +510,6 @@ impl<ChannelSigner: WriteableEcdsaChannelSigner> Persist<ChannelSigner> for Stor
         error!("Attempted to inform the ChainMonitor about a successfully persisted ChannelMonitor but the ChainMonitor doesn't know about the ChannelMonitor");
     }
     debug!("Successfully remotely persisted the ChannelMonitor {}", key);
-}*/
-
-fn sync_persist_monitor_remotely(
-    storage: Arc<Box<dyn RemoteStorage>>,
-    encryption_key: &[u8; 32],
-    data: Vec<u8>,
-    channel_id: OutPoint,
-    retries: u32,
-) -> Result<()> {
-    // Don't use any separator to keep the key purely hexadecimal. Instead, separate by byte count:
-    // First 64 characters (32 bytes) = txid
-    // Last 4 characters (2 bytes) = output index
-    let key = format!("{}{:04x}", channel_id.txid.to_hex(), channel_id.index);
-    let encrypted_data = encrypt(&data, encryption_key)?;
-
-    for _ in 0..retries {
-        match storage.put_object(
-            MONITORS_BUCKET.to_string(),
-            key.clone(),
-            encrypted_data.clone(),
-        ) {
-            Ok(_) => {
-                debug!("Successfully remotely persisted the ChannelMonitor {}", key);
-                return Ok(());
-            }
-            Err(RuntimeError { .. }) => {
-                error!(
-                    "Temporary failure to remotely persist the ChannelMonitor {}...",
-                    key
-                );
-            }
-            Err(e) => {
-                error!(
-                    "Failed to remotely persist the ChannelMonitor {} - {}",
-                    key,
-                    e.to_string()
-                );
-                return Err(runtime_error(
-                    RuntimeErrorCode::GenericError,
-                    "Failed to remotely persist monitor",
-                ));
-            }
-        }
-        std::thread::sleep(Duration::from_millis(500));
-    }
-    Err(runtime_error(
-        RuntimeErrorCode::GenericError,
-        "Failed to remotely persist monitor",
-    ))
 }
 
 impl<

@@ -149,7 +149,6 @@ impl LightningNode {
             remote_storage,
             config.local_persistence_path.clone(),
             encryption_key,
-            rt.handle(),
         ));
         if !persister.check_health() {
             warn!("Remote storage is unhealty");
