@@ -12,8 +12,9 @@ mod p2p_connection_test {
     use std::thread::sleep;
     use std::time::Duration;
 
+    use crate::setup::mocked_storage_setup::mocked_storage_node;
+    use crate::setup::nigiri;
     use crate::setup::nigiri::NodeInstance;
-    use crate::setup::{mocked_storage_node, nigiri};
 
     #[test]
     #[file_parallel(key, "/tmp/3l-int-tests-lock")]

@@ -2,6 +2,7 @@
 pub mod config;
 #[path = "../mocked_remote_storage/mod.rs"]
 pub mod mocked_remote_storage;
+pub mod mocked_storage_setup;
 #[path = "../print_events_handler/mod.rs"]
 mod print_event_handler;
 
@@ -10,17 +11,15 @@ use eel::interfaces::{ExchangeRateProvider, RemoteStorage};
 use eel::LightningNode;
 
 use crate::setup::config::{get_testing_config, LOCAL_PERSISTENCE_PATH};
-use crate::setup::mocked_remote_storage::MockedRemoteStorage;
 #[cfg(feature = "nigiri")]
 use crate::setup::nigiri::{NodeInstance, RGS_CLN_HOST, RGS_CLN_ID, RGS_CLN_PORT};
 use crate::setup::print_event_handler::PrintEventsHandler;
 
 use simplelog::{ConfigBuilder, LevelFilter, SimpleLogger};
 use std::fs;
-use std::sync::{Arc, Once};
+use std::sync::Once;
 use std::thread::sleep;
 use std::time::Duration;
-use storage_mock::Storage;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
 
@@ -88,17 +87,6 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
     }
 }
 
-pub fn mocked_storage_node() -> NodeHandle<MockedRemoteStorage> {
-    mocked_storage_node_configurable(mocked_remote_storage::Config::default())
-}
-
-pub fn mocked_storage_node_configurable(
-    config: mocked_remote_storage::Config,
-) -> NodeHandle<MockedRemoteStorage> {
-    let storage = MockedRemoteStorage::new(Arc::new(Storage::new()), config);
-    NodeHandle::new(storage)
-}
-
 #[cfg(feature = "nigiri")]
 fn node_connect_to_rgs_cln(node: NodeInstance) {
     nigiri::node_connect(node, RGS_CLN_ID, RGS_CLN_HOST, RGS_CLN_PORT).unwrap();
@@ -109,6 +97,7 @@ fn node_connect_to_rgs_cln(node: NodeInstance) {
 pub mod nigiri {
     use super::*;
 
+    use crate::setup::mocked_storage_setup::mocked_storage_node;
     use crate::try_cmd_repeatedly;
     use bitcoin::hashes::hex::ToHex;
     use log::debug;

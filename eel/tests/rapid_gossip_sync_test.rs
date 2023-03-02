@@ -2,8 +2,9 @@ mod setup;
 
 #[cfg(feature = "nigiri")]
 mod rapid_gossip_sync_test {
+    use crate::setup::mocked_storage_setup::mocked_storage_node;
+    use crate::setup::nigiri;
     use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
-    use crate::setup::{mocked_storage_node, nigiri};
     use crate::try_cmd_repeatedly;
     use bitcoin::hashes::hex::ToHex;
     use eel::LightningNode;

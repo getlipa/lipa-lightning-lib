@@ -5,7 +5,8 @@ mod node_info_test {
     use bitcoin::secp256k1::PublicKey;
     use serial_test::file_serial;
 
-    use crate::setup::{mocked_storage_node, nigiri};
+    use crate::setup::mocked_storage_setup::mocked_storage_node;
+    use crate::setup::nigiri;
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]

@@ -8,8 +8,9 @@ mod chain_sync_test {
     use std::thread::sleep;
     use std::time::Duration;
 
+    use crate::setup::mocked_storage_setup::mocked_storage_node;
     use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
-    use crate::setup::{mocked_storage_node, nigiri, NodeHandle};
+    use crate::setup::{nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
 
     const HALF_SEC: Duration = Duration::from_millis(500);
