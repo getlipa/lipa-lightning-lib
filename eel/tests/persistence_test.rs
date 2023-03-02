@@ -4,6 +4,7 @@ mod setup;
 mod persistence_test {
     use crate::setup::mocked_remote_storage::Config;
     use eel::errors::RuntimeErrorCode;
+    use eel::interfaces::RemoteStorage;
     use eel::LightningNode;
     use log::info;
     use perro::Error::RuntimeError;
@@ -13,7 +14,7 @@ mod persistence_test {
     use std::time::Duration;
 
     use crate::setup::nigiri::NodeInstance;
-    use crate::setup::{nigiri, NodeHandle};
+    use crate::setup::{mocked_storage_node_configurable, nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
 
     const ONE_SAT: u64 = 1_000;
@@ -30,7 +31,8 @@ mod persistence_test {
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn slow_remote_storage() {
         nigiri::setup_environment_with_lsp();
-        let node_handle = NodeHandle::new(Config::new(Some(Duration::from_secs(1)), true, 100));
+        let config = Config::new(Some(Duration::from_secs(1)), true, 100);
+        let node_handle = mocked_storage_node_configurable(config);
 
         run_flow_normal_restart(&node_handle);
     }
@@ -39,7 +41,8 @@ mod persistence_test {
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn unreliable_remote_storage() {
         nigiri::setup_environment_with_lsp();
-        let node_handle = NodeHandle::new(Config::new(Some(Duration::from_secs(0)), true, 50));
+        let config = Config::new(Some(Duration::from_secs(0)), true, 50);
+        let node_handle = mocked_storage_node_configurable(config);
 
         run_flow_normal_restart(&node_handle);
     }
@@ -48,7 +51,8 @@ mod persistence_test {
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn recovery() {
         nigiri::setup_environment_with_lsp();
-        let node_handle = NodeHandle::new(Config::new(Some(Duration::from_secs(0)), true, 100));
+        let config = Config::new(Some(Duration::from_secs(0)), true, 100);
+        let node_handle = mocked_storage_node_configurable(config);
 
         run_flow_recovery_restart(&node_handle);
     }
@@ -58,7 +62,8 @@ mod persistence_test {
     fn unavailable_remote_storage() {
         nigiri::ensure_environment_running();
 
-        let node_handle = NodeHandle::new(Config::new(None, false, 100));
+        let config = Config::new(None, false, 100);
+        let node_handle = mocked_storage_node_configurable(config);
 
         let node_result = node_handle.start();
         assert!(matches!(
@@ -70,7 +75,7 @@ mod persistence_test {
         ));
     }
 
-    fn run_flow_normal_restart(node_handle: &NodeHandle) {
+    fn run_flow_normal_restart<S: RemoteStorage + Clone + 'static>(node_handle: &NodeHandle<S>) {
         run_flow_1st_jit_channel(node_handle);
 
         // Wait for eel-node to shutdown
@@ -79,7 +84,7 @@ mod persistence_test {
         run_flow_2nd_jit_channel(node_handle);
     }
 
-    fn run_flow_recovery_restart(node_handle: &NodeHandle) {
+    fn run_flow_recovery_restart<S: RemoteStorage + Clone + 'static>(node_handle: &NodeHandle<S>) {
         run_flow_1st_jit_channel(node_handle);
 
         // Wait for eel-node to shutdown
@@ -90,7 +95,7 @@ mod persistence_test {
         run_flow_2nd_jit_channel(node_handle);
     }
 
-    fn run_flow_1st_jit_channel(node_handle: &NodeHandle) {
+    fn run_flow_1st_jit_channel<S: RemoteStorage + Clone + 'static>(node_handle: &NodeHandle<S>) {
         {
             let node = node_handle.start().unwrap();
             assert_eq!(node.get_node_info().num_peers, 1);
@@ -116,7 +121,7 @@ mod persistence_test {
         } // Shut down the node
     }
 
-    fn run_flow_2nd_jit_channel(node_handle: &NodeHandle) {
+    fn run_flow_2nd_jit_channel<S: RemoteStorage + Clone + 'static>(node_handle: &NodeHandle<S>) {
         {
             let node = node_handle.start().unwrap();
 

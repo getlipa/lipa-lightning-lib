@@ -3,7 +3,7 @@ mod setup;
 #[cfg(feature = "nigiri")]
 mod rapid_gossip_sync_test {
     use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
-    use crate::setup::{nigiri, NodeHandle};
+    use crate::setup::{mocked_storage_node, nigiri};
     use crate::try_cmd_repeatedly;
     use bitcoin::hashes::hex::ToHex;
     use eel::LightningNode;
@@ -25,7 +25,7 @@ mod rapid_gossip_sync_test {
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_update_from_0_and_partial_update() {
         nigiri::setup_environment_with_lsp_rgs();
-        let node_handle = NodeHandle::default();
+        let node_handle = mocked_storage_node();
 
         let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
             .unwrap()

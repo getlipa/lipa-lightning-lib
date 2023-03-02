@@ -5,14 +5,14 @@ mod node_info_test {
     use bitcoin::secp256k1::PublicKey;
     use serial_test::file_serial;
 
-    use crate::setup::{nigiri, NodeHandle};
+    use crate::setup::{mocked_storage_node, nigiri};
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_get_node_info() {
         nigiri::setup_environment_with_lsp();
 
-        let node = NodeHandle::default().start().unwrap();
+        let node = mocked_storage_node().start().unwrap();
         let node_info = node.get_node_info();
 
         assert!(

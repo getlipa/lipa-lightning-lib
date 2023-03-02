@@ -6,7 +6,7 @@ pub mod mocked_remote_storage;
 mod print_event_handler;
 
 use eel::config::Config;
-use eel::interfaces::ExchangeRateProvider;
+use eel::interfaces::{ExchangeRateProvider, RemoteStorage};
 use eel::LightningNode;
 
 use crate::setup::config::{get_testing_config, LOCAL_PERSISTENCE_PATH};
@@ -25,9 +25,9 @@ use storage_mock::Storage;
 static INIT_LOGGER_ONCE: Once = Once::new();
 
 #[allow(dead_code)]
-pub struct NodeHandle {
+pub struct NodeHandle<S: RemoteStorage + Clone + 'static> {
     config: Config,
-    storage: MockedRemoteStorage,
+    storage: S,
 }
 
 #[ctor::ctor]
@@ -57,21 +57,15 @@ impl ExchangeRateProvider for ExchangeRateProviderMock {
 }
 
 #[allow(dead_code)]
-impl NodeHandle {
-    pub fn new(storage_config: mocked_remote_storage::Config) -> Self {
-        let storage = MockedRemoteStorage::new(Arc::new(Storage::new()), storage_config);
-
+impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
+    pub fn new(remote_storage: S) -> Self {
         let _ = fs::remove_dir_all(LOCAL_PERSISTENCE_PATH);
         fs::create_dir(LOCAL_PERSISTENCE_PATH).unwrap();
 
         NodeHandle {
             config: get_testing_config(),
-            storage,
+            storage: remote_storage,
         }
-    }
-
-    pub fn default() -> Self {
-        Self::new(mocked_remote_storage::Config::default())
     }
 
     pub fn start(&self) -> eel::errors::Result<LightningNode> {
@@ -89,9 +83,20 @@ impl NodeHandle {
         node
     }
 
-    pub fn get_storage(&mut self) -> &mut MockedRemoteStorage {
+    pub fn get_storage(&mut self) -> &mut S {
         &mut self.storage
     }
+}
+
+pub fn mocked_storage_node() -> NodeHandle<MockedRemoteStorage> {
+    mocked_storage_node_configurable(mocked_remote_storage::Config::default())
+}
+
+pub fn mocked_storage_node_configurable(
+    config: mocked_remote_storage::Config,
+) -> NodeHandle<MockedRemoteStorage> {
+    let storage = MockedRemoteStorage::new(Arc::new(Storage::new()), config);
+    NodeHandle::new(storage)
 }
 
 #[cfg(feature = "nigiri")]
@@ -737,7 +742,7 @@ pub mod nigiri {
     pub fn initiate_node_with_channel(remote_node: NodeInstance) -> LightningNode {
         nigiri::setup_environment_with_lsp();
 
-        let node = NodeHandle::default().start().unwrap();
+        let node = mocked_storage_node().start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
         assert_eq!(node.get_node_info().num_peers, 1);

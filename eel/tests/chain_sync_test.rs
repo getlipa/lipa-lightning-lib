@@ -3,12 +3,13 @@ mod setup;
 #[cfg(feature = "nigiri")]
 mod chain_sync_test {
     use bitcoin::hashes::hex::ToHex;
+    use eel::interfaces::RemoteStorage;
     use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::Duration;
 
     use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
-    use crate::setup::{nigiri, NodeHandle};
+    use crate::setup::{mocked_storage_node, nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
 
     const HALF_SEC: Duration = Duration::from_millis(500);
@@ -19,7 +20,7 @@ mod chain_sync_test {
     fn test_react_to_events() {
         nigiri::setup_environment_with_lsp();
 
-        let node = NodeHandle::default().start().unwrap();
+        let node = mocked_storage_node().start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
         let tx_id = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap();
@@ -80,7 +81,7 @@ mod chain_sync_test {
     fn test_react_to_events_with_offline_node() {
         nigiri::setup_environment_with_lsp();
 
-        let node_handle = NodeHandle::default();
+        let node_handle = mocked_storage_node();
 
         // test channel is confirmed only after 6 confirmations with offline node
         let tx_id = start_node_open_channel_without_confirm_stop_node(&node_handle);
@@ -122,7 +123,7 @@ mod chain_sync_test {
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_force_close_is_detected_offline_node_unconfirmed_channel() {
         nigiri::setup_environment_with_lsp();
-        let node_handle = NodeHandle::default();
+        let node_handle = mocked_storage_node();
 
         let tx_id = start_node_open_channel_without_confirm_stop_node(&node_handle);
 
@@ -139,7 +140,9 @@ mod chain_sync_test {
         assert_eq!(node.get_node_info().channels_info.num_channels, 0);
     }
 
-    fn start_node_open_channel_without_confirm_stop_node(node_handle: &NodeHandle) -> String {
+    fn start_node_open_channel_without_confirm_stop_node<S: RemoteStorage + Clone + 'static>(
+        node_handle: &NodeHandle<S>,
+    ) -> String {
         let node = node_handle.start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
