@@ -48,7 +48,7 @@ fn is_connected(peer: &LnPeer, peer_manager: &PeerManager) -> bool {
     peer_manager
         .get_peer_node_ids()
         .iter()
-        .any(|id| *id == peer.pub_key)
+        .any(|(id, _net_address)| *id == peer.pub_key)
 }
 
 pub(crate) struct LnPeer {

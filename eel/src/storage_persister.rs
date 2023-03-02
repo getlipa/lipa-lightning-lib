@@ -1,22 +1,28 @@
 use crate::encryption_symmetric::{decrypt, encrypt};
 use crate::errors::*;
 use crate::interfaces::RemoteStorage;
-use crate::types::{ChainMonitor, NetworkGraph, Scorer};
+use crate::types::{ChainMonitor, ChannelManager, NetworkGraph, Router, Scorer};
 use crate::{LightningLogger, StartupVariant};
 use std::cmp::Ordering;
 
 use crate::async_runtime::Handle;
+use crate::tx_broadcaster::TxBroadcaster;
 use bitcoin::hash_types::BlockHash;
 use bitcoin::hashes::hex::ToHex;
+use bitcoin::Network;
 use lightning::chain::chaininterface::{BroadcasterInterface, FeeEstimator};
 use lightning::chain::chainmonitor::{MonitorUpdateId, Persist};
 use lightning::chain::channelmonitor::{ChannelMonitor, ChannelMonitorUpdate};
-use lightning::chain::keysinterface::{InMemorySigner, KeysInterface, KeysManager, Sign};
+use lightning::chain::keysinterface::{
+    EntropySource, InMemorySigner, KeysManager, NodeSigner, SignerProvider,
+    WriteableEcdsaChannelSigner,
+};
 use lightning::chain::transaction::OutPoint;
 use lightning::chain::{ChannelMonitorUpdateStatus, Watch};
 use lightning::ln::channelmanager::{
     ChainParameters, ChannelManagerReadArgs, SimpleArcChannelManager,
 };
+use lightning::routing::router;
 use lightning::routing::scoring::{ProbabilisticScoringParameters, WriteableScore};
 use lightning::util::config::UserConfig;
 use lightning::util::logger::Logger;
@@ -76,22 +82,33 @@ impl StoragePersister {
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn read_channel_monitors<Signer: Sign, K: Deref>(
+    pub fn read_channel_monitors<ES: Deref, SP: Deref>(
         &self,
-        keys_manager: K,
-    ) -> Result<(StartupVariant, Vec<(BlockHash, ChannelMonitor<Signer>)>)>
+        entropy_source: ES,
+        signer_provider: SP,
+    ) -> Result<(
+        StartupVariant,
+        Vec<(
+            BlockHash,
+            ChannelMonitor<<SP::Target as SignerProvider>::Signer>,
+        )>,
+    )>
     where
-        K::Target: KeysInterface<Signer = Signer> + Sized,
+        ES::Target: EntropySource + Sized,
+        SP::Target: SignerProvider + Sized,
     {
         let mut local_channel_monitors = self
             .fs_persister
-            .read_channelmonitors(&*keys_manager)
+            .read_channelmonitors(&*entropy_source, &*signer_provider)
             .map_to_permanent_failure("Failed to read channel monitors from disk")?;
 
-        let mut remote_channel_monitors = self.read_remote_channel_monitors(keys_manager)?;
+        let mut remote_channel_monitors =
+            self.read_remote_channel_monitors(entropy_source, signer_provider)?;
 
-        let startup_variant =
-            Self::infer_startup_variant(&mut local_channel_monitors, &mut remote_channel_monitors)?;
+        let startup_variant = Self::infer_startup_variant::<SP>(
+            &mut local_channel_monitors,
+            &mut remote_channel_monitors,
+        )?;
         let monitors = match startup_variant {
             StartupVariant::FreshStart => Vec::new(),
             StartupVariant::Recovery => remote_channel_monitors,
@@ -101,12 +118,20 @@ impl StoragePersister {
         Ok((startup_variant, monitors))
     }
 
-    fn read_remote_channel_monitors<Signer: Sign, K: Deref>(
+    #[allow(clippy::type_complexity)]
+    fn read_remote_channel_monitors<ES: Deref, SP: Deref>(
         &self,
-        keys_manager: K,
-    ) -> Result<Vec<(BlockHash, ChannelMonitor<Signer>)>>
+        entropy_source: ES,
+        signer_provider: SP,
+    ) -> Result<
+        Vec<(
+            BlockHash,
+            ChannelMonitor<<SP::Target as SignerProvider>::Signer>,
+        )>,
+    >
     where
-        K::Target: KeysInterface<Signer = Signer> + Sized,
+        ES::Target: EntropySource + Sized,
+        SP::Target: SignerProvider + Sized,
     {
         let mut remote_channel_monitors = Vec::new();
         for key in self
@@ -127,7 +152,11 @@ impl StoragePersister {
             let data = decrypt(&encrypted_data, &self.encryption_key)
                 .map_to_permanent_failure("Failed to decrypt ChannelMonitor")?;
             let mut buffer = Cursor::new(&data);
-            match <(BlockHash, ChannelMonitor<Signer>)>::read(&mut buffer, &*keys_manager) {
+            match <(
+                BlockHash,
+                ChannelMonitor<<SP::Target as SignerProvider>::Signer>,
+            )>::read(&mut buffer, (&*entropy_source, &*signer_provider))
+            {
                 Ok((blockhash, channel_monitor)) => {
                     debug!(
                         "Successfully read ChannelMonitor {} from remote storage",
@@ -151,10 +180,19 @@ impl StoragePersister {
         Ok(remote_channel_monitors)
     }
 
-    fn infer_startup_variant<Signer: Sign>(
-        local_monitors: &mut Vec<(BlockHash, ChannelMonitor<Signer>)>,
-        remote_monitors: &mut Vec<(BlockHash, ChannelMonitor<Signer>)>,
-    ) -> Result<StartupVariant> {
+    fn infer_startup_variant<SP: Deref>(
+        local_monitors: &mut Vec<(
+            BlockHash,
+            ChannelMonitor<<SP::Target as SignerProvider>::Signer>,
+        )>,
+        remote_monitors: &mut Vec<(
+            BlockHash,
+            ChannelMonitor<<SP::Target as SignerProvider>::Signer>,
+        )>,
+    ) -> Result<StartupVariant>
+    where
+        SP::Target: SignerProvider + Sized,
+    {
         if local_monitors.is_empty() {
             // If we don't have any local ChannelMonitors, but have 1 or more remote ChannelMonitors,
             // we can assume that this is a new app installation.
@@ -221,29 +259,27 @@ impl StoragePersister {
     }
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-    pub fn read_or_init_channel_manager<M, T, F, L>(
+    pub fn read_or_init_channel_manager(
         &self,
-        chain_monitor: Arc<M>,
-        broadcaster: Arc<T>,
+        chain_monitor: Arc<ChainMonitor>,
+        broadcaster: Arc<TxBroadcaster>,
         keys_manager: Arc<KeysManager>,
-        fee_estimator: Arc<F>,
-        logger: Arc<L>,
+        fee_estimator: Arc<crate::FeeEstimator>,
+        logger: Arc<LightningLogger>,
+        router: Arc<Router>,
         channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>>,
         user_config: UserConfig,
         chain_params: ChainParameters,
         startup_variant: StartupVariant,
-    ) -> Result<(Option<BlockHash>, SimpleArcChannelManager<M, T, F, L>)>
-    where
-        M: Watch<InMemorySigner>,
-        T: BroadcasterInterface,
-        F: FeeEstimator,
-        L: Logger,
-    {
+    ) -> Result<(Option<BlockHash>, ChannelManager)> {
         let read_args = ChannelManagerReadArgs::new(
+            Arc::clone(&keys_manager),
+            Arc::clone(&keys_manager),
             Arc::clone(&keys_manager),
             Arc::clone(&fee_estimator),
             Arc::clone(&chain_monitor),
             Arc::clone(&broadcaster),
+            Arc::clone(&router),
             Arc::clone(&logger),
             user_config,
             channel_monitors,
@@ -255,7 +291,10 @@ impl StoragePersister {
                     fee_estimator,
                     chain_monitor,
                     broadcaster,
+                    router,
                     logger,
+                    Arc::clone(&keys_manager),
+                    Arc::clone(&keys_manager),
                     keys_manager,
                     user_config,
                     chain_params,
@@ -278,7 +317,7 @@ impl StoragePersister {
                 let mut buffer = Cursor::new(&data);
                 let (block_hash, channel_manager) = <(
                         BlockHash,
-                        SimpleArcChannelManager<M, T, F, L>,
+                        ChannelManager,
                     )>::read(&mut buffer, read_args)
                         .map_to_permanent_failure("Failed to parse a previously remotely persisted ChannelManager. Could it have been corrupted?")?;
                 Ok((Some(block_hash), channel_manager))
@@ -289,7 +328,7 @@ impl StoragePersister {
                     PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(MANAGER_KEY));
                 if let Ok(f) = fs::File::open(path) {
                     let (block_hash, channel_manager) =
-                        <(BlockHash, SimpleArcChannelManager<M, T, F, L>)>::read(
+                        <(BlockHash, ChannelManager)>::read(
                             &mut BufReader::new(f),
                             read_args,
                         )
@@ -308,7 +347,7 @@ impl StoragePersister {
 
     pub fn read_or_init_graph(
         &self,
-        genesis_hash: BlockHash,
+        network: Network,
         logger: Arc<LightningLogger>,
     ) -> Result<NetworkGraph> {
         let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(GRAPH_KEY));
@@ -324,7 +363,7 @@ impl StoragePersister {
             }
         }
         debug!("Couldn't find a previously persisted network graph. Creating a new one...");
-        Ok(NetworkGraph::new(genesis_hash, logger))
+        Ok(NetworkGraph::new(network, logger))
     }
 
     pub fn read_or_init_scorer(
@@ -351,7 +390,7 @@ impl StoragePersister {
     }
 }
 
-impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
+impl<ChannelSigner: WriteableEcdsaChannelSigner> Persist<ChannelSigner> for StoragePersister {
     fn persist_new_channel(
         &self,
         channel_id: OutPoint,
@@ -409,7 +448,7 @@ impl<ChannelSigner: Sign> Persist<ChannelSigner> for StoragePersister {
     fn update_persisted_channel(
         &self,
         channel_id: OutPoint,
-        _update: &Option<ChannelMonitorUpdate>,
+        _update: Option<&ChannelMonitorUpdate>,
         data: &ChannelMonitor<ChannelSigner>,
         update_id: MonitorUpdateId,
     ) -> ChannelMonitorUpdateStatus {
@@ -519,21 +558,34 @@ fn sync_persist_monitor_remotely(
     ))
 }
 
-impl<'a, M: Deref, T: Deref, K: Deref, F: Deref, L: Deref, S: WriteableScore<'a>>
-    Persister<'a, M, T, K, F, L, S> for StoragePersister
+impl<
+        'a,
+        M: Deref,
+        T: Deref,
+        ES: Deref,
+        NS: Deref,
+        SP: Deref,
+        F: Deref,
+        R: Deref,
+        L: Deref,
+        S: WriteableScore<'a>,
+    > Persister<'a, M, T, ES, NS, SP, F, R, L, S> for StoragePersister
 where
-    M::Target: 'static + Watch<<K::Target as KeysInterface>::Signer>,
+    M::Target: 'static + Watch<<SP::Target as SignerProvider>::Signer>,
     T::Target: 'static + BroadcasterInterface,
-    K::Target: 'static + KeysInterface,
+    ES::Target: 'static + EntropySource,
+    NS::Target: 'static + NodeSigner,
+    SP::Target: 'static + SignerProvider,
     F::Target: 'static + FeeEstimator,
+    R::Target: 'static + router::Router,
     L::Target: 'static + Logger,
 {
     fn persist_manager(
         &self,
-        channel_manager: &lightning::ln::channelmanager::ChannelManager<M, T, K, F, L>,
+        channel_manager: &lightning::ln::channelmanager::ChannelManager<M, T, ES, NS, SP, F, R, L>,
     ) -> std::result::Result<(), std::io::Error> {
         // Persist locally
-        match <FilesystemPersister as Persister<'_, M, T, K, F, L, S>>::persist_manager(
+        match <FilesystemPersister as Persister<'_, M, T, ES, NS, SP, F, R, L, S>>::persist_manager(
             &self.fs_persister,
             channel_manager,
         ) {
@@ -582,14 +634,14 @@ where
         &self,
         network_graph: &lightning::routing::gossip::NetworkGraph<L>,
     ) -> std::result::Result<(), std::io::Error> {
-        <FilesystemPersister as Persister<'_, M, T, K, F, L, S>>::persist_graph(
+        <FilesystemPersister as Persister<'_, M, T, ES, NS, SP, F, R, L, S>>::persist_graph(
             &self.fs_persister,
             network_graph,
         )
     }
 
     fn persist_scorer(&self, scorer: &S) -> std::result::Result<(), std::io::Error> {
-        <FilesystemPersister as Persister<'_, M, T, K, F, L, S>>::persist_scorer(
+        <FilesystemPersister as Persister<'_, M, T, ES, NS, SP, F, R, L, S>>::persist_scorer(
             &self.fs_persister,
             scorer,
         )
@@ -607,6 +659,7 @@ mod tests {
     use lightning::util::ser::ReadableArgs;
     use std::fs;
     use std::io::Cursor;
+    use std::sync::Arc;
 
     const MONITOR_1_STATE_1_PATH: &str = "tests/resources/monitors/state_1/1c4eb9c1d721ae7616ee480a735d175818510326701695ad4163aa00c6a320dd_0";
     const MONITOR_1_STATE_2_PATH: &str = "tests/resources/monitors/state_2/1c4eb9c1d721ae7616ee480a735d175818510326701695ad4163aa00c6a320dd_0";
@@ -623,7 +676,7 @@ mod tests {
         let mut local_monitors = Vec::new();
         let mut remote_monitors = Vec::new();
 
-        let startup_variant = StoragePersister::infer_startup_variant::<InMemorySigner>(
+        let startup_variant = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         )
@@ -642,7 +695,7 @@ mod tests {
         remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_1_PATH));
         remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_1_PATH));
 
-        let startup_variant = StoragePersister::infer_startup_variant::<InMemorySigner>(
+        let startup_variant = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         )
@@ -659,7 +712,7 @@ mod tests {
         remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_1_PATH));
         remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_1_PATH));
 
-        let startup_variant = StoragePersister::infer_startup_variant::<InMemorySigner>(
+        let startup_variant = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         )
@@ -679,7 +732,7 @@ mod tests {
         remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_2_PATH));
         remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_2_PATH));
 
-        let startup_variant = StoragePersister::infer_startup_variant::<InMemorySigner>(
+        let startup_variant = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         )
@@ -699,7 +752,7 @@ mod tests {
         remote_monitors.push(read_channel_monitor(MONITOR_3_STATE_3_PATH));
         remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_3_PATH));
 
-        let startup_variant_result = StoragePersister::infer_startup_variant::<InMemorySigner>(
+        let startup_variant_result = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         );
@@ -720,7 +773,7 @@ mod tests {
         remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_1_PATH));
         remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_1_PATH));
 
-        let startup_variant = StoragePersister::infer_startup_variant::<InMemorySigner>(
+        let startup_variant = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         )
@@ -739,7 +792,7 @@ mod tests {
         remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_2_PATH));
         remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_2_PATH));
 
-        let startup_variant_result = StoragePersister::infer_startup_variant::<InMemorySigner>(
+        let startup_variant_result = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         );
@@ -754,6 +807,10 @@ mod tests {
         let keys_manager = KeysManager::new(&[0u8; 32], 0, 0);
         let data = fs::read(path).unwrap();
         let mut buffer = Cursor::new(&data);
-        <(BlockHash, ChannelMonitor<InMemorySigner>)>::read(&mut buffer, &keys_manager).unwrap()
+        <(BlockHash, ChannelMonitor<InMemorySigner>)>::read(
+            &mut buffer,
+            (&keys_manager, &keys_manager),
+        )
+        .unwrap()
     }
 }

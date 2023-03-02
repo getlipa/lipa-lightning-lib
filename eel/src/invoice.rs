@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 use crate::lsp;
 use crate::payment_store::{FiatValues, PaymentStore};
 use bitcoin::hashes::{sha256, Hash};
-use lightning::chain::keysinterface::{KeysInterface, KeysManager, Recipient};
+use lightning::chain::keysinterface::{KeysManager, NodeSigner, Recipient};
 use lightning::ln::channelmanager::ChannelDetails;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
@@ -68,7 +68,7 @@ pub(crate) async fn create_invoice(
         );
 
         let (payment_hash, payment_secret) = channel_manager
-            .create_inbound_payment(Some(incoming_amount_msat), 1000)
+            .create_inbound_payment(Some(incoming_amount_msat), 1000, None)
             .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
 
         let payment_request = PaymentRequest {
@@ -90,7 +90,7 @@ pub(crate) async fn create_invoice(
         )
     } else {
         let (payment_hash, payment_secret) = channel_manager
-            .create_inbound_payment(Some(amount_msat), 1000)
+            .create_inbound_payment(Some(amount_msat), 1000, None)
             .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
 
         (
@@ -110,7 +110,7 @@ pub(crate) async fn create_invoice(
         .payee_pub_key(payee_pubkey)
         .amount_milli_satoshis(amount_msat)
         .current_timestamp()
-        .min_final_cltv_expiry(144);
+        .min_final_cltv_expiry_delta(144);
     for private_route in private_routes {
         builder = builder.private_route(private_route);
     }
