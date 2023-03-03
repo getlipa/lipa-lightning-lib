@@ -36,6 +36,8 @@ jobs:
       - name: Build
         run: cargo build --verbose
       - name: Run unit tests
+        env:
+          BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
         run: make test
   build-ios:
     name: Build for iOS targets

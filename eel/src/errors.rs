@@ -5,7 +5,7 @@ pub enum RuntimeErrorCode {
     EsploraServiceUnavailable,
     ExchangeRateProviderUnavailable,
     LspServiceUnavailable,
-    RemoteStorageServiceUnavailable,
+    RemoteStorageError,
     RgsServiceUnavailable,
 
     AlreadyUsedInvoice,

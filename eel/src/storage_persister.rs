@@ -138,7 +138,7 @@ impl StoragePersister {
             .storage
             .list_objects(MONITORS_BUCKET.to_string())
             .map_to_runtime_error(
-                RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                RuntimeErrorCode::RemoteStorageError,
                 "Failed to get list of ChannelMonitors from remote storage",
             )?
         {
@@ -146,7 +146,7 @@ impl StoragePersister {
                 .storage
                 .get_object(MONITORS_BUCKET.to_string(), key.clone())
                 .map_to_runtime_error(
-                    RuntimeErrorCode::RemoteStorageServiceUnavailable,
+                    RuntimeErrorCode::RemoteStorageError,
                     format!("Failed to get ChannelMonitor {key} from remote storage"),
                 )?;
             let data = decrypt(&encrypted_data, &self.encryption_key)
@@ -519,7 +519,10 @@ fn sync_persist_monitor_remotely(
     channel_id: OutPoint,
     retries: u32,
 ) -> Result<()> {
-    let key = format!("{}_{}", channel_id.txid.to_hex(), channel_id.index);
+    // Don't use any separator to keep the key purely hexadecimal. Instead, separate by byte count:
+    // First 64 characters (32 bytes) = txid
+    // Last 4 characters (2 bytes) = output index
+    let key = format!("{}{:04x}", channel_id.txid.to_hex(), channel_id.index);
     let encrypted_data = encrypt(&data, encryption_key)?;
 
     for _ in 0..retries {
@@ -611,20 +614,23 @@ where
                 ));
             }
         };
-        if self
-            .storage
-            .put_object(
-                OBJECTS_BUCKET.to_string(),
-                MANAGER_KEY.to_string(),
-                encrypted_data,
-            )
-            .is_err()
-        {
+
+        let persisting_result = self.storage.put_object(
+            OBJECTS_BUCKET.to_string(),
+            MANAGER_KEY.to_string(),
+            encrypted_data,
+        );
+
+        if let Err(e) = persisting_result {
             // We ignore errors on persisting the channel manager remotely hoping that it
             // will succeed next time and meanwhile the user will not try to
             // recover the wallet from an outdated backup (which will result in
             // force close for some new channels).
-            error!("Error on remotely persisting channel manager. Ignoring.");
+
+            error!(
+                "Error on remotely persisting channel manager. Ignoring. Error: {}",
+                e.to_string()
+            );
         }
 
         Ok(())
