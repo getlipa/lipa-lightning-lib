@@ -35,9 +35,9 @@ jobs:
         uses: Swatinem/rust-cache@v2.2.0
       - name: Build
         run: cargo build --verbose
-      - name: Set environment variables
-        run: echo "BACKEND_BASE_URL=${{ secrets.BACKEND_BASE_URL }}" >> $GITHUB_ENV
       - name: Run unit tests
+        env:
+          BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
         run: make test
   build-ios:
     name: Build for iOS targets

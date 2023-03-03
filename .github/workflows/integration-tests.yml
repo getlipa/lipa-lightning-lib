@@ -31,7 +31,7 @@ jobs:
         with:
           use_liquid: false
           use_ln: true
-      - name: Set environment variables
-        run: echo "BACKEND_BASE_URL=${{ secrets.BACKEND_BASE_URL }}" >> $GITHUB_ENV
       - name: Run integration tests
+        env:
+          BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
         run: make integrationtests
