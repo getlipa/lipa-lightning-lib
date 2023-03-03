@@ -2,7 +2,6 @@
 
 extern crate core;
 
-mod auth;
 mod callbacks;
 mod config;
 mod eel_interface_impl;
@@ -50,8 +49,6 @@ impl LightningNode {
 
         let seed = sanitize_input::strong_type_seed(&config.seed)?;
 
-        let auth = auth::Auth::new(config.graphql_url.clone(), &seed)?;
-
         let eel_config = eel::config::Config {
             network: config.network,
             seed,
@@ -63,14 +60,17 @@ impl LightningNode {
             local_persistence_path: config.local_persistence_path,
             timezone_config: config.timezone_config,
         };
+
+        let auth = Arc::new(build_auth(&seed, config.graphql_url.clone())?);
+
         let remote_storage = Box::new(RemoteStorageGraphql::new(
             config.graphql_url.clone(),
             config.backend_health_url,
-            auth.get_instace(),
+            Arc::clone(&auth),
         )?);
+
         let user_event_handler = Box::new(EventsImpl { events_callback });
 
-        let auth = Arc::new(build_auth(&seed, config.graphql_url.clone())?);
         let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
             config.graphql_url.clone(),
             Arc::clone(&auth),
