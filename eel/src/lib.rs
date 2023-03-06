@@ -181,7 +181,10 @@ impl LightningNode {
         let graph = Arc::new(persister.read_or_init_graph(config.network, Arc::clone(&logger))?);
 
         // Step 11: Initialize the RapidSyncClient
-        let rapid_sync = Arc::new(RapidGossipSync::new(Arc::clone(&graph)));
+        let rapid_sync = Arc::new(RapidGossipSync::new(
+            Arc::clone(&graph),
+            Arc::clone(&logger),
+        ));
         let rapid_sync_client = Arc::new(RapidSyncClient::new(
             config.rgs_url.clone(),
             Arc::clone(&rapid_sync),
