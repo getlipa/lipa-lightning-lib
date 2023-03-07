@@ -83,8 +83,18 @@ connect-rgs-ln-node:
 	id=`docker-compose -f rgs/compose.yaml exec rgs-cln lightning-cli --network=regtest getinfo | jq -r .id`; \
 	nigiri cln connect $$id@rgs-cln:9937
 
+.PHONY: setup-channel-cln-lspd-lnd
+setup-channel-cln-lspd-lnd:
+	$(MAKE) --directory lspd setup-channel-cln-lspd-lnd
+
 .PHONY: stop-dev-env
 stop-dev-env:
 	docker-compose -f rgs/compose.yaml down
 	docker-compose -f lspd/compose.yaml down
 	nigiri stop --delete
+
+.PHONY: pause-dev-env
+pause-dev-env:
+	docker-compose -f rgs/compose.yaml stop
+	docker-compose -f lspd/compose.yaml stop
+	nigiri stop
