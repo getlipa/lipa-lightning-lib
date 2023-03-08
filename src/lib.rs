@@ -19,7 +19,7 @@ pub use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 pub use eel::interfaces::ExchangeRates;
 use eel::key_derivation::derive_key_pair_hex;
-use eel::keys_manager::{generate_secret, mnemonic_to_secret};
+use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix};
 use eel::lsp::LspFee;
 use eel::node_info::{ChannelsInfo, NodeInfo};
 use eel::payment_store::{FiatValues, Payment, PaymentState, PaymentType, TzTime};
