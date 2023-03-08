@@ -355,4 +355,7 @@ namespace lipalightninglib {
     // Generate a Secret object (containing the seed). Provide an empty string to use no passphrase.
     [Throws=LnError]
     Secret mnemonic_to_secret(sequence<string> mnemonic_string, string passphrase);
+
+    // Return a list of valid BIP-39 English words starting with the prefix.
+    sequence<string> words_by_prefix(string prefix);
 };

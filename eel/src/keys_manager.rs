@@ -2,7 +2,7 @@ use crate::errors::Result;
 use crate::random;
 use crate::secret::Secret;
 
-use bdk::keys::bip39::Mnemonic;
+use bdk::keys::bip39::{Language, Mnemonic};
 use cipher::consts::U32;
 use lightning::chain::keysinterface::KeysManager;
 use perro::MapToError;
@@ -29,6 +29,14 @@ pub fn mnemonic_to_secret(mnemonic_string: Vec<String>, passphrase: String) -> R
         Mnemonic::from_str(&mnemonic_string.join(" ")).map_to_invalid_input("Invalid mnemonic")?;
 
     Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
+}
+
+pub fn words_by_prefix(prefix: String) -> Vec<String> {
+    Language::English
+        .words_by_prefix(&prefix)
+        .iter()
+        .map(|w| w.to_string())
+        .collect()
 }
 
 fn derive_secret_from_mnemonic(mnemonic: Mnemonic, passphrase: String) -> Secret {
@@ -82,5 +90,16 @@ mod tests {
         assert_eq!(secret.mnemonic, mnemonic);
         assert_eq!(secret.passphrase, passphrase);
         assert_eq!(secret.seed, seed_expected);
+    }
+
+    #[test]
+    fn test_words_by_prefix() {
+        assert_eq!(words_by_prefix("".to_string()).len(), 2048);
+        assert_eq!(words_by_prefix("s".to_string()).len(), 250);
+        assert_eq!(words_by_prefix("sc".to_string()).len(), 15);
+        assert_eq!(words_by_prefix("sch".to_string()), vec!["scheme", "school"]);
+        assert_eq!(words_by_prefix("sche".to_string()), vec!["scheme"]);
+        assert_eq!(words_by_prefix("scheme".to_string()), vec!["scheme"]);
+        assert_eq!(words_by_prefix("schemelol".to_string()).len(), 0);
     }
 }
