@@ -21,8 +21,7 @@ mod p2p_connection_test {
         nigiri::ensure_environment_running();
         let node = NodeHandle::default().start().unwrap();
 
-        sleep(Duration::from_millis(100));
-        assert_eq!(node.get_node_info().num_peers, 1);
+        wait_for!(node.get_node_info().num_peers == 1);
         let peers = setup::nigiri::list_peers(NodeInstance::LspdLnd).unwrap();
         assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
     }
@@ -37,9 +36,7 @@ mod p2p_connection_test {
         {
             // Let's shutdown LSPD LND.
             setup::nigiri::pause_lspd();
-            sleep(Duration::from_secs(1));
-
-            assert_eq!(node.get_node_info().num_peers, 0);
+            wait_for!(node.get_node_info().num_peers == 0);
         }
 
         // Test reconnect when LSP is back.
@@ -49,8 +46,7 @@ mod p2p_connection_test {
             setup::nigiri::wait_for_healthy_lspd();
             // TODO: Once reconnect period exposed as a config, config it with a
             //       smaller value to speedup the test.
-            sleep(Duration::from_secs(10));
-            assert_eq!(node.get_node_info().num_peers, 1);
+            wait_for!(node.get_node_info().num_peers == 1);
             let peers = setup::nigiri::list_peers(NodeInstance::LspdLnd).unwrap();
             assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
         }

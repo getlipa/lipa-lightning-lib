@@ -49,6 +49,28 @@ fn init_logger() {
     });
 }
 
+#[macro_export]
+macro_rules! wait_for {
+    ($cond:expr) => {
+        let attempts = 200;
+        let sleep_duration = Duration::from_millis(100);
+        let mut i = 0;
+        loop {
+            if $cond {
+                break;
+            } else if i == attempts {
+                let total_duration = sleep_duration * attempts;
+                panic!(
+                    "Failed to wait for `{}` after {total_duration:?}.",
+                    stringify!($cond)
+                );
+            }
+            sleep(sleep_duration);
+            i += 1;
+        }
+    };
+}
+
 struct ExchangeRateProviderMock;
 impl ExchangeRateProvider for ExchangeRateProviderMock {
     fn query_exchange_rate(&self, _code: String) -> eel::errors::Result<u32> {
@@ -81,12 +103,12 @@ impl NodeHandle {
             Box::new(self.storage.clone()),
             Box::new(events_handler),
             Box::new(ExchangeRateProviderMock {}),
-        );
+        )?;
 
-        // Wait for the the P2P background task to connect to the LSP
-        sleep(Duration::from_millis(1500));
+        // Wait for the the P2P background task to connect to the LSP.
+        wait_for!(node.get_node_info().num_peers == 1);
 
-        node
+        Ok(node)
     }
 
     pub fn get_storage(&mut self) -> &mut MockedRemoteStorage {
@@ -241,14 +263,7 @@ pub mod nigiri {
     }
 
     pub fn wait_for_sync(node: NodeInstance) {
-        for _ in 0..40 {
-            if is_node_synced(node) {
-                return;
-            }
-            sleep(Duration::from_millis(500));
-        }
-
-        panic!("Failed to start {:?}. Not synced after 20 sec.", node);
+        wait_for!(is_node_synced(node));
     }
 
     pub fn is_node_synced(node: NodeInstance) -> bool {
