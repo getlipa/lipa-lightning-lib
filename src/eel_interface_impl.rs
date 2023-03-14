@@ -136,7 +136,7 @@ impl EventHandler for EventsImpl {
 
     fn channel_closed(&self, channel_id: String, reason: String) {
         if let Err(e) = self.events_callback.channel_closed(channel_id, reason) {
-            error!("Error on handling Challen Closed event: {e}");
+            error!("Error on handling Channel Closed event: {e}");
         }
     }
 }
