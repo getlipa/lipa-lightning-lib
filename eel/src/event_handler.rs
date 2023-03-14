@@ -131,10 +131,8 @@ impl EventHandler for LipaEventHandler {
                         {
                             error!("Failed to persist in the payment db that the receiving payment with hash {} has succeeded", payment_hash.0.to_hex());
                         }
-                        // TODO: Handle unwrap()
                         self.user_event_handler
-                            .payment_received(payment_hash.0.to_hex(), amount_msat)
-                            .unwrap();
+                            .payment_received(payment_hash.0.to_hex(), amount_msat);
                     }
                     PaymentPurpose::SpontaneousPayment(_) => {
                         info!(
@@ -174,14 +172,11 @@ impl EventHandler for LipaEventHandler {
                 {
                     error!("Failed to persist in the payment db that sending payment with hash {} has succeeded", payment_hash.0.to_hex());
                 }
-                // TODO: Handle unwrap()
-                self.user_event_handler
-                    .payment_sent(
-                        payment_preimage.0.to_hex(),
-                        payment_hash.0.to_hex(),
-                        fee_paid_msat,
-                    )
-                    .unwrap();
+                self.user_event_handler.payment_sent(
+                    payment_preimage.0.to_hex(),
+                    payment_hash.0.to_hex(),
+                    fee_paid_msat,
+                );
             }
             Event::PaymentFailed {
                 payment_id: _,
@@ -197,10 +192,8 @@ impl EventHandler for LipaEventHandler {
                 {
                     error!("Failed to persist in the payment db that sending payment with hash {} has failed", payment_hash.0.to_hex());
                 }
-                // TODO: Handle unwrap()
                 self.user_event_handler
-                    .payment_failed(payment_hash.0.to_hex())
-                    .unwrap();
+                    .payment_failed(payment_hash.0.to_hex());
             }
             Event::PaymentPathSuccessful { .. } => {}
             Event::PaymentPathFailed { .. } => {}
@@ -242,10 +235,8 @@ impl EventHandler for LipaEventHandler {
                     channel_id.to_hex(),
                     reason
                 );
-                // TODO: Handle unwrap()
                 self.user_event_handler
-                    .channel_closed(channel_id.to_hex(), reason.to_string())
-                    .unwrap();
+                    .channel_closed(channel_id.to_hex(), reason.to_string());
             }
             Event::DiscardFunding { .. } => {}
             Event::OpenChannelRequest {

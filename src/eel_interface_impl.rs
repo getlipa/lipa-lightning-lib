@@ -3,6 +3,7 @@ use eel::interfaces::{EventHandler, RemoteStorage};
 use eel::MapToError;
 
 use honey_badger::Auth;
+use log::error;
 use mole::ChannelStatePersistenceClient;
 use perro::runtime_error;
 use std::sync::Arc;
@@ -109,32 +110,33 @@ pub(crate) struct EventsImpl {
 }
 
 impl EventHandler for EventsImpl {
-    fn payment_received(&self, payment_hash: String, amount_msat: u64) -> Result<()> {
-        self.events_callback
+    fn payment_received(&self, payment_hash: String, amount_msat: u64) {
+        if let Err(e) = self
+            .events_callback
             .payment_received(payment_hash, amount_msat)
-            .map_to_permanent_failure("Events callback failed")
+        {
+            error!("Error on handling Payment Received event: {e}");
+        }
     }
 
-    fn channel_closed(&self, channel_id: String, reason: String) -> Result<()> {
-        self.events_callback
-            .channel_closed(channel_id, reason)
-            .map_to_permanent_failure("Events callback failed")
+    fn payment_sent(&self, payment_hash: String, payment_preimage: String, fee_paid_msat: u64) {
+        if let Err(e) =
+            self.events_callback
+                .payment_sent(payment_hash, payment_preimage, fee_paid_msat)
+        {
+            error!("Error on handling Payment Sent event: {e}");
+        }
     }
 
-    fn payment_sent(
-        &self,
-        payment_hash: String,
-        payment_preimage: String,
-        fee_paid_msat: u64,
-    ) -> Result<()> {
-        self.events_callback
-            .payment_sent(payment_hash, payment_preimage, fee_paid_msat)
-            .map_to_permanent_failure("Events callback failed")
+    fn payment_failed(&self, payment_hash: String) {
+        if let Err(e) = self.events_callback.payment_failed(payment_hash) {
+            error!("Error on handling Payment Failed event: {e}");
+        }
     }
 
-    fn payment_failed(&self, payment_hash: String) -> Result<()> {
-        self.events_callback
-            .payment_failed(payment_hash)
-            .map_to_permanent_failure("Events callback failed")
+    fn channel_closed(&self, channel_id: String, reason: String) {
+        if let Err(e) = self.events_callback.channel_closed(channel_id, reason) {
+            error!("Error on handling Challen Closed event: {e}");
+        }
     }
 }

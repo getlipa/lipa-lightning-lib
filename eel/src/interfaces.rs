@@ -13,18 +13,13 @@ pub trait RemoteStorage: Send + Sync {
 }
 
 pub trait EventHandler: Send + Sync {
-    fn payment_received(&self, payment_hash: String, amount_msat: u64) -> Result<()>;
+    fn payment_received(&self, payment_hash: String, amount_msat: u64);
 
-    fn channel_closed(&self, channel_id: String, reason: String) -> Result<()>;
+    fn payment_sent(&self, payment_hash: String, payment_preimage: String, fee_paid_msat: u64);
 
-    fn payment_sent(
-        &self,
-        payment_hash: String,
-        payment_preimage: String,
-        fee_paid_msat: u64,
-    ) -> Result<()>;
+    fn payment_failed(&self, payment_hash: String);
 
-    fn payment_failed(&self, payment_hash: String) -> Result<()>;
+    fn channel_closed(&self, channel_id: String, reason: String);
 }
 
 #[derive(Clone)]
