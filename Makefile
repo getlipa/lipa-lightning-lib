@@ -59,12 +59,12 @@ pr: fmt buildall test clippy check-mod-test
 
 .PHONY: run-eel
 run-eel:
-	cargo run --manifest-path eel/Cargo.toml --example node
+	cargo run --manifest-path eel/Cargo.toml --example eel-node
 
 .PHONY: run-3l
 run-3l: ARGS =
 run-3l:
-	cargo run --example node -- $(ARGS)
+	cargo run --example 3l-node -- $(ARGS)
 
 .PHONY: build-dev-env
 build-dev-env:
