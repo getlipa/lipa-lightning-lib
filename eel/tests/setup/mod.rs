@@ -2,32 +2,31 @@
 pub mod config;
 #[path = "../mocked_remote_storage/mod.rs"]
 pub mod mocked_remote_storage;
+pub mod mocked_storage_setup;
 #[path = "../print_events_handler/mod.rs"]
 mod print_event_handler;
 
 use eel::config::Config;
-use eel::interfaces::ExchangeRateProvider;
+use eel::interfaces::{ExchangeRateProvider, RemoteStorage};
 use eel::LightningNode;
 
 use crate::setup::config::{get_testing_config, LOCAL_PERSISTENCE_PATH};
-use crate::setup::mocked_remote_storage::MockedRemoteStorage;
 #[cfg(feature = "nigiri")]
 use crate::setup::nigiri::{NodeInstance, RGS_CLN_HOST, RGS_CLN_ID, RGS_CLN_PORT};
 use crate::setup::print_event_handler::PrintEventsHandler;
 
 use simplelog::{ConfigBuilder, LevelFilter, SimpleLogger};
 use std::fs;
-use std::sync::{Arc, Once};
+use std::sync::Once;
 use std::thread::sleep;
 use std::time::Duration;
-use storage_mock::Storage;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
 
 #[allow(dead_code)]
-pub struct NodeHandle {
+pub struct NodeHandle<S: RemoteStorage + Clone + 'static> {
     config: Config,
-    storage: MockedRemoteStorage,
+    storage: S,
 }
 
 #[ctor::ctor]
@@ -57,21 +56,15 @@ impl ExchangeRateProvider for ExchangeRateProviderMock {
 }
 
 #[allow(dead_code)]
-impl NodeHandle {
-    pub fn new(storage_config: mocked_remote_storage::Config) -> Self {
-        let storage = MockedRemoteStorage::new(Arc::new(Storage::new()), storage_config);
-
+impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
+    pub fn new(remote_storage: S) -> Self {
         let _ = fs::remove_dir_all(LOCAL_PERSISTENCE_PATH);
         fs::create_dir(LOCAL_PERSISTENCE_PATH).unwrap();
 
         NodeHandle {
             config: get_testing_config(),
-            storage,
+            storage: remote_storage,
         }
-    }
-
-    pub fn default() -> Self {
-        Self::new(mocked_remote_storage::Config::default())
     }
 
     pub fn start(&self) -> eel::errors::Result<LightningNode> {
@@ -89,7 +82,7 @@ impl NodeHandle {
         node
     }
 
-    pub fn get_storage(&mut self) -> &mut MockedRemoteStorage {
+    pub fn get_storage(&mut self) -> &mut S {
         &mut self.storage
     }
 }
@@ -104,6 +97,7 @@ fn node_connect_to_rgs_cln(node: NodeInstance) {
 pub mod nigiri {
     use super::*;
 
+    use crate::setup::mocked_storage_setup::mocked_storage_node;
     use crate::try_cmd_repeatedly;
     use bitcoin::hashes::hex::ToHex;
     use log::debug;
@@ -737,7 +731,7 @@ pub mod nigiri {
     pub fn initiate_node_with_channel(remote_node: NodeInstance) -> LightningNode {
         nigiri::setup_environment_with_lsp();
 
-        let node = NodeHandle::default().start().unwrap();
+        let node = mocked_storage_node().start().unwrap();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
         assert_eq!(node.get_node_info().num_peers, 1);

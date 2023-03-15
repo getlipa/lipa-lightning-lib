@@ -9,8 +9,9 @@ mod receiving_payments_test {
     use std::thread::sleep;
     use std::time::Duration;
 
+    use crate::setup::mocked_storage_setup::mocked_storage_node;
+    use crate::setup::nigiri;
     use crate::setup::nigiri::NodeInstance;
-    use crate::setup::{nigiri, NodeHandle};
     use crate::try_cmd_repeatedly;
 
     const ONE_SAT: u64 = 1_000;
@@ -32,7 +33,7 @@ mod receiving_payments_test {
         // Test receiving an invoice on a node that does not have any channel yet
         // resp, the channel opening is part of the payment process.
         nigiri::setup_environment_with_lsp();
-        let node_handle = NodeHandle::default();
+        let node_handle = mocked_storage_node();
 
         {
             let node = node_handle.start().unwrap();
@@ -122,7 +123,7 @@ mod receiving_payments_test {
     fn receive_multiple_payments_for_same_invoice() {
         nigiri::ensure_environment_running();
 
-        let node = NodeHandle::default().start().unwrap();
+        let node = mocked_storage_node().start().unwrap();
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
         assert_eq!(node.get_node_info().num_peers, 1);
 
