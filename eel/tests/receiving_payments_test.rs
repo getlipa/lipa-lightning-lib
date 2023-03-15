@@ -1,4 +1,5 @@
 mod setup;
+mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod receiving_payments_test {
@@ -9,9 +10,9 @@ mod receiving_payments_test {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use crate::setup::mocked_storage_setup::mocked_storage_node;
-    use crate::setup::nigiri;
-    use crate::setup::nigiri::NodeInstance;
+    use crate::setup::mocked_storage_node;
+    use crate::setup_env::nigiri;
+    use crate::setup_env::nigiri::NodeInstance;
     use crate::try_cmd_repeatedly;
 
     const ONE_SAT: u64 = 1_000;

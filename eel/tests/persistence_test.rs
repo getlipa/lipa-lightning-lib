@@ -1,4 +1,5 @@
 mod setup;
+mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod persistence_test {
@@ -13,9 +14,9 @@ mod persistence_test {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use crate::setup::mocked_storage_setup::mocked_storage_node_configurable;
-    use crate::setup::nigiri::NodeInstance;
-    use crate::setup::{nigiri, NodeHandle};
+    use crate::setup::{mocked_storage_node_configurable, NodeHandle};
+    use crate::setup_env::nigiri;
+    use crate::setup_env::nigiri::NodeInstance;
     use crate::try_cmd_repeatedly;
 
     const ONE_SAT: u64 = 1_000;

@@ -1,12 +1,13 @@
 mod setup;
+mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod node_info_test {
     use bitcoin::secp256k1::PublicKey;
     use serial_test::file_serial;
 
-    use crate::setup::mocked_storage_setup::mocked_storage_node;
-    use crate::setup::nigiri;
+    use crate::setup::mocked_storage_node;
+    use crate::setup_env::nigiri;
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
