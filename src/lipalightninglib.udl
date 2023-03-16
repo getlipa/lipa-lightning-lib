@@ -1,3 +1,25 @@
+// The main goal of this library is to instantiate a full Lightning Network node,
+// which synchronizes itself using various Lipa-hosted services (Esplora, Rapid-Gossip-Sync) and
+// and is connected through a Lightning channel to an LSP (owned by Lipa as well).
+// This node then runs in the background and keeps syncing with the network(s).
+// Library consumers can perform various operations: create invoices, receive payments, validate invoices, send payments, etc.
+//
+// Remarks:
+//  - When the LSP is mentioned in this document, it is being seen from the point-of-view of the Lipa Lightning node; as an external service.
+//    However, it is assumed that the LSP is being run by the same party that uses this library, so the LSP is highly customized and trusted.
+//  - The LSP flow is as follows:
+//      1. User wants to receive a payment and therefore creates an invoice
+//      2. If the amount the user wants to receive does not surpass
+//         the amount that can be received through existing channels (inbound capacity),
+//         the LSP flow ends here and a regular Lightning payment is performed.
+//      3. If the amount the user wants to receive surpasses the amount that can be received through existing channels,
+//         the payment the user wants to receive must be registered with the LSP.
+//         Caution: Such payments incur additional costs and the user must be warned about that -> query_lsp_fee()
+//      4. When the payment towards the user is initiated, the LSP creates a new channel on-the-fly.
+//         The creation of the channel and the receiving of the payment happens simultaneously for the user.
+
+// Use "Bitcoin" for production code (= runs on the Bitcoin mainnet)
+// Testnet and Signet are test *networks*, while Regtest enables an entirely local test environment
 enum Network {
     "Bitcoin",
     "Testnet",
@@ -5,61 +27,335 @@ enum Network {
     "Regtest",
 };
 
-dictionary LipaLightningConfig {
-    sequence<u8> seed;
-    string bitcoind_rpc_username;
-    string bitcoind_rpc_password;
-    u16 bitcoind_rpc_port;
-    string bitcoind_rpc_host;
-    u16 ldk_peer_listening_port;
+// An object that holds timezone configuration values necessary for 3L to do timestamp annotation. These values get tied
+// together with every timestamp persisted in the local payment database.
+//
+// Fields:
+// * timezone_id - string identifier whose format is completely arbitrary and can be chosen by the user
+// * timezone_utc_offset_secs - offset from the UTC timezone in seconds
+dictionary TzConfig {
+    string timezone_id;
+    i32 timezone_utc_offset_secs;
+};
+
+// An object that holds all configuration needed to start a LightningNode instance.
+//
+// Fields:
+// * network - the Bitcoin Network the node should run on (see enum above)
+// * seed - the seed derived from the mnemonic optionally including a pass phrase
+// * fiat_currency - ISO 4217 currency code
+// * esplora_api_url - url of the esplora API to retrieve chain data from and over which transactions are being published
+//     possible values:
+//     - "https://blockstream.info/api" for Mainnet (PROD)
+//     - "https://blockstream.info/testnet/api" for Testnet
+// * rgs_url - the url of the Rapid Gossip Sync (RGS) server. Possible values:
+//     - "https://rapidsync.lightningdevkit.org/snapshot/" for Mainnet (PROD)
+//     - *WIP* for Testnet
+// * local_persistence_path - a path on the local filesystem where this library will directly persist data
+// * timezone_config - a timezone configuration object
+// * graphql_url - url of GraphQL backend
+dictionary Config {
     Network network;
-};
-
-callback interface PersistCallback {
-    boolean exists(string path);
-    sequence<string> read_dir(string path);
-    boolean write_to_file(string path, sequence<u8> data);
-    sequence<u8> read(string path);
-};
-
-dictionary LipaNodeInfo {
-    sequence<u8> node_pubkey;
-    u64 num_channels;
-    u64 num_usable_channels;
-    u64 local_balance_msat;
-    u64 num_peers;
+    sequence<u8> seed;
+    string fiat_currency;
+    string esplora_api_url;
+    string rgs_url;
+    string lsp_url;
+    string lsp_token;
+    string local_persistence_path;
+    TzConfig timezone_config;
+    string graphql_url;
+    string backend_health_url;
 };
 
 [Error]
-enum LipaLightningError {
-    "Placeholder",
-    "PeerConnection",
-    "ChannelOpen",
-    "InvoiceParsing",
-    "InvoiceInvalid",
-    "Routing",
-    "PaymentFail",
-    "InternalError",
-    "PubkeyParsing",
-    "InvalidPayee",
-    "InvoiceCreation",
+enum CallbackError {
+    // Invalid input.
+    // Consider fixing the input and retrying the request.
+    "InvalidInput",
+
+    // Recoverable problem (e.g. network issue, problem with en external service).
+    // Consider retrying the request.
+    "RuntimeError",
+
+    // Unrecoverable problem (e.g. internal invariant broken).
+    // Consider suggesting the user to report the issue to the developers.
+    "PermanentFailure",
+
+    // This value is required by UniFFI library. Do not use the value directly.
+    "UnexpectedUniFFI",
 };
 
-interface LipaLightning {
-    constructor(LipaLightningConfig config, PersistCallback persist_callback);
-    void stop();
-    sequence<u8> get_my_node_id();
-    LipaNodeInfo get_node_info();
-    [Throws=LipaLightningError]
-    void connect_open_channel(sequence<u8> node_id, string node_address, u64 channel_value_sat);
-    [Throws=LipaLightningError]
-    void send_payment(string invoice_str);
-    [Throws=LipaLightningError]
-    void send_spontaneous_payment(u64 amout_msat, sequence<u8> node_id);
-    [Throws=LipaLightningError]
-    string create_invoice(u64 amount_msat, u32 expiry_secs);
+// Asynchronous events that the consumer of this library needs/wants to handle are delivered through this interface.
+// These callbacks will only be called once, so the consumer of this library should be quick to persist information
+// regarding their occurrence. Otherwise, it's possible that an event gets "lost" if the app is terminated before
+// persistence finishes.
+callback interface EventsCallback {
+    // This callback will be called when a payment has been received.
+    //
+    // Parameters:
+    // * payment_hash - can be used cross-reference this claimed payment with a previously issued invoice.
+    // * amount_msat - will be at least as high as the value requested in the invoice but it's possible
+    //      for it to be higher.
+    [Throws=CallbackError]
+    void payment_received(string payment_hash, u64 amount_msat);
+
+    // This callback will be called when a payment has been successfully sent (the payee received the funds)
+    //
+    // Parameters:
+    // * payment_hash - the hash of the payment can be used to cross-reference this event to the payment that has succeeded
+    // * payment_preimage - the preimage of the payment can be used as proof of payment
+    // * fee_paid_msat - the amount that was paid in routing fees
+    [Throws=CallbackError]
+    void payment_sent(string payment_hash, string payment_preimage, u64 fee_paid_msat);
+
+    // This callback will be called when a payment has failed and no further attempts will be pursued.
+    //
+    // Parameters:
+    // * payment_hash - the hash of the payment can be used to cross-reference this event to the payment that has failed
+    [Throws=CallbackError]
+    void payment_failed(string payment_hash);
+
+    // This callback will be called when a channel has started closing
+    //
+    // On the MVP version of Lipa wallet, this event is unexpected and is likely to result in funds moving
+    // on-chain, thus becoming unavailable. If this happens, the user should be informed of the problem and that he
+    // should contact Lipa.
+    //
+    // Parameters:
+    // * channel_id - Channel ID encoded in hexadecimal.
+    // * reason - provides a reason for the close
+    [Throws=CallbackError]
+    void channel_closed(string channel_id, string reason);
+};
+
+// A code that specifies the RuntimError that ocurred
+enum RuntimeErrorCode {
+    "EsploraServiceUnavailable", // The esplora service is unavailable. Could there be a loss of internet connection?
+    "ExchangeRateProviderUnavailable",
+    "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
+    "RemoteStorageError", // Any error related to the remote storage. Could be a network error or a data error.
+    "RgsServiceUnavailable", // The rapid gossip sync service is unavailable. Could there be a loss of internet connection?
+    "RgsUpdateError", // Failed to apply update. Maybe retry?
+
+    "ObjectNotFound", // An object could not be read from storage because it was not found
+
+    "AlreadyUsedInvoice", // An already recognized invoice tried to be paid. Either a previous payment attempt has been made or this invoice was generated by the local node
+    "NoRouteFound", // Many things can cause this. Do we have enough funds?
+    "SendFailure", // A path was found but sending failed. Many things can cause this
+
+    "GenericError", // A generic error for unexpected/unknown runtime errors
+};
+
+[Error]
+interface LnError {
+    // Invalid input.
+    // Consider fixing the input and retrying the request.
+    InvalidInput(string msg);
+
+    // Recoverable problem (e.g. network issue, problem with en external service).
+    // Consider retrying the request.
+    RuntimeError(RuntimeErrorCode code, string msg);
+
+    // Unrecoverable problem (e.g. internal invariant broken).
+    // Consider suggesting the user to report the issue to the developers.
+    PermanentFailure(string msg);
+};
+
+// Information embedded in an invoice
+dictionary InvoiceDetails {
+    u64? amount_msat;
+    string description;
+    string payment_hash;
+    string payee_pub_key;
+    timestamp invoice_timestamp; // The moment an invoice was created (UTC)
+    duration expiry_interval; // The interval after which the invoice expires (invoice_timestamp + expiry_interval = timestamp of expiration)
+};
+
+enum PaymentType {
+    "Receiving",
+    "Sending",
+};
+
+enum PaymentState {
+    "Created",
+    "Succeeded",
+    "Failed",
+};
+
+// A UTC timestamp accompanied by the ID of the timezone on which it was recorded and the respective UTC offset
+dictionary TzTime {
+    timestamp timestamp;
+    string timezone_id;
+    i32 timezone_utc_offset_secs;
+};
+
+// A pair of fiat values composed by a fiat string identifier, the corresponding amount, and an usd amount.
+// The amounts are stored in thousandths of the fiat currency.
+//      Example: 1.23 EUR would result in the `amount` 1230
+dictionary FiatValues {
+    string fiat;
+    u64 amount;
+    u64 amount_usd;
+};
+
+// Information about an incoming or outgoing payment
+dictionary Payment {
+    PaymentType payment_type;
+    PaymentState payment_state;
+    string hash; // Hex representation of payment hash
+    u64 amount_msat;
+    string invoice;
+    TzTime created_at;
+    TzTime latest_state_change_at;
+    string description; // The description embedded in the invoice. Given the length limit of this data, sometimes a hex hash of the description is provided instead.
+    string? preimage; // Hex representation of the preimage. Is only guaranteed be present on successful payments
+    u64? network_fees_msat; // Routing fees paid in an `Sending` payment. Will only be present if payment was successful.
+    u64? lsp_fees_msat; // LSP fees paid in a `Receiving` payment. Will always be present for `Receiving` payments but the amount is only paid if successful.
+    FiatValues? fiat_values;
+    string metadata;
+};
+
+interface LightningNode {
+    // Initiate the Lightning node and let it run in a background thread
+    [Throws=LnError]
+    constructor(Config config, EventsCallback events_callback);
+
+    // Request some basic info about the local node
+    NodeInfo get_node_info();
+
+    // Get information about the fee charged by the LSP for opening new channels
+    [Throws=LnError]
+    LspFee query_lsp_fee();
+
+    // Create an invoice to receive a payment with:
+    //    - amount_msat - the smallest amount of millisats required for the node to accept the incoming payment (sender will have to pay fees on top of that amount)
+    //    - description - a description to be embedded into the created invoice
+    //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
+    //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
+    [Throws=LnError]
+    string create_invoice(u64 amount_msat, string description, string metadata);
+
+    // Validates and, if valid, decodes an invoice returning detailed information
+    //    - invoice - a BOLT-11 invoice (normally starts with lnbc)
+    [Throws=LnError]
+    InvoiceDetails decode_invoice(string invoice);
+
+    // Starts an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.
+    // If successful, it doesn't mean that the payment itself was successful (funds received by the payee).
+    // After this method returns, the consumer of this library will learn about a successful/failed payment through the
+    // callbacks `payment_sent()` and `payment_failed()` in `EventsCallback`.
+    //    - invoice - a BOLT-11 invoice (normally starts with lnbc)
+    //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
+    //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
+    [Throws=LnError]
+    void pay_invoice(string invoice, string metadata);
+
+    // Get a list of the latest payments
+    //    - number_of_payments - the maximum number of payments that will be returned
+    [Throws=LnError]
+    sequence<Payment> get_latest_payments(u32 number_of_payments);
+
+    // Get a payment given its payment hash
+    //    - hash - hex representation of payment hash
+    [Throws=LnError]
+    Payment get_payment(string hash);
+
+    // Call the method when the app goes foreground, such that the user can interact with it.
+    // The library starts running the background tasks more frequently to improve user experience.
+    void foreground();
+
+    // Call the method when the app goes backgroung, such that the user can not interact with it.
+    // The library stops running some unnecessery tasks and runs necessary tasks less frequently.
+    // It should save battery and internet traffic.
+    void background();
+
+    // List codes of supported fiat currencies.
+    [Throws=LnError]
+    sequence<string> list_currency_codes();
+
+    [Throws=LnError]
+    ExchangeRates get_exchange_rates();
+};
+
+// Exchange rates as sats per major unit.
+dictionary ExchangeRates {
+    u32 default_currency;
+    u32 usd;
+};
+
+dictionary ChannelsInfo {
+    u16 num_channels;
+    u16 num_usable_channels;
+    u64 local_balance_msat;
+
+    // Capacity the node can actually receive.
+    // It excludes non usable channels, pending htlcs, channels reserves, etc.
+    u64 inbound_capacity_msat;
+
+    // Capacity the node can actually send.
+    // It excludes non usable channels, pending htlcs, channels reserves, etc.
+    u64 outbound_capacity_msat;
+};
+
+// Information about the Lightning node running in the background
+dictionary NodeInfo {
+    sequence<u8> node_pubkey; // Lightning network public key of the node (also known as node id)
+    u16 num_peers; // Number of peers the node is connected to
+    ChannelsInfo channels_info; // Information about the channels of the node
+};
+
+// The fee charged by the Lightning Service Provider (LSP) for opening a channel with the node.
+// This fee is being charged at the time of the channel creation.
+// The LSP simply substracts this fee from an incoming payment (if this incoming payment leads to a channel creation).
+dictionary LspFee {
+  u64 channel_minimum_fee_msat;
+  // Parts per myriad (aka basis points) -> 100 is 1%
+  u64 channel_fee_permyriad;
+};
+
+enum LogLevel {
+    "Error",
+    "Warn",
+    "Info",
+    "Debug",
+    "Trace",
+};
+
+// An object that holds necessary secrets. Should be dealt with carefully and never be logged.
+//
+// Fields:
+// * mnemonic - a mnemonic code or mnemonic sentence as described in BIP-39.
+// * passphrase - an optional word (or sentence) added to the mnemonic.
+// * seed - a seed one-way derived from the mnemonic and the passphrase.
+//
+// The consumer of the library *must* persist `mnemonic` and `passphrase`
+// *securely* on the device,
+// The consumer of the library *must* never use or share it except to display it to
+// the end user for backup or for recovering a wallet.
+// The consumer of the library may want to *securely* persist `seed` or derive it
+// every time `seed` is needed, but it will have performance implications.
+dictionary Secret {
+    // The 24 words used to derive the node's private key
+    sequence<string> mnemonic;
+    // optional passphrase. If not provided, it is an empty string.
+    string passphrase;
+    // The seed derived from the mnemonic and the passphrase
+    sequence<u8> seed;
 };
 
 namespace lipalightninglib {
-    void init_logger_once();
+    // Initiate the logger and set the log level
+    void init_native_logger_once(LogLevel min_level);
+
+    // Generate a new mnemonic with an optional passphrase. Provide an empty string to use no passphrase.
+    [Throws=LnError]
+    Secret generate_secret(string passphrase);
+
+    // Generate a Secret object (containing the seed). Provide an empty string to use no passphrase.
+    [Throws=LnError]
+    Secret mnemonic_to_secret(sequence<string> mnemonic_string, string passphrase);
+
+    // Return a list of valid BIP-39 English words starting with the prefix.
+    sequence<string> words_by_prefix(string prefix);
 };

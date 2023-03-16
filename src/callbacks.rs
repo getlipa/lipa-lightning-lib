@@ -1,23 +1,40 @@
 use std::fmt::Debug;
+use uniffi::UnexpectedUniFFICallbackError;
 
-pub trait PersistCallback: Send + Sync + Debug {
-    /// Check if a file or directory exists
-    fn exists(&self, path: String) -> bool;
+#[derive(Debug, thiserror::Error)]
+pub enum CallbackError {
+    #[error("InvalidInput")]
+    InvalidInput,
 
-    /// Read filenames in the given path
-    fn read_dir(&self, path: String) -> Vec<String>;
+    #[error("RuntimeError")]
+    RuntimeError,
 
-    /// Write data to a file
-    ///
-    /// # Return
-    /// Returns `true` if successful and `false` otherwise.
-    ///
-    /// Must only return after being certain that data was persisted safely.
-    /// Failure to do so will result in loss of funds.
-    ///
-    /// Returning `false` will likely result in a channel being force-closed.
-    fn write_to_file(&self, path: String, data: Vec<u8>) -> bool;
+    #[error("PermanentFailure")]
+    PermanentFailure,
 
-    /// Read data from file
-    fn read(&self, path: String) -> Vec<u8>;
+    #[error("UnexpectedUniFFICallbackError")]
+    UnexpectedUniFFI,
+}
+
+impl From<UnexpectedUniFFICallbackError> for CallbackError {
+    fn from(_error: UnexpectedUniFFICallbackError) -> Self {
+        CallbackError::UnexpectedUniFFI
+    }
+}
+
+pub type CallbackResult<T> = Result<T, CallbackError>;
+
+pub trait EventsCallback: Send + Sync {
+    fn payment_received(&self, payment_hash: String, amount_msat: u64) -> CallbackResult<()>;
+
+    fn channel_closed(&self, channel_id: String, reason: String) -> CallbackResult<()>;
+
+    fn payment_sent(
+        &self,
+        payment_hash: String,
+        payment_preimage: String,
+        fee_paid_msat: u64,
+    ) -> CallbackResult<()>;
+
+    fn payment_failed(&self, payment_hash: String) -> CallbackResult<()>;
 }

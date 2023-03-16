@@ -1,0 +1,78 @@
+services:
+  lspd-lnd:
+    container_name: lspd-lnd
+    build: ./lnd-zero-conf
+    ports:
+      - '9739:9739'
+      - '10013:10013'
+    healthcheck:
+      test: ["CMD-SHELL", "lncli getinfo | grep -q '\"synced_to_chain\": true'"]
+      interval: 3s
+      timeout: 10s
+      retries: 5
+      start_period: 3s
+
+  db:
+    container_name: lspd-db
+    image: 'postgres:14.5-alpine'
+    environment:
+      POSTGRES_USER: lipauser
+      POSTGRES_PASSWORD: lipapassword
+      POSTGRES_DB: lipadb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --username=lipauser --dbname=lipadb"]
+      interval: 3s
+      timeout: 10s
+      retries: 5
+      start_period: 3s
+    volumes:
+      - ./db-init.sh:/docker-entrypoint-initdb.d/db-init.sh
+      - ../submodules/lspd/postgresql/migrations/:/migrations/
+
+  lspd:
+    build:
+      context: ../submodules/lspd
+      dockerfile: ../../lspd/Dockerfile
+    ports:
+      - '6666:6666'
+    depends_on:
+      db:
+        condition: service_healthy
+      lspd-lnd:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://lipauser:lipapassword@lspd-db:5432/lipadb
+      LISTEN_ADDRESS: 0.0.0.0:6666
+      NODE_HOST: 127.0.0.1:9739
+      NODES: >
+        [ {
+          "name": "lipa",
+          "nodePubkey": "",
+          "lspdPrivateKey": "6ca37dfd24b41046ff3bb904cd36710176352b71dbeaf8fbfaa162043e3cbd6b",
+          "token": "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l",
+          "host": "127.0.0.1:9739",
+          "publicChannelAmount": "1000183",
+          "channelAmount": "100000",
+          "channelPrivate": true,
+          "targetConf": "6",
+          "minHtlcMsat": "600",
+          "baseFeeMsat": "1000",
+          "feeRate": "0.000001",
+          "timeLockDelta": "144",
+          "channelFeePermyriad": "40",
+          "channelMinimumFeeMsat": "2000000",
+          "additionalChannelCapacity": "100000",
+          "maxInactiveDuration": "3888000",
+          "lnd": {
+            "address": "lspd-lnd:10013",
+            "cert": "-----BEGIN CERTIFICATE-----\nMIICLzCCAdWgAwIBAgIRAOuqD0FU/WmHN9fm/RAAzlgwCgYIKoZIzj0EAwIwODEf\nMB0GA1UEChMWbG5kIGF1dG9nZW5lcmF0ZWQgY2VydDEVMBMGA1UEAxMMYjNlYzhh\nNjhkMjlmMB4XDTIyMTEwMjExMTI1NloXDTIzMTIyODExMTI1NlowODEfMB0GA1UE\nChMWbG5kIGF1dG9nZW5lcmF0ZWQgY2VydDEVMBMGA1UEAxMMYjNlYzhhNjhkMjlm\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEl+1Iv0kMCXym15BKzuHlKKWZgHxV\nzfIPYm71jo4GQy2xIxwK/EwG/921Nf1E094ueOqRQkkyKRDt32ThZKo3raOBvzCB\nvDAOBgNVHQ8BAf8EBAMCAqQwEwYDVR0lBAwwCgYIKwYBBQUHAwEwDwYDVR0TAQH/\nBAUwAwEB/zAdBgNVHQ4EFgQUWmbXeLtcJCg+1U7EmyttBQ0qTqswZQYDVR0RBF4w\nXIIMYjNlYzhhNjhkMjlmgglsb2NhbGhvc3SCCGxzcGQtbG5kggR1bml4ggp1bml4\ncGFja2V0ggdidWZjb25uhwR/AAABhxAAAAAAAAAAAAAAAAAAAAABhwTAqHAHMAoG\nCCqGSM49BAMCA0gAMEUCIQC737DzCbBRVDpggMrFd6ucbg1Vhh1JIYn7B8l0IwpO\n8QIgHXGEgYwQMhvy+51AclXTBTCifS91qoln1YX2f6OdeLM=\n-----END CERTIFICATE-----\n",
+            "macaroon": "0201036c6e6402f801030a10d3b187e34ec06431ee277818c2e589ad1201301a160a0761646472657373120472656164120577726974651a130a04696e666f120472656164120577726974651a170a08696e766f69636573120472656164120577726974651a210a086d616361726f6f6e120867656e6572617465120472656164120577726974651a160a076d657373616765120472656164120577726974651a170a086f6666636861696e120472656164120577726974651a160a076f6e636861696e120472656164120577726974651a140a057065657273120472656164120577726974651a180a067369676e6572120867656e6572617465120472656164000006200362040144ad7c4d48a33b9731346d24f4da6512498417b086703850f8dae984"
+            }
+          }
+        ]
+
+
+networks:
+  default:
+    name: nigiri
+    external: true

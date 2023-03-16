@@ -1,3 +1,8 @@
+[workspace]
+members = [
+    "eel",
+]
+
 [package]
 name = "lipalightninglib"
 version = "0.1.0"
@@ -7,39 +12,43 @@ edition = "2021"
 crate-type = ["lib", "staticlib", "cdylib"]
 name = "uniffi_lipalightninglib"
 
-[dependencies]
-tokio = { version = "1", features = [ "io-util", "macros", "rt", "rt-multi-thread", "sync", "net", "time" ] }
-uniffi = "0.19.6"
-thiserror = "1.0"
-lightning = { version = "0.0.110", features = ["max_level_trace"] }
-# won't be used when using esplora
-lightning-block-sync = { version = "0.0.110", features = [ "rpc-client" ] }
-lightning-invoice = { version = "0.18.0" }
-lightning-net-tokio = { version = "0.0.110" }
-lightning-background-processor = { version = "0.0.110" }
-bitcoin = "0.28.1"
-rand = "0.4"
-log = "0.4.17"
-env_logger = "0.9.0"
-serde_json = { version = "1.0" }
+[features]
+nigiri = []
 
-# needed for ldk-sample
-base64 = "0.13.0"
-futures = "0.3"
-time = "0.3.12"
-bitcoin-bech32 = "0.12"
-bech32 = "0.9"
-libc = "0.2.126"
+[dependencies]
+eel = { path = "eel" }
+
+log = "0.4.17"
+uniffi = "0.23.0"
+thiserror = "1.0.38"
+
+chameleon = { git = "https://github.com/getlipa/wild" }
+honey-badger = { git = "https://github.com/getlipa/wild" }
+mole = { git = "https://github.com/getlipa/wild" }
+perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.0" }
+
+[dev-dependencies]
+bitcoin = "0.29.2"
+colored = "2.0.0"
+chrono = { version = "0.4.23", default-features = false }
+ctor = "0.1.26"
+esplora-client = { version = "0.4.0", default-features = false, features = ["blocking"] }
+rand = "0.8.5"
+rustyline = { version = "11.0.0", features = ["derive"] }
+serde_json = "1.0"
+serial_test = { version =  "1.0.0", features = ["file_locks"] }
+simplelog = { version = "0.12.0", features = ["test"] }
+storage-mock = { path = "util/storage-mock" } # todo: Remove this dependency after the issue described here is fixed: https://github.com/getlipa/lipa-lightning-lib/pull/251
 
 [target.'cfg(target_os = "ios")'.dependencies]
 oslog = "0.2.0"
 
 [target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.11"
+android_logger = "0.13.0"
 
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winbase"] }
+[package.metadata.cross.build]
+pre-build = ["apt update --no-show-upgraded && apt install --yes protobuf-compiler"]
 
 [build-dependencies]
-uniffi_bindgen = "0.19.6"
 camino = "1.1.1"
+uniffi_bindgen = "0.23.0"

@@ -1,35 +1,17 @@
-use bitcoin::Network;
+use eel::config::TzConfig;
+use eel::Network;
 
-/*/// An object that holds all configuration needed to start a LipaLightning instance
-///
-/// # Fields:
-///
-/// * `seed` - the seed as a byte array of length 32
-/// * `electrum_url` - url for electrum connection e.g. `"tcp://electrum.blockstream.info:50001".to_string()`
-/// * `ldk_peer_listening_port` - the port on which LDK listens for new p2p connections
-/// * `network` - the on which to run this LipaLightning instance*/
-
-/// An object that holds all configuration needed to start a LipaLightning instance
-///
-/// # Fields:
-///
-/// * `seed` - the seed as a byte array of length 32
-/// * `bitcoind_rpc_username`
-/// * `bitcoind_rpc_username`
-/// * `bitcoind_rpc_port` - the port of the bitcoind RPC
-/// * `bitcoind_rpc_host` - the address of the bitcoind RPC (e.g. `localhost`)
-/// * `ldk_peer_listening_port` - the port on which LDK listens for new p2p connections
-/// * `network` - the on which to run this LipaLightning instance
-pub struct LipaLightningConfig {
-    /*pub seed: Vec<u8>,
-    pub electrum_url: String,
-    pub ldk_peer_listening_port: u16,
-    pub network: Network,*/
-    pub seed: Vec<u8>,
-    pub bitcoind_rpc_username: String,
-    pub bitcoind_rpc_password: String,
-    pub bitcoind_rpc_port: u16,
-    pub bitcoind_rpc_host: String,
-    pub ldk_peer_listening_port: u16,
+#[derive(Debug, Clone)]
+pub struct Config {
     pub network: Network,
+    pub seed: Vec<u8>,
+    pub fiat_currency: String,
+    pub esplora_api_url: String,
+    pub rgs_url: String,
+    pub lsp_url: String,
+    pub lsp_token: String,
+    pub local_persistence_path: String,
+    pub timezone_config: TzConfig,
+    pub graphql_url: String,
+    pub backend_health_url: String,
 }

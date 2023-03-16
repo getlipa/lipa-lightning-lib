@@ -1,0 +1,8 @@
+# Temporary fix - Once we move to a newer cross version, this file can be removed.
+# Checkout https://github.com/cross-rs/cross/issues/1217#issuecomment-1465167806 for details. 
+[target.aarch64-linux-android]
+image = "ghcr.io/cross-rs/aarch64-linux-android:main"
+[target.i686-linux-android]
+image = "ghcr.io/cross-rs/i686-linux-android:main"
+[target.x86_64-linux-android]
+image = "ghcr.io/cross-rs/x86_64-linux-android:main"

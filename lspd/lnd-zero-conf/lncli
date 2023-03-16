@@ -1,0 +1,3 @@
+#!/bin/sh
+
+/go/lnd/lncli --rpcserver 127.0.0.1:10013 --network regtest "$@"

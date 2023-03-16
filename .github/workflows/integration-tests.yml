@@ -1,0 +1,38 @@
+name: Integration Tests with Nigiri
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  schedule:
+    - cron: '21 2 * * 1-5' # every weekday at 2:21 AM UTC
+
+jobs:
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.2.0
+      - name: Run Nigiri
+        uses: vulpemventures/nigiri-github-action@master
+        with:
+          use_liquid: false
+          use_ln: true
+      - name: Run integration tests
+        env:
+          BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
+        run: make integrationtests

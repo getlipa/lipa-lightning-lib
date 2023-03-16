@@ -1,7 +1,17 @@
+.3l_cli_history
+.3l_local
+.3l_local_test
+.3l_node
 .DS_Store
+.eel_cli_history
+.eel_node
+.eel_remote
 .idea
-.ldk
+
+bindings
 
 # Added by cargo
-/target
-/Cargo.lock
+target
+Cargo.lock
+util/storage-mock/target
+util/storage-mock/Cargo.lock
