@@ -168,10 +168,10 @@ fn create_invoice<'a>(
         .parse()
         .map_err(|_| "Error: amount should be an integer number".to_string())?;
     let description = words.collect::<Vec<_>>().join(" ");
-    let invoice = node
+    let invoice_details = node
         .create_invoice(amount, description, String::new())
         .map_err(|e| e.to_string())?;
-    println!("{}", invoice);
+    println!("{}", invoice_details.invoice);
     Ok(())
 }
 

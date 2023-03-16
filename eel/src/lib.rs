@@ -363,7 +363,7 @@ impl LightningNode {
         amount_msat: u64,
         description: String,
         metadata: String,
-    ) -> Result<String> {
+    ) -> Result<InvoiceDetails> {
         let currency = match self.config.network {
             Network::Bitcoin => Currency::Bitcoin,
             Network::Testnet => Currency::BitcoinTestnet,
@@ -391,11 +391,13 @@ impl LightningNode {
             &mut self.payment_store.lock().unwrap(),
             fiat_values,
         ))?;
-        Ok(signed_invoice.to_string())
+        let invoice_str = signed_invoice.to_string();
+        self.decode_invoice(invoice_str)
     }
 
     pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
-        let invoice = Self::parse_validate_invoice(self, &invoice)?;
+        let invoice_str = invoice;
+        let invoice = Self::parse_validate_invoice(self, &invoice_str)?;
 
         let description = match invoice.description() {
             InvoiceDescription::Direct(d) => d.to_string(),
@@ -408,6 +410,7 @@ impl LightningNode {
         };
 
         Ok(InvoiceDetails {
+            invoice: invoice_str,
             amount_msat: invoice.amount_milli_satoshis(),
             description,
             payment_hash: invoice.payment_hash().to_string(),

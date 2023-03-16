@@ -32,12 +32,12 @@ mod sending_payments_test {
         assert!(node.get_node_info().channels_info.num_usable_channels > 0);
         assert!(node.get_node_info().channels_info.inbound_capacity_msat > REBALANCE_AMOUNT);
 
-        let invoice = node
+        let invoice_details = node
             .create_invoice(REBALANCE_AMOUNT, "test".to_string(), String::new())
             .unwrap();
-        assert!(invoice.starts_with("lnbc"));
+        assert!(invoice_details.invoice.starts_with("lnbc"));
 
-        nigiri::pay_invoice(LspdLnd, &invoice).unwrap();
+        nigiri::pay_invoice(LspdLnd, &invoice_details.invoice).unwrap();
 
         assert_eq!(
             node.get_node_info().channels_info.local_balance_msat,
