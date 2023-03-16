@@ -12,6 +12,4 @@ bindings
 
 # Added by cargo
 target
-Cargo.lock
 util/storage-mock/target
-util/storage-mock/Cargo.lock
