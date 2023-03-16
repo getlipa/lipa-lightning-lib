@@ -43,7 +43,9 @@ dictionary TzConfig {
 // Fields:
 // * network - the Bitcoin Network the node should run on (see enum above)
 // * seed - the seed derived from the mnemonic optionally including a pass phrase
-// * fiat_currency - ISO 4217 currency code
+// * fiat_currency - ISO 4217 currency code, the backend does not support all of them,
+//     but supports at leat USD and EUR, so it is safe to default to one of them.
+//     Providing an invalid code will result in missing fiat values for payments.
 // * esplora_api_url - url of the esplora API to retrieve chain data from and over which transactions are being published
 //     possible values:
 //     - "https://blockstream.info/api" for Mainnet (PROD)
@@ -357,5 +359,6 @@ namespace lipalightninglib {
     Secret mnemonic_to_secret(sequence<string> mnemonic_string, string passphrase);
 
     // Return a list of valid BIP-39 English words starting with the prefix.
+    // Calling this function with empty prefix will return the full list of BIP-39 words.
     sequence<string> words_by_prefix(string prefix);
 };
