@@ -70,24 +70,6 @@ dictionary Config {
     string backend_health_url;
 };
 
-[Error]
-enum CallbackError {
-    // Invalid input.
-    // Consider fixing the input and retrying the request.
-    "InvalidInput",
-
-    // Recoverable problem (e.g. network issue, problem with en external service).
-    // Consider retrying the request.
-    "RuntimeError",
-
-    // Unrecoverable problem (e.g. internal invariant broken).
-    // Consider suggesting the user to report the issue to the developers.
-    "PermanentFailure",
-
-    // This value is required by UniFFI library. Do not use the value directly.
-    "UnexpectedUniFFI",
-};
-
 // Asynchronous events that the consumer of this library needs/wants to handle are delivered through this interface.
 // These callbacks will only be called once, so the consumer of this library should be quick to persist information
 // regarding their occurrence. Otherwise, it's possible that an event gets "lost" if the app is terminated before
@@ -99,7 +81,6 @@ callback interface EventsCallback {
     // * payment_hash - can be used cross-reference this claimed payment with a previously issued invoice.
     // * amount_msat - will be at least as high as the value requested in the invoice but it's possible
     //      for it to be higher.
-    [Throws=CallbackError]
     void payment_received(string payment_hash, u64 amount_msat);
 
     // This callback will be called when a payment has been successfully sent (the payee received the funds)
@@ -108,14 +89,12 @@ callback interface EventsCallback {
     // * payment_hash - the hash of the payment can be used to cross-reference this event to the payment that has succeeded
     // * payment_preimage - the preimage of the payment can be used as proof of payment
     // * fee_paid_msat - the amount that was paid in routing fees
-    [Throws=CallbackError]
     void payment_sent(string payment_hash, string payment_preimage, u64 fee_paid_msat);
 
     // This callback will be called when a payment has failed and no further attempts will be pursued.
     //
     // Parameters:
     // * payment_hash - the hash of the payment can be used to cross-reference this event to the payment that has failed
-    [Throws=CallbackError]
     void payment_failed(string payment_hash);
 
     // This callback will be called when a channel has started closing
@@ -127,7 +106,6 @@ callback interface EventsCallback {
     // Parameters:
     // * channel_id - Channel ID encoded in hexadecimal.
     // * reason - provides a reason for the close
-    [Throws=CallbackError]
     void channel_closed(string channel_id, string reason);
 };
 

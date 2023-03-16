@@ -9,7 +9,7 @@ mod exchange_rate_provider;
 mod native_logger;
 mod sanitize_input;
 
-pub use crate::callbacks::{CallbackError, EventsCallback};
+pub use crate::callbacks::EventsCallback;
 pub use crate::config::Config;
 use crate::eel_interface_impl::{EventsImpl, RemoteStorageGraphql};
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
