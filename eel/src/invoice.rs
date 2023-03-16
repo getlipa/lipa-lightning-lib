@@ -18,6 +18,7 @@ use perro::{invalid_input, MapToError, MapToErrorForUnitType, ResultTrait};
 use secp256k1::ecdsa::RecoverableSignature;
 
 pub struct InvoiceDetails {
+    pub invoice: String,
     pub amount_msat: Option<u64>,
     pub description: String,
     pub payment_hash: String,

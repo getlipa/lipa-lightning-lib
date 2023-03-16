@@ -196,12 +196,12 @@ mod receiving_payments_test {
     }
 
     fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
-        let invoice = node
+        let invoice_details = node
             .create_invoice(payment_amount, "test".to_string(), String::new())
             .unwrap();
-        assert!(invoice.starts_with("lnbc"));
+        assert!(invoice_details.invoice.starts_with("lnbc"));
 
-        invoice
+        invoice_details.invoice
     }
 
     fn connect_node_to_lsp(node: NodeInstance, lsp_node_id: &str) {

@@ -104,7 +104,7 @@ impl LightningNode {
         amount_msat: u64,
         description: String,
         metadata: String,
-    ) -> Result<String> {
+    ) -> Result<InvoiceDetails> {
         self.core_node
             .create_invoice(amount_msat, description, metadata)
     }
