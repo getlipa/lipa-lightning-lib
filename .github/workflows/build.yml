@@ -32,8 +32,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: true
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.2.0
       - name: Build
         run: cargo build --verbose
       - name: Run unit tests
@@ -62,8 +60,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: true
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.2.0
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
@@ -88,8 +84,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: true
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.2.0
       - name: Install Cross
         run: cargo install cross --locked
       - name: Build target
