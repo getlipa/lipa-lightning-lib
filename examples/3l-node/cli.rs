@@ -289,6 +289,7 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
         );
         println!("      State:              {:?}", payment.payment_state);
         println!("      Amount msat:        {}", payment.amount_msat);
+        println!("      Amount fiat:        {:?}", payment.fiat_values);
         println!("      Network fees msat:  {:?}", payment.network_fees_msat);
         println!("      LSP fees:           {:?}", payment.lsp_fees_msat);
         println!("      Hash:               {}", payment.hash);
