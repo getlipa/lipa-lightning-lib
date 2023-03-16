@@ -1,4 +1,5 @@
 mod setup;
+mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod chain_sync_test {
@@ -8,9 +9,9 @@ mod chain_sync_test {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use crate::setup::mocked_storage_setup::mocked_storage_node;
-    use crate::setup::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
-    use crate::setup::{nigiri, NodeHandle};
+    use crate::setup::{mocked_storage_node, NodeHandle};
+    use crate::setup_env::nigiri;
+    use crate::setup_env::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
     use crate::try_cmd_repeatedly;
 
     const HALF_SEC: Duration = Duration::from_millis(500);

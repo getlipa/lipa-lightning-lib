@@ -1,14 +1,14 @@
 #[path = "print_events_handler/mod.rs"]
 mod print_events_handler;
-#[path = "../eel/tests/setup/mod.rs"]
-mod setup;
 mod setup_3l;
+#[path = "../eel/tests/setup_env/mod.rs"]
+mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod node_info_test {
-    use crate::setup::nigiri;
-    use crate::setup::nigiri::NodeInstance;
     use crate::setup_3l::NodeHandle;
+    use crate::setup_env::nigiri;
+    use crate::setup_env::nigiri::NodeInstance;
     use crate::try_cmd_repeatedly;
 
     use bitcoin::hashes::hex::ToHex;

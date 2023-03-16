@@ -1,5 +1,5 @@
 use crate::print_events_handler::PrintEventsHandler;
-use crate::setup::config::{get_testing_config, LOCAL_PERSISTENCE_PATH};
+use crate::setup_env::config::{get_testing_config, LOCAL_PERSISTENCE_PATH};
 
 use uniffi_lipalightninglib::Config;
 use uniffi_lipalightninglib::LightningNode;

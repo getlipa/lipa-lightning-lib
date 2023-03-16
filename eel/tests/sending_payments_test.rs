@@ -1,14 +1,16 @@
 mod setup;
+mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod sending_payments_test {
+    use crate::setup::mocked_storage_node;
     use eel::{InvoiceDetails, LightningNode};
     use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::{Duration, UNIX_EPOCH};
 
-    use crate::setup::nigiri;
-    use crate::setup::nigiri::NodeInstance::{LspdLnd, NigiriCln, NigiriLnd};
+    use crate::setup_env::nigiri;
+    use crate::setup_env::nigiri::NodeInstance::{LspdLnd, NigiriCln, NigiriLnd};
 
     const REBALANCE_AMOUNT: u64 = 50_000_000;
     const CHANNEL_SIZE: u64 = 1_000_000_000;
@@ -17,7 +19,11 @@ mod sending_payments_test {
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn pay_invoice_direct_peer_test_and_invoice_decoding_test() {
-        let node = nigiri::initiate_node_with_channel(LspdLnd);
+        nigiri::setup_environment_with_lsp();
+        let node = mocked_storage_node().start().unwrap();
+
+        assert_eq!(node.get_node_info().num_peers, 1);
+        nigiri::initiate_channel_from_remote(node.get_node_info().node_pubkey, LspdLnd);
 
         // Test hardcoded invoices here to avoid an additional test env set up
         invoice_decode_test(&node);
