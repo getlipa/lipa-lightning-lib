@@ -27,6 +27,7 @@ pub(crate) fn poll_for_user_input(
     let prompt = "3L ϟ ".bold().blue().to_string();
     let history_path = Path::new(".3l_cli_history");
     let mut rl = setup_editor(&history_path);
+    let mut fiat_currency = fiat_currency;
     loop {
         let line = match rl.readline(&prompt) {
             Ok(line) => line,
@@ -56,6 +57,21 @@ pub(crate) fn poll_for_user_input(
                     if let Err(message) = list_currency_codes(node) {
                         println!("{}", message.red());
                     }
+                }
+                "changecurrency" => {
+                    fiat_currency = match words
+                        .next()
+                        .ok_or_else(|| "Error: fiat currency code is required".to_string())
+                    {
+                        Ok(c) => {
+                            change_currency(node, c);
+                            c.to_string()
+                        }
+                        Err(e) => {
+                            println!("{}", e.red());
+                            fiat_currency
+                        }
+                    };
                 }
                 "invoice" => {
                     if let Err(message) = create_invoice(node, &mut words) {
@@ -107,6 +123,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("lspfee", "lspfee"));
     hints.insert(CommandHint::new("exchangerates", "exchangerates"));
     hints.insert(CommandHint::new("listcurrencies", "listcurrencies"));
+    hints.insert(CommandHint::new(
+        "changecurrency <currency code>",
+        "changecurrency",
+    ));
 
     hints.insert(CommandHint::new(
         "invoice <amount in millisats> [description]",
@@ -136,16 +156,17 @@ fn help() {
     println!("  lspfee");
     println!("  exchangerates");
     println!("  listcurrencies");
-    println!("");
+    println!("  changecurrency <currency code>");
+    println!();
     println!("  invoice <amount in millisats> [description]");
     println!("  decodeinvoice <invoice>");
     println!("  payinvoice <invoice>");
-    println!("");
+    println!();
     println!("  listpayments");
-    println!("");
+    println!();
     println!("  foreground");
     println!("  background");
-    println!("");
+    println!();
     println!("  stop");
 }
 
@@ -201,6 +222,10 @@ fn list_currency_codes(node: &LightningNode) -> Result<(), String> {
     let codes = node.list_currency_codes().map_err(|e| e.to_string())?;
     println!("Supported currencies: {codes:?}");
     Ok(())
+}
+
+fn change_currency(node: &LightningNode, fiat_currency: &str) {
+    node.change_fiat_currency(String::from(fiat_currency));
 }
 
 fn create_invoice(

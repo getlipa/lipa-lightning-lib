@@ -101,6 +101,7 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
 #[allow(dead_code)]
 pub struct LightningNode {
     config: Config,
+    fiat_currency: Mutex<String>,
     rt: AsyncRuntime,
     lsp_client: Arc<LspClient>,
     keys_manager: Arc<KeysManager>,
@@ -324,7 +325,8 @@ impl LightningNode {
         );
 
         Ok(Self {
-            config,
+            config: config.clone(),
+            fiat_currency: Mutex::new(config.fiat_currency),
             rt,
             lsp_client,
             keys_manager,
@@ -370,14 +372,7 @@ impl LightningNode {
             Network::Regtest => Currency::Regtest,
             Network::Signet => Currency::Signet,
         };
-        let fiat_values = match self.get_exchange_rates() {
-            Ok(e) => Some(FiatValues::from_amount_msat(
-                amount_msat,
-                &self.config.fiat_currency,
-                &e,
-            )),
-            Err(_) => None,
-        };
+        let fiat_values = self.get_fiat_values(amount_msat);
         let signed_invoice = self.rt.handle().block_on(create_invoice(
             CreateInvoiceParams {
                 amount_msat,
@@ -444,14 +439,7 @@ impl LightningNode {
             InvoiceDescription::Hash(h) => h.0.to_hex(),
         };
 
-        let fiat_values = match self.get_exchange_rates() {
-            Ok(e) => Some(FiatValues::from_amount_msat(
-                amount_msat,
-                &self.config.fiat_currency,
-                &e,
-            )),
-            Err(_) => None,
-        };
+        let fiat_values = self.get_fiat_values(amount_msat);
 
         match pay_invoice(
             &invoice_struct,
@@ -545,6 +533,16 @@ impl LightningNode {
             )
     }
 
+    pub fn change_fiat_currency(&self, fiat_currency: &str) {
+        let mut node_fiat_currency = self.fiat_currency.lock().unwrap();
+        *node_fiat_currency = String::from(fiat_currency);
+
+        let mut task_manager = self.task_manager.lock().unwrap();
+        task_manager.change_fiat_currency(fiat_currency);
+        // if the fiat currency is being changed, we can assume the app is in the foreground
+        task_manager.restart(FOREGROUND_PERIODS);
+    }
+
     fn parse_validate_invoice(&self, invoice: &str) -> Result<Invoice> {
         let invoice = Invoice::from_str(Self::chomp_prefix(invoice.trim()))
             .map_to_invalid_input("Invalid invoice - parse failure")?;
@@ -570,6 +568,17 @@ impl LightningNode {
             tail
         } else {
             string
+        }
+    }
+
+    fn get_fiat_values(&self, amount_msat: u64) -> Option<FiatValues> {
+        match self.get_exchange_rates() {
+            Ok(e) => Some(FiatValues::from_amount_msat(
+                amount_msat,
+                &self.fiat_currency.lock().unwrap(),
+                &e,
+            )),
+            Err(_) => None,
         }
     }
 }

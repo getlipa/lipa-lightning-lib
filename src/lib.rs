@@ -140,6 +140,10 @@ impl LightningNode {
     pub fn get_exchange_rates(&self) -> Result<ExchangeRates> {
         self.core_node.get_exchange_rates()
     }
+
+    pub fn change_fiat_currency(&self, fiat_currency: String) {
+        self.core_node.change_fiat_currency(&fiat_currency);
+    }
 }
 
 fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
