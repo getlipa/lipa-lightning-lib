@@ -255,6 +255,9 @@ interface LightningNode {
     [Throws=LnError]
     sequence<string> list_currency_codes();
 
+    // Provides exchange rates on BTC/USD and BTC/<default currency> pairs
+    // Please keep in mind that this method doesn't make any network calls. It simply retrieves
+    // previously fetched values that are frequently updated by a background task.
     [Throws=LnError]
     ExchangeRates get_exchange_rates();
 };
