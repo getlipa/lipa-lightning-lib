@@ -275,6 +275,11 @@ impl TaskManager {
             }
         })
     }
+
+    pub fn change_fiat_currency(&mut self, fiat_currency: &str) {
+        self.fiat_currency = String::from(fiat_currency);
+        *self.exchange_rates.lock().unwrap() = None;
+    }
 }
 
 impl Drop for TaskManager {

@@ -257,6 +257,10 @@ interface LightningNode {
 
     [Throws=LnError]
     ExchangeRates get_exchange_rates();
+
+    // Change the fiat currency (ISO 4217 currency code) - not all are supported
+    //      The method `list_currency_codes()` can used to list supported codes.
+    void change_fiat_currency(string fiat_currency);
 };
 
 // Exchange rates as sats per major unit.
