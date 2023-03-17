@@ -48,6 +48,11 @@ pub(crate) fn poll_for_user_input(
                 "lspfee" => {
                     lsp_fee(node);
                 }
+                "calculatelspfee" => {
+                    if let Err(message) = calculate_lsp_fee(node, &mut words) {
+                        println!("{}", message.red());
+                    }
+                }
                 "exchangerates" => {
                     if let Err(message) = get_exchange_rates(node, &fiat_currency) {
                         println!("{}", message.red());
@@ -121,11 +126,15 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     let mut hints = HashSet::new();
     hints.insert(CommandHint::new("nodeinfo", "nodeinfo"));
     hints.insert(CommandHint::new("lspfee", "lspfee"));
+    hints.insert(CommandHint::new(
+        "calculatelspfee <amount in millisat>",
+        "calculatelspfee ",
+    ));
     hints.insert(CommandHint::new("exchangerates", "exchangerates"));
     hints.insert(CommandHint::new("listcurrencies", "listcurrencies"));
     hints.insert(CommandHint::new(
         "changecurrency <currency code>",
-        "changecurrency",
+        "changecurrency ",
     ));
 
     hints.insert(CommandHint::new(
@@ -154,6 +163,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
 fn help() {
     println!("  nodeinfo");
     println!("  lspfee");
+    println!("  calculatelspfee");
     println!("  exchangerates");
     println!("  listcurrencies");
     println!("  changecurrency <currency code>");
@@ -180,6 +190,21 @@ fn lsp_fee(node: &LightningNode) {
         "Fee rate: {}%",
         lsp_fee.channel_fee_permyriad as f64 / 100f64
     );
+}
+
+fn calculate_lsp_fee(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<(), String> {
+    let amount = words
+        .next()
+        .ok_or_else(|| "Error: amount in millisats is required".to_string())?;
+    let amount: u64 = amount
+        .parse()
+        .map_err(|_| "Error: amount should be an integer number".to_string())?;
+    let fee = node.calculate_lsp_fee(amount).unwrap();
+    println!(" LSP fee: {} sats", fee as f64 / 1_000f64);
+    Ok(())
 }
 
 fn node_info(node: &LightningNode) {
