@@ -23,9 +23,6 @@ lightning-net-tokio = "0.0.114"
 lightning-persister = "0.0.114"
 lightning-rapid-gossip-sync = "0.0.114"
 log = "0.4.17"
-# Explicitly depend on miniscript to fix the issue with bdk dependency:
-# https://github.com/getlipa/lipa-lightning-lib/actions/runs/4435452695/jobs/7782617622
-miniscript = { version = "9", features = ["serde"] }
 num_enum = "0.5.9"
 prost = "0.11.0"
 rand = "0.8.5"
