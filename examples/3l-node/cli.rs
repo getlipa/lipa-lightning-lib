@@ -11,11 +11,7 @@ use std::path::Path;
 
 use crate::LightningNode;
 
-pub(crate) fn poll_for_user_input(
-    node: &LightningNode,
-    log_file_path: &str,
-    fiat_currency: String,
-) {
+pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("{}", "3L Example Node".blue().bold());
     println!("Detailed logs are available at {}", log_file_path);
     println!("To stop the node, please type \"stop\" for a graceful shutdown.");
@@ -27,7 +23,6 @@ pub(crate) fn poll_for_user_input(
     let prompt = "3L ϟ ".bold().blue().to_string();
     let history_path = Path::new(".3l_cli_history");
     let mut rl = setup_editor(&history_path);
-    let mut fiat_currency = fiat_currency;
     loop {
         let line = match rl.readline(&prompt) {
             Ok(line) => line,
@@ -54,7 +49,7 @@ pub(crate) fn poll_for_user_input(
                     }
                 }
                 "exchangerates" => {
-                    if let Err(message) = get_exchange_rates(node, &fiat_currency) {
+                    if let Err(message) = get_exchange_rates(node) {
                         println!("{}", message.red());
                     }
                 }
@@ -64,17 +59,15 @@ pub(crate) fn poll_for_user_input(
                     }
                 }
                 "changecurrency" => {
-                    fiat_currency = match words
+                    match words
                         .next()
                         .ok_or_else(|| "Error: fiat currency code is required".to_string())
                     {
                         Ok(c) => {
                             change_currency(node, c);
-                            c.to_string()
                         }
                         Err(e) => {
                             println!("{}", e.red());
-                            fiat_currency
                         }
                     };
                 }
@@ -236,10 +229,10 @@ fn node_info(node: &LightningNode) {
     );
 }
 
-fn get_exchange_rates(node: &LightningNode, fiat_currency: &str) -> Result<(), String> {
+fn get_exchange_rates(node: &LightningNode) -> Result<(), String> {
     let rates = node.get_exchange_rates().map_err(|e| e.to_string())?;
-    println!("{fiat_currency}: {} sats", rates.default_currency);
-    println!("USD: {} sats", rates.usd);
+    println!("{}: {} sats", rates.currency_code, rates.rate);
+    println!("USD: {} sats", rates.usd_rate);
     Ok(())
 }
 

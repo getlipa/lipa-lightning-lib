@@ -251,12 +251,12 @@ impl TaskManager {
             let exchange_rates = Arc::clone(&exchange_rates);
             async move {
                 match tokio::task::spawn_blocking(move || {
-                    let default_currency =
-                        exchange_rate_provider.query_exchange_rate(fiat_currency)?;
-                    let usd = exchange_rate_provider.query_exchange_rate("USD".to_string())?;
+                    let rate = exchange_rate_provider.query_exchange_rate(fiat_currency.clone())?;
+                    let usd_rate = exchange_rate_provider.query_exchange_rate("USD".to_string())?;
                     let rates = ExchangeRates {
-                        default_currency,
-                        usd,
+                        currency_code: fiat_currency,
+                        rate,
+                        usd_rate,
                     };
                     Ok(rates) as Result<ExchangeRates>
                 })
@@ -276,9 +276,8 @@ impl TaskManager {
         })
     }
 
-    pub fn change_fiat_currency(&mut self, fiat_currency: &str) {
-        self.fiat_currency = String::from(fiat_currency);
-        *self.exchange_rates.lock().unwrap() = None;
+    pub fn change_fiat_currency(&mut self, fiat_currency: String) {
+        self.fiat_currency = fiat_currency;
     }
 }
 

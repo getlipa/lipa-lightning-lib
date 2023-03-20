@@ -38,12 +38,12 @@ pub struct FiatValues {
 }
 
 impl FiatValues {
-    pub fn from_amount_msat(amount_msat: u64, fiat: &str, exchange_rates: &ExchangeRates) -> Self {
+    pub fn from_amount_msat(amount_msat: u64, exchange_rates: &ExchangeRates) -> Self {
         // fiat amount in thousandths of the major fiat unit
-        let amount = amount_msat / (exchange_rates.default_currency as u64);
-        let amount_usd = amount_msat / (exchange_rates.usd as u64);
+        let amount = amount_msat / (exchange_rates.rate as u64);
+        let amount_usd = amount_msat / (exchange_rates.usd_rate as u64);
         FiatValues {
-            fiat: fiat.to_string(),
+            fiat: exchange_rates.currency_code.clone(),
             amount,
             amount_usd,
         }
@@ -776,27 +776,28 @@ mod tests {
     #[test]
     fn test_fiat_value_from_exchange_rate() {
         let exchange_rates = ExchangeRates {
-            default_currency: 5_000,
-            usd: 5_000,
+            currency_code: "EUR".to_string(),
+            rate: 5_000,
+            usd_rate: 5_000,
         };
         assert_eq!(
-            FiatValues::from_amount_msat(1_000, "EUR", &exchange_rates).amount,
+            FiatValues::from_amount_msat(1_000, &exchange_rates).amount,
             0
         );
         assert_eq!(
-            FiatValues::from_amount_msat(10_000, "EUR", &exchange_rates).amount,
+            FiatValues::from_amount_msat(10_000, &exchange_rates).amount,
             2
         );
         assert_eq!(
-            FiatValues::from_amount_msat(100_000, "EUR", &exchange_rates).amount,
+            FiatValues::from_amount_msat(100_000, &exchange_rates).amount,
             20
         );
         assert_eq!(
-            FiatValues::from_amount_msat(1_000_000, "EUR", &exchange_rates).amount,
+            FiatValues::from_amount_msat(1_000_000, &exchange_rates).amount,
             200
         );
         assert_eq!(
-            FiatValues::from_amount_msat(10_000_000, "EUR", &exchange_rates).amount,
+            FiatValues::from_amount_msat(10_000_000, &exchange_rates).amount,
             2_000
         );
     }

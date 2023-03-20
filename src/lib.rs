@@ -146,7 +146,7 @@ impl LightningNode {
     }
 
     pub fn change_fiat_currency(&self, fiat_currency: String) {
-        self.core_node.change_fiat_currency(&fiat_currency);
+        self.core_node.change_fiat_currency(fiat_currency);
     }
 }
 
