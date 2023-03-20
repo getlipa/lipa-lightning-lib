@@ -206,6 +206,8 @@ interface LightningNode {
     NodeInfo get_node_info();
 
     // Get information about the fee charged by the LSP for opening new channels
+    // Please keep in mind that this method doesn't make any network calls. It simply retrieves
+    // previously fetched values that are frequently updated by a background task.
     [Throws=LnError]
     LspFee query_lsp_fee();
 
