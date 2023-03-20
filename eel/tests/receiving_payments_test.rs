@@ -147,11 +147,12 @@ mod receiving_payments_test {
         assert_channel_ready(&node, TWENTY_K_SATS * 3);
         let invoice = issue_invoice(&node, TWENTY_K_SATS);
 
-        nigiri::lnd_pay_invoice(NodeInstance::LspdLnd, &invoice).unwrap();
         nigiri::lnd_pay_invoice(NodeInstance::NigiriLnd, &invoice).unwrap();
-        nigiri::cln_pay_invoice(NodeInstance::NigiriCln, &invoice).unwrap();
+        // New attempts to pay the same invoice should fail!
+        assert!(nigiri::lnd_pay_invoice(NodeInstance::LspdLnd, &invoice).is_err());
+        assert!(nigiri::cln_pay_invoice(NodeInstance::NigiriCln, &invoice).is_err());
 
-        assert_payment_received(&node, TWENTY_K_SATS * 3);
+        assert_payment_received(&node, TWENTY_K_SATS);
     }
 
     fn run_jit_channel_open_flow(

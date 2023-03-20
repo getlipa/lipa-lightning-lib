@@ -1,6 +1,6 @@
 use crate::errors::Result;
 use crate::interfaces;
-use crate::payment_store::PaymentStore;
+use crate::payment_store::{PaymentState, PaymentStore};
 use crate::task_manager::TaskManager;
 use crate::types::ChannelManager;
 
@@ -59,6 +59,19 @@ impl EventHandler for LipaEventHandler {
                     payment_hash.0.to_hex(),
                     amount_msat,
                 );
+
+                if let Ok(payment) = self
+                    .payment_store
+                    .lock()
+                    .unwrap()
+                    .get_payment(&payment_hash.0)
+                {
+                    if payment.payment_state == PaymentState::Succeeded {
+                        info!("Registered incoming payment for {} msat with hash {}. Rejecting because we've already claimed a payment with the same hash", amount_msat, payment_hash.0.to_hex());
+                        self.channel_manager.fail_htlc_backwards(&payment_hash);
+                        return;
+                    }
+                }
 
                 match purpose {
                     PaymentPurpose::InvoicePayment {
