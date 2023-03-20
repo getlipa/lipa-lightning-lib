@@ -45,8 +45,8 @@ pub use crate::invoice::InvoiceDetails;
 use crate::invoice::{create_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
 use crate::logger::LightningLogger;
-use crate::lsp::{LspClient, LspFee};
-use crate::node_info::{get_channels_info, NodeInfo};
+use crate::lsp::{calculate_fee, LspClient, LspFee};
+use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info, NodeInfo};
 use crate::random::generate_random_bytes;
 use crate::rapid_sync_client::RapidSyncClient;
 use crate::storage_persister::StoragePersister;
@@ -358,6 +358,17 @@ impl LightningNode {
                 "Failed to get LSP info",
             )?;
         Ok(lsp_info.fee)
+    }
+
+    pub fn calculate_lsp_fee(&self, amount_msat: u64) -> Result<u64> {
+        let lsp_fee = self.query_lsp_fee()?;
+        let max_incoming_payment_size =
+            estimate_max_incoming_payment_size(&self.get_node_info().channels_info);
+        if max_incoming_payment_size < amount_msat {
+            let fee = calculate_fee(amount_msat, &lsp_fee);
+            return Ok(fee);
+        }
+        Ok(0)
     }
 
     pub fn create_invoice(

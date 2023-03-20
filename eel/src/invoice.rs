@@ -1,6 +1,6 @@
 use crate::errors::*;
 use crate::lsp::{LspClient, PaymentRequest};
-use crate::node_info::get_channels_info;
+use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info};
 use crate::types::ChannelManager;
 use bitcoin::bech32::ToBase32;
 use std::time::{Duration, SystemTime};
@@ -46,7 +46,8 @@ pub(crate) async fn create_invoice(
 
     // Do we need a new channel to receive this payment?
     let channels_info = get_channels_info(&channel_manager.list_channels());
-    let needs_channel_opening = channels_info.inbound_capacity_msat < amount_msat;
+    let max_incoming_payment_size = estimate_max_incoming_payment_size(&channels_info);
+    let needs_channel_opening = max_incoming_payment_size < amount_msat;
 
     let payee_pubkey = channel_manager.get_our_node_id();
 

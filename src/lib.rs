@@ -99,6 +99,10 @@ impl LightningNode {
         self.core_node.query_lsp_fee()
     }
 
+    pub fn calculate_lsp_fee(&self, amount_msat: u64) -> Result<u64> {
+        self.core_node.calculate_lsp_fee(amount_msat)
+    }
+
     pub fn create_invoice(
         &self,
         amount_msat: u64,

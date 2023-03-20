@@ -17,17 +17,17 @@ pub struct NodeInfo {
 }
 
 pub(crate) fn get_channels_info(channels: &[ChannelDetails]) -> ChannelsInfo {
-    let usable_channels = channels.iter().filter(|c| c.is_usable);
+    let usable_channels: Vec<_> = channels.iter().filter(|c| c.is_usable).collect();
 
     let num_channels = channels.len() as u16;
-    let num_usable_channels = usable_channels.clone().count() as u16;
+    let num_usable_channels = usable_channels.len() as u16;
     let local_balance_msat = channels.iter().map(|c| c.balance_msat).sum();
     let inbound_capacity_msat = usable_channels
-        .clone()
+        .iter()
         .map(|c| c.inbound_capacity_msat)
         .sum();
     let outbound_capacity_msat = usable_channels
-        .clone()
+        .iter()
         .map(|c| c.outbound_capacity_msat)
         .sum();
 
@@ -38,6 +38,12 @@ pub(crate) fn get_channels_info(channels: &[ChannelDetails]) -> ChannelsInfo {
         inbound_capacity_msat,
         outbound_capacity_msat,
     }
+}
+
+pub(crate) fn estimate_max_incoming_payment_size(channels_info: &ChannelsInfo) -> u64 {
+    // TODO: This estimation is not precise. See a similar issue with outbound capacity:
+    //       https://github.com/lightningdevkit/rust-lightning/issues/1126
+    channels_info.inbound_capacity_msat
 }
 
 #[cfg(test)]
