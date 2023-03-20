@@ -20,7 +20,7 @@ eel = { path = "eel" }
 
 log = "0.4.17"
 uniffi = "0.23.0"
-thiserror = "1.0.38"
+thiserror = "1.0.40"
 
 chameleon = { git = "https://github.com/getlipa/wild" }
 honey-badger = { git = "https://github.com/getlipa/wild" }

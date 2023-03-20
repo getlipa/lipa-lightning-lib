@@ -33,7 +33,7 @@ reqwest = { version = "0.11.12", default-features = false, features = ["blocking
 rusqlite = { version = "0.28.0", features = ["bundled", "chrono"] }
 # Explicitly depend on secp256k1 for secp256k1::SECP256K1.
 secp256k1 = { version = "0.24.3", features = ["global-context"] }
-thiserror = "1.0.34"
+thiserror = "1.0.40"
 tokio = { version = "1.21.1", features = ["rt-multi-thread", "time", "sync"] }
 tonic = "0.8.3"
 
