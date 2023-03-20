@@ -24,8 +24,9 @@ pub trait EventHandler: Send + Sync {
 
 #[derive(Clone)]
 pub struct ExchangeRates {
-    pub default_currency: u32,
-    pub usd: u32,
+    pub currency_code: String,
+    pub rate: u32,
+    pub usd_rate: u32,
 }
 
 pub trait ExchangeRateProvider: Send + Sync {

@@ -274,8 +274,9 @@ interface LightningNode {
 
 // Exchange rates as sats per major unit.
 dictionary ExchangeRates {
-    u32 default_currency;
-    u32 usd;
+    string currency_code;
+    u32 rate;
+    u32 usd_rate;
 };
 
 dictionary ChannelsInfo {

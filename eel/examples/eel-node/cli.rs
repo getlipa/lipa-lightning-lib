@@ -9,11 +9,7 @@ use std::path::Path;
 
 use crate::LightningNode;
 
-pub(crate) fn poll_for_user_input(
-    node: &LightningNode,
-    log_file_path: &str,
-    fiat_currency: String,
-) {
+pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("{}", "Eel Example Node".yellow().bold());
     println!("Detailed logs are available at {}", log_file_path);
     println!("To stop the node, please type \"stop\" for a graceful shutdown.");
@@ -49,7 +45,7 @@ pub(crate) fn poll_for_user_input(
                     lsp_fee(node);
                 }
                 "exchangerates" => {
-                    if let Err(message) = get_exchange_rates(node, &fiat_currency) {
+                    if let Err(message) = get_exchange_rates(node) {
                         println!("{}", message.red());
                     }
                 }
@@ -150,10 +146,10 @@ fn node_info(node: &LightningNode) {
     );
 }
 
-fn get_exchange_rates(node: &LightningNode, fiat_currency: &str) -> Result<(), String> {
+fn get_exchange_rates(node: &LightningNode) -> Result<(), String> {
     let rates = node.get_exchange_rates().map_err(|e| e.to_string())?;
-    println!("{fiat_currency}: {} sats", rates.default_currency);
-    println!("USD: {} sats", rates.usd);
+    println!("{}: {} sats", rates.currency_code, rates.rate);
+    println!("USD: {} sats", rates.usd_rate);
     Ok(())
 }
 

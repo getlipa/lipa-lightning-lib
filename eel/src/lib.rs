@@ -101,7 +101,6 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
 #[allow(dead_code)]
 pub struct LightningNode {
     config: Config,
-    fiat_currency: Mutex<String>,
     rt: AsyncRuntime,
     lsp_client: Arc<LspClient>,
     keys_manager: Arc<KeysManager>,
@@ -325,8 +324,7 @@ impl LightningNode {
         );
 
         Ok(Self {
-            config: config.clone(),
-            fiat_currency: Mutex::new(config.fiat_currency),
+            config,
             rt,
             lsp_client,
             keys_manager,
@@ -361,10 +359,10 @@ impl LightningNode {
     }
 
     pub fn calculate_lsp_fee(&self, amount_msat: u64) -> Result<u64> {
-        let lsp_fee = self.query_lsp_fee()?;
         let max_incoming_payment_size =
             estimate_max_incoming_payment_size(&self.get_node_info().channels_info);
         if max_incoming_payment_size < amount_msat {
+            let lsp_fee = self.query_lsp_fee()?;
             let fee = calculate_fee(amount_msat, &lsp_fee);
             return Ok(fee);
         }
@@ -544,10 +542,7 @@ impl LightningNode {
             )
     }
 
-    pub fn change_fiat_currency(&self, fiat_currency: &str) {
-        let mut node_fiat_currency = self.fiat_currency.lock().unwrap();
-        *node_fiat_currency = String::from(fiat_currency);
-
+    pub fn change_fiat_currency(&self, fiat_currency: String) {
         let mut task_manager = self.task_manager.lock().unwrap();
         task_manager.change_fiat_currency(fiat_currency);
         // if the fiat currency is being changed, we can assume the app is in the foreground
@@ -583,14 +578,9 @@ impl LightningNode {
     }
 
     fn get_fiat_values(&self, amount_msat: u64) -> Option<FiatValues> {
-        match self.get_exchange_rates() {
-            Ok(e) => Some(FiatValues::from_amount_msat(
-                amount_msat,
-                &self.fiat_currency.lock().unwrap(),
-                &e,
-            )),
-            Err(_) => None,
-        }
+        self.get_exchange_rates()
+            .ok()
+            .map(|e| FiatValues::from_amount_msat(amount_msat, &e))
     }
 }
 

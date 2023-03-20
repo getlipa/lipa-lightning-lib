@@ -35,7 +35,7 @@ fn main() {
     let config = Config {
         network: Network::Regtest,
         seed,
-        fiat_currency: fiat_currency.clone(),
+        fiat_currency,
         esplora_api_url: "http://localhost:30000".to_string(),
         rgs_url: "http://localhost:8080/snapshot/".to_string(),
         lsp_url: "http://127.0.0.1:6666".to_string(),
@@ -53,7 +53,7 @@ fn main() {
 
     // Lauch CLI
     sleep(Duration::from_secs(1));
-    cli::poll_for_user_input(&node, &format!("{BASE_DIR}/{LOG_FILE}"), fiat_currency);
+    cli::poll_for_user_input(&node, &format!("{BASE_DIR}/{LOG_FILE}"));
 }
 
 fn init_logger() {
