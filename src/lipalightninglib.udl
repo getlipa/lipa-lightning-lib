@@ -274,7 +274,7 @@ interface LightningNode {
     void change_fiat_currency(string fiat_currency);
 
     // Change the timezone config.
-    //    - timezone_config - the actual user's timezone
+    //    - timezone_config - the user's current timezone
     void change_timezone_config(TzConfig timezone_config);
 };
 
