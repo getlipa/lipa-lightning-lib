@@ -3,28 +3,32 @@ use crate::lsp::{LspClient, PaymentRequest};
 use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info};
 use crate::types::ChannelManager;
 use bitcoin::bech32::ToBase32;
+use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 use crate::lsp;
 use crate::payment_store::{FiatValues, PaymentStore};
 use bitcoin::hashes::{sha256, Hash};
+use bitcoin::Network;
 use lightning::chain::keysinterface::{KeysManager, NodeSigner, Recipient};
 use lightning::ln::channelmanager::ChannelDetails;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
-use lightning_invoice::{Currency, InvoiceBuilder, SignedRawInvoice};
+use lightning_invoice::{Currency, Invoice, InvoiceBuilder, InvoiceDescription, SignedRawInvoice};
 use log::info;
 use perro::{invalid_input, MapToError, MapToErrorForUnitType, ResultTrait};
 use secp256k1::ecdsa::RecoverableSignature;
 
+#[derive(PartialEq, Eq, Debug)]
 pub struct InvoiceDetails {
     pub invoice: String,
     pub amount_msat: Option<u64>,
     pub description: String,
     pub payment_hash: String,
     pub payee_pub_key: String,
-    pub invoice_timestamp: SystemTime,
+    pub creation_timestamp: SystemTime,
     pub expiry_interval: Duration,
+    pub expiry_timestamp: SystemTime,
 }
 
 pub(crate) struct CreateInvoiceParams {
@@ -32,6 +36,57 @@ pub(crate) struct CreateInvoiceParams {
     pub currency: Currency,
     pub description: String,
     pub metadata: String,
+}
+
+pub(crate) fn get_invoice_details(invoice: Invoice) -> Result<InvoiceDetails> {
+    let description = match invoice.description() {
+        InvoiceDescription::Direct(d) => d.to_string(),
+        InvoiceDescription::Hash(_) => String::new(),
+    };
+
+    let payee_pub_key = match invoice.payee_pub_key() {
+        None => invoice.recover_payee_pub_key().to_string(),
+        Some(p) => p.to_string(),
+    };
+
+    Ok(InvoiceDetails {
+        invoice: invoice.to_string(),
+        amount_msat: invoice.amount_milli_satoshis(),
+        description,
+        payment_hash: invoice.payment_hash().to_string(),
+        payee_pub_key,
+        creation_timestamp: invoice.timestamp(),
+        expiry_interval: invoice.expiry_time(),
+        expiry_timestamp: invoice.timestamp() + invoice.expiry_time(),
+    })
+}
+
+pub(crate) fn parse_validate_invoice(network: Network, invoice: &str) -> Result<Invoice> {
+    let invoice = Invoice::from_str(chomp_prefix(invoice.trim()))
+        .map_to_invalid_input("Invalid invoice - parse failure")?;
+
+    let invoice_network = match invoice.currency() {
+        Currency::Bitcoin => Network::Bitcoin,
+        Currency::BitcoinTestnet => Network::Testnet,
+        Currency::Regtest => Network::Regtest,
+        Currency::Simnet => Network::Signet,
+        Currency::Signet => Network::Signet,
+    };
+
+    if network != invoice_network {
+        return Err(invalid_input("Invalid invoice - network mismatch"));
+    }
+
+    Ok(invoice)
+}
+
+fn chomp_prefix(string: &str) -> &str {
+    let prefix = "lightning:";
+    if let Some(tail) = string.strip_prefix(prefix) {
+        tail
+    } else {
+        string
+    }
 }
 
 pub(crate) async fn create_invoice(

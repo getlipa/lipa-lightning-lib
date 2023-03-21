@@ -87,7 +87,7 @@ mod sending_payments_test {
         assert_eq!(invoice_details.payment_hash, REGTEST_INVOICE_HASH);
         assert_eq!(
             invoice_details
-                .invoice_timestamp
+                .creation_timestamp
                 .duration_since(UNIX_EPOCH)
                 .unwrap(),
             REGTEST_INVOICE_DURATION_FROM_UNIX_EPOCH

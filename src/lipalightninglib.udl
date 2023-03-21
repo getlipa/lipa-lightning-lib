@@ -235,8 +235,9 @@ dictionary InvoiceDetails {
     string payment_hash;
     string payee_pub_key; // The pubkey (aka node id) of the invoice issuer. Please keep in mind that this doesn't necessarily
         // identify the payee due to the proliferation of custodial wallet (multiple users will share a node id).
-    timestamp invoice_timestamp; // The moment an invoice was created (UTC)
-    duration expiry_interval; // The interval after which the invoice expires (invoice_timestamp + expiry_interval = timestamp of expiration)
+    timestamp creation_timestamp; // The moment an invoice was created (UTC)
+    duration expiry_interval; // The interval after which the invoice expires (creation_timestamp + expiry_interval = expiry_timestamp)
+    timestamp expiry_timestamp; // The moment an invoice expires (UTC)
 };
 
 // Information about an incoming or outgoing payment
@@ -245,7 +246,7 @@ dictionary Payment {
     PaymentState payment_state;
     string hash; // Hex representation of payment hash
     u64 amount_msat;
-    string invoice;
+    InvoiceDetails invoice_details;
     TzTime created_at;
     TzTime latest_state_change_at;
     string description; // The description embedded in the invoice. Given the length limit of this data,
