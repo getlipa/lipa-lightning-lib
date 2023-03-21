@@ -1,14 +1,13 @@
 use crate::async_runtime::{Handle, RepeatingTaskHandle};
-use crate::chain_access::LipaChainAccess;
-use crate::confirm::ConfirmWrapper;
 use crate::errors::Result;
 use crate::fee_estimator::FeeEstimator;
 use crate::interfaces::{ExchangeRateProvider, ExchangeRates};
 use crate::lsp::{LspClient, LspInfo};
 use crate::p2p_networking::{connect_peer, LnPeer};
 use crate::rapid_sync_client::RapidSyncClient;
-use crate::types::{ChainMonitor, ChannelManager, PeerManager};
+use crate::types::{ChainMonitor, ChannelManager, PeerManager, TxSync};
 
+use lightning::chain::Confirm;
 use log::{debug, error};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -37,7 +36,7 @@ pub(crate) struct TaskManager {
 
     channel_manager: Arc<ChannelManager>,
     chain_monitor: Arc<ChainMonitor>,
-    chain_access: Arc<Mutex<LipaChainAccess>>,
+    tx_sync: Arc<TxSync>,
 
     fiat_currency: String,
     exchange_rate_provider: Arc<dyn ExchangeRateProvider>,
@@ -56,7 +55,7 @@ impl TaskManager {
         rapid_sync_client: Arc<RapidSyncClient>,
         channel_manager: Arc<ChannelManager>,
         chain_monitor: Arc<ChainMonitor>,
-        chain_access: Arc<Mutex<LipaChainAccess>>,
+        tx_sync: Arc<TxSync>,
         fiat_currency: String,
         exchange_rate_provider: Box<dyn ExchangeRateProvider>,
     ) -> Self {
@@ -69,7 +68,7 @@ impl TaskManager {
             rapid_sync_client,
             channel_manager,
             chain_monitor,
-            chain_access,
+            tx_sync,
             fiat_currency,
             exchange_rate_provider: Arc::from(exchange_rate_provider),
             exchange_rates: Arc::new(Mutex::new(None)),
@@ -132,19 +131,19 @@ impl TaskManager {
     fn start_blockchain_sync(&self, period: Duration) -> RepeatingTaskHandle {
         let channel_manager = Arc::clone(&self.channel_manager);
         let chain_monitor = Arc::clone(&self.chain_monitor);
-        let chain_access = Arc::clone(&self.chain_access);
+        let tx_sync = Arc::clone(&self.tx_sync);
 
         self.runtime_handle.spawn_repeating_task(period, move || {
-            let chain_access = Arc::clone(&chain_access);
+            let tx_sync = Arc::clone(&tx_sync);
             let channel_manager_regular_sync = Arc::clone(&channel_manager);
             let chain_monitor_regular_sync = Arc::clone(&chain_monitor);
             async move {
-                let confirm_regular_sync = ConfirmWrapper::new(vec![
-                    &*channel_manager_regular_sync,
-                    &*chain_monitor_regular_sync,
-                ]);
+                let confirmables = vec![
+                    &*channel_manager_regular_sync as &(dyn Confirm + Sync + Send),
+                    &*chain_monitor_regular_sync as &(dyn Confirm + Sync + Send),
+                ];
                 let now = Instant::now();
-                match chain_access.lock().unwrap().sync(&confirm_regular_sync) {
+                match tx_sync.sync(confirmables).await {
                     Ok(()) => debug!(
                         "Sync to blockchain finished in {}ms",
                         now.elapsed().as_millis()

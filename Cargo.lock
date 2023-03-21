@@ -732,7 +732,7 @@ dependencies = [
  "colored",
  "ctor",
  "ecies",
- "esplora-client",
+ "esplora-client 0.4.0",
  "futures",
  "lightning",
  "lightning-background-processor",
@@ -740,6 +740,7 @@ dependencies = [
  "lightning-net-tokio",
  "lightning-persister",
  "lightning-rapid-gossip-sync",
+ "lightning-transaction-sync",
  "log",
  "num_enum",
  "perro",
@@ -837,6 +838,18 @@ checksum = "64f18991e7bf11e7ffee451b5318b5c1a73c52d0d0ada6e5a3017c8c1ced6a21"
 dependencies = [
  "libc",
  "str-buf",
+]
+
+[[package]]
+name = "esplora-client"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38bbba572d03ca4d628b653f01e60ba6947c67df65ee8910c79daaf252897924"
+dependencies = [
+ "bitcoin",
+ "log",
+ "reqwest",
+ "serde",
 ]
 
 [[package]]
@@ -1613,6 +1626,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightning-transaction-sync"
+version = "0.0.114"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7095f2bf734c03c5ed13714d90a951f39860cf58b65f887a16f32377774464b"
+dependencies = [
+ "bdk-macros",
+ "bitcoin",
+ "esplora-client 0.3.0",
+ "futures",
+ "lightning",
+]
+
+[[package]]
 name = "link-cplusplus"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1639,7 +1665,7 @@ dependencies = [
  "colored",
  "ctor",
  "eel",
- "esplora-client",
+ "esplora-client 0.4.0",
  "honey-badger",
  "log",
  "mole",
@@ -2235,6 +2261,7 @@ dependencies = [
  "serde_urlencoded",
  "tokio",
  "tokio-rustls",
+ "tokio-socks",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -2774,6 +2801,18 @@ dependencies = [
  "rustls",
  "tokio",
  "webpki",
+]
+
+[[package]]
+name = "tokio-socks"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51165dfa029d2a65969413a6cc96f354b86b464498702f174a4efa13608fd8c0"
+dependencies = [
+ "either",
+ "futures-util",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

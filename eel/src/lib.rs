@@ -14,13 +14,10 @@ pub mod payment_store;
 pub mod secret;
 
 mod async_runtime;
-mod chain_access;
-mod confirm;
 mod encryption_symmetric;
 mod esplora_client;
 mod event_handler;
 mod fee_estimator;
-mod filter;
 mod invoice;
 mod logger;
 mod random;
@@ -32,14 +29,11 @@ mod tx_broadcaster;
 mod types;
 
 use crate::async_runtime::AsyncRuntime;
-use crate::chain_access::LipaChainAccess;
 use crate::config::{Config, TzConfig};
-use crate::confirm::ConfirmWrapper;
 use crate::errors::*;
 use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
-use crate::filter::FilterImpl;
 use crate::interfaces::{EventHandler, ExchangeRateProvider, ExchangeRates, RemoteStorage};
 pub use crate::invoice::InvoiceDetails;
 use crate::invoice::{create_invoice, CreateInvoiceParams};
@@ -47,34 +41,34 @@ use crate::keys_manager::init_keys_manager;
 use crate::logger::LightningLogger;
 use crate::lsp::{calculate_fee, LspClient, LspFee};
 use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info, NodeInfo};
+use crate::payment_store::{FiatValues, Payment, PaymentStore};
 use crate::random::generate_random_bytes;
 use crate::rapid_sync_client::RapidSyncClient;
 use crate::storage_persister::StoragePersister;
 use crate::task_manager::{RestartIfFailedPeriod, TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
-use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router};
-use std::path::Path;
+use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router, TxSync};
 
-use crate::payment_store::{FiatValues, Payment, PaymentStore};
-use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::hashes::hex::{FromHex, ToHex};
 pub use bitcoin::Network;
 use cipher::consts::U32;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::{EntropySource, InMemorySigner, KeysManager};
-use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Watch};
+use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Confirm, Watch};
 use lightning::ln::channelmanager::{ChainParameters, Retry, RetryableSendFailure};
 use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_invoice::payment::{pay_invoice, PaymentError};
 use lightning_invoice::{Currency, Invoice, InvoiceDescription};
+use log::error;
 pub use log::Level as LogLevel;
 use log::{info, warn};
 pub use perro::{
     invalid_input, permanent_failure, runtime_error, MapToError, MapToErrorForUnitType,
     OptionToError,
 };
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -126,7 +120,6 @@ impl LightningNode {
         exchange_rate_provider: Box<dyn ExchangeRateProvider>,
     ) -> Result<Self> {
         let rt = AsyncRuntime::new()?;
-        let genesis_hash = genesis_block(config.network).header.block_hash();
 
         let esplora_client = Arc::new(EsploraClient::new(&config.esplora_api_url)?);
 
@@ -155,11 +148,14 @@ impl LightningNode {
         }
 
         // Step 5. Initialize the Transaction Filter
-        let filter = Arc::new(FilterImpl::new());
+        let tx_sync = Arc::new(TxSync::new(
+            config.esplora_api_url.clone(),
+            Arc::clone(&logger),
+        ));
 
         // Step 6. Initialize the ChainMonitor
         let chain_monitor = Arc::new(ChainMonitor::new(
-            Some(Arc::clone(&filter)),
+            Some(Arc::clone(&tx_sync)),
             Arc::clone(&tx_broadcaster),
             Arc::clone(&logger),
             Arc::clone(&fee_estimator),
@@ -205,7 +201,7 @@ impl LightningNode {
         // (needed when using Electrum or BIP 157/158)
         // Step 14: Prepare ChannelMonitors for chain sync
         for (_, channel_monitor) in channel_monitors.iter() {
-            channel_monitor.load_outputs_to_watch(&filter);
+            channel_monitor.load_outputs_to_watch(&tx_sync);
         }
 
         // Step 15: Initialize the ChannelManager
@@ -219,29 +215,34 @@ impl LightningNode {
         let mut_channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>> =
             channel_monitors.iter_mut().map(|(_, m)| m).collect();
 
-        let (channel_manager_block_hash, channel_manager) = persister
-            .read_or_init_channel_manager(
-                Arc::clone(&chain_monitor),
-                Arc::clone(&tx_broadcaster),
-                Arc::clone(&keys_manager),
-                Arc::clone(&fee_estimator),
-                Arc::clone(&logger),
-                Arc::clone(&router),
-                mut_channel_monitors,
-                mobile_node_user_config,
-                chain_params,
-                startup_variant,
-            )?;
+        let channel_manager = persister.read_or_init_channel_manager(
+            Arc::clone(&chain_monitor),
+            Arc::clone(&tx_broadcaster),
+            Arc::clone(&keys_manager),
+            Arc::clone(&fee_estimator),
+            Arc::clone(&logger),
+            Arc::clone(&router),
+            mut_channel_monitors,
+            mobile_node_user_config,
+            chain_params,
+            startup_variant,
+        )?;
         let channel_manager = Arc::new(channel_manager);
 
         // Step 16. Sync ChannelMonitors and ChannelManager to chain tip
-        let confirm = ConfirmWrapper::new(vec![&*channel_manager, &*chain_monitor]);
-        let chain_access = Arc::new(Mutex::new(LipaChainAccess::new(
-            esplora_client,
-            filter,
-            channel_manager_block_hash.unwrap_or(genesis_hash),
-        )));
-        chain_access.lock().unwrap().sync(&confirm)?;
+        let confirmables = vec![
+            &*channel_manager as &(dyn Confirm + Sync + Send),
+            &*chain_monitor as &(dyn Confirm + Sync + Send),
+        ];
+        {
+            let tx_sync = Arc::clone(&tx_sync);
+            if let Err(e) = rt
+                .handle()
+                .block_on(async move { tx_sync.sync(confirmables).await })
+            {
+                error!("Sync to blockchain failed: {:?}", e);
+            }
+        }
 
         // Step 17. Give ChannelMonitors to ChainMonitor
         for (_, channel_monitor) in channel_monitors {
@@ -279,7 +280,7 @@ impl LightningNode {
             rapid_sync_client,
             Arc::clone(&channel_manager),
             Arc::clone(&chain_monitor),
-            Arc::clone(&chain_access),
+            Arc::clone(&tx_sync),
             config.fiat_currency.clone(),
             exchange_rate_provider,
         )));

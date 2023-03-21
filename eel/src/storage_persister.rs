@@ -268,7 +268,7 @@ impl StoragePersister {
         user_config: UserConfig,
         chain_params: ChainParameters,
         startup_variant: StartupVariant,
-    ) -> Result<(Option<BlockHash>, ChannelManager)> {
+    ) -> Result<ChannelManager> {
         let read_args = ChannelManagerReadArgs::new(
             Arc::clone(&keys_manager),
             Arc::clone(&keys_manager),
@@ -296,7 +296,7 @@ impl StoragePersister {
                     user_config,
                     chain_params,
                 );
-                Ok((None, channel_manager))
+                Ok(channel_manager)
             }
             StartupVariant::Recovery => {
                 // Try to get ChannelManager from remote
@@ -312,25 +312,25 @@ impl StoragePersister {
 
                 let data = decrypt(&encrypted_data, &self.encryption_key)?;
                 let mut buffer = Cursor::new(&data);
-                let (block_hash, channel_manager) = <(
+                let (_block_hash, channel_manager) = <(
                         BlockHash,
                         ChannelManager,
                     )>::read(&mut buffer, read_args)
                         .map_to_permanent_failure("Failed to parse a previously remotely persisted ChannelManager. Could it have been corrupted?")?;
-                Ok((Some(block_hash), channel_manager))
+                Ok(channel_manager)
             }
             StartupVariant::Normal => {
                 // Get ChannelManager from local filesystem
                 let path =
                     PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(MANAGER_KEY));
                 if let Ok(f) = fs::File::open(path) {
-                    let (block_hash, channel_manager) =
+                    let (_block_hash, channel_manager) =
                         <(BlockHash, ChannelManager)>::read(
                             &mut BufReader::new(f),
                             read_args,
                         )
                             .map_to_permanent_failure("Failed to parse a previously locally persisted ChannelManager. Could it have been corrupted?")?;
-                    Ok((Some(block_hash), channel_manager))
+                    Ok(channel_manager)
                 } else {
                     error!("Failed to find a local channel manager.");
                     // TODO: should we try to get the remote ChannelMonitor in this scenario?
