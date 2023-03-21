@@ -21,6 +21,7 @@ pub enum PaymentState {
     Created,
     Succeeded,
     Failed,
+    Retrying,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -254,6 +255,26 @@ impl PaymentStore {
         Ok(())
     }
 
+    pub fn payment_retrying(&self, hash: &[u8]) -> Result<()> {
+        self.db_conn
+            .execute(
+                "\
+                INSERT INTO events (payment_id, type, timezone_id, timezone_utc_offset_secs) \
+                VALUES (
+                    (SELECT payment_id FROM payments WHERE hash=?1), ?2, ?3, ?4)
+                ",
+                (
+                    hash,
+                    PaymentState::Retrying as u8,
+                    &self.timezone_config.timezone_id,
+                    self.timezone_config.timezone_utc_offset_secs,
+                ),
+            )
+            .map_to_invalid_input("Failed to add payment retrying event to payments db")?;
+
+        Ok(())
+    }
+
     pub fn fill_preimage(&self, hash: &[u8], preimage: &[u8]) -> Result<()> {
         self.db_conn
             .execute(
@@ -338,27 +359,6 @@ impl PaymentStore {
             )?
             .map_to_permanent_failure("Corrupted payment db")?;
         Ok(payment)
-    }
-
-    pub fn payment_exists(&self, hash: &[u8]) -> Result<bool> {
-        let mut statement = self
-            .db_conn
-            .prepare(
-                "\
-            SELECT payment_id \
-            FROM payments \
-            WHERE payments.hash=? \
-            ",
-            )
-            .map_to_permanent_failure("Failed to prepare SQL query")?;
-        let mut payment_iter = statement
-            .query([hash])
-            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
-
-        Ok(payment_iter
-            .next()
-            .map_to_permanent_failure("Corrupted payment db")?
-            .is_some())
     }
 }
 
@@ -446,7 +446,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
             CREATE TABLE IF NOT EXISTS events (
               event_id INTEGER NOT NULL PRIMARY KEY,
               payment_id INTEGER NOT NULL,
-              type INTEGER CHECK( type in (0, 1, 2) ) NOT NULL,
+              type INTEGER CHECK( type in (0, 1, 2, 3) ) NOT NULL,
               inserted_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
               timezone_id TEXT NOT NULL,
               timezone_utc_offset_secs INTEGER NOT NULL,
@@ -523,7 +523,7 @@ mod tests {
         let metadata = String::from("Test metadata 1");
         let fiat_value = None;
 
-        assert!(!payment_store.payment_exists(&hash).unwrap());
+        assert!(payment_store.get_payment(&hash).is_err());
 
         payment_store
             .new_incoming_payment(
@@ -537,7 +537,7 @@ mod tests {
             )
             .unwrap();
 
-        assert!(payment_store.payment_exists(&hash).unwrap());
+        assert!(payment_store.get_payment(&hash).is_ok());
     }
 
     #[test]
@@ -683,6 +683,25 @@ mod tests {
         assert_eq!(payments.len(), 2);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Failed);
+        assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
+        assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
+        assert_eq!(payment.latest_state_change_at.timezone_id, TEST_TZ_ID);
+        assert_eq!(
+            payment.latest_state_change_at.timezone_utc_offset_secs,
+            TEST_TZ_OFFSET
+        );
+        assert_eq!(payment.created_at.timestamp, created_at);
+        assert_ne!(
+            payment.created_at.timestamp,
+            payment.latest_state_change_at.timestamp
+        );
+        assert!(payment.created_at.timestamp < payment.latest_state_change_at.timestamp);
+
+        payment_store.payment_retrying(&hash).unwrap();
+        let payments = payment_store.get_latest_payments(100).unwrap();
+        assert_eq!(payments.len(), 2);
+        let payment = payments.get(0).unwrap();
+        assert_eq!(payment.payment_state, PaymentState::Retrying);
         assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
         assert_eq!(payment.latest_state_change_at.timezone_id, TEST_TZ_ID);

@@ -162,6 +162,7 @@ enum PaymentState {
     "Created",
     "Succeeded",
     "Failed",
+    "Retrying",
 };
 
 // A UTC timestamp accompanied by the ID of the timezone on which it was recorded and the respective UTC offset
