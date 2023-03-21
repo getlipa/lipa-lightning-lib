@@ -108,7 +108,7 @@ pub struct LightningNode {
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
     task_manager: Arc<Mutex<TaskManager>>,
-    payment_store: Mutex<PaymentStore>,
+    payment_store: Arc<Mutex<PaymentStore>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -290,18 +290,17 @@ impl LightningNode {
         let payment_store_path = payment_store_path
             .to_str()
             .ok_or_invalid_input("Invalid local persistence path")?;
-        let payment_store = Mutex::new(PaymentStore::new(
+        let payment_store = Arc::new(Mutex::new(PaymentStore::new(
             payment_store_path,
             config.timezone_config.clone(),
-        )?);
+        )?));
 
         // Step 22. Initialize an EventHandler
         let event_handler = Arc::new(LipaEventHandler::new(
             Arc::clone(&channel_manager),
             Arc::clone(&task_manager),
             user_event_handler,
-            payment_store_path,
-            config.timezone_config.clone(),
+            Arc::clone(&payment_store),
         )?);
 
         // Step 23. Start Background Processing
