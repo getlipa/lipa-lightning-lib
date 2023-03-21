@@ -1,4 +1,7 @@
 use crate::hinter::{CommandHint, CommandHinter};
+
+use uniffi_lipalightninglib::TzConfig;
+
 use bitcoin::secp256k1::PublicKey;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
@@ -71,6 +74,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         }
                     };
                 }
+                "changetimezone" => {
+                    if let Err(message) = change_timezone(node, &mut words) {
+                        println!("{}", message.red());
+                    }
+                }
                 "invoice" => {
                     if let Err(message) = create_invoice(node, &mut words) {
                         println!("{}", message.red());
@@ -129,6 +137,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "changecurrency <currency code>",
         "changecurrency ",
     ));
+    hints.insert(CommandHint::new(
+        "changetimezone [timezone offset in mins] [timezone id]",
+        "changetimezone ",
+    ));
 
     hints.insert(CommandHint::new(
         "invoice <amount in millisats> [description]",
@@ -156,10 +168,11 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
 fn help() {
     println!("  nodeinfo");
     println!("  lspfee");
-    println!("  calculatelspfee");
+    println!("  calculatelspfee <amount in millisat>");
     println!("  exchangerates");
     println!("  listcurrencies");
     println!("  changecurrency <currency code>");
+    println!("  changetimezone [timezone offset in mins] [timezone id]");
     println!();
     println!("  invoice <amount in millisats> [description]");
     println!("  decodeinvoice <invoice>");
@@ -244,6 +257,31 @@ fn list_currency_codes(node: &LightningNode) -> Result<(), String> {
 
 fn change_currency(node: &LightningNode, fiat_currency: &str) {
     node.change_fiat_currency(String::from(fiat_currency));
+}
+
+fn change_timezone(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<(), String> {
+    let timezone_utc_offset_mins: i32 = words
+        .next()
+        .unwrap_or("0")
+        .parse()
+        .map_err(|_| "Error: offset should be an integer number".to_string())?;
+    let timezone_utc_offset_secs = timezone_utc_offset_mins * 60;
+    let timezone_id = words.collect::<Vec<_>>().join(" ");
+
+    let tz_config = TzConfig {
+        timezone_id,
+        timezone_utc_offset_secs,
+    };
+    println!(
+        " Timezone offset secs: {}",
+        tz_config.timezone_utc_offset_secs
+    );
+    println!(" Timezone id:          {}", tz_config.timezone_id);
+    node.change_timezone_config(tz_config);
+    Ok(())
 }
 
 fn create_invoice(
