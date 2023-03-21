@@ -272,6 +272,10 @@ interface LightningNode {
     // Change the fiat currency (ISO 4217 currency code) - not all are supported
     //      The method `list_currency_codes()` can used to list supported codes.
     void change_fiat_currency(string fiat_currency);
+
+    // Change the timezone config.
+    //    - timezone_config - the actual user's timezone
+    void change_timezone_config(TzConfig timezone_config);
 };
 
 // Exchange rates as sats per major unit.

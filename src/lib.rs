@@ -148,6 +148,10 @@ impl LightningNode {
     pub fn change_fiat_currency(&self, fiat_currency: String) {
         self.core_node.change_fiat_currency(fiat_currency);
     }
+
+    pub fn change_timezone_config(&self, timezone_config: TzConfig) {
+        self.core_node.change_timezone_config(timezone_config);
+    }
 }
 
 fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {

@@ -33,7 +33,7 @@ mod types;
 
 use crate::async_runtime::AsyncRuntime;
 use crate::chain_access::LipaChainAccess;
-use crate::config::Config;
+use crate::config::{Config, TzConfig};
 use crate::confirm::ConfirmWrapper;
 use crate::errors::*;
 use crate::esplora_client::EsploraClient;
@@ -546,6 +546,10 @@ impl LightningNode {
         task_manager.change_fiat_currency(fiat_currency);
         // if the fiat currency is being changed, we can assume the app is in the foreground
         task_manager.restart(FOREGROUND_PERIODS);
+    }
+
+    pub fn change_timezone_config(&self, _timezone_config: TzConfig) {
+        // TODO: Change timezone in payment store.
     }
 
     fn parse_validate_invoice(&self, invoice: &str) -> Result<Invoice> {
