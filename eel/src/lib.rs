@@ -548,8 +548,9 @@ impl LightningNode {
         task_manager.restart(FOREGROUND_PERIODS);
     }
 
-    pub fn change_timezone_config(&self, _timezone_config: TzConfig) {
-        // TODO: Change timezone in payment store.
+    pub fn change_timezone_config(&self, timezone_config: TzConfig) {
+        let mut payment_store = self.payment_store.lock().unwrap();
+        payment_store.update_timezone_config(timezone_config);
     }
 
     fn parse_validate_invoice(&self, invoice: &str) -> Result<Invoice> {

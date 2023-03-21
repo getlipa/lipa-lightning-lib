@@ -3,6 +3,7 @@ use crate::hinter::{CommandHint, CommandHinter};
 use uniffi_lipalightninglib::TzConfig;
 
 use bitcoin::secp256k1::PublicKey;
+use chrono::offset::FixedOffset;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use rustyline::config::{Builder, CompletionType};
@@ -357,16 +358,25 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
         Err(e) => return Err(e.to_string()),
     };
 
-    println!("Total of {} payments\n", payments.len());
-
+    println!("Total of {} payments\n", payments.len().to_string().bold());
     for payment in payments {
+        let payment_type = format!("{:?}", payment.payment_type);
         let created_at: DateTime<Utc> = payment.created_at.timestamp.into();
-        let latest_state_change_at: DateTime<Utc> = payment.latest_state_change_at.timestamp.into();
+        let timezone = FixedOffset::east_opt(payment.created_at.timezone_utc_offset_secs).unwrap();
+        let created_at = created_at.with_timezone(&timezone);
+
+        let latest_change_at: DateTime<Utc> = payment.latest_state_change_at.timestamp.into();
+        let timezone =
+            FixedOffset::east_opt(payment.latest_state_change_at.timezone_utc_offset_secs).unwrap();
+        let latest_change_at = latest_change_at.with_timezone(&timezone);
         println!(
-            "{:?} payment created at {} and with latest state change at {}",
-            payment.payment_type,
-            created_at.format("%d/%m/%Y %T"),
-            latest_state_change_at.format("%d/%m/%Y %T")
+            "{} payment created at {created_at} {}",
+            payment_type.bold(),
+            payment.created_at.timezone_id
+        );
+        println!(
+            "and with latest state change at {latest_change_at} {}",
+            payment.latest_state_change_at.timezone_id
         );
         println!("      State:              {:?}", payment.payment_state);
         println!("      Amount msat:        {}", payment.amount_msat);

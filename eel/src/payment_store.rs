@@ -92,6 +92,10 @@ impl PaymentStore {
         })
     }
 
+    pub fn update_timezone_config(&mut self, timezone_config: TzConfig) {
+        self.timezone_config = timezone_config;
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new_incoming_payment(
         &mut self,
