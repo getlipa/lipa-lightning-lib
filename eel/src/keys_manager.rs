@@ -2,7 +2,7 @@ use crate::errors::Result;
 use crate::random;
 use crate::secret::Secret;
 
-use bdk::keys::bip39::{Language, Mnemonic};
+use bip39::{Language, Mnemonic};
 use cipher::consts::U32;
 use lightning::chain::keysinterface::KeysManager;
 use perro::MapToError;
