@@ -236,10 +236,11 @@ interface LightningNode {
     // After this method returns, the consumer of this library will learn about a successful/failed payment through the
     // callbacks `payment_sent()` and `payment_failed()` in `EventsCallback`.
     //    - invoice - a BOLT-11 invoice (normally starts with lnbc)
+    //    - amount_msat - amount in millisats to be paid, might be up to twice the expected amount or any amount for an open invoice (with no amount) 
     //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
     //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
     [Throws=LnError]
-    void pay_invoice(string invoice, string metadata);
+    void pay_invoice(string invoice, u64 amount_msat, string metadata);
 
     // Get a list of the latest payments
     //    - number_of_payments - the maximum number of payments that will be returned
