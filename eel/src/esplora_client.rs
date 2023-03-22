@@ -1,7 +1,7 @@
 use crate::errors::*;
 use std::collections::HashMap;
 
-use bitcoin::{BlockHeader, Transaction};
+use bitcoin::Transaction;
 use esplora_client::blocking::BlockingClient;
 use esplora_client::Builder;
 use perro::MapToError;
@@ -10,14 +10,6 @@ static ESPLORA_TIMEOUT_SECS: u64 = 30;
 
 pub(crate) struct EsploraClient {
     client: BlockingClient,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct ConfirmedTransaction {
-    pub tx: Transaction,
-    pub block_height: u32,
-    pub block_header: BlockHeader,
-    pub position: usize, // position within the block
 }
 
 impl EsploraClient {
