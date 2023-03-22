@@ -1,10 +1,9 @@
 #![allow(dead_code)]
 
 use crate::errors::Result;
-use bdk::bitcoin::hashes::hex::ToHex;
-use bdk::bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
-use bdk::bitcoin::Network;
-use bdk::miniscript::ToPublicKey;
+use bitcoin::hashes::hex::ToHex;
+use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
+use bitcoin::Network;
 use perro::MapToError;
 use secp256k1::{PublicKey, SECP256K1};
 use std::str::FromStr;
@@ -13,7 +12,7 @@ const PERSISTENCE_ENCRYPTION_KEY: &str = "m/76738065'/0'/1";
 
 pub struct KeyPair {
     pub secret_key: [u8; 32],
-    pub public_key: Vec<u8>,
+    pub public_key: [u8; 33],
 }
 
 pub struct KeyPairHex {
@@ -45,9 +44,7 @@ pub fn derive_key_pair(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair
         .map_to_permanent_failure("Failed to derive keys")?;
 
     let secret_key = derived_xpriv.private_key.secret_bytes();
-    let public_key = PublicKey::from_secret_key(SECP256K1, &derived_xpriv.private_key)
-        .to_public_key()
-        .to_bytes();
+    let public_key = PublicKey::from_secret_key(SECP256K1, &derived_xpriv.private_key).serialize();
 
     Ok(KeyPair {
         secret_key,
@@ -58,7 +55,7 @@ pub fn derive_key_pair(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bdk::keys::bip39::Mnemonic;
+    use bip39::Mnemonic;
     use std::str::FromStr;
 
     const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";

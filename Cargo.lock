@@ -725,7 +725,7 @@ version = "0.1.0"
 dependencies = [
  "aes",
  "aes-gcm",
- "bdk",
+ "bip39",
  "bitcoin",
  "chrono",
  "cipher",
