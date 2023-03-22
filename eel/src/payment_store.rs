@@ -21,7 +21,7 @@ pub enum PaymentState {
     Created,
     Succeeded,
     Failed,
-    Retrying,
+    Retried,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -265,7 +265,7 @@ impl PaymentStore {
                 ",
                 (
                     hash,
-                    PaymentState::Retrying as u8,
+                    PaymentState::Retried as u8,
                     &self.timezone_config.timezone_id,
                     self.timezone_config.timezone_utc_offset_secs,
                 ),
@@ -701,7 +701,7 @@ mod tests {
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 2);
         let payment = payments.get(0).unwrap();
-        assert_eq!(payment.payment_state, PaymentState::Retrying);
+        assert_eq!(payment.payment_state, PaymentState::Retried);
         assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
         assert_eq!(payment.latest_state_change_at.timezone_id, TEST_TZ_ID);
