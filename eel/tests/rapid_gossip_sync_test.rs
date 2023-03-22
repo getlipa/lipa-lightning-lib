@@ -33,6 +33,9 @@ mod rapid_gossip_sync_test {
             .unwrap()
             .pub_key;
 
+        let invoice_test_payment_retry =
+            nigiri::issue_invoice(NodeInstance::NigiriCln, "test", ONE_K_SATS, 3600).unwrap();
+
         {
             let node = node_handle.start().unwrap();
             let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
@@ -84,6 +87,15 @@ mod rapid_gossip_sync_test {
             sleep(Duration::from_secs(10));
             assert!(node.get_node_info().channels_info.outbound_capacity_msat > 0);
 
+            // The node hasn't yet learned about the new channels so it won't be able to pay
+            assert!(matches!(
+                node.pay_invoice(invoice_test_payment_retry.clone(), String::new()),
+                Err(perro::Error::RuntimeError {
+                    code: eel::errors::RuntimeErrorCode::NoRouteFound,
+                    ..
+                })
+            ));
+
             // wait for the RGS server to learn about the new channels (100 seconds isn't enough)
             sleep(Duration::from_secs(150));
 
@@ -103,6 +115,10 @@ mod rapid_gossip_sync_test {
             assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
 
             send_payment_flow(&node, NodeInstance::NigiriCln, ONE_K_SATS);
+
+            // If paying an invoice has failed, retrying is possible
+            node.pay_invoice(invoice_test_payment_retry, String::new())
+                .unwrap();
 
             // Create new channel - the 3L node will have to learn about it in a partial sync
             nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false)
