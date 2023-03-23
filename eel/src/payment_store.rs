@@ -26,7 +26,7 @@ pub enum PaymentState {
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct TzTime {
-    pub timestamp: SystemTime,
+    pub time: SystemTime,
     pub timezone_id: String,
     pub timezone_utc_offset_secs: i32,
 }
@@ -382,7 +382,7 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let latest_state_change_at_timezone_id = row.get(11)?;
     let latest_state_change_at_timezone_utc_offset_secs = row.get(12)?;
     let latest_state_change_at = TzTime {
-        timestamp: SystemTime::from(latest_state_change_at_timestamp),
+        time: SystemTime::from(latest_state_change_at_timestamp),
         timezone_id: latest_state_change_at_timezone_id,
         timezone_utc_offset_secs: latest_state_change_at_timezone_utc_offset_secs,
     };
@@ -391,7 +391,7 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let created_at_timezone_id = row.get(15)?;
     let created_at_timezone_utc_offset_secs = row.get(16)?;
     let created_at = TzTime {
-        timestamp: SystemTime::from(created_at_timestamp),
+        time: SystemTime::from(created_at_timestamp),
         timezone_id: created_at_timezone_id,
         timezone_utc_offset_secs: created_at_timezone_utc_offset_secs,
     };
@@ -598,7 +598,7 @@ mod tests {
         assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
         assert_eq!(payment.created_at, payment.latest_state_change_at);
-        let created_at = payment.created_at.timestamp;
+        let created_at = payment.created_at.time;
 
         payment_store.fill_preimage(&hash, &preimage).unwrap();
 
@@ -623,12 +623,9 @@ mod tests {
             payment.latest_state_change_at.timezone_utc_offset_secs,
             TEST_TZ_OFFSET
         );
-        assert_eq!(payment.created_at.timestamp, created_at);
-        assert_ne!(
-            payment.created_at.timestamp,
-            payment.latest_state_change_at.timestamp
-        );
-        assert!(payment.created_at.timestamp < payment.latest_state_change_at.timestamp);
+        assert_eq!(payment.created_at.time, created_at);
+        assert_ne!(payment.created_at.time, payment.latest_state_change_at.time);
+        assert!(payment.created_at.time < payment.latest_state_change_at.time);
 
         // New outgoing payment that fails
         let hash = vec![5, 6, 7, 8];
@@ -673,7 +670,7 @@ mod tests {
         assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
         assert_eq!(payment.created_at, payment.latest_state_change_at);
-        let created_at = payment.created_at.timestamp;
+        let created_at = payment.created_at.time;
 
         // To be able to test the difference between created_at and latest_state_change_at
         sleep(Duration::from_secs(1));
@@ -690,12 +687,9 @@ mod tests {
             payment.latest_state_change_at.timezone_utc_offset_secs,
             TEST_TZ_OFFSET
         );
-        assert_eq!(payment.created_at.timestamp, created_at);
-        assert_ne!(
-            payment.created_at.timestamp,
-            payment.latest_state_change_at.timestamp
-        );
-        assert!(payment.created_at.timestamp < payment.latest_state_change_at.timestamp);
+        assert_eq!(payment.created_at.time, created_at);
+        assert_ne!(payment.created_at.time, payment.latest_state_change_at.time);
+        assert!(payment.created_at.time < payment.latest_state_change_at.time);
 
         payment_store.payment_retrying(&hash).unwrap();
         let payments = payment_store.get_latest_payments(100).unwrap();
@@ -709,12 +703,9 @@ mod tests {
             payment.latest_state_change_at.timezone_utc_offset_secs,
             TEST_TZ_OFFSET
         );
-        assert_eq!(payment.created_at.timestamp, created_at);
-        assert_ne!(
-            payment.created_at.timestamp,
-            payment.latest_state_change_at.timestamp
-        );
-        assert!(payment.created_at.timestamp < payment.latest_state_change_at.timestamp);
+        assert_eq!(payment.created_at.time, created_at);
+        assert_ne!(payment.created_at.time, payment.latest_state_change_at.time);
+        assert!(payment.created_at.time < payment.latest_state_change_at.time);
 
         // New outgoing payment that succeedes
         let hash = vec![1, 3, 5, 7];
@@ -759,7 +750,7 @@ mod tests {
         assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
         assert_eq!(payment.created_at, payment.latest_state_change_at);
-        let created_at = payment.created_at.timestamp;
+        let created_at = payment.created_at.time;
 
         // To be able to test the difference between created_at and latest_state_change_at
         sleep(Duration::from_secs(1));
@@ -780,12 +771,9 @@ mod tests {
             payment.latest_state_change_at.timezone_utc_offset_secs,
             TEST_TZ_OFFSET
         );
-        assert_eq!(payment.created_at.timestamp, created_at);
-        assert_ne!(
-            payment.created_at.timestamp,
-            payment.latest_state_change_at.timestamp
-        );
-        assert!(payment.created_at.timestamp < payment.latest_state_change_at.timestamp);
+        assert_eq!(payment.created_at.time, created_at);
+        assert_ne!(payment.created_at.time, payment.latest_state_change_at.time);
+        assert!(payment.created_at.time < payment.latest_state_change_at.time);
 
         let payment_by_hash = payment_store.get_payment(&hash).unwrap();
         assert_eq!(payment, &payment_by_hash);

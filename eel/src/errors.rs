@@ -7,14 +7,16 @@ pub enum RuntimeErrorCode {
     LspServiceUnavailable,
     RemoteStorageError,
     RgsServiceUnavailable,
+    RgsUpdateError,
+
+    ObjectNotFound,
 
     AlreadyUsedInvoice,
+    PayingToSelf,
     NoRouteFound,
-    RgsUpdateError,
     SendFailure,
 
     GenericError,
-    ObjectNotFound,
 }
 
 impl Display for RuntimeErrorCode {
