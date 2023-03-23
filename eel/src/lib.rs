@@ -494,7 +494,7 @@ impl LightningNode {
         if let Ok(payment) = payment_store.get_payment(invoice_struct.payment_hash()) {
             match payment.payment_type {
                 PaymentType::Receiving => return Err(runtime_error(
-                    RuntimeErrorCode::AlreadyUsedInvoice,
+                    RuntimeErrorCode::PayingToSelf,
                     "This invoice was issued by the local node. Paying yourself is not supported.",
                 )),
                 PaymentType::Sending => {
