@@ -312,6 +312,9 @@ namespace lipalightninglib {
     // Calling this function with empty prefix will return the full list of BIP-39 words.
     sequence<string> words_by_prefix(string prefix);
 
+    [Throws=LnError]
+    void accept_terms_and_conditions(sequence<u8> seed, string graphql_url);
+
     // Performs a recovery procedure by fetching necessary data from remote storage.
     // It should and can only be called on a fresh install of the app, if the user wants to recover a previously created wallet.
     // If no existing wallet is found, returns an error.
@@ -366,6 +369,7 @@ interface LnError {
 // A code that specifies the RuntimeError that occurred
 enum RuntimeErrorCode {
     // CONNECTIVITY ERRORS
+    "AuthServiceUnvailable", // The backed auth service is unavailable.
     "EsploraServiceUnavailable", // The esplora service is unavailable. Could there be a loss of internet connection?
     "ExchangeRateProviderUnavailable", // The exchange rate service is unavailable. Could there be a loss of internet connection?
     "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
