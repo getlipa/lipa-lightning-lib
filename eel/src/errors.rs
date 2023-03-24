@@ -11,6 +11,8 @@ pub enum RuntimeErrorCode {
 
     ObjectNotFound,
 
+    NonExistingWallet,
+
     AlreadyUsedInvoice,
     PayingToSelf,
     NoRouteFound,

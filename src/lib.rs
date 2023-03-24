@@ -7,12 +7,14 @@ mod config;
 mod eel_interface_impl;
 mod exchange_rate_provider;
 mod native_logger;
+mod recovery;
 mod sanitize_input;
 
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::Config;
 use crate::eel_interface_impl::{EventsImpl, RemoteStorageGraphql};
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
+use crate::recovery::recover_lightning_node;
 use std::fs;
 
 pub use eel::config::TzConfig;

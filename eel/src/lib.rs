@@ -11,6 +11,7 @@ pub mod lsp;
 pub mod node_info;
 pub mod p2p_networking;
 pub mod payment_store;
+pub mod recovery;
 pub mod secret;
 
 mod async_runtime;
