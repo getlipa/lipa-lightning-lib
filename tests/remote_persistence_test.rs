@@ -5,7 +5,7 @@ mod setup_3l;
 mod setup_env;
 
 #[cfg(feature = "nigiri")]
-mod node_info_test {
+mod remote_persistence_test {
     use crate::setup_3l::NodeHandle;
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
@@ -50,6 +50,8 @@ mod node_info_test {
         assert!(!get_monitors_dir_contents().status.success()); // prove monitor files are gone
 
         // Recover node from remote persistence
+        node_handle.recover().unwrap();
+
         let node = node_handle.start().unwrap();
 
         // prove monitor files are back for the same channels (file names = same channel ids)

@@ -27,6 +27,18 @@ pub(crate) type ChainMonitor = LdkChainMonitor<
 pub(crate) type ChannelManager =
     SimpleArcChannelManager<ChainMonitor, TxBroadcaster, FeeEstimator, LightningLogger>;
 
+pub(crate) type ChannelManagerReadArgs<'a> = lightning::ln::channelmanager::ChannelManagerReadArgs<
+    'a,
+    Arc<ChainMonitor>,
+    Arc<TxBroadcaster>,
+    Arc<KeysManager>,
+    Arc<KeysManager>,
+    Arc<KeysManager>,
+    Arc<FeeEstimator>,
+    Arc<Router>,
+    Arc<LightningLogger>,
+>;
+
 pub(crate) type PeerManager = lightning::ln::peer_handler::PeerManager<
     SocketDescriptor,
     Arc<ChannelManager>,

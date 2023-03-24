@@ -373,9 +373,6 @@ enum RuntimeErrorCode {
     "RgsServiceUnavailable", // The rapid gossip sync service is unavailable. Could there be a loss of internet connection?
     "RgsUpdateError", // Failed to apply update. Maybe retry?
 
-    // This will most likely disappear with the introduction of `NonExistingWallet`
-    "ObjectNotFound", // An object could not be read from storage because it was not found
-
     // RECOVERY ERRORS
     "NonExistingWallet", // A recovery process couldn't be completed because no recovery data could be found. Most likely the recovery phrase wasn't created by the lipa wallet.
 
@@ -387,4 +384,5 @@ enum RuntimeErrorCode {
 
     // OTHER ERRORS
     "GenericError", // A generic error for unexpected/unknown runtime errors
+    "ObjectNotFound", // An object could not be read from storage because it was not found
 };

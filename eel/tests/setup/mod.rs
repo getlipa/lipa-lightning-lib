@@ -6,6 +6,7 @@ mod print_events_handler;
 use crate::setup_env::config::get_testing_config;
 use eel::config::Config;
 use eel::interfaces::{ExchangeRateProvider, RemoteStorage};
+use eel::recovery::recover_lightning_node;
 use eel::LightningNode;
 use mocked_remote_storage::MockedRemoteStorage;
 use print_events_handler::PrintEventsHandler;
@@ -51,6 +52,14 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
 
     pub fn get_storage(&mut self) -> &mut S {
         &mut self.storage
+    }
+
+    pub fn recover(&self) -> eel::errors::Result<()> {
+        recover_lightning_node(
+            self.config.seed,
+            self.config.local_persistence_path.clone(),
+            Box::new(self.storage.clone()),
+        )
     }
 }
 
