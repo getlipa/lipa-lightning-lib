@@ -311,6 +311,12 @@ namespace lipalightninglib {
     // Return a list of valid BIP-39 English words starting with the prefix.
     // Calling this function with empty prefix will return the full list of BIP-39 words.
     sequence<string> words_by_prefix(string prefix);
+
+    // Performs a recovery procedure by fetching necessary data from remote storage.
+    // It should and can only be called on a fresh install of the app, if the user wants to recover a previously created wallet.
+    // If no existing wallet is found, returns an error.
+    [Throws=LnError]
+    void recover_lightning_node(sequence<u8> seed, string local_persistence_path, string graphql_url, string backend_health_url);
 };
 
 enum LogLevel {
@@ -359,6 +365,7 @@ interface LnError {
 
 // A code that specifies the RuntimeError that occurred
 enum RuntimeErrorCode {
+    // CONNECTIVITY ERRORS
     "EsploraServiceUnavailable", // The esplora service is unavailable. Could there be a loss of internet connection?
     "ExchangeRateProviderUnavailable", // The exchange rate service is unavailable. Could there be a loss of internet connection?
     "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
@@ -366,12 +373,18 @@ enum RuntimeErrorCode {
     "RgsServiceUnavailable", // The rapid gossip sync service is unavailable. Could there be a loss of internet connection?
     "RgsUpdateError", // Failed to apply update. Maybe retry?
 
+    // This will most likely disappear with the introduction of `NonExistingWallet`
     "ObjectNotFound", // An object could not be read from storage because it was not found
 
+    // RECOVERY ERRORS
+    "NonExistingWallet", // A recovery process couldn't be completed because no recovery data could be found. Most likely the recovery phrase wasn't created by the lipa wallet.
+
+    // PAYMENT SENDING ERRORS
     "AlreadyUsedInvoice", // An already recognized invoice tried to be paid. Either a payment attempt is in progress or the invoice has already been paid.
     "PayingToSelf", // A locally issued invoice tried to be paid. Self-payments are not supported.
     "NoRouteFound", // Many things can cause this. Do we have enough funds?
     "SendFailure", // A path was found but sending failed. Many things can cause this
 
+    // OTHER ERRORS
     "GenericError", // A generic error for unexpected/unknown runtime errors
 };
