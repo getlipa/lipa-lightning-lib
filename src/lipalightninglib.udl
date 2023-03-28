@@ -53,7 +53,7 @@ interface LightningNode {
     [Throws=LnError]
     InvoiceDetails create_invoice(u64 amount_msat, string description, string metadata);
 
-    // Validates and, if valid, decodes an invoice returning detailed information
+    // Decodes an invoice returning detailed information
     //    - invoice - a BOLT-11 invoice (Mainnet invoices start with "lnbc")
     [Throws=LnError]
     InvoiceDetails decode_invoice(string invoice);
@@ -62,7 +62,11 @@ interface LightningNode {
     // If successful, it doesn't mean that the payment itself was successful (funds received by the payee).
     // After this method returns, the consumer of this library will learn about a successful/failed payment through the
     // callbacks `payment_sent()` and `payment_failed()` in `EventsCallback`.
-    //    - invoice - a BOLT-11 invoice (normally starts with lnbc)
+    //
+    // Parameters:
+    //    - invoice - a BOLT-11 invoice (normally starts with lnbc). The invoice must:
+    //          * use the same network as the one this node operates on
+    //          * have not expired
     //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
     //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
     [Throws=LnError]
@@ -238,6 +242,7 @@ dictionary InvoiceDetails {
     timestamp creation_timestamp; // The moment an invoice was created (UTC)
     duration expiry_interval; // The interval after which the invoice expires (creation_timestamp + expiry_interval = expiry_timestamp)
     timestamp expiry_timestamp; // The moment an invoice expires (UTC)
+    Network network; // The Bitcoin network the invoice relates to
 };
 
 // Information about an incoming or outgoing payment

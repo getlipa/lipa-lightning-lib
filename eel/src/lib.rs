@@ -37,7 +37,7 @@ use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::interfaces::{EventHandler, ExchangeRateProvider, ExchangeRates, RemoteStorage};
 pub use crate::invoice::InvoiceDetails;
-use crate::invoice::{create_invoice, CreateInvoiceParams};
+use crate::invoice::{create_invoice, validate_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
 use crate::logger::LightningLogger;
 use crate::lsp::{calculate_fee, LspClient, LspFee};
@@ -400,8 +400,8 @@ impl LightningNode {
     }
 
     pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
-        let invoice = invoice::parse_validate_invoice(self.config.network, &invoice)?;
-        invoice::get_invoice_details(invoice)
+        let invoice = invoice::parse_invoice(&invoice)?;
+        invoice::get_invoice_details(&invoice)
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
@@ -459,7 +459,9 @@ impl LightningNode {
         invoice: &str,
         metadata: &str,
     ) -> Result<Invoice> {
-        let invoice_struct = invoice::parse_validate_invoice(self.config.network, invoice)?;
+        let invoice_struct = invoice::parse_invoice(invoice)?;
+
+        validate_invoice(self.config.network, &invoice_struct)?;
 
         let amount_msat = invoice_struct
             .amount_milli_satoshis()

@@ -340,7 +340,7 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let lsp_fees_msat = row.get(6)?;
     let invoice: String = row.get(7)?;
     let invoice_details = invoice::get_invoice_details(
-        Invoice::from_str(&invoice)
+        &Invoice::from_str(&invoice)
             .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, Type::Text, Box::new(e)))?,
     )
     .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, Type::Text, Box::new(e)))?;

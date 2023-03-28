@@ -8,6 +8,7 @@ use bitcoin::hashes::hex::ToHex;
 use lightning::util::events::{Event, EventHandler, PaymentPurpose};
 use log::{error, info, trace};
 use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 pub(crate) struct LipaEventHandler {
     channel_manager: Arc<ChannelManager>,
@@ -57,14 +58,31 @@ impl EventHandler for LipaEventHandler {
                     amount_msat,
                 );
 
-                if let Ok(payment) = self
-                    .payment_store
-                    .lock()
-                    .unwrap()
-                    .get_payment(&payment_hash.0)
-                {
+                let payment_store = self.payment_store.lock().unwrap();
+
+                if let Ok(payment) = payment_store.get_payment(&payment_hash.0) {
                     if payment.payment_state == PaymentState::Succeeded {
                         info!("Registered incoming payment for {} msat with hash {}. Rejecting because we've already claimed a payment with the same hash", amount_msat, payment_hash.0.to_hex());
+                        self.channel_manager.fail_htlc_backwards(&payment_hash);
+                        return;
+                    } else if payment.payment_state == PaymentState::InvoiceExpired {
+                        info!("Registered incoming payment for {} msat with hash {}. Rejecting because the corresponding invoice expired", amount_msat, payment_hash.0.to_hex());
+                        self.channel_manager.fail_htlc_backwards(&payment_hash);
+                        return;
+                    } else if payment.invoice_details.expiry_timestamp < SystemTime::now() {
+                        if payment_store
+                            .new_payment_state(
+                                payment_hash.0.as_slice(),
+                                PaymentState::InvoiceExpired,
+                            )
+                            .is_err()
+                        {
+                            error!(
+                                "Failed to set InvoiceExpired status in the payment db for payment hash {}",
+                                payment_hash.0.to_hex()
+                            );
+                        }
+                        info!("Registered incoming payment for {} msat with hash {}. Rejecting because the corresponding invoice expired", amount_msat, payment_hash.0.to_hex());
                         self.channel_manager.fail_htlc_backwards(&payment_hash);
                         return;
                     }
@@ -80,10 +98,7 @@ impl EventHandler for LipaEventHandler {
                             amount_msat,
                             payment_hash.0.to_hex()
                         );
-                        if self
-                            .payment_store
-                            .lock()
-                            .unwrap()
+                        if payment_store
                             .fill_preimage(payment_hash.0.as_slice(), payment_preimage.0.as_slice())
                             .is_err()
                         {
