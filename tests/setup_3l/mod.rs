@@ -1,8 +1,8 @@
 use crate::print_events_handler::PrintEventsHandler;
 use crate::setup_env::config::{get_testing_config, LOCAL_PERSISTENCE_PATH};
 
-use uniffi_lipalightninglib::Config;
 use uniffi_lipalightninglib::LightningNode;
+use uniffi_lipalightninglib::{recover_lightning_node, Config};
 
 use core::time::Duration;
 use eel::config::TzConfig;
@@ -58,6 +58,15 @@ impl NodeHandle {
     pub fn reset_state() {
         let _ = fs::remove_dir_all(LOCAL_PERSISTENCE_PATH);
         fs::create_dir(LOCAL_PERSISTENCE_PATH).unwrap();
+    }
+
+    pub fn recover(&self) -> eel::errors::Result<()> {
+        recover_lightning_node(
+            self.config.seed.to_vec(),
+            self.config.local_persistence_path.clone(),
+            self.config.graphql_url.clone(),
+            self.config.backend_health_url.clone(),
+        )
     }
 }
 

@@ -106,13 +106,6 @@ pub struct LightningNode {
     payment_store: Arc<Mutex<PaymentStore>>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum StartupVariant {
-    FreshStart,
-    Recovery,
-    Normal,
-}
-
 impl LightningNode {
     pub fn new(
         config: Config,
@@ -170,7 +163,7 @@ impl LightningNode {
         let keys_manager = Arc::new(init_keys_manager(&config.get_seed_first_half())?);
 
         // Step 9. Read ChannelMonitor state from disk/remote
-        let (startup_variant, mut channel_monitors) =
+        let mut channel_monitors =
             persister.read_channel_monitors(&*keys_manager, &*keys_manager)?;
 
         // Step 10: Initialize the NetworkGraph
@@ -226,7 +219,6 @@ impl LightningNode {
             mut_channel_monitors,
             mobile_node_user_config,
             chain_params,
-            startup_variant,
         )?;
         let channel_manager = Arc::new(channel_manager);
 

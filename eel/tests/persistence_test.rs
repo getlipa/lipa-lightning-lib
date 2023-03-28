@@ -15,6 +15,7 @@ mod persistence_test {
     use std::time::Duration;
 
     use crate::setup::{mocked_storage_node_configurable, NodeHandle};
+    use crate::setup_env::config::LOCAL_PERSISTENCE_PATH;
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
     use crate::try_cmd_repeatedly;
@@ -91,8 +92,15 @@ mod persistence_test {
 
         // Wait for eel-node to shutdown
         sleep(Duration::from_secs(5));
+        // Recovery isn't possible while there's a local install
+        assert!(matches!(
+            node_handle.recover(),
+            Err(perro::Error::InvalidInput { .. })
+        ));
         // Remove the local state
-        fs::remove_dir_all(".3l_local_test").unwrap();
+        fs::remove_dir_all(LOCAL_PERSISTENCE_PATH).unwrap();
+        // Perform recovery procedure
+        node_handle.recover().unwrap();
 
         run_flow_2nd_jit_channel(node_handle);
     }
@@ -150,7 +158,7 @@ mod persistence_test {
 
         nigiri::pay_invoice(paying_node, &invoice_details.invoice).unwrap();
 
-        assert_payment_received(&node, initial_balance + payment_amount - lsp_fee);
+        assert_payment_received(node, initial_balance + payment_amount - lsp_fee);
     }
 
     fn assert_payment_received(node: &LightningNode, expected_balance: u64) {

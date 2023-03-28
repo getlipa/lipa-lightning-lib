@@ -1,8 +1,10 @@
 use crate::encryption_symmetric::{decrypt, encrypt};
 use crate::errors::*;
 use crate::interfaces::RemoteStorage;
-use crate::types::{ChainMonitor, ChannelManager, NetworkGraph, Router, Scorer};
-use crate::{LightningLogger, StartupVariant};
+use crate::types::{
+    ChainMonitor, ChannelManager, ChannelManagerReadArgs, NetworkGraph, Router, Scorer,
+};
+use crate::LightningLogger;
 use std::cmp::Ordering;
 
 use crate::tx_broadcaster::TxBroadcaster;
@@ -18,19 +20,17 @@ use lightning::chain::keysinterface::{
 };
 use lightning::chain::transaction::OutPoint;
 use lightning::chain::{ChannelMonitorUpdateStatus, Watch};
-use lightning::ln::channelmanager::{
-    ChainParameters, ChannelManagerReadArgs, SimpleArcChannelManager,
-};
+use lightning::ln::channelmanager::{ChainParameters, SimpleArcChannelManager};
 use lightning::routing::router;
 use lightning::routing::scoring::{ProbabilisticScoringParameters, WriteableScore};
 use lightning::util::config::UserConfig;
 use lightning::util::logger::Logger;
-use lightning::util::persist::Persister;
+use lightning::util::persist::{KVStorePersister, Persister};
 use lightning::util::ser::{ReadableArgs, Writeable};
 use lightning_persister::FilesystemPersister;
-use log::{debug, error, info};
+use log::{debug, error, warn};
 use perro::Error::RuntimeError;
-use perro::{permanent_failure, MapToError};
+use perro::{invalid_input, permanent_failure, runtime_error, MapToError};
 use std::fs;
 use std::io::{BufReader, Cursor};
 use std::ops::Deref;
@@ -83,13 +83,12 @@ impl StoragePersister {
         &self,
         entropy_source: ES,
         signer_provider: SP,
-    ) -> Result<(
-        StartupVariant,
+    ) -> Result<
         Vec<(
             BlockHash,
             ChannelMonitor<<SP::Target as SignerProvider>::Signer>,
         )>,
-    )>
+    >
     where
         ES::Target: EntropySource + Sized,
         SP::Target: SignerProvider + Sized,
@@ -99,24 +98,20 @@ impl StoragePersister {
             .read_channelmonitors(&*entropy_source, &*signer_provider)
             .map_to_permanent_failure("Failed to read channel monitors from disk")?;
 
+        // Fetch remote channel monitors to make sure remote state hasn't advanced
         let mut remote_channel_monitors =
-            self.read_remote_channel_monitors(entropy_source, signer_provider)?;
+            self.fetch_remote_channel_monitors(entropy_source, signer_provider)?;
 
-        let startup_variant = Self::infer_startup_variant::<SP>(
+        Self::verify_local_state_is_latest_state::<SP>(
             &mut local_channel_monitors,
             &mut remote_channel_monitors,
         )?;
-        let monitors = match startup_variant {
-            StartupVariant::FreshStart => Vec::new(),
-            StartupVariant::Recovery => remote_channel_monitors,
-            StartupVariant::Normal => local_channel_monitors,
-        };
 
-        Ok((startup_variant, monitors))
+        Ok(local_channel_monitors)
     }
 
     #[allow(clippy::type_complexity)]
-    fn read_remote_channel_monitors<ES: Deref, SP: Deref>(
+    pub fn fetch_remote_channel_monitors<ES: Deref, SP: Deref>(
         &self,
         entropy_source: ES,
         signer_provider: SP,
@@ -177,7 +172,7 @@ impl StoragePersister {
         Ok(remote_channel_monitors)
     }
 
-    fn infer_startup_variant<SP: Deref>(
+    fn verify_local_state_is_latest_state<SP: Deref>(
         local_monitors: &mut Vec<(
             BlockHash,
             ChannelMonitor<<SP::Target as SignerProvider>::Signer>,
@@ -186,7 +181,7 @@ impl StoragePersister {
             BlockHash,
             ChannelMonitor<<SP::Target as SignerProvider>::Signer>,
         )>,
-    ) -> Result<StartupVariant>
+    ) -> Result<()>
     where
         SP::Target: SignerProvider + Sized,
     {
@@ -194,11 +189,7 @@ impl StoragePersister {
             // If we don't have any local ChannelMonitors, but have 1 or more remote ChannelMonitors,
             // we can assume that this is a new app installation.
             if !remote_monitors.is_empty() {
-                info!("This is a Recovery start! No local ChannelMonitors were found, but {} was/were retrieved from remote storage.", remote_monitors.len());
-                return Ok(StartupVariant::Recovery);
-            } else {
-                info!("This is a FreshStart start! No local or remote ChannelMonitors were found.");
-                return Ok(StartupVariant::FreshStart);
+                return Err(invalid_input(format!("Invalid seed. No local ChannelMonitors were found, but {} was/were retrieved from remote storage.", remote_monitors.len())));
             }
         }
 
@@ -209,8 +200,8 @@ impl StoragePersister {
                 // The local state is more recent than the remote one. As part of the node startup,
                 // every ChannelMonitor is persisted again so this is likely to get resolved.
                 // Let's log it anyway...
-                info!("This is a Normal start! Warning: the remote storage doesn't know about all channels.");
-                return Ok(StartupVariant::Normal);
+                warn!("The remote storage doesn't know about all channels.");
+                return Ok(());
             }
             Ordering::Equal => {}
             Ordering::Greater => {
@@ -242,7 +233,7 @@ impl StoragePersister {
                     // The remote ChannelMonitor isn't up-to-date. As part of the node startup, every
                     // ChannelMonitor is persisted again so this is likely to get resolved.
                     // Let's log it anyway...
-                    info!("Warning: the remote version of a channel monitor {} isn't as recent as the local one", local_monitor.get_funding_txo().0.to_channel_id().to_hex());
+                    warn!("The remote version of a channel monitor {} isn't as recent as the local one", local_monitor.get_funding_txo().0.to_channel_id().to_hex());
                 }
                 Ordering::Equal => {}
                 Ordering::Greater => {
@@ -251,8 +242,7 @@ impl StoragePersister {
                 }
             }
         }
-        info!("This is a Normal start!");
-        Ok(StartupVariant::Normal)
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -267,7 +257,6 @@ impl StoragePersister {
         channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>>,
         user_config: UserConfig,
         chain_params: ChainParameters,
-        startup_variant: StartupVariant,
     ) -> Result<ChannelManager> {
         let read_args = ChannelManagerReadArgs::new(
             Arc::clone(&keys_manager),
@@ -282,8 +271,10 @@ impl StoragePersister {
             channel_monitors,
         );
 
-        match startup_variant {
-            StartupVariant::FreshStart => {
+        let local_channel_manager = self.read_local_channel_manager(read_args)?;
+
+        match local_channel_manager {
+            None => {
                 let channel_manager = SimpleArcChannelManager::new(
                     fee_estimator,
                     chain_monitor,
@@ -298,48 +289,52 @@ impl StoragePersister {
                 );
                 Ok(channel_manager)
             }
-            StartupVariant::Recovery => {
-                // Try to get ChannelManager from remote
-                let encrypted_data = match self
-                    .storage
-                    .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string()) {
-                    Ok(data) => data,
-                    Err(RuntimeError {code: RuntimeErrorCode::ObjectNotFound, ..}) => return Err(permanent_failure(
-                        "Failed to find remote ChannelManager even though this was determined to be a Recovery start (which means it could be found before).",
-                    )),
-                    Err(e) => return Err(e),
-                };
-
-                let data = decrypt(&encrypted_data, &self.encryption_key)?;
-                let mut buffer = Cursor::new(&data);
-                let (_block_hash, channel_manager) = <(
-                        BlockHash,
-                        ChannelManager,
-                    )>::read(&mut buffer, read_args)
-                        .map_to_permanent_failure("Failed to parse a previously remotely persisted ChannelManager. Could it have been corrupted?")?;
-                Ok(channel_manager)
-            }
-            StartupVariant::Normal => {
-                // Get ChannelManager from local filesystem
-                let path =
-                    PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(MANAGER_KEY));
-                if let Ok(f) = fs::File::open(path) {
-                    let (_block_hash, channel_manager) =
-                        <(BlockHash, ChannelManager)>::read(
-                            &mut BufReader::new(f),
-                            read_args,
-                        )
-                            .map_to_permanent_failure("Failed to parse a previously locally persisted ChannelManager. Could it have been corrupted?")?;
-                    Ok(channel_manager)
-                } else {
-                    error!("Failed to find a local channel manager.");
-                    // TODO: should we try to get the remote ChannelMonitor in this scenario?
-                    Err(permanent_failure(
-                        "Failed to find a local ChannelMonitor during a normal startup",
-                    ))
-                }
-            }
+            Some(c) => Ok(c),
         }
+    }
+
+    fn read_local_channel_manager(
+        &self,
+        read_args: ChannelManagerReadArgs,
+    ) -> Result<Option<ChannelManager>> {
+        let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(MANAGER_KEY));
+        if !path.exists() {
+            return Ok(None);
+        }
+        if let Ok(f) = fs::File::open(path) {
+            let (_block_hash, channel_manager) =
+                <(BlockHash, ChannelManager)>::read(
+                    &mut BufReader::new(f),
+                    read_args,
+                )
+                    .map_to_permanent_failure("Failed to parse a previously locally persisted ChannelManager. Could it have been corrupted?")?;
+            Ok(Some(channel_manager))
+        } else {
+            error!("Failed to open the local channel manager file.");
+            Err(permanent_failure(
+                "Failed to open the local ChannelMonitor file",
+            ))
+        }
+    }
+
+    pub fn fetch_remote_channel_manager_serialized(&self) -> Result<Vec<u8>> {
+        let encrypted_data = match self
+            .storage
+            .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
+        {
+            Ok(data) => data,
+            Err(RuntimeError {
+                code: RuntimeErrorCode::ObjectNotFound,
+                ..
+            }) => {
+                return Err(runtime_error(
+                    RuntimeErrorCode::NonExistingWallet,
+                    "Failed to find remote ChannelManager",
+                ))
+            }
+            Err(e) => return Err(e),
+        };
+        decrypt(&encrypted_data, &self.encryption_key)
     }
 
     pub fn read_or_init_graph(
@@ -384,6 +379,43 @@ impl StoragePersister {
         }
         debug!("Couldn't find a previously persisted scorer. Creating a new one...");
         Ok(Scorer::new(params, graph, logger))
+    }
+
+    pub fn persist_serialized_manager_local(&self, channel_manager: &[u8]) -> Result<()> {
+        fs::write(
+            get_local_channel_manager_path(&self.fs_persister.get_data_dir()),
+            channel_manager,
+        )
+        .map_to_permanent_failure(
+            "Failed to locally persist the ChannelManager recovered from remote storage",
+        )
+    }
+
+    pub fn persist_channel_monitors_local(
+        &self,
+        monitors: Vec<(BlockHash, ChannelMonitor<InMemorySigner>)>,
+    ) -> Result<()> {
+        for (_, monitor) in monitors {
+            self.persist_channel_monitor_local(monitor.get_funding_txo().0, &monitor)?;
+        }
+        Ok(())
+    }
+
+    fn persist_channel_monitor_local<ChannelSigner: WriteableEcdsaChannelSigner>(
+        &self,
+        funding_txo: OutPoint,
+        monitor: &ChannelMonitor<ChannelSigner>,
+    ) -> Result<()> {
+        let key = format!(
+            "monitors/{}_{}",
+            funding_txo.txid.to_hex(),
+            funding_txo.index
+        );
+        self.fs_persister
+            .persist(&key, monitor)
+            .map_to_permanent_failure(
+                "Failed to locally persist a ChannelMonitor recovered from remote storage",
+            )
     }
 }
 
@@ -605,11 +637,35 @@ where
     }
 }
 
+pub(crate) fn has_local_install(local_persistence_path: &str) -> bool {
+    has_local_channel_manager(local_persistence_path)
+        || has_local_channel_monitors(local_persistence_path)
+}
+
+fn has_local_channel_manager(local_persistence_path: &str) -> bool {
+    fs::File::open(get_local_channel_manager_path(local_persistence_path)).is_ok()
+}
+
+fn has_local_channel_monitors(local_persistence_path: &str) -> bool {
+    let channel_monitors_dir_path = get_local_channel_monitors_dir_path(local_persistence_path);
+    match fs::read_dir(channel_monitors_dir_path) {
+        Ok(mut dir_entries) => dir_entries.next().is_some(),
+        Err(_) => false,
+    }
+}
+
+fn get_local_channel_manager_path(local_persistence_path: &str) -> PathBuf {
+    PathBuf::from(local_persistence_path).join(Path::new(MANAGER_KEY))
+}
+
+fn get_local_channel_monitors_dir_path(local_persistence_path: &str) -> PathBuf {
+    PathBuf::from(local_persistence_path).join(Path::new(MONITORS_BUCKET))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::errors::Error;
     use crate::storage_persister::StoragePersister;
-    use crate::StartupVariant;
     use bitcoin::BlockHash;
     use lightning::chain::channelmonitor::ChannelMonitor;
     use lightning::chain::keysinterface::{InMemorySigner, KeysManager};
@@ -633,13 +689,11 @@ mod tests {
         let mut local_monitors = Vec::new();
         let mut remote_monitors = Vec::new();
 
-        let startup_variant = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
+        StoragePersister::verify_local_state_is_latest_state::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         )
         .unwrap();
-
-        assert_eq!(startup_variant, StartupVariant::FreshStart);
     }
 
     #[test]
@@ -652,13 +706,11 @@ mod tests {
         remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_1_PATH));
         remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_1_PATH));
 
-        let startup_variant = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
+        StoragePersister::verify_local_state_is_latest_state::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         )
         .unwrap();
-
-        assert_eq!(startup_variant, StartupVariant::Normal);
     }
 
     #[test]
@@ -669,13 +721,12 @@ mod tests {
         remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_1_PATH));
         remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_1_PATH));
 
-        let startup_variant = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
+        let result = StoragePersister::verify_local_state_is_latest_state::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
-        )
-        .unwrap();
+        );
 
-        assert_eq!(startup_variant, StartupVariant::Recovery);
+        assert!(matches!(result, Err(perro::Error::InvalidInput { .. })));
     }
 
     #[test]
@@ -689,13 +740,11 @@ mod tests {
         remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_2_PATH));
         remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_2_PATH));
 
-        let startup_variant = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
+        StoragePersister::verify_local_state_is_latest_state::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         )
         .unwrap();
-
-        assert_eq!(startup_variant, StartupVariant::Normal);
     }
 
     #[test]
@@ -709,15 +758,12 @@ mod tests {
         remote_monitors.push(read_channel_monitor(MONITOR_3_STATE_3_PATH));
         remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_3_PATH));
 
-        let startup_variant_result = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
+        let result = StoragePersister::verify_local_state_is_latest_state::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         );
 
-        assert!(matches!(
-            startup_variant_result,
-            Err(Error::PermanentFailure { .. })
-        ))
+        assert!(matches!(result, Err(Error::PermanentFailure { .. })))
     }
 
     #[test]
@@ -730,13 +776,11 @@ mod tests {
         remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_1_PATH));
         remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_1_PATH));
 
-        let startup_variant = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
+        StoragePersister::verify_local_state_is_latest_state::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         )
         .unwrap();
-
-        assert_eq!(startup_variant, StartupVariant::Normal);
     }
 
     #[test]
@@ -749,15 +793,12 @@ mod tests {
         remote_monitors.push(read_channel_monitor(MONITOR_1_STATE_2_PATH));
         remote_monitors.push(read_channel_monitor(MONITOR_2_STATE_2_PATH));
 
-        let startup_variant_result = StoragePersister::infer_startup_variant::<Arc<KeysManager>>(
+        let result = StoragePersister::verify_local_state_is_latest_state::<Arc<KeysManager>>(
             &mut local_monitors,
             &mut remote_monitors,
         );
 
-        assert!(matches!(
-            startup_variant_result,
-            Err(Error::PermanentFailure { .. })
-        ))
+        assert!(matches!(result, Err(Error::PermanentFailure { .. })))
     }
 
     fn read_channel_monitor(path: &str) -> (BlockHash, ChannelMonitor<InMemorySigner>) {
