@@ -9,7 +9,7 @@ use uniffi_lipalightninglib::LightningNode;
 use uniffi_lipalightninglib::{Config, TzConfig};
 
 use bitcoin::Network;
-use eel::keys_manager::mnemonic_to_secret;
+use eel::keys_manager::generate_secret;
 use log::info;
 use std::thread::sleep;
 use std::time::Duration;
@@ -31,7 +31,15 @@ fn main() {
     let _ = args.next();
     let fiat_currency = args.next().unwrap_or("EUR".to_string());
 
-    let seed = generate_seed();
+    let seed = match fs::read(format!("{}/seed", BASE_DIR)) {
+        Ok(s) => s,
+        Err(_) => {
+            let seed = generate_seed();
+            fs::write(format!("{}/seed", BASE_DIR), &seed).unwrap();
+            seed
+        }
+    };
+
     let config = Config {
         network: Network::Regtest,
         seed,
@@ -80,9 +88,7 @@ fn init_logger() {
 
 fn generate_seed() -> Vec<u8> {
     let passphrase = "".to_string();
-    let mnemonic = "kid rent scatter hire lonely deal simple olympic stool juice ketchup situate crouch taste stone badge act minute borrow mail venue lunar walk empower".to_string();
-    let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
-    let secret = mnemonic_to_secret(mnemonic, passphrase).unwrap();
+    let secret = generate_secret(passphrase).unwrap();
     secret.seed
 }
 
