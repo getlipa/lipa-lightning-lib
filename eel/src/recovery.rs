@@ -68,19 +68,20 @@ pub fn recover_lightning_node(
 }
 
 fn has_local_install(local_persistence_path: &str) -> bool {
-    // ChannelManager
-    let channel_manager_path = get_local_channel_manager_path(local_persistence_path);
-    if fs::File::open(channel_manager_path).is_ok() {
-        return true;
-    }
-    // ChannelMonitors
+    has_local_channel_manager(local_persistence_path)
+        || has_local_channel_monitors(local_persistence_path)
+}
+
+fn has_local_channel_manager(local_persistence_path: &str) -> bool {
+    fs::File::open(get_local_channel_manager_path(local_persistence_path)).is_ok()
+}
+
+fn has_local_channel_monitors(local_persistence_path: &str) -> bool {
     let channel_monitors_dir_path = get_local_channel_monitors_dir_path(local_persistence_path);
-    if let Ok(mut dir_entries) = fs::read_dir(channel_monitors_dir_path) {
-        if dir_entries.next().is_some() {
-            return true;
-        }
+    match fs::read_dir(channel_monitors_dir_path) {
+        Ok(mut dir_entries) => dir_entries.next().is_some(),
+        Err(_) => false,
     }
-    false
 }
 
 fn get_local_channel_manager_path(local_persistence_path: &str) -> PathBuf {
