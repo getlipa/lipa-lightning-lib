@@ -26,6 +26,7 @@ pub enum PaymentState {
     Succeeded,
     Failed,
     Retried,
+    InvoiceExpired,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -205,7 +206,7 @@ impl PaymentStore {
     }
 
     pub fn incoming_payment_succeeded(&self, hash: &[u8]) -> Result<()> {
-        self.insert_payment_succeded_event(hash)
+        self.new_payment_state(hash, PaymentState::Succeeded)
     }
 
     pub fn outgoing_payment_succeeded(
@@ -214,12 +215,12 @@ impl PaymentStore {
         preimage: &[u8],
         network_fees_msat: u64,
     ) -> Result<()> {
-        self.insert_payment_succeded_event(hash)?;
+        self.new_payment_state(hash, PaymentState::Succeeded)?;
         self.fill_preimage(hash, preimage)?;
         self.fill_network_fees(hash, network_fees_msat)
     }
 
-    fn insert_payment_succeded_event(&self, hash: &[u8]) -> Result<()> {
+    pub fn new_payment_state(&self, hash: &[u8], state: PaymentState) -> Result<()> {
         self.db_conn
             .execute(
                 "\
@@ -229,47 +230,7 @@ impl PaymentStore {
                 ",
                 (
                     hash,
-                    PaymentState::Succeeded as u8,
-                    &self.timezone_config.timezone_id,
-                    self.timezone_config.timezone_utc_offset_secs,
-                ),
-            )
-            .map_to_invalid_input("Failed to add payment confirmed event to payments db")?;
-
-        Ok(())
-    }
-
-    pub fn payment_failed(&self, hash: &[u8]) -> Result<()> {
-        self.db_conn
-            .execute(
-                "\
-                INSERT INTO events (payment_id, type, timezone_id, timezone_utc_offset_secs) \
-                VALUES (
-                    (SELECT payment_id FROM payments WHERE hash=?1), ?2, ?3, ?4)
-                ",
-                (
-                    hash,
-                    PaymentState::Failed as u8,
-                    &self.timezone_config.timezone_id,
-                    self.timezone_config.timezone_utc_offset_secs,
-                ),
-            )
-            .map_to_invalid_input("Failed to add payment failed event to payments db")?;
-
-        Ok(())
-    }
-
-    pub fn payment_retrying(&self, hash: &[u8]) -> Result<()> {
-        self.db_conn
-            .execute(
-                "\
-                INSERT INTO events (payment_id, type, timezone_id, timezone_utc_offset_secs) \
-                VALUES (
-                    (SELECT payment_id FROM payments WHERE hash=?1), ?2, ?3, ?4)
-                ",
-                (
-                    hash,
-                    PaymentState::Retried as u8,
+                    state as u8,
                     &self.timezone_config.timezone_id,
                     self.timezone_config.timezone_utc_offset_secs,
                 ),
@@ -455,7 +416,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
             CREATE TABLE IF NOT EXISTS events (
               event_id INTEGER NOT NULL PRIMARY KEY,
               payment_id INTEGER NOT NULL,
-              type INTEGER CHECK( type in (0, 1, 2, 3) ) NOT NULL,
+              type INTEGER CHECK( type in (0, 1, 2, 3, 4) ) NOT NULL,
               inserted_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
               timezone_id TEXT NOT NULL,
               timezone_utc_offset_secs INTEGER NOT NULL,
@@ -684,7 +645,9 @@ mod tests {
         // To be able to test the difference between created_at and latest_state_change_at
         sleep(Duration::from_secs(1));
 
-        payment_store.payment_failed(&hash).unwrap();
+        payment_store
+            .new_payment_state(&hash, PaymentState::Failed)
+            .unwrap();
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 2);
         let payment = payments.get(0).unwrap();
@@ -700,7 +663,9 @@ mod tests {
         assert_ne!(payment.created_at.time, payment.latest_state_change_at.time);
         assert!(payment.created_at.time < payment.latest_state_change_at.time);
 
-        payment_store.payment_retrying(&hash).unwrap();
+        payment_store
+            .new_payment_state(&hash, PaymentState::Retried)
+            .unwrap();
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 2);
         let payment = payments.get(0).unwrap();

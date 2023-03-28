@@ -422,17 +422,17 @@ impl LightningNode {
             Err(e) => {
                 return match e {
                     PaymentError::Invoice(e) => {
-                        self.payment_store
-                            .lock()
-                            .unwrap()
-                            .payment_failed(invoice_struct.payment_hash())?;
+                        self.payment_store.lock().unwrap().new_payment_state(
+                            invoice_struct.payment_hash(),
+                            PaymentState::Failed,
+                        )?;
                         Err(invalid_input(format!("Invalid invoice - {e}")))
                     }
                     PaymentError::Sending(e) => {
-                        self.payment_store
-                            .lock()
-                            .unwrap()
-                            .payment_failed(invoice_struct.payment_hash())?;
+                        self.payment_store.lock().unwrap().new_payment_state(
+                            invoice_struct.payment_hash(),
+                            PaymentState::Failed,
+                        )?;
                         match e {
                             RetryableSendFailure::PaymentExpired => Err(runtime_error(
                                 RuntimeErrorCode::SendFailure,
@@ -484,7 +484,8 @@ impl LightningNode {
                             "This invoice has already been paid or is in the process of being paid. Please use a different one or wait until the current payment attempt fails before retrying.",
                         ));
                     }
-                    payment_store.payment_retrying(invoice_struct.payment_hash())?;
+                    payment_store
+                        .new_payment_state(invoice_struct.payment_hash(), PaymentState::Retried)?;
                 }
             }
         } else {
