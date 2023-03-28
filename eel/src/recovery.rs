@@ -2,17 +2,10 @@ use crate::errors::Result;
 use crate::interfaces::RemoteStorage;
 use crate::key_derivation;
 use crate::keys_manager::init_keys_manager;
-use crate::storage_persister::{StoragePersister, MANAGER_KEY, MONITORS_BUCKET};
-use bitcoin::hashes::hex::ToHex;
-use lightning::chain::channelmonitor::ChannelMonitor;
-use lightning::chain::keysinterface::WriteableEcdsaChannelSigner;
-use lightning::chain::transaction::OutPoint;
-use lightning::util::persist::KVStorePersister;
-use lightning_persister::FilesystemPersister;
+use crate::storage_persister::{has_local_install, StoragePersister};
 use log::info;
 use perro::{invalid_input, MapToError};
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub fn recover_lightning_node(
@@ -38,13 +31,7 @@ pub fn recover_lightning_node(
 
     // Fetch and persist ChannelManager
     let remote_channel_manager = storage.fetch_remote_channel_manager_serialized()?;
-    fs::write(
-        get_local_channel_manager_path(&local_persistence_path),
-        remote_channel_manager,
-    )
-    .map_to_permanent_failure(
-        "Failed to locally persist the ChannelManager recovered from remote storage",
-    )?;
+    storage.persist_serialized_manager_local(&remote_channel_manager)?;
 
     // Fetch and persist ChannelMonitors
     let mut seed_first_half = [0u8; 32];
@@ -58,53 +45,7 @@ pub fn recover_lightning_node(
         remote_channel_monitors.len()
     );
 
-    let persister = FilesystemPersister::new(local_persistence_path);
-
-    for (_, monitor) in remote_channel_monitors {
-        persist_channel_monitor(&persister, monitor.get_funding_txo().0, &monitor)?;
-    }
-
-    Ok(())
-}
-
-fn has_local_install(local_persistence_path: &str) -> bool {
-    has_local_channel_manager(local_persistence_path)
-        || has_local_channel_monitors(local_persistence_path)
-}
-
-fn has_local_channel_manager(local_persistence_path: &str) -> bool {
-    fs::File::open(get_local_channel_manager_path(local_persistence_path)).is_ok()
-}
-
-fn has_local_channel_monitors(local_persistence_path: &str) -> bool {
-    let channel_monitors_dir_path = get_local_channel_monitors_dir_path(local_persistence_path);
-    match fs::read_dir(channel_monitors_dir_path) {
-        Ok(mut dir_entries) => dir_entries.next().is_some(),
-        Err(_) => false,
-    }
-}
-
-fn get_local_channel_manager_path(local_persistence_path: &str) -> PathBuf {
-    PathBuf::from(local_persistence_path).join(Path::new(MANAGER_KEY))
-}
-
-fn get_local_channel_monitors_dir_path(local_persistence_path: &str) -> PathBuf {
-    PathBuf::from(local_persistence_path).join(Path::new(MONITORS_BUCKET))
-}
-
-fn persist_channel_monitor<ChannelSigner: WriteableEcdsaChannelSigner>(
-    persister: &FilesystemPersister,
-    funding_txo: OutPoint,
-    monitor: &ChannelMonitor<ChannelSigner>,
-) -> Result<()> {
-    let key = format!(
-        "monitors/{}_{}",
-        funding_txo.txid.to_hex(),
-        funding_txo.index
-    );
-    persister.persist(&key, monitor).map_to_permanent_failure(
-        "Failed to locally persist a ChannelMonitor recovered from remote storage",
-    )
+    storage.persist_channel_monitors_local(remote_channel_monitors)
 }
 
 #[cfg(test)]
