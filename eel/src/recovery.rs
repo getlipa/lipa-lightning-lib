@@ -27,9 +27,14 @@ pub fn recover_lightning_node(
         encryption_key,
     ));
 
-    verify_no_local_install(&local_persistence_path)?;
+    if has_local_install(&local_persistence_path) {
+        return Err(invalid_input(
+            "Invalid local persistence path: an existing wallet installation was found!",
+        ));
+    }
 
-    let _ = fs::create_dir_all(&local_persistence_path);
+    fs::create_dir_all(&local_persistence_path)
+        .map_to_invalid_input("Invalid local persistence path: failed to create directory")?;
 
     // Fetch and persist ChannelManager
     let remote_channel_manager = storage.fetch_remote_channel_manager_serialized()?;
@@ -52,11 +57,9 @@ pub fn recover_lightning_node(
         "Fetched {} channel monitors from remote storage during recovery procedure",
         remote_channel_monitors.len()
     );
-    let local_channel_monitors_dir_path =
-        get_local_channel_monitors_dir_path(&local_persistence_path);
+
     let persister = FilesystemPersister::new(local_persistence_path);
 
-    let _ = fs::create_dir_all(local_channel_monitors_dir_path);
     for (_, monitor) in remote_channel_monitors {
         persist_channel_monitor(&persister, monitor.get_funding_txo().0, &monitor)?;
     }
@@ -64,24 +67,20 @@ pub fn recover_lightning_node(
     Ok(())
 }
 
-fn verify_no_local_install(local_persistence_path: &str) -> Result<()> {
+fn has_local_install(local_persistence_path: &str) -> bool {
     // ChannelManager
     let channel_manager_path = get_local_channel_manager_path(local_persistence_path);
     if fs::File::open(channel_manager_path).is_ok() {
-        return Err(invalid_input(
-            "Invalid local persistence path: an existing wallet installation was found!",
-        ));
+        return true;
     }
     // ChannelMonitors
     let channel_monitors_dir_path = get_local_channel_monitors_dir_path(local_persistence_path);
     if let Ok(mut dir_entries) = fs::read_dir(channel_monitors_dir_path) {
         if dir_entries.next().is_some() {
-            return Err(invalid_input(
-                "Invalid local persistence path: an existing wallet installation was found!",
-            ));
+            return true;
         }
     }
-    Ok(())
+    false
 }
 
 fn get_local_channel_manager_path(local_persistence_path: &str) -> PathBuf {
@@ -104,6 +103,38 @@ fn persist_channel_monitor<ChannelSigner: WriteableEcdsaChannelSigner>(
     );
     persister.persist(&key, monitor).map_to_permanent_failure(
         "Failed to locally persist a ChannelMonitor recovered from remote storage",
-    )?;
-    Ok(())
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::recovery::has_local_install;
+    use std::fs;
+
+    const TEST_INSTALL_PATH: &str = ".3l_unit_test";
+    const TEST_MANAGER_PATH: &str = ".3l_unit_test/manager";
+    const TEST_MONITORS_PATH: &str = ".3l_unit_test/monitors";
+    const TEST_MONITOR_INSTANCE_PATH: &str = ".3l_unit_test/monitors/thunderstorm";
+
+    #[test]
+    fn test_has_local_install() {
+        let _ = fs::remove_dir_all(TEST_INSTALL_PATH);
+
+        assert!(!has_local_install(TEST_INSTALL_PATH));
+
+        fs::create_dir_all(TEST_INSTALL_PATH).unwrap();
+        assert!(!has_local_install(TEST_INSTALL_PATH));
+
+        fs::create_dir_all(TEST_MONITORS_PATH).unwrap();
+        assert!(!has_local_install(TEST_INSTALL_PATH));
+
+        fs::write(TEST_MANAGER_PATH, TEST_MANAGER_PATH).unwrap();
+        assert!(has_local_install(TEST_INSTALL_PATH));
+        fs::remove_file(TEST_MANAGER_PATH).unwrap();
+
+        fs::write(TEST_MONITOR_INSTANCE_PATH, TEST_MONITOR_INSTANCE_PATH).unwrap();
+        assert!(has_local_install(TEST_INSTALL_PATH));
+
+        fs::remove_dir_all(TEST_INSTALL_PATH).unwrap();
+    }
 }

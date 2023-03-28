@@ -40,7 +40,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 pub(crate) static MONITORS_BUCKET: &str = "monitors";
-pub(crate) static OBJECTS_BUCKET: &str = "objects";
+static OBJECTS_BUCKET: &str = "objects";
 
 pub(crate) static MANAGER_KEY: &str = "manager";
 static GRAPH_KEY: &str = "network_graph";
