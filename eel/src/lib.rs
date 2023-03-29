@@ -50,7 +50,7 @@ use crate::task_manager::{RestartIfFailedPeriod, TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router, TxSync};
 
-use bitcoin::hashes::hex::{FromHex, ToHex};
+use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
 use cipher::consts::U32;
 use lightning::chain::channelmonitor::ChannelMonitor;
@@ -423,14 +423,14 @@ impl LightningNode {
                 return match e {
                     PaymentError::Invoice(e) => {
                         self.payment_store.lock().unwrap().new_payment_state(
-                            invoice_struct.payment_hash(),
+                            &invoice_struct.payment_hash().to_string(),
                             PaymentState::Failed,
                         )?;
                         Err(invalid_input(format!("Invalid invoice - {e}")))
                     }
                     PaymentError::Sending(e) => {
                         self.payment_store.lock().unwrap().new_payment_state(
-                            invoice_struct.payment_hash(),
+                            &invoice_struct.payment_hash().to_string(),
                             PaymentState::Failed,
                         )?;
                         match e {
@@ -473,7 +473,7 @@ impl LightningNode {
         let fiat_values = self.get_fiat_values(amount_msat);
 
         let mut payment_store = self.payment_store.lock().unwrap();
-        if let Ok(payment) = payment_store.get_payment(invoice_struct.payment_hash()) {
+        if let Ok(payment) = payment_store.get_payment(&invoice_struct.payment_hash().to_string()) {
             match payment.payment_type {
                 PaymentType::Receiving => return Err(runtime_error(
                     RuntimeErrorCode::PayingToSelf,
@@ -486,13 +486,15 @@ impl LightningNode {
                             "This invoice has already been paid or is in the process of being paid. Please use a different one or wait until the current payment attempt fails before retrying.",
                         ));
                     }
-                    payment_store
-                        .new_payment_state(invoice_struct.payment_hash(), PaymentState::Retried)?;
+                    payment_store.new_payment_state(
+                        &invoice_struct.payment_hash().to_string(),
+                        PaymentState::Retried,
+                    )?;
                 }
             }
         } else {
             payment_store.new_outgoing_payment(
-                invoice_struct.payment_hash(),
+                &invoice_struct.payment_hash().to_string(),
                 amount_msat,
                 &description,
                 invoice,
@@ -504,17 +506,15 @@ impl LightningNode {
     }
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
-        self.payment_store
-            .lock()
-            .unwrap()
-            .get_latest_payments(number_of_payments)
+        let payment_store = self.payment_store.lock().unwrap();
+        payment_store.process_expired_payments()?;
+        payment_store.get_latest_payments(number_of_payments)
     }
 
     pub fn get_payment(&self, hash: &str) -> Result<Payment> {
-        self.payment_store
-            .lock()
-            .unwrap()
-            .get_payment(&Vec::from_hex(hash).map_to_invalid_input("Invalid hash")?)
+        let payment_store = self.payment_store.lock().unwrap();
+        payment_store.process_expired_payments()?;
+        payment_store.get_payment(hash)
     }
 
     pub fn foreground(&self) {

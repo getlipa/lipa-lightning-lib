@@ -2,7 +2,6 @@ use crate::config::TzConfig;
 use crate::errors::Result;
 use crate::interfaces::ExchangeRates;
 use crate::{invoice, InvoiceDetails};
-use bitcoin::hashes::hex::ToHex;
 use lightning_invoice::Invoice;
 use num_enum::TryFromPrimitive;
 use perro::{MapToError, OptionToError};
@@ -12,14 +11,14 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use std::time::SystemTime;
 
-#[derive(PartialEq, Eq, Debug, TryFromPrimitive)]
+#[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
 pub enum PaymentType {
     Receiving,
     Sending,
 }
 
-#[derive(PartialEq, Eq, Debug, TryFromPrimitive)]
+#[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
 pub enum PaymentState {
     Created,
@@ -29,7 +28,7 @@ pub enum PaymentState {
     InvoiceExpired,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct TzTime {
     pub time: SystemTime,
     pub timezone_id: String,
@@ -64,7 +63,7 @@ fn fiat_values_option_to_option_tuple(
         .unwrap_or((None, None, None))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,
@@ -105,7 +104,7 @@ impl PaymentStore {
     #[allow(clippy::too_many_arguments)]
     pub fn new_incoming_payment(
         &mut self,
-        hash: &[u8],
+        hash: &str,
         amount_msat: u64,
         lsp_fees_msat: u64,
         description: &str,
@@ -157,7 +156,7 @@ impl PaymentStore {
 
     pub fn new_outgoing_payment(
         &mut self,
-        hash: &[u8],
+        hash: &str,
         amount_msat: u64,
         description: &str,
         invoice: &str,
@@ -205,14 +204,14 @@ impl PaymentStore {
             .map_to_permanent_failure("Failed to commit new outgoing payment transaction")
     }
 
-    pub fn incoming_payment_succeeded(&self, hash: &[u8]) -> Result<()> {
+    pub fn incoming_payment_succeeded(&self, hash: &str) -> Result<()> {
         self.new_payment_state(hash, PaymentState::Succeeded)
     }
 
     pub fn outgoing_payment_succeeded(
         &self,
-        hash: &[u8],
-        preimage: &[u8],
+        hash: &str,
+        preimage: &str,
         network_fees_msat: u64,
     ) -> Result<()> {
         self.new_payment_state(hash, PaymentState::Succeeded)?;
@@ -220,7 +219,7 @@ impl PaymentStore {
         self.fill_network_fees(hash, network_fees_msat)
     }
 
-    pub fn new_payment_state(&self, hash: &[u8], state: PaymentState) -> Result<()> {
+    pub fn new_payment_state(&self, hash: &str, state: PaymentState) -> Result<()> {
         self.db_conn
             .execute(
                 "\
@@ -240,7 +239,58 @@ impl PaymentStore {
         Ok(())
     }
 
-    pub fn fill_preimage(&self, hash: &[u8], preimage: &[u8]) -> Result<()> {
+    pub fn process_expired_payments(&self) -> Result<()> {
+        let mut statement = self
+            .db_conn
+            .prepare("\
+            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, \
+            lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
+            recent_events.timezone_id, recent_events.timezone_utc_offset_secs, description, \
+            creation_events.inserted_at, creation_events.timezone_id, creation_events.timezone_utc_offset_secs, \
+            amount_usd, amount_fiat, fiat_currency \
+            FROM payments \
+            JOIN recent_events ON payments.payment_id=recent_events.payment_id \
+            JOIN creation_events ON payments.payment_id=creation_events.payment_id \
+            WHERE state NOT IN (1, 4) \
+            ")
+            .map_to_permanent_failure("Failed to prepare SQL query")?;
+        let non_expired_payment_iter = statement
+            .query_map([], payment_from_row)
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
+
+        for payment in non_expired_payment_iter {
+            let payment = payment.map_to_permanent_failure("Corrupted payment db")?;
+            debug_assert!(
+                payment.payment_state != PaymentState::Succeeded
+                    && payment.payment_state != PaymentState::InvoiceExpired
+            );
+            if Self::should_be_set_expired(&payment) {
+                self.new_payment_state(&payment.hash, PaymentState::InvoiceExpired)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn should_be_set_expired(payment: &Payment) -> bool {
+        if payment.invoice_details.expiry_timestamp < SystemTime::now() {
+            match payment.payment_type {
+                PaymentType::Receiving => {
+                    if payment.payment_state == PaymentState::Created {
+                        return true;
+                    }
+                }
+                PaymentType::Sending => {
+                    if payment.payment_state == PaymentState::Failed {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    pub fn fill_preimage(&self, hash: &str, preimage: &str) -> Result<()> {
         self.db_conn
             .execute(
                 "\
@@ -255,7 +305,7 @@ impl PaymentStore {
         Ok(())
     }
 
-    fn fill_network_fees(&self, hash: &[u8], network_fees_msat: u64) -> Result<()> {
+    fn fill_network_fees(&self, hash: &str, network_fees_msat: u64) -> Result<()> {
         self.db_conn
             .execute(
                 "\
@@ -298,7 +348,7 @@ impl PaymentStore {
         Ok(payments)
     }
 
-    pub fn get_payment(&self, hash: &[u8]) -> Result<Payment> {
+    pub fn get_payment(&self, hash: &str) -> Result<Payment> {
         let mut statement = self
             .db_conn
             .prepare("\
@@ -331,10 +381,8 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let payment_type: u8 = row.get(1)?;
     let payment_type = PaymentType::try_from(payment_type)
         .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, Type::Integer, Box::new(e)))?;
-    let hash: Vec<u8> = row.get(2)?;
-    let hash = hash.to_hex();
-    let preimage: Option<Vec<u8>> = row.get(3)?;
-    let preimage = preimage.map(|p| p.to_hex());
+    let hash = row.get(2)?;
+    let preimage = row.get(3)?;
     let amount_msat = row.get(4)?;
     let network_fees_msat = row.get(5)?;
     let lsp_fees_msat = row.get(6)?;
@@ -401,11 +449,11 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
             CREATE TABLE IF NOT EXISTS payments (
               payment_id INTEGER NOT NULL PRIMARY KEY,
               type INTEGER CHECK( type IN (0, 1) ) NOT NULL,
-              hash BLOB NOT NULL UNIQUE,
+              hash TEXT NOT NULL UNIQUE,
               amount_msat INTEGER NOT NULL,
               invoice TEXT NOT NULL,
               description TEXT NOT NULL,
-              preimage BLOB,
+              preimage TEXT,
               network_fees_msat INTEGER,
               lsp_fees_msat INTEGER,
               amount_usd INTEGER,
@@ -452,7 +500,6 @@ mod tests {
     use crate::payment_store::{
         apply_migrations, FiatValues, PaymentState, PaymentStore, PaymentType,
     };
-    use bitcoin::hashes::hex::ToHex;
     use rusqlite::Connection;
     use std::fs;
     use std::thread::sleep;
@@ -484,8 +531,8 @@ mod tests {
         let mut payment_store =
             PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}"), tz_config).unwrap();
 
-        let hash = vec![1, 2, 3, 4];
-        let _preimage = vec![5, 6, 7, 8];
+        let hash = "1234";
+        let _preimage = "5678";
         let amount_msat = 100_000_000;
         let lsp_fees_msat = 2_000_000;
         let description = String::from("Test description 1");
@@ -493,11 +540,11 @@ mod tests {
         let metadata = String::from("Test metadata 1");
         let fiat_value = None;
 
-        assert!(payment_store.get_payment(&hash).is_err());
+        assert!(payment_store.get_payment(hash).is_err());
 
         payment_store
             .new_incoming_payment(
-                &hash,
+                hash,
                 amount_msat,
                 lsp_fees_msat,
                 &description,
@@ -507,7 +554,7 @@ mod tests {
             )
             .unwrap();
 
-        assert!(payment_store.get_payment(&hash).is_ok());
+        assert!(payment_store.get_payment(hash).is_ok());
     }
 
     #[test]
@@ -525,8 +572,8 @@ mod tests {
         assert!(payments.is_empty());
 
         // New incoming payment
-        let hash = vec![1, 2, 3, 4];
-        let preimage = vec![5, 6, 7, 8];
+        let hash = "1234";
+        let preimage = "5678";
         let amount_msat = 100_000_000;
         let lsp_fees_msat = 2_000_000;
         let description = String::from("Test description 1");
@@ -540,7 +587,7 @@ mod tests {
 
         payment_store
             .new_incoming_payment(
-                &hash,
+                hash,
                 amount_msat,
                 lsp_fees_msat,
                 &description,
@@ -555,7 +602,7 @@ mod tests {
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_type, PaymentType::Receiving);
         assert_eq!(payment.payment_state, PaymentState::Created);
-        assert_eq!(payment.hash, hash.to_hex());
+        assert_eq!(payment.hash, hash);
         assert_eq!(payment.amount_msat, amount_msat);
         assert_eq!(payment.invoice_details.invoice, invoice);
         assert_eq!(payment.description, description);
@@ -569,18 +616,19 @@ mod tests {
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
         assert_eq!(payment.created_at, payment.latest_state_change_at);
         let created_at = payment.created_at.time;
+        assert!(PaymentStore::should_be_set_expired(payment));
 
-        payment_store.fill_preimage(&hash, &preimage).unwrap();
+        payment_store.fill_preimage(hash, preimage).unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
-        assert_eq!(payment.preimage, Some(preimage.to_hex()));
+        assert_eq!(payment.preimage, Some(preimage.to_string()));
 
         // To be able to test the difference between created_at and latest_state_change_at
         sleep(Duration::from_secs(1));
 
-        payment_store.incoming_payment_succeeded(&hash).unwrap();
+        payment_store.incoming_payment_succeeded(hash).unwrap();
 
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 1);
@@ -596,10 +644,11 @@ mod tests {
         assert_eq!(payment.created_at.time, created_at);
         assert_ne!(payment.created_at.time, payment.latest_state_change_at.time);
         assert!(payment.created_at.time < payment.latest_state_change_at.time);
+        assert!(!PaymentStore::should_be_set_expired(payment));
 
         // New outgoing payment that fails
-        let hash = vec![5, 6, 7, 8];
-        let _preimage = vec![1, 2, 3, 4];
+        let hash = "5678";
+        let _preimage = "1234";
         let amount_msat = 5_000_000;
         let _network_fees_msat = 2_000;
         let description = String::from("Test description 2");
@@ -613,7 +662,7 @@ mod tests {
 
         payment_store
             .new_outgoing_payment(
-                &hash,
+                hash,
                 amount_msat,
                 &description,
                 &invoice,
@@ -627,7 +676,7 @@ mod tests {
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_type, PaymentType::Sending);
         assert_eq!(payment.payment_state, PaymentState::Created);
-        assert_eq!(payment.hash, hash.to_hex());
+        assert_eq!(payment.hash, hash);
         assert_eq!(payment.amount_msat, amount_msat);
         assert_eq!(payment.invoice_details.invoice, invoice);
         assert_eq!(payment.description, description);
@@ -641,12 +690,13 @@ mod tests {
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
         assert_eq!(payment.created_at, payment.latest_state_change_at);
         let created_at = payment.created_at.time;
+        assert!(!PaymentStore::should_be_set_expired(payment));
 
         // To be able to test the difference between created_at and latest_state_change_at
         sleep(Duration::from_secs(1));
 
         payment_store
-            .new_payment_state(&hash, PaymentState::Failed)
+            .new_payment_state(hash, PaymentState::Failed)
             .unwrap();
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 2);
@@ -662,9 +712,10 @@ mod tests {
         assert_eq!(payment.created_at.time, created_at);
         assert_ne!(payment.created_at.time, payment.latest_state_change_at.time);
         assert!(payment.created_at.time < payment.latest_state_change_at.time);
+        assert!(PaymentStore::should_be_set_expired(payment));
 
         payment_store
-            .new_payment_state(&hash, PaymentState::Retried)
+            .new_payment_state(hash, PaymentState::Retried)
             .unwrap();
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 2);
@@ -680,10 +731,11 @@ mod tests {
         assert_eq!(payment.created_at.time, created_at);
         assert_ne!(payment.created_at.time, payment.latest_state_change_at.time);
         assert!(payment.created_at.time < payment.latest_state_change_at.time);
+        assert!(!PaymentStore::should_be_set_expired(payment));
 
         // New outgoing payment that succeedes
-        let hash = vec![1, 3, 5, 7];
-        let preimage = vec![2, 4, 6, 8];
+        let hash = "1357";
+        let preimage = "2468";
         let amount_msat = 10_000_000;
         let network_fees_msat = 500;
         let description = String::from("Test description 3");
@@ -697,7 +749,7 @@ mod tests {
 
         payment_store
             .new_outgoing_payment(
-                &hash,
+                hash,
                 amount_msat,
                 &description,
                 &invoice,
@@ -711,7 +763,7 @@ mod tests {
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_type, PaymentType::Sending);
         assert_eq!(payment.payment_state, PaymentState::Created);
-        assert_eq!(payment.hash, hash.to_hex());
+        assert_eq!(payment.hash, hash);
         assert_eq!(payment.amount_msat, amount_msat);
         assert_eq!(payment.invoice_details.invoice, invoice);
         assert_eq!(payment.description, description);
@@ -725,18 +777,19 @@ mod tests {
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
         assert_eq!(payment.created_at, payment.latest_state_change_at);
         let created_at = payment.created_at.time;
+        assert!(!PaymentStore::should_be_set_expired(payment));
 
         // To be able to test the difference between created_at and latest_state_change_at
         sleep(Duration::from_secs(1));
 
         payment_store
-            .outgoing_payment_succeeded(&hash, &preimage, network_fees_msat)
+            .outgoing_payment_succeeded(hash, preimage, network_fees_msat)
             .unwrap();
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 3);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Succeeded);
-        assert_eq!(payment.preimage, Some(preimage.to_hex()));
+        assert_eq!(payment.preimage, Some(preimage.to_string()));
         assert_eq!(payment.network_fees_msat, Some(network_fees_msat));
         assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
@@ -748,8 +801,9 @@ mod tests {
         assert_eq!(payment.created_at.time, created_at);
         assert_ne!(payment.created_at.time, payment.latest_state_change_at.time);
         assert!(payment.created_at.time < payment.latest_state_change_at.time);
+        assert!(!PaymentStore::should_be_set_expired(payment));
 
-        let payment_by_hash = payment_store.get_payment(&hash).unwrap();
+        let payment_by_hash = payment_store.get_payment(hash).unwrap();
         assert_eq!(payment, &payment_by_hash);
     }
 
@@ -784,6 +838,113 @@ mod tests {
         assert_eq!(
             FiatValues::from_amount_msat(10_000_000, &exchange_rates).amount,
             2_000
+        );
+    }
+
+    #[test]
+    fn test_process_expired_payments() {
+        let db_name = String::from("process_expired_payments.db3");
+        reset_db(&db_name);
+        let tz_config = TzConfig {
+            timezone_id: String::from(TEST_TZ_ID),
+            timezone_utc_offset_secs: TEST_TZ_OFFSET,
+        };
+        let mut payment_store =
+            PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}"), tz_config).unwrap();
+
+        let amount_msat = 5_000_000;
+        let _network_fees_msat = 2_000;
+        let description = String::from("Test description 2");
+        let invoice = String::from("lnbcrt50u1p37590hdqqpp5wkf8saa4g3ejjhyh89uf5svhlus0ajrz0f9dm6tqnwxtupq3lyeqsp528valrymd092ev6s0srcwcnc3eufhnv453fzj7m5nscj2ejzvx7q9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqfky0rtekx6249z2dgvs4wc474q7yg3sx2u7hlvpua5ep5zla3akzqqqqyqqqqqqqqqqqqlgqqqqqqgqjq7n9ukth32d98unkxe692hgd7ke2vskmfz8d2s0part2ycd4vqneq3qgrj2jkvkq2vraa29xsll9lajgdq33yn76ny4h3wacsfxrdudcp575kp6");
+        let metadata = String::from("Test metadata 2");
+        let fiat_value = Some(FiatValues {
+            fiat: String::from("CHF"),
+            amount: 4253,
+            amount_usd: 4103,
+        });
+
+        // Create a payment for each possible state payments can be in
+        //      * Receiving payments can only have state "Created", "Succeeded" or "InvoiceExpired"
+        //      * Sending payments can have any of the 5 existing states
+        for i in 0..5 {
+            payment_store
+                .new_outgoing_payment(
+                    &i.to_string(),
+                    amount_msat,
+                    &description,
+                    &invoice,
+                    &metadata,
+                    fiat_value.clone(),
+                )
+                .unwrap();
+        }
+        for i in 5..8 {
+            payment_store
+                .new_incoming_payment(
+                    &i.to_string(),
+                    amount_msat,
+                    0,
+                    &description,
+                    &invoice,
+                    &metadata,
+                    fiat_value.clone(),
+                )
+                .unwrap();
+        }
+
+        // Set the states
+        payment_store
+            .new_payment_state("1", PaymentState::Succeeded)
+            .unwrap();
+        payment_store
+            .new_payment_state("2", PaymentState::Failed)
+            .unwrap();
+        payment_store
+            .new_payment_state("3", PaymentState::Retried)
+            .unwrap();
+        payment_store
+            .new_payment_state("4", PaymentState::InvoiceExpired)
+            .unwrap();
+        payment_store
+            .new_payment_state("6", PaymentState::Succeeded)
+            .unwrap();
+        payment_store
+            .new_payment_state("7", PaymentState::InvoiceExpired)
+            .unwrap();
+
+        payment_store.process_expired_payments().unwrap();
+
+        assert_eq!(
+            payment_store.get_payment("0").unwrap().payment_state,
+            PaymentState::Created
+        );
+        assert_eq!(
+            payment_store.get_payment("1").unwrap().payment_state,
+            PaymentState::Succeeded
+        );
+        assert_eq!(
+            payment_store.get_payment("2").unwrap().payment_state,
+            PaymentState::InvoiceExpired
+        );
+        assert_eq!(
+            payment_store.get_payment("3").unwrap().payment_state,
+            PaymentState::Retried
+        );
+        assert_eq!(
+            payment_store.get_payment("4").unwrap().payment_state,
+            PaymentState::InvoiceExpired
+        );
+        assert_eq!(
+            payment_store.get_payment("5").unwrap().payment_state,
+            PaymentState::InvoiceExpired
+        );
+        assert_eq!(
+            payment_store.get_payment("6").unwrap().payment_state,
+            PaymentState::Succeeded
+        );
+        assert_eq!(
+            payment_store.get_payment("7").unwrap().payment_state,
+            PaymentState::InvoiceExpired
         );
     }
 }
