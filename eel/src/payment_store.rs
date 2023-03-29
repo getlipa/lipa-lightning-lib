@@ -1,11 +1,15 @@
 use crate::config::TzConfig;
 use crate::errors::Result;
 use crate::interfaces::ExchangeRates;
+use crate::{invoice, InvoiceDetails};
 use bitcoin::hashes::hex::ToHex;
+use lightning_invoice::Invoice;
 use num_enum::TryFromPrimitive;
 use perro::{MapToError, OptionToError};
+use rusqlite::types::Type;
 use rusqlite::{Connection, Row};
 use std::convert::TryFrom;
+use std::str::FromStr;
 use std::time::SystemTime;
 
 #[derive(PartialEq, Eq, Debug, TryFromPrimitive)]
@@ -22,6 +26,7 @@ pub enum PaymentState {
     Succeeded,
     Failed,
     Retried,
+    InvoiceExpired,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -65,7 +70,7 @@ pub struct Payment {
     pub payment_state: PaymentState,
     pub hash: String,
     pub amount_msat: u64,
-    pub invoice: String,
+    pub invoice_details: InvoiceDetails,
     pub created_at: TzTime,
     pub latest_state_change_at: TzTime,
     pub description: String,
@@ -201,7 +206,7 @@ impl PaymentStore {
     }
 
     pub fn incoming_payment_succeeded(&self, hash: &[u8]) -> Result<()> {
-        self.insert_payment_succeded_event(hash)
+        self.new_payment_state(hash, PaymentState::Succeeded)
     }
 
     pub fn outgoing_payment_succeeded(
@@ -210,12 +215,12 @@ impl PaymentStore {
         preimage: &[u8],
         network_fees_msat: u64,
     ) -> Result<()> {
-        self.insert_payment_succeded_event(hash)?;
+        self.new_payment_state(hash, PaymentState::Succeeded)?;
         self.fill_preimage(hash, preimage)?;
         self.fill_network_fees(hash, network_fees_msat)
     }
 
-    fn insert_payment_succeded_event(&self, hash: &[u8]) -> Result<()> {
+    pub fn new_payment_state(&self, hash: &[u8], state: PaymentState) -> Result<()> {
         self.db_conn
             .execute(
                 "\
@@ -225,47 +230,7 @@ impl PaymentStore {
                 ",
                 (
                     hash,
-                    PaymentState::Succeeded as u8,
-                    &self.timezone_config.timezone_id,
-                    self.timezone_config.timezone_utc_offset_secs,
-                ),
-            )
-            .map_to_invalid_input("Failed to add payment confirmed event to payments db")?;
-
-        Ok(())
-    }
-
-    pub fn payment_failed(&self, hash: &[u8]) -> Result<()> {
-        self.db_conn
-            .execute(
-                "\
-                INSERT INTO events (payment_id, type, timezone_id, timezone_utc_offset_secs) \
-                VALUES (
-                    (SELECT payment_id FROM payments WHERE hash=?1), ?2, ?3, ?4)
-                ",
-                (
-                    hash,
-                    PaymentState::Failed as u8,
-                    &self.timezone_config.timezone_id,
-                    self.timezone_config.timezone_utc_offset_secs,
-                ),
-            )
-            .map_to_invalid_input("Failed to add payment failed event to payments db")?;
-
-        Ok(())
-    }
-
-    pub fn payment_retrying(&self, hash: &[u8]) -> Result<()> {
-        self.db_conn
-            .execute(
-                "\
-                INSERT INTO events (payment_id, type, timezone_id, timezone_utc_offset_secs) \
-                VALUES (
-                    (SELECT payment_id FROM payments WHERE hash=?1), ?2, ?3, ?4)
-                ",
-                (
-                    hash,
-                    PaymentState::Retried as u8,
+                    state as u8,
                     &self.timezone_config.timezone_id,
                     self.timezone_config.timezone_utc_offset_secs,
                 ),
@@ -364,8 +329,8 @@ impl PaymentStore {
 
 fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let payment_type: u8 = row.get(1)?;
-    let payment_type =
-        PaymentType::try_from(payment_type).map_err(|_| rusqlite::Error::InvalidQuery)?;
+    let payment_type = PaymentType::try_from(payment_type)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, Type::Integer, Box::new(e)))?;
     let hash: Vec<u8> = row.get(2)?;
     let hash = hash.to_hex();
     let preimage: Option<Vec<u8>> = row.get(3)?;
@@ -373,11 +338,16 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let amount_msat = row.get(4)?;
     let network_fees_msat = row.get(5)?;
     let lsp_fees_msat = row.get(6)?;
-    let invoice = row.get(7)?;
+    let invoice: String = row.get(7)?;
+    let invoice_details = invoice::get_invoice_details(
+        &Invoice::from_str(&invoice)
+            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, Type::Text, Box::new(e)))?,
+    )
+    .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, Type::Text, Box::new(e)))?;
     let metadata = row.get(8)?;
     let payment_state: u8 = row.get(9)?;
-    let payment_state =
-        PaymentState::try_from(payment_state).map_err(|_| rusqlite::Error::InvalidQuery)?;
+    let payment_state = PaymentState::try_from(payment_state)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, Type::Integer, Box::new(e)))?;
     let latest_state_change_at_timestamp: chrono::DateTime<chrono::Utc> = row.get(10)?;
     let latest_state_change_at_timezone_id = row.get(11)?;
     let latest_state_change_at_timezone_utc_offset_secs = row.get(12)?;
@@ -412,7 +382,7 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
         payment_state,
         hash,
         amount_msat,
-        invoice,
+        invoice_details,
         created_at,
         latest_state_change_at,
         description,
@@ -446,7 +416,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
             CREATE TABLE IF NOT EXISTS events (
               event_id INTEGER NOT NULL PRIMARY KEY,
               payment_id INTEGER NOT NULL,
-              type INTEGER CHECK( type in (0, 1, 2, 3) ) NOT NULL,
+              type INTEGER CHECK( type in (0, 1, 2, 3, 4) ) NOT NULL,
               inserted_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
               timezone_id TEXT NOT NULL,
               timezone_utc_offset_secs INTEGER NOT NULL,
@@ -587,7 +557,7 @@ mod tests {
         assert_eq!(payment.payment_state, PaymentState::Created);
         assert_eq!(payment.hash, hash.to_hex());
         assert_eq!(payment.amount_msat, amount_msat);
-        assert_eq!(payment.invoice, invoice);
+        assert_eq!(payment.invoice_details.invoice, invoice);
         assert_eq!(payment.description, description);
         assert_eq!(payment.preimage, None);
         assert_eq!(payment.network_fees_msat, None);
@@ -659,7 +629,7 @@ mod tests {
         assert_eq!(payment.payment_state, PaymentState::Created);
         assert_eq!(payment.hash, hash.to_hex());
         assert_eq!(payment.amount_msat, amount_msat);
-        assert_eq!(payment.invoice, invoice);
+        assert_eq!(payment.invoice_details.invoice, invoice);
         assert_eq!(payment.description, description);
         assert_eq!(payment.preimage, None);
         assert_eq!(payment.network_fees_msat, None);
@@ -675,7 +645,9 @@ mod tests {
         // To be able to test the difference between created_at and latest_state_change_at
         sleep(Duration::from_secs(1));
 
-        payment_store.payment_failed(&hash).unwrap();
+        payment_store
+            .new_payment_state(&hash, PaymentState::Failed)
+            .unwrap();
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 2);
         let payment = payments.get(0).unwrap();
@@ -691,7 +663,9 @@ mod tests {
         assert_ne!(payment.created_at.time, payment.latest_state_change_at.time);
         assert!(payment.created_at.time < payment.latest_state_change_at.time);
 
-        payment_store.payment_retrying(&hash).unwrap();
+        payment_store
+            .new_payment_state(&hash, PaymentState::Retried)
+            .unwrap();
         let payments = payment_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 2);
         let payment = payments.get(0).unwrap();
@@ -739,7 +713,7 @@ mod tests {
         assert_eq!(payment.payment_state, PaymentState::Created);
         assert_eq!(payment.hash, hash.to_hex());
         assert_eq!(payment.amount_msat, amount_msat);
-        assert_eq!(payment.invoice, invoice);
+        assert_eq!(payment.invoice_details.invoice, invoice);
         assert_eq!(payment.description, description);
         assert_eq!(payment.preimage, None);
         assert_eq!(payment.network_fees_msat, None);

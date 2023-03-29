@@ -37,7 +37,7 @@ use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::interfaces::{EventHandler, ExchangeRateProvider, ExchangeRates, RemoteStorage};
 pub use crate::invoice::InvoiceDetails;
-use crate::invoice::{create_invoice, CreateInvoiceParams};
+use crate::invoice::{create_invoice, validate_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
 use crate::logger::LightningLogger;
 use crate::lsp::{calculate_fee, LspClient, LspFee};
@@ -70,7 +70,6 @@ pub use perro::{
     OptionToError,
 };
 use std::path::Path;
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::Duration;
@@ -393,28 +392,8 @@ impl LightningNode {
     }
 
     pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
-        let invoice_str = invoice;
-        let invoice = Self::parse_validate_invoice(self, &invoice_str)?;
-
-        let description = match invoice.description() {
-            InvoiceDescription::Direct(d) => d.to_string(),
-            InvoiceDescription::Hash(_) => String::new(),
-        };
-
-        let payee_pub_key = match invoice.payee_pub_key() {
-            None => invoice.recover_payee_pub_key().to_string(),
-            Some(p) => p.to_string(),
-        };
-
-        Ok(InvoiceDetails {
-            invoice: invoice_str,
-            amount_msat: invoice.amount_milli_satoshis(),
-            description,
-            payment_hash: invoice.payment_hash().to_string(),
-            payee_pub_key,
-            invoice_timestamp: invoice.timestamp(),
-            expiry_interval: invoice.expiry_time(),
-        })
+        let invoice = invoice::parse_invoice(&invoice)?;
+        invoice::get_invoice_details(&invoice)
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
@@ -435,17 +414,17 @@ impl LightningNode {
             Err(e) => {
                 return match e {
                     PaymentError::Invoice(e) => {
-                        self.payment_store
-                            .lock()
-                            .unwrap()
-                            .payment_failed(invoice_struct.payment_hash())?;
+                        self.payment_store.lock().unwrap().new_payment_state(
+                            invoice_struct.payment_hash(),
+                            PaymentState::Failed,
+                        )?;
                         Err(invalid_input(format!("Invalid invoice - {e}")))
                     }
                     PaymentError::Sending(e) => {
-                        self.payment_store
-                            .lock()
-                            .unwrap()
-                            .payment_failed(invoice_struct.payment_hash())?;
+                        self.payment_store.lock().unwrap().new_payment_state(
+                            invoice_struct.payment_hash(),
+                            PaymentState::Failed,
+                        )?;
                         match e {
                             RetryableSendFailure::PaymentExpired => Err(runtime_error(
                                 RuntimeErrorCode::SendFailure,
@@ -472,7 +451,9 @@ impl LightningNode {
         invoice: &str,
         metadata: &str,
     ) -> Result<Invoice> {
-        let invoice_struct = Self::parse_validate_invoice(self, invoice)?;
+        let invoice_struct = invoice::parse_invoice(invoice)?;
+
+        validate_invoice(self.config.network, &invoice_struct)?;
 
         let amount_msat = invoice_struct
             .amount_milli_satoshis()
@@ -497,7 +478,8 @@ impl LightningNode {
                             "This invoice has already been paid or is in the process of being paid. Please use a different one or wait until the current payment attempt fails before retrying.",
                         ));
                     }
-                    payment_store.payment_retrying(invoice_struct.payment_hash())?;
+                    payment_store
+                        .new_payment_state(invoice_struct.payment_hash(), PaymentState::Retried)?;
                 }
             }
         } else {
@@ -562,34 +544,6 @@ impl LightningNode {
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
         let mut payment_store = self.payment_store.lock().unwrap();
         payment_store.update_timezone_config(timezone_config);
-    }
-
-    fn parse_validate_invoice(&self, invoice: &str) -> Result<Invoice> {
-        let invoice = Invoice::from_str(Self::chomp_prefix(invoice.trim()))
-            .map_to_invalid_input("Invalid invoice - parse failure")?;
-
-        let network = match invoice.currency() {
-            Currency::Bitcoin => Network::Bitcoin,
-            Currency::BitcoinTestnet => Network::Testnet,
-            Currency::Regtest => Network::Regtest,
-            Currency::Simnet => Network::Signet,
-            Currency::Signet => Network::Signet,
-        };
-
-        if network != self.config.network {
-            return Err(invalid_input("Invalid invoice - network mismatch"));
-        }
-
-        Ok(invoice)
-    }
-
-    fn chomp_prefix(string: &str) -> &str {
-        let prefix = "lightning:";
-        if let Some(tail) = string.strip_prefix(prefix) {
-            tail
-        } else {
-            string
-        }
     }
 
     fn get_fiat_values(&self, amount_msat: u64) -> Option<FiatValues> {

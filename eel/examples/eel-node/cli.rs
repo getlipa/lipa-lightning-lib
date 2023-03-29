@@ -194,7 +194,7 @@ fn decode_invoice<'a>(
     println!("  Payee public key    {}", invoice_details.payee_pub_key);
     println!(
         "  Invoice timestamp   {:?}",
-        invoice_details.invoice_timestamp
+        invoice_details.creation_timestamp
     );
     println!(
         "  Expiry interval     {:?}",
@@ -244,7 +244,10 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
         println!("      Hash:               {}", payment.hash);
         println!("      Preimage:           {:?}", payment.preimage);
         println!("      Description:        {}", payment.description);
-        println!("      Invoice:            {}", payment.invoice);
+        println!(
+            "      Invoice:            {}",
+            payment.invoice_details.invoice
+        );
         println!();
     }
 
