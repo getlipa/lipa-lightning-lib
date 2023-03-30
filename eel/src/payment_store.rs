@@ -4,12 +4,14 @@ use crate::interfaces::ExchangeRates;
 use crate::{invoice, InvoiceDetails};
 use lightning_invoice::Invoice;
 use num_enum::TryFromPrimitive;
-use perro::{MapToError, OptionToError};
+use perro::{permanent_failure, MapToError, OptionToError};
 use rusqlite::types::Type;
-use rusqlite::{Connection, Row};
+use rusqlite::{Connection, OptionalExtension, Row};
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::time::SystemTime;
+
+const SCHEMA_VERSION: u64 = 1;
 
 #[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
@@ -450,6 +452,35 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
 
 fn apply_migrations(db_conn: &Connection) -> Result<()> {
     db_conn
+        .execute(
+            "\
+        CREATE TABLE IF NOT EXISTS config (\
+          id INTEGER NOT NULL PRIMARY KEY,
+          db_schema INTEGER
+        )",
+            [],
+        )
+        .map_to_permanent_failure("Failed to set up local payment database")?;
+
+    let current_schema: Option<u64> = db_conn
+        .query_row("SELECT db_schema FROM config WHERE id = $1", [1], |row| {
+            row.get(0)
+        })
+        .optional()
+        .map_to_permanent_failure("Failed to set up local payment database")?;
+
+    if current_schema.is_some() {
+        upgrade_db(current_schema.unwrap(), db_conn)?;
+    }
+
+    db_conn
+        .execute(
+            "INSERT OR IGNORE INTO config (id, db_schema) VALUES ($1, $2)",
+            [1, SCHEMA_VERSION],
+        )
+        .map_to_permanent_failure("Failed to set up local payment database")?;
+
+    db_conn
         .execute_batch(
             "\
             CREATE TABLE IF NOT EXISTS payments (
@@ -499,6 +530,29 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
         .map_to_permanent_failure("Failed to set up local payment database")
 }
 
+fn upgrade_db(schema: u64, _db_conn: &Connection) -> Result<()> {
+    // Once we upgrade schema, logic like the one that follows can be used.
+    /*
+    if schema == 1 {
+        // upgrade from schema 1 to schema 2
+    }
+    if (1..=2).contains(&schema) {
+        // upgrade from schema 2 to schema 3
+    }
+    if (1..=3).contains(&schema) {
+        // upgrade from schema 3 to schema 4
+    }
+    // etc
+    */
+    if !(1..=SCHEMA_VERSION).contains(&schema) {
+        return Err(permanent_failure(format!(
+            "Unexpected payment database schema {}. It's only supported up until {}.",
+            schema, SCHEMA_VERSION
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::config::TzConfig;
@@ -528,6 +582,12 @@ mod tests {
         // Applying migrations on an already setup db is fine
         let db_conn = Connection::open(format!("{TEST_DB_PATH}/{db_name}")).unwrap();
         apply_migrations(&db_conn).unwrap();
+
+        // Test upgrading from every existent schema version
+        let db_conn =
+            Connection::open("tests/resources/payment_databases/new_payment_schema_1.db3").unwrap();
+        apply_migrations(&db_conn).unwrap();
+        // Every schema change should lead to an additional call to `apply_migrations()`
     }
 
     #[test]
