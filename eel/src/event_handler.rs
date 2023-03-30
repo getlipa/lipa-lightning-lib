@@ -30,6 +30,24 @@ impl LipaEventHandler {
             payment_store,
         })
     }
+
+    pub fn payment_received(&self, payment_hash: String, amount_msat: u64) {
+        self.user_event_handler
+            .payment_received(payment_hash, amount_msat)
+    }
+
+    pub fn payment_sent(&self, payment_hash: String, payment_preimage: String, fee_paid_msat: u64) {
+        self.user_event_handler
+            .payment_sent(payment_hash, payment_preimage, fee_paid_msat)
+    }
+
+    pub fn payment_failed(&self, payment_hash: String) {
+        self.user_event_handler.payment_failed(payment_hash)
+    }
+
+    pub fn channel_closed(&self, channel_id: String, reason: String) {
+        self.user_event_handler.channel_closed(channel_id, reason)
+    }
 }
 
 impl EventHandler for LipaEventHandler {
