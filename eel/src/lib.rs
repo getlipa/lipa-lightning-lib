@@ -48,7 +48,10 @@ use crate::rapid_sync_client::RapidSyncClient;
 use crate::storage_persister::StoragePersister;
 use crate::task_manager::{RestartIfFailedPeriod, TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
-use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router, TxSync};
+use crate::types::{
+    ChainMonitor, ChannelManager, NetworkGraph, PeerManager, RapidGossipSync, Router, Scorer,
+    TxSync,
+};
 
 use bitcoin::hashes::hex::{FromHex, ToHex};
 pub use bitcoin::Network;
@@ -70,7 +73,7 @@ pub use perro::{
     OptionToError,
 };
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::Duration;
 
@@ -95,14 +98,27 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
 #[allow(dead_code)]
 pub struct LightningNode {
     config: Config,
-    rt: AsyncRuntime,
-    lsp_client: Arc<LspClient>,
     keys_manager: Arc<KeysManager>,
-    background_processor: BackgroundProcessor,
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
-    task_manager: Arc<Mutex<TaskManager>>,
     payment_store: Arc<Mutex<PaymentStore>>,
+    persister: Arc<StoragePersister>,
+    chain_monitor: Arc<ChainMonitor>,
+    graph: Arc<NetworkGraph>,
+    logger: Arc<LightningLogger>,
+    scorer: Arc<Mutex<Scorer>>,
+    fee_estimator: Arc<FeeEstimator>,
+    tx_sync: Arc<TxSync>,
+    lsp_client: Arc<LspClient>,
+    user_event_handler: Arc<Box<dyn EventHandler>>,
+    exchange_rate_provider: Arc<Box<dyn ExchangeRateProvider>>,
+    lightning_runtime: RwLock<Option<LightningRuntime>>,
+}
+
+struct LightningRuntime {
+    pub _rt: AsyncRuntime,
+    pub _background_processor: BackgroundProcessor,
+    pub task_manager: Arc<Mutex<TaskManager>>,
 }
 
 impl LightningNode {
@@ -112,8 +128,6 @@ impl LightningNode {
         user_event_handler: Box<dyn EventHandler>,
         exchange_rate_provider: Box<dyn ExchangeRateProvider>,
     ) -> Result<Self> {
-        let rt = AsyncRuntime::new()?;
-
         let esplora_client = Arc::new(EsploraClient::new(&config.esplora_api_url)?);
 
         // Step 1. Initialize the FeeEstimator
@@ -168,22 +182,12 @@ impl LightningNode {
         // Step 10: Initialize the NetworkGraph
         let graph = Arc::new(persister.read_or_init_graph(config.network, Arc::clone(&logger))?);
 
-        // Step 11: Initialize the RapidSyncClient
-        let rapid_sync = Arc::new(RapidGossipSync::new(
-            Arc::clone(&graph),
-            Arc::clone(&logger),
-        ));
-        let rapid_sync_client = Arc::new(RapidSyncClient::new(
-            config.rgs_url.clone(),
-            Arc::clone(&rapid_sync),
-        )?);
-
-        // Step 12: Initialize the ProbabilisticScorer
+        // Step 11: Initialize the ProbabilisticScorer
         let scorer = Arc::new(Mutex::new(
             persister.read_or_init_scorer(Arc::clone(&graph), Arc::clone(&logger))?,
         ));
 
-        // Step 13: Initialize the Router
+        // Step 12: Initialize the Router
         let router = Arc::new(Router::new(
             Arc::clone(&graph),
             Arc::clone(&logger),
@@ -192,12 +196,12 @@ impl LightningNode {
         ));
 
         // (needed when using Electrum or BIP 157/158)
-        // Step 14: Prepare ChannelMonitors for chain sync
+        // Step 13: Prepare ChannelMonitors for chain sync
         for (_, channel_monitor) in channel_monitors.iter() {
             channel_monitor.load_outputs_to_watch(&tx_sync);
         }
 
-        // Step 15: Initialize the ChannelManager
+        // Step 14: Initialize the ChannelManager
         let mobile_node_user_config = build_mobile_node_user_config();
         // TODO: Init properly.
         let best_block = BestBlock::from_network(config.network);
@@ -221,7 +225,8 @@ impl LightningNode {
         )?;
         let channel_manager = Arc::new(channel_manager);
 
-        // Step 16. Sync ChannelMonitors and ChannelManager to chain tip
+        // Step 15. Sync ChannelMonitors and ChannelManager to chain tip
+        let rt = AsyncRuntime::new()?;
         let confirmables = vec![
             &*channel_manager as &(dyn Confirm + Sync + Send),
             &*chain_monitor as &(dyn Confirm + Sync + Send),
@@ -236,7 +241,7 @@ impl LightningNode {
             }
         }
 
-        // Step 17. Give ChannelMonitors to ChainMonitor
+        // Step 16. Give ChannelMonitors to ChainMonitor
         for (_, channel_monitor) in channel_monitors {
             let funding_outpoint = channel_monitor.get_funding_txo().0;
             match chain_monitor.watch_channel(funding_outpoint, channel_monitor) {
@@ -250,35 +255,14 @@ impl LightningNode {
             }
         }
 
-        // Step 18. Initialize the PeerManager
+        // Step 17. Initialize the PeerManager
         let peer_manager = Arc::new(init_peer_manager(
             Arc::clone(&channel_manager),
             Arc::clone(&keys_manager),
             Arc::clone(&logger),
         )?);
 
-        // Step 19: Initialize the LspClient
-        let lsp_client = Arc::new(LspClient::new(
-            config.lsp_url.clone(),
-            config.lsp_token.clone(),
-        )?);
-
-        // Step 20: Initialize the TaskManager
-        let task_manager = Arc::new(Mutex::new(TaskManager::new(
-            rt.handle(),
-            Arc::clone(&lsp_client),
-            Arc::clone(&peer_manager),
-            Arc::clone(&fee_estimator),
-            rapid_sync_client,
-            Arc::clone(&channel_manager),
-            Arc::clone(&chain_monitor),
-            Arc::clone(&tx_sync),
-            config.fiat_currency.clone(),
-            exchange_rate_provider,
-        )));
-        task_manager.lock().unwrap().restart(FOREGROUND_PERIODS);
-
-        // Step 21: Initialize the PaymentStore
+        // Step 18: Initialize the PaymentStore
         let payment_store_path = Path::new(&config.local_persistence_path).join("payment_db.db3");
         let payment_store_path = payment_store_path
             .to_str()
@@ -288,15 +272,72 @@ impl LightningNode {
             config.timezone_config.clone(),
         )?));
 
-        // Step 22. Initialize an EventHandler
-        let event_handler = Arc::new(LipaEventHandler::new(
-            Arc::clone(&channel_manager),
-            Arc::clone(&task_manager),
-            user_event_handler,
-            Arc::clone(&payment_store),
+        let lsp_client = Arc::new(LspClient::new(
+            config.lsp_url.clone(),
+            config.lsp_token.clone(),
         )?);
 
-        // Step 23. Start Background Processing
+        Ok(Self {
+            config,
+            keys_manager,
+            channel_manager: Arc::clone(&channel_manager),
+            peer_manager,
+            payment_store,
+            persister,
+            chain_monitor,
+            graph,
+            logger,
+            scorer,
+            fee_estimator,
+            tx_sync,
+            lsp_client,
+            user_event_handler: Arc::new(user_event_handler),
+            exchange_rate_provider: Arc::new(exchange_rate_provider),
+            lightning_runtime: RwLock::new(None),
+        })
+    }
+
+    pub fn start(&self) -> Result<()> {
+        let mut lightning_runtime = self.lightning_runtime.write().unwrap();
+        if lightning_runtime.is_some() {
+            return Err(runtime_error(
+                RuntimeErrorCode::NodeAlreadyRunning,
+                "The node is already running. Can't start it again.",
+            ))?;
+        }
+
+        let rt = AsyncRuntime::new()?;
+
+        let rapid_sync = Arc::new(RapidGossipSync::new(
+            Arc::clone(&self.graph),
+            Arc::clone(&self.logger),
+        ));
+        let rapid_sync_client = Arc::new(RapidSyncClient::new(
+            self.config.rgs_url.clone(),
+            Arc::clone(&rapid_sync),
+        )?);
+
+        let task_manager = Arc::new(Mutex::new(TaskManager::new(
+            rt.handle(),
+            Arc::clone(&self.lsp_client),
+            Arc::clone(&self.peer_manager),
+            Arc::clone(&self.fee_estimator),
+            rapid_sync_client,
+            Arc::clone(&self.channel_manager),
+            Arc::clone(&self.chain_monitor),
+            Arc::clone(&self.tx_sync),
+            self.config.fiat_currency.clone(),
+            Arc::clone(&self.exchange_rate_provider),
+        )));
+        task_manager.lock().unwrap().restart(FOREGROUND_PERIODS);
+
+        let event_handler = Arc::new(LipaEventHandler::new(
+            Arc::clone(&self.channel_manager),
+            Arc::clone(&task_manager),
+            Arc::clone(&self.user_event_handler),
+            Arc::clone(&self.payment_store),
+        )?);
+
         // The fact that we do not restart the background process assumes that
         // it will never fail. However it may fail:
         //  1. on persisting channel manager, but it never fails since we ignore
@@ -305,27 +346,23 @@ impl LightningNode {
         // The other strategy to handle errors and restart the process will be
         // more difficult but will not provide any benefits.
         let background_processor = BackgroundProcessor::start(
-            persister,
-            Arc::clone(&event_handler),
-            chain_monitor,
-            Arc::clone(&channel_manager),
-            GossipSync::rapid(rapid_sync),
-            Arc::clone(&peer_manager),
-            logger,
-            Some(scorer),
+            Arc::clone(&self.persister),
+            event_handler,
+            Arc::clone(&self.chain_monitor),
+            Arc::clone(&self.channel_manager),
+            GossipSync::rapid(Arc::clone(&rapid_sync)),
+            Arc::clone(&self.peer_manager),
+            Arc::clone(&self.logger),
+            Some(Arc::clone(&self.scorer)),
         );
 
-        Ok(Self {
-            config,
-            rt,
-            lsp_client,
-            keys_manager,
-            background_processor,
-            channel_manager: Arc::clone(&channel_manager),
-            peer_manager,
+        *lightning_runtime = Some(LightningRuntime {
+            _rt: rt,
+            _background_processor: background_processor,
             task_manager,
-            payment_store,
-        })
+        });
+
+        Ok(())
     }
 
     pub fn get_node_info(&self) -> NodeInfo {
@@ -338,7 +375,12 @@ impl LightningNode {
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        let lsp_info = self
+        let rt_lock = self.lightning_runtime.read().unwrap();
+        let lightning_runtime = rt_lock
+            .as_ref()
+            .ok_or_runtime_error(RuntimeErrorCode::NodeNotRunning, "Node isn't running")?;
+
+        let lsp_info = lightning_runtime
             .task_manager
             .lock()
             .unwrap()
@@ -374,7 +416,8 @@ impl LightningNode {
             Network::Signet => Currency::Signet,
         };
         let fiat_values = self.get_fiat_values(amount_msat);
-        let signed_invoice = self.rt.handle().block_on(create_invoice(
+        let rt = AsyncRuntime::new()?;
+        let signed_invoice = rt.handle().block_on(create_invoice(
             CreateInvoiceParams {
                 amount_msat,
                 currency,
@@ -509,36 +552,63 @@ impl LightningNode {
             .get_payment(&Vec::from_hex(hash).map_to_invalid_input("Invalid hash")?)
     }
 
-    pub fn foreground(&self) {
-        self.task_manager
+    pub fn foreground(&self) -> Result<()> {
+        let rt_lock = self.lightning_runtime.read().unwrap();
+        let lightning_runtime = rt_lock
+            .as_ref()
+            .ok_or_runtime_error(RuntimeErrorCode::NodeNotRunning, "Node isn't running")?;
+
+        lightning_runtime
+            .task_manager
             .lock()
             .unwrap()
             .restart(FOREGROUND_PERIODS);
+        Ok(())
     }
 
-    pub fn background(&self) {
-        self.task_manager
+    pub fn background(&self) -> Result<()> {
+        let rt_lock = self.lightning_runtime.read().unwrap();
+        let lightning_runtime = rt_lock
+            .as_ref()
+            .ok_or_runtime_error(RuntimeErrorCode::NodeNotRunning, "Node isn't running")?;
+
+        lightning_runtime
+            .task_manager
             .lock()
             .unwrap()
             .restart(BACKGROUND_PERIODS);
+        Ok(())
     }
 
     pub fn get_exchange_rates(&self) -> Result<ExchangeRates> {
-        self.task_manager
+        let rt_lock = self.lightning_runtime.read().unwrap();
+        let lightning_runtime = rt_lock
+            .as_ref()
+            .ok_or_runtime_error(RuntimeErrorCode::NodeNotRunning, "Node isn't running")?;
+
+        let res = lightning_runtime
+            .task_manager
             .lock()
             .unwrap()
             .get_exchange_rates()
             .ok_or_runtime_error(
                 RuntimeErrorCode::ExchangeRateProviderUnavailable,
                 "Failed to get exchange rates",
-            )
+            );
+        res
     }
 
-    pub fn change_fiat_currency(&self, fiat_currency: String) {
-        let mut task_manager = self.task_manager.lock().unwrap();
+    pub fn change_fiat_currency(&self, fiat_currency: String) -> Result<()> {
+        let rt_lock = self.lightning_runtime.read().unwrap();
+        let lightning_runtime = rt_lock
+            .as_ref()
+            .ok_or_runtime_error(RuntimeErrorCode::NodeNotRunning, "Node isn't running")?;
+
+        let mut task_manager = lightning_runtime.task_manager.lock().unwrap();
         task_manager.change_fiat_currency(fiat_currency);
         // if the fiat currency is being changed, we can assume the app is in the foreground
         task_manager.restart(FOREGROUND_PERIODS);
+        Ok(())
     }
 
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
@@ -551,16 +621,30 @@ impl LightningNode {
             .ok()
             .map(|e| FiatValues::from_amount_msat(amount_msat, &e))
     }
+
+    pub fn stop(&self) -> Result<()> {
+        let mut rt_lock = self.lightning_runtime.write().unwrap();
+        let lightning_runtime = rt_lock
+            .as_ref()
+            .ok_or_runtime_error(RuntimeErrorCode::NodeNotRunning, "Node isn't running")?;
+
+        lightning_runtime
+            .task_manager
+            .lock()
+            .unwrap()
+            .request_shutdown_all();
+
+        self.peer_manager.disconnect_all_peers();
+
+        // Dropping the LightningRuntime stops the background processor
+        *rt_lock = None;
+        Ok(())
+    }
 }
 
 impl Drop for LightningNode {
     fn drop(&mut self) {
-        self.task_manager.lock().unwrap().request_shutdown_all();
-
-        self.peer_manager.disconnect_all_peers();
-
-        // The background processor implements the drop trait itself.
-        // It therefore doesn't have to be stopped manually.
+        let _ = self.stop();
     }
 }
 

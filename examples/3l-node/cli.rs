@@ -68,7 +68,9 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         .ok_or_else(|| "Error: fiat currency code is required".to_string())
                     {
                         Ok(c) => {
-                            change_currency(node, c);
+                            if let Err(message) = change_currency(node, c) {
+                                println!("{}", message.red());
+                            }
                         }
                         Err(e) => {
                             println!("{}", e.red());
@@ -101,12 +103,29 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     }
                 }
                 "foreground" => {
-                    node.foreground();
+                    if let Err(e) = node.foreground() {
+                        let message = "Failed to call foreground";
+                        println!("{}: {}", message.red(), e);
+                    }
                 }
                 "background" => {
-                    node.background();
+                    if let Err(e) = node.background() {
+                        let message = "Failed to call background";
+                        println!("{}: {}", message.red(), e);
+                    }
+                }
+                "start" => {
+                    if let Err(e) = node.start() {
+                        let message = "Failed to call start";
+                        println!("{}: {}", message.red(), e);
+                    }
+                    break;
                 }
                 "stop" => {
+                    if let Err(e) = node.stop() {
+                        let message = "Failed to call stop";
+                        println!("{}: {}", message.red(), e);
+                    }
                     break;
                 }
                 _ => println!(
@@ -156,6 +175,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("listpayments", "listpayments"));
     hints.insert(CommandHint::new("foreground", "foreground"));
     hints.insert(CommandHint::new("background", "background"));
+    hints.insert(CommandHint::new("start", "start"));
     hints.insert(CommandHint::new("stop", "stop"));
     hints.insert(CommandHint::new("help", "help"));
     let hinter = CommandHinter { hints };
@@ -184,6 +204,7 @@ fn help() {
     println!("  foreground");
     println!("  background");
     println!();
+    println!("  start");
     println!("  stop");
 }
 
@@ -256,8 +277,9 @@ fn list_currency_codes(node: &LightningNode) -> Result<(), String> {
     Ok(())
 }
 
-fn change_currency(node: &LightningNode, fiat_currency: &str) {
-    node.change_fiat_currency(String::from(fiat_currency));
+fn change_currency(node: &LightningNode, fiat_currency: &str) -> Result<(), String> {
+    node.change_fiat_currency(String::from(fiat_currency))
+        .map_err(|e| e.to_string())
 }
 
 fn change_timezone(

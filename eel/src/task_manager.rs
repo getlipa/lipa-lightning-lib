@@ -39,7 +39,7 @@ pub(crate) struct TaskManager {
     tx_sync: Arc<TxSync>,
 
     fiat_currency: String,
-    exchange_rate_provider: Arc<dyn ExchangeRateProvider>,
+    exchange_rate_provider: Arc<Box<dyn ExchangeRateProvider>>,
     exchange_rates: Arc<Mutex<Option<ExchangeRates>>>,
 
     task_handles: Vec<RepeatingTaskHandle>,
@@ -57,7 +57,7 @@ impl TaskManager {
         chain_monitor: Arc<ChainMonitor>,
         tx_sync: Arc<TxSync>,
         fiat_currency: String,
-        exchange_rate_provider: Box<dyn ExchangeRateProvider>,
+        exchange_rate_provider: Arc<Box<dyn ExchangeRateProvider>>,
     ) -> Self {
         Self {
             runtime_handle,
@@ -70,7 +70,7 @@ impl TaskManager {
             chain_monitor,
             tx_sync,
             fiat_currency,
-            exchange_rate_provider: Arc::from(exchange_rate_provider),
+            exchange_rate_provider,
             exchange_rates: Arc::new(Mutex::new(None)),
             task_handles: Vec::new(),
         }

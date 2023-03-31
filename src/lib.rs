@@ -93,6 +93,10 @@ impl LightningNode {
         })
     }
 
+    pub fn start(&self) -> Result<()> {
+        self.core_node.start()
+    }
+
     pub fn get_node_info(&self) -> NodeInfo {
         self.core_node.get_node_info()
     }
@@ -131,11 +135,11 @@ impl LightningNode {
         self.core_node.get_payment(&hash)
     }
 
-    pub fn foreground(&self) {
+    pub fn foreground(&self) -> Result<()> {
         self.core_node.foreground()
     }
 
-    pub fn background(&self) {
+    pub fn background(&self) -> Result<()> {
         self.core_node.background()
     }
 
@@ -147,12 +151,16 @@ impl LightningNode {
         self.core_node.get_exchange_rates()
     }
 
-    pub fn change_fiat_currency(&self, fiat_currency: String) {
-        self.core_node.change_fiat_currency(fiat_currency);
+    pub fn change_fiat_currency(&self, fiat_currency: String) -> Result<()> {
+        self.core_node.change_fiat_currency(fiat_currency)
     }
 
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
         self.core_node.change_timezone_config(timezone_config);
+    }
+
+    pub fn stop(&self) -> Result<()> {
+        self.core_node.stop()
     }
 }
 

@@ -42,12 +42,14 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
             Box::new(self.storage.clone()),
             Box::new(events_handler),
             Box::new(ExchangeRateProviderMock {}),
-        );
+        )?;
+
+        node.start()?;
 
         // Wait for the the P2P background task to connect to the LSP
         sleep(Duration::from_millis(1500));
 
-        node
+        Ok(node)
     }
 
     pub fn get_storage(&mut self) -> &mut S {

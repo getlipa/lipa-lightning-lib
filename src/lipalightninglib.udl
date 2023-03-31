@@ -30,6 +30,12 @@ interface LightningNode {
     [Throws=LnError]
     constructor(Config config, EventsCallback events_callback);
 
+    [Throws=LnError]
+    void start();
+
+    [Throws=LnError]
+    void stop();
+
     // Request some basic info about the local node
     NodeInfo get_node_info();
 
@@ -84,11 +90,13 @@ interface LightningNode {
 
     // Call the method when the app goes to foreground, such that the user can interact with it.
     // The library starts running the background tasks more frequently to improve user experience.
+    [Throws=LnError]
     void foreground();
 
     // Call the method when the app goes to background, such that the user can not interact with it.
     // The library stops running some unnecessary tasks and runs necessary tasks less frequently.
     // It should save battery and internet traffic.
+    [Throws=LnError]
     void background();
 
     // List codes of supported fiat currencies.
@@ -103,6 +111,7 @@ interface LightningNode {
 
     // Change the fiat currency (ISO 4217 currency code) - not all are supported
     //      The method `list_currency_codes()` can used to list supported codes.
+    [Throws=LnError]
     void change_fiat_currency(string fiat_currency);
 
     // Change the timezone config.
@@ -375,6 +384,10 @@ interface LnError {
 
 // A code that specifies the RuntimeError that occurred
 enum RuntimeErrorCode {
+    // NODE STATUS ERRORS
+    "NodeAlreadyRunning",
+    "NodeNotRunning",
+
     // CONNECTIVITY ERRORS
     "AuthServiceUnvailable", // The backed auth service is unavailable.
     "EsploraServiceUnavailable", // The esplora service is unavailable. Could there be a loss of internet connection?

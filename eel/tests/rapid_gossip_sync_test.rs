@@ -99,7 +99,7 @@ mod rapid_gossip_sync_test {
             // wait for the RGS server to learn about the new channels (100 seconds isn't enough)
             sleep(Duration::from_secs(150));
 
-            node.foreground();
+            node.foreground().unwrap();
 
             info!("Restarting node..."); // to test that the graph is persisted and retrieved correctly
         } // Shut down the node
@@ -137,7 +137,7 @@ mod rapid_gossip_sync_test {
             // wait for the RGS server to learn about the new channels (100 seconds isn't enough)
             sleep(Duration::from_secs(150));
 
-            node.foreground();
+            node.foreground().unwrap();
 
             info!("Restarting node..."); // to test that the graph is persisted and retrieved correctly
         } // Shut down the node

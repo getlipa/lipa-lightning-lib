@@ -13,7 +13,7 @@ use std::time::SystemTime;
 pub(crate) struct LipaEventHandler {
     channel_manager: Arc<ChannelManager>,
     task_manager: Arc<Mutex<TaskManager>>,
-    user_event_handler: Box<dyn interfaces::EventHandler>,
+    user_event_handler: Arc<Box<dyn interfaces::EventHandler>>,
     payment_store: Arc<Mutex<PaymentStore>>,
 }
 
@@ -21,7 +21,7 @@ impl LipaEventHandler {
     pub fn new(
         channel_manager: Arc<ChannelManager>,
         task_manager: Arc<Mutex<TaskManager>>,
-        user_event_handler: Box<dyn interfaces::EventHandler>,
+        user_event_handler: Arc<Box<dyn interfaces::EventHandler>>,
         payment_store: Arc<Mutex<PaymentStore>>,
     ) -> Result<Self> {
         Ok(Self {

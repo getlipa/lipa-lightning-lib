@@ -70,12 +70,29 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     }
                 }
                 "foreground" => {
-                    node.foreground();
+                    if let Err(e) = node.foreground() {
+                        let message = "Failed to call foreground";
+                        println!("{}: {}", message.red(), e);
+                    }
                 }
                 "background" => {
-                    node.background();
+                    if let Err(e) = node.background() {
+                        let message = "Failed to call background";
+                        println!("{}: {}", message.red(), e);
+                    }
+                }
+                "start" => {
+                    if let Err(e) = node.start() {
+                        let message = "Failed to call start";
+                        println!("{}: {}", message.red(), e);
+                    }
+                    break;
                 }
                 "stop" => {
+                    if let Err(e) = node.stop() {
+                        let message = "Failed to call stop";
+                        println!("{}: {}", message.red(), e);
+                    }
                     break;
                 }
                 _ => println!(
@@ -102,6 +119,7 @@ fn help() {
     println!("  foreground");
     println!("  background");
     println!("");
+    println!("  start");
     println!("  stop");
 }
 

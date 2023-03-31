@@ -2,6 +2,9 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RuntimeErrorCode {
+    NodeAlreadyRunning,
+    NodeNotRunning,
+
     AuthServiceUnvailable,
     EsploraServiceUnavailable,
     ExchangeRateProviderUnavailable,

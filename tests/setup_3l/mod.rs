@@ -47,12 +47,14 @@ impl NodeHandle {
 
     pub fn start(&self) -> Result<LightningNode> {
         let events_handler = PrintEventsHandler {};
-        let node = LightningNode::new(self.config.clone(), Box::new(events_handler));
+        let node = LightningNode::new(self.config.clone(), Box::new(events_handler))?;
+
+        node.start()?;
 
         // Wait for the the P2P background task to connect to the LSP
         sleep(Duration::from_millis(1500));
 
-        node
+        Ok(node)
     }
 
     pub fn reset_state() {
