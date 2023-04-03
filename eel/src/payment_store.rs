@@ -469,8 +469,8 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
         .optional()
         .map_to_permanent_failure("Failed to set up local payment database")?;
 
-    if current_schema.is_some() {
-        upgrade_db(current_schema.unwrap(), db_conn)?;
+    if let Some(current_schema) = current_schema {
+        upgrade_db(current_schema, db_conn)?;
     }
 
     db_conn
