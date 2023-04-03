@@ -93,12 +93,7 @@ fn network_from_currency(currency: Currency) -> Network {
 }
 
 fn chomp_prefix(string: &str) -> &str {
-    let prefix = "lightning:";
-    if let Some(tail) = string.strip_prefix(prefix) {
-        tail
-    } else {
-        string
-    }
+    string.strip_prefix("lightning:").unwrap_or(string)
 }
 
 pub(crate) async fn create_invoice(
