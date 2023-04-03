@@ -11,7 +11,7 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use std::time::SystemTime;
 
-const SCHEMA_VERSION: u64 = 1;
+const SCHEMA_VERSION: u16 = 1;
 
 #[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
@@ -462,7 +462,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
         )
         .map_to_permanent_failure("Failed to set up local payment database")?;
 
-    let current_schema: Option<u64> = db_conn
+    let current_schema: Option<u16> = db_conn
         .query_row("SELECT db_schema FROM config WHERE id = $1", [1], |row| {
             row.get(0)
         })
@@ -530,7 +530,7 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
         .map_to_permanent_failure("Failed to set up local payment database")
 }
 
-fn upgrade_db(schema: u64, _db_conn: &Connection) -> Result<()> {
+fn upgrade_db(schema: u16, _db_conn: &Connection) -> Result<()> {
     // Once we upgrade schema, logic like the one that follows can be used.
     /*
     if schema == 1 {
