@@ -571,7 +571,7 @@ where
         channel_manager: &lightning::ln::channelmanager::ChannelManager<M, T, ES, NS, SP, F, R, L>,
     ) -> std::result::Result<(), std::io::Error> {
         // Persist locally
-        match <FilesystemPersister as Persister<'_, M, T, ES, NS, SP, F, R, L, S>>::persist_manager(
+        match Persister::<'_, M, T, ES, NS, SP, F, R, L, S>::persist_manager(
             &self.fs_persister,
             channel_manager,
         ) {
@@ -623,17 +623,14 @@ where
         &self,
         network_graph: &lightning::routing::gossip::NetworkGraph<L>,
     ) -> std::result::Result<(), std::io::Error> {
-        <FilesystemPersister as Persister<'_, M, T, ES, NS, SP, F, R, L, S>>::persist_graph(
+        Persister::<'_, M, T, ES, NS, SP, F, R, L, S>::persist_graph(
             &self.fs_persister,
             network_graph,
         )
     }
 
     fn persist_scorer(&self, scorer: &S) -> std::result::Result<(), std::io::Error> {
-        <FilesystemPersister as Persister<'_, M, T, ES, NS, SP, F, R, L, S>>::persist_scorer(
-            &self.fs_persister,
-            scorer,
-        )
+        Persister::<'_, M, T, ES, NS, SP, F, R, L, S>::persist_scorer(&self.fs_persister, scorer)
     }
 }
 
