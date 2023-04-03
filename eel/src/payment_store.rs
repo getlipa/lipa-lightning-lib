@@ -271,11 +271,17 @@ impl PaymentStore {
             FROM payments \
             JOIN recent_events ON payments.payment_id=recent_events.payment_id \
             JOIN creation_events ON payments.payment_id=creation_events.payment_id \
-            WHERE state NOT IN (1, 4) \
+            WHERE state NOT IN (?1, ?2) \
             ")
             .map_to_permanent_failure("Failed to prepare SQL query")?;
         let non_expired_payment_iter = statement
-            .query_map([], payment_from_row)
+            .query_map(
+                [
+                    PaymentState::Succeeded as u8,
+                    PaymentState::InvoiceExpired as u8,
+                ],
+                payment_from_row,
+            )
             .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
 
         for payment in non_expired_payment_iter {
