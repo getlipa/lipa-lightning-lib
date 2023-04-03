@@ -8,7 +8,6 @@ use bitcoin::hashes::hex::ToHex;
 use lightning::util::events::{Event, EventHandler, PaymentPurpose};
 use log::{error, info, trace};
 use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
 
 pub(crate) struct LipaEventHandler {
     channel_manager: Arc<ChannelManager>,
@@ -60,28 +59,12 @@ impl EventHandler for LipaEventHandler {
 
                 let payment_store = self.payment_store.lock().unwrap();
 
-                if let Ok(payment) = payment_store.get_payment(&payment_hash.0) {
+                if let Ok(payment) = payment_store.get_payment(&payment_hash.0.to_hex()) {
                     if payment.payment_state == PaymentState::Succeeded {
                         info!("Registered incoming payment for {} msat with hash {}. Rejecting because we've already claimed a payment with the same hash", amount_msat, payment_hash.0.to_hex());
                         self.channel_manager.fail_htlc_backwards(&payment_hash);
                         return;
                     } else if payment.payment_state == PaymentState::InvoiceExpired {
-                        info!("Registered incoming payment for {} msat with hash {}. Rejecting because the corresponding invoice expired", amount_msat, payment_hash.0.to_hex());
-                        self.channel_manager.fail_htlc_backwards(&payment_hash);
-                        return;
-                    } else if payment.invoice_details.expiry_timestamp < SystemTime::now() {
-                        if payment_store
-                            .new_payment_state(
-                                payment_hash.0.as_slice(),
-                                PaymentState::InvoiceExpired,
-                            )
-                            .is_err()
-                        {
-                            error!(
-                                "Failed to set InvoiceExpired status in the payment db for payment hash {}",
-                                payment_hash.0.to_hex()
-                            );
-                        }
                         info!("Registered incoming payment for {} msat with hash {}. Rejecting because the corresponding invoice expired", amount_msat, payment_hash.0.to_hex());
                         self.channel_manager.fail_htlc_backwards(&payment_hash);
                         return;
@@ -99,7 +82,10 @@ impl EventHandler for LipaEventHandler {
                             payment_hash.0.to_hex()
                         );
                         if payment_store
-                            .fill_preimage(payment_hash.0.as_slice(), payment_preimage.0.as_slice())
+                            .fill_preimage(
+                                &payment_hash.0.as_slice().to_hex(),
+                                &payment_preimage.0.as_slice().to_hex(),
+                            )
                             .is_err()
                         {
                             error!(
@@ -151,7 +137,7 @@ impl EventHandler for LipaEventHandler {
                             .payment_store
                             .lock()
                             .unwrap()
-                            .incoming_payment_succeeded(payment_hash.0.as_slice())
+                            .incoming_payment_succeeded(&payment_hash.0.as_slice().to_hex())
                             .is_err()
                         {
                             error!("Failed to persist in the payment db that the receiving payment with hash {} has succeeded", payment_hash.0.to_hex());
@@ -189,8 +175,8 @@ impl EventHandler for LipaEventHandler {
                     .lock()
                     .unwrap()
                     .outgoing_payment_succeeded(
-                        payment_hash.0.as_slice(),
-                        payment_preimage.0.as_slice(),
+                        &payment_hash.0.as_slice().to_hex(),
+                        &payment_preimage.0.as_slice().to_hex(),
                         fee_paid_msat,
                     )
                     .is_err()
@@ -212,7 +198,7 @@ impl EventHandler for LipaEventHandler {
                     .payment_store
                     .lock()
                     .unwrap()
-                    .new_payment_state(payment_hash.0.as_slice(), PaymentState::Failed)
+                    .new_payment_state(&payment_hash.0.as_slice().to_hex(), PaymentState::Failed)
                     .is_err()
                 {
                     error!("Failed to persist in the payment db that sending payment with hash {} has failed", payment_hash.0.to_hex());
