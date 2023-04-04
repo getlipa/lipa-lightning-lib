@@ -7,7 +7,6 @@ use num_enum::TryFromPrimitive;
 use perro::{MapToError, OptionToError};
 use rusqlite::types::Type;
 use rusqlite::{Connection, Row};
-use std::convert::TryFrom;
 use std::str::FromStr;
 use std::time::SystemTime;
 

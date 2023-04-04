@@ -50,7 +50,7 @@ fn main() {
         lsp_token: "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string(),
         local_persistence_path: BASE_DIR.to_string(),
         timezone_config: TzConfig {
-            timezone_id: String::from("Europe/Zurich"),
+            timezone_id: String::from("Africa/Tunis"),
             timezone_utc_offset_secs: 1 * 60 * 60,
         },
         graphql_url: get_backend_url(),
