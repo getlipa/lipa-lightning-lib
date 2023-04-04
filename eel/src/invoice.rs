@@ -8,6 +8,7 @@ use std::time::{Duration, SystemTime};
 
 use crate::lsp;
 use crate::payment_store::{FiatValues, PaymentStore};
+use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::Network;
 use lightning::chain::keysinterface::{KeysManager, NodeSigner, Recipient};
@@ -19,7 +20,7 @@ use log::info;
 use perro::{invalid_input, MapToError, MapToErrorForUnitType, ResultTrait};
 use secp256k1::ecdsa::RecoverableSignature;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct InvoiceDetails {
     pub invoice: String,
     pub amount_msat: Option<u64>,
@@ -196,7 +197,7 @@ pub(crate) async fn create_invoice(
 
     payment_store
         .new_incoming_payment(
-            &payment_hash,
+            &payment_hash.to_hex(),
             amount_msat,
             lsp_fee,
             &params.description,
