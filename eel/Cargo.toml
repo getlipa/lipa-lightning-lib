@@ -48,4 +48,4 @@ simplelog = { version = "0.12.0", features = ["test"] }
 storage-mock = { path = "../util/storage-mock" }
 
 [build-dependencies]
-tonic-build = "0.9.0"
+tonic-build = "0.9.1"
