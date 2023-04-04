@@ -81,7 +81,7 @@ pub struct Payment {
 }
 
 impl Payment {
-    pub fn should_be_set_expired(&self) -> bool {
+    fn should_be_set_expired(&self) -> bool {
         if self.invoice_details.expiry_timestamp < SystemTime::now() {
             match self.payment_type {
                 PaymentType::Receiving => {
@@ -259,45 +259,6 @@ impl PaymentStore {
         Ok(())
     }
 
-    pub fn process_expired_payments(&self) -> Result<()> {
-        let mut statement = self
-            .db_conn
-            .prepare("\
-            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, \
-            lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
-            recent_events.timezone_id, recent_events.timezone_utc_offset_secs, description, \
-            creation_events.inserted_at, creation_events.timezone_id, creation_events.timezone_utc_offset_secs, \
-            amount_usd, amount_fiat, fiat_currency \
-            FROM payments \
-            JOIN recent_events ON payments.payment_id=recent_events.payment_id \
-            JOIN creation_events ON payments.payment_id=creation_events.payment_id \
-            WHERE state NOT IN (?1, ?2) \
-            ")
-            .map_to_permanent_failure("Failed to prepare SQL query")?;
-        let non_expired_payment_iter = statement
-            .query_map(
-                [
-                    PaymentState::Succeeded as u8,
-                    PaymentState::InvoiceExpired as u8,
-                ],
-                payment_from_row,
-            )
-            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
-
-        for payment in non_expired_payment_iter {
-            let payment = payment.map_to_permanent_failure("Corrupted payment db")?;
-            debug_assert!(
-                payment.payment_state != PaymentState::Succeeded
-                    && payment.payment_state != PaymentState::InvoiceExpired
-            );
-            if payment.should_be_set_expired() {
-                self.new_payment_state(&payment.hash, PaymentState::InvoiceExpired)?;
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn fill_preimage(&self, hash: &str, preimage: &str) -> Result<()> {
         self.db_conn
             .execute(
@@ -386,6 +347,45 @@ impl PaymentStore {
             )?
             .map_to_permanent_failure("Corrupted payment db")?;
         Ok(payment)
+    }
+
+    fn process_expired_payments(&self) -> Result<()> {
+        let mut statement = self
+            .db_conn
+            .prepare("\
+            SELECT payments.payment_id, payments.type, hash, preimage, amount_msat, network_fees_msat, \
+            lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
+            recent_events.timezone_id, recent_events.timezone_utc_offset_secs, description, \
+            creation_events.inserted_at, creation_events.timezone_id, creation_events.timezone_utc_offset_secs, \
+            amount_usd, amount_fiat, fiat_currency \
+            FROM payments \
+            JOIN recent_events ON payments.payment_id=recent_events.payment_id \
+            JOIN creation_events ON payments.payment_id=creation_events.payment_id \
+            WHERE state NOT IN (?1, ?2) \
+            ")
+            .map_to_permanent_failure("Failed to prepare SQL query")?;
+        let non_expired_payment_iter = statement
+            .query_map(
+                [
+                    PaymentState::Succeeded as u8,
+                    PaymentState::InvoiceExpired as u8,
+                ],
+                payment_from_row,
+            )
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
+
+        for payment in non_expired_payment_iter {
+            let payment = payment.map_to_permanent_failure("Corrupted payment db")?;
+            debug_assert!(
+                payment.payment_state != PaymentState::Succeeded
+                    && payment.payment_state != PaymentState::InvoiceExpired
+            );
+            if payment.should_be_set_expired() {
+                self.new_payment_state(&payment.hash, PaymentState::InvoiceExpired)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
