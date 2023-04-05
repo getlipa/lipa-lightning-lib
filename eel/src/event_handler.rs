@@ -1,6 +1,7 @@
 use crate::errors::Result;
 use crate::interfaces;
-use crate::payment_store::{PaymentState, PaymentStore};
+use crate::payment::PaymentState;
+use crate::payment_store::PaymentStore;
 use crate::task_manager::TaskManager;
 use crate::types::ChannelManager;
 
