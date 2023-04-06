@@ -66,7 +66,7 @@ pub struct Payment {
 }
 
 impl Payment {
-    pub(crate) fn expired(&self) -> bool {
+    pub(crate) fn has_expired(&self) -> bool {
         if self.invoice_details.expiry_timestamp < SystemTime::now() {
             return match self.payment_type {
                 PaymentType::Receiving => self.payment_state == PaymentState::Created,

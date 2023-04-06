@@ -290,7 +290,7 @@ impl PaymentStore {
                 payment.payment_state != PaymentState::Succeeded
                     && payment.payment_state != PaymentState::InvoiceExpired
             );
-            if payment.expired() {
+            if payment.has_expired() {
                 self.new_payment_state(&payment.hash, PaymentState::InvoiceExpired)?;
             }
         }
