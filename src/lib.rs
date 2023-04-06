@@ -24,7 +24,7 @@ use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix};
 use eel::lsp::LspFee;
 use eel::node_info::{ChannelsInfo, NodeInfo};
-use eel::payment_store::{FiatValues, Payment, PaymentState, PaymentType, TzTime};
+use eel::payment::{FiatValues, Payment, PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
 use eel::InvoiceDetails;
 use eel::LogLevel;

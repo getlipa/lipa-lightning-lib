@@ -1,103 +1,14 @@
 use crate::config::TzConfig;
 use crate::errors::Result;
-use crate::interfaces::ExchangeRates;
-use crate::{invoice, InvoiceDetails};
+use crate::invoice;
 use lightning_invoice::Invoice;
-use num_enum::TryFromPrimitive;
 use perro::{MapToError, OptionToError};
 use rusqlite::types::Type;
 use rusqlite::{Connection, Row};
 use std::str::FromStr;
 use std::time::SystemTime;
 
-#[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
-#[repr(u8)]
-pub enum PaymentType {
-    Receiving,
-    Sending,
-}
-
-#[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
-#[repr(u8)]
-pub enum PaymentState {
-    Created,
-    Succeeded,
-    Failed,
-    Retried,
-    InvoiceExpired,
-}
-
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct TzTime {
-    pub time: SystemTime,
-    pub timezone_id: String,
-    pub timezone_utc_offset_secs: i32,
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub struct FiatValues {
-    pub fiat: String,
-    pub amount: u64,
-    pub amount_usd: u64,
-}
-
-impl FiatValues {
-    pub fn from_amount_msat(amount_msat: u64, exchange_rates: &ExchangeRates) -> Self {
-        // fiat amount in thousandths of the major fiat unit
-        let amount = amount_msat / (exchange_rates.rate as u64);
-        let amount_usd = amount_msat / (exchange_rates.usd_rate as u64);
-        FiatValues {
-            fiat: exchange_rates.currency_code.clone(),
-            amount,
-            amount_usd,
-        }
-    }
-}
-
-fn fiat_values_option_to_option_tuple(
-    fiat_values: Option<FiatValues>,
-) -> (Option<String>, Option<u64>, Option<u64>) {
-    fiat_values
-        .map(|f| (Some(f.fiat), Some(f.amount), Some(f.amount_usd)))
-        .unwrap_or((None, None, None))
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub struct Payment {
-    pub payment_type: PaymentType,
-    pub payment_state: PaymentState,
-    pub hash: String,
-    pub amount_msat: u64,
-    pub invoice_details: InvoiceDetails,
-    pub created_at: TzTime,
-    pub latest_state_change_at: TzTime,
-    pub description: String,
-    pub preimage: Option<String>,
-    pub network_fees_msat: Option<u64>,
-    pub lsp_fees_msat: Option<u64>,
-    pub fiat_values: Option<FiatValues>,
-    pub metadata: String,
-}
-
-impl Payment {
-    fn should_be_set_expired(&self) -> bool {
-        if self.invoice_details.expiry_timestamp < SystemTime::now() {
-            match self.payment_type {
-                PaymentType::Receiving => {
-                    if self.payment_state == PaymentState::Created {
-                        return true;
-                    }
-                }
-                PaymentType::Sending => {
-                    if self.payment_state == PaymentState::Failed {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-}
+use crate::payment::{FiatValues, Payment, PaymentState, PaymentType, TzTime};
 
 pub(crate) struct PaymentStore {
     db_conn: Connection,
@@ -379,13 +290,21 @@ impl PaymentStore {
                 payment.payment_state != PaymentState::Succeeded
                     && payment.payment_state != PaymentState::InvoiceExpired
             );
-            if payment.should_be_set_expired() {
+            if payment.has_expired() {
                 self.new_payment_state(&payment.hash, PaymentState::InvoiceExpired)?;
             }
         }
 
         Ok(())
     }
+}
+
+fn fiat_values_option_to_option_tuple(
+    fiat_values: Option<FiatValues>,
+) -> (Option<String>, Option<u64>, Option<u64>) {
+    fiat_values
+        .map(|f| (Some(f.fiat), Some(f.amount), Some(f.amount_usd)))
+        .unwrap_or((None, None, None))
 }
 
 fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
@@ -508,9 +427,8 @@ fn apply_migrations(db_conn: &Connection) -> Result<()> {
 mod tests {
     use crate::config::TzConfig;
     use crate::interfaces::ExchangeRates;
-    use crate::payment_store::{
-        apply_migrations, FiatValues, PaymentState, PaymentStore, PaymentType,
-    };
+    use crate::payment::{FiatValues, PaymentState, PaymentType};
+    use crate::payment_store::{apply_migrations, PaymentStore};
     use lightning::ln::PaymentSecret;
     use lightning_invoice::{Currency, InvoiceBuilder};
     use rusqlite::Connection;
