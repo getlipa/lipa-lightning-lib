@@ -13,7 +13,7 @@ mod receiving_payments_test {
     use crate::setup::mocked_storage_node;
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
-    use crate::try_cmd_repeatedly;
+    use crate::{try_cmd_repeatedly, wait_for_eq};
 
     const ONE_SAT: u64 = 1_000;
     const ONE_K_SATS: u64 = 1_000_000;
@@ -38,7 +38,7 @@ mod receiving_payments_test {
 
         {
             let node = node_handle.start().unwrap();
-            assert_eq!(node.get_node_info().num_peers, 1);
+            wait_for_eq!(node.get_node_info().num_peers, 1);
 
             let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
                 .unwrap()
@@ -126,7 +126,7 @@ mod receiving_payments_test {
 
         let node = mocked_storage_node().start().unwrap();
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
-        assert_eq!(node.get_node_info().num_peers, 1);
+        wait_for_eq!(node.get_node_info().num_peers, 1);
 
         let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
             .unwrap()

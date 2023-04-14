@@ -12,7 +12,7 @@ mod chain_sync_test {
     use crate::setup::{mocked_storage_node, NodeHandle};
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
-    use crate::try_cmd_repeatedly;
+    use crate::{try_cmd_repeatedly, wait_for, wait_for_eq};
 
     const HALF_SEC: Duration = Duration::from_millis(500);
     const N_RETRIES: u8 = 10;
@@ -50,31 +50,26 @@ mod chain_sync_test {
 
         // mine a block and do the same again and remove 1 of the previously opened channels
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
-        nigiri::wait_for_sync(NodeInstance::LspdLnd);
+        wait_for_eq!(node.get_node_info().channels_info.num_channels, 2);
+
+        wait_for!(nigiri::is_node_synced(NodeInstance::LspdLnd));
         let _ = open_2_chans_close_1(&node_id);
         nigiri::lnd_node_force_close_channel(NodeInstance::LspdLnd, open_channels.pop().unwrap())
             .unwrap();
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-        sleep(Duration::from_secs(10));
 
-        assert_eq!(node.get_node_info().channels_info.num_channels, 2);
-        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
+        wait_for_eq!(node.get_node_info().channels_info.num_channels, 2);
+        wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
 
         // test force close is detected
         nigiri::lnd_node_disconnect_peer(NodeInstance::LspdLnd, node_id).unwrap();
         nigiri::lnd_node_force_close_channel(NodeInstance::LspdLnd, tx_id).unwrap();
         nigiri::node_stop(NodeInstance::LspdLnd).unwrap();
 
-        sleep(Duration::from_secs(10));
-
         assert_eq!(node.get_node_info().channels_info.num_channels, 2);
-
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
-
-        sleep(Duration::from_secs(10));
-
-        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
+        wait_for_eq!(node.get_node_info().channels_info.num_channels, 1);
     }
 
     #[test]
@@ -95,7 +90,7 @@ mod chain_sync_test {
             let node = node_handle.start().unwrap();
 
             assert_eq!(node.get_node_info().channels_info.num_channels, 1);
-            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
+            wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
         } // drop node
 
         // test node remains usable after restart
@@ -103,7 +98,7 @@ mod chain_sync_test {
             let node = node_handle.start().unwrap();
 
             assert_eq!(node.get_node_info().channels_info.num_channels, 1);
-            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
+            wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
         }
 
         // test force close is detected offline node
@@ -115,9 +110,7 @@ mod chain_sync_test {
         let node = node_handle.start().unwrap();
 
         // Wait for the local node to learn from esplora that the channel has been force closed
-        sleep(Duration::from_secs(10));
-
-        assert_eq!(node.get_node_info().channels_info.num_channels, 0);
+        wait_for_eq!(node.get_node_info().channels_info.num_channels, 0);
     }
 
     #[test]

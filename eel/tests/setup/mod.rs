@@ -12,8 +12,6 @@ use mocked_remote_storage::MockedRemoteStorage;
 use print_events_handler::PrintEventsHandler;
 use std::fs;
 use std::sync::Arc;
-use std::thread::sleep;
-use std::time::Duration;
 use storage_mock::Storage;
 
 #[allow(dead_code)]
@@ -37,17 +35,13 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
 
     pub fn start(&self) -> eel::errors::Result<LightningNode> {
         let events_handler = PrintEventsHandler {};
-        let node = LightningNode::new(
+
+        LightningNode::new(
             self.config.clone(),
             Box::new(self.storage.clone()),
             Box::new(events_handler),
             Box::new(ExchangeRateProviderMock {}),
-        );
-
-        // Wait for the the P2P background task to connect to the LSP
-        sleep(Duration::from_millis(1500));
-
-        node
+        )
     }
 
     pub fn get_storage(&mut self) -> &mut S {

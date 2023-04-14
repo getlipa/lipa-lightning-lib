@@ -15,6 +15,7 @@ mod p2p_connection_test {
     use crate::setup::mocked_storage_node;
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
+    use crate::wait_for_eq;
 
     #[test]
     #[file_parallel(key, "/tmp/3l-int-tests-lock")]
@@ -22,8 +23,7 @@ mod p2p_connection_test {
         nigiri::ensure_environment_running();
         let node = mocked_storage_node().start().unwrap();
 
-        sleep(Duration::from_millis(100));
-        assert_eq!(node.get_node_info().num_peers, 1);
+        wait_for_eq!(node.get_node_info().num_peers, 1);
         let peers = nigiri::list_peers(NodeInstance::LspdLnd).unwrap();
         assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
     }
@@ -38,9 +38,7 @@ mod p2p_connection_test {
         {
             // Let's shutdown LSPD LND.
             nigiri::pause_lspd();
-            sleep(Duration::from_secs(1));
-
-            assert_eq!(node.get_node_info().num_peers, 0);
+            wait_for_eq!(node.get_node_info().num_peers, 0);
         }
 
         // Test reconnect when LSP is back.
@@ -48,10 +46,7 @@ mod p2p_connection_test {
             // Now let's start LSPD LND again.
             nigiri::start_lspd();
             nigiri::wait_for_healthy_lspd();
-            // TODO: Once reconnect period exposed as a config, config it with a
-            //       smaller value to speedup the test.
-            sleep(Duration::from_secs(10));
-            assert_eq!(node.get_node_info().num_peers, 1);
+            wait_for_eq!(node.get_node_info().num_peers, 1);
             let peers = nigiri::list_peers(NodeInstance::LspdLnd).unwrap();
             assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
         }

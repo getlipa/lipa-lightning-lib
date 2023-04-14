@@ -18,7 +18,7 @@ mod persistence_test {
     use crate::setup_env::config::LOCAL_PERSISTENCE_PATH;
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
-    use crate::try_cmd_repeatedly;
+    use crate::{try_cmd_repeatedly, wait_for_eq};
 
     const ONE_SAT: u64 = 1_000;
     const TWO_K_SATS: u64 = 2_000_000;
@@ -108,7 +108,7 @@ mod persistence_test {
     fn run_flow_1st_jit_channel<S: RemoteStorage + Clone + 'static>(node_handle: &NodeHandle<S>) {
         {
             let node = node_handle.start().unwrap();
-            assert_eq!(node.get_node_info().num_peers, 1);
+            wait_for_eq!(node.get_node_info().num_peers, 1);
 
             let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
                 .unwrap()
@@ -136,8 +136,7 @@ mod persistence_test {
             let node = node_handle.start().unwrap();
 
             // Wait for p2p connection to be reestablished and channels marked active
-            sleep(Duration::from_secs(5));
-            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
+            wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
 
             run_jit_channel_open_flow(&node, NodeInstance::NigiriLnd, HALF_M_SATS, TWO_K_SATS);
             assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);

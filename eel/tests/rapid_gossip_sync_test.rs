@@ -6,7 +6,7 @@ mod rapid_gossip_sync_test {
     use crate::setup::mocked_storage_node;
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
-    use crate::try_cmd_repeatedly;
+    use crate::{try_cmd_repeatedly, wait_for, wait_for_eq};
     use bitcoin::hashes::hex::ToHex;
     use eel::LightningNode;
     use log::info;
@@ -39,7 +39,7 @@ mod rapid_gossip_sync_test {
         {
             let node = node_handle.start().unwrap();
             let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
-            assert_eq!(node.get_node_info().num_peers, 1);
+            wait_for_eq!(node.get_node_info().num_peers, 1);
 
             // Setup channels:
             // NigiriLND -> LspdLnd  -> 3L
@@ -83,9 +83,7 @@ mod rapid_gossip_sync_test {
                 node.get_node_info().channels_info.local_balance_msat,
                 HUNDRED_K_SATS
             );
-            // TODO: figure out why the following sleep is needed - the assert that follows fails otherwise
-            sleep(Duration::from_secs(10));
-            assert!(node.get_node_info().channels_info.outbound_capacity_msat > 0);
+            wait_for!(node.get_node_info().channels_info.outbound_capacity_msat > 0);
 
             // The node hasn't yet learned about the new channels so it won't be able to pay
             assert!(matches!(
