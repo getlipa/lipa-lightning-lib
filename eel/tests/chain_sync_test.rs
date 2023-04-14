@@ -46,7 +46,6 @@ mod chain_sync_test {
 
         // test multiple txs simultaneously
         let node_id = node.get_node_info().node_pubkey.to_hex();
-        // open 2 channels and force-close 1 of them right away
         let mut open_channels = open_2_chans_close_1(&node_id);
 
         // mine a block and do the same again and remove 1 of the previously opened channels
@@ -156,6 +155,7 @@ mod chain_sync_test {
         tx_id
     }
 
+    // open 2 channels and force-close 1 of them right away
     fn open_2_chans_close_1(node_id: &str) -> Vec<String> {
         let mut open_channels = Vec::new();
 
