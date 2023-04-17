@@ -4,6 +4,7 @@ use crate::setup_env::config::{get_testing_config, LOCAL_PERSISTENCE_PATH};
 use uniffi_lipalightninglib::LightningNode;
 use uniffi_lipalightninglib::{recover_lightning_node, Config};
 
+use crate::wait_for_eq;
 use core::time::Duration;
 use eel::config::TzConfig;
 use eel::errors::RuntimeErrorCode;
@@ -47,12 +48,12 @@ impl NodeHandle {
 
     pub fn start(&self) -> Result<LightningNode> {
         let events_handler = PrintEventsHandler {};
-        let node = LightningNode::new(self.config.clone(), Box::new(events_handler));
+        let node = LightningNode::new(self.config.clone(), Box::new(events_handler))?;
 
         // Wait for the the P2P background task to connect to the LSP
-        sleep(Duration::from_millis(1500));
+        wait_for_eq!(node.get_node_info().num_peers, 1);
 
-        node
+        Ok(node)
     }
 
     pub fn reset_state() {

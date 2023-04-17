@@ -11,6 +11,7 @@ mod sending_payments_test {
 
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance::{LspdLnd, NigiriCln, NigiriLnd};
+    use crate::wait_for_eq;
 
     const REBALANCE_AMOUNT: u64 = 50_000_000;
     const CHANNEL_SIZE: u64 = 1_000_000_000;
@@ -22,7 +23,7 @@ mod sending_payments_test {
         nigiri::setup_environment_with_lsp();
         let node = mocked_storage_node().start().unwrap();
 
-        assert_eq!(node.get_node_info().num_peers, 1);
+        wait_for_eq!(node.get_node_info().num_peers, 1);
         nigiri::initiate_channel_from_remote(node.get_node_info().node_pubkey, LspdLnd);
 
         // Test hardcoded invoices here to avoid an additional test env set up

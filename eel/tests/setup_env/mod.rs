@@ -30,6 +30,48 @@ fn init_logger() {
     });
 }
 
+#[macro_export]
+macro_rules! wait_for {
+    ($cond:expr) => {
+        let message_if_not_satisfied = format!("Failed to wait for `{}`", stringify!($cond));
+        crate::wait_for_condition!($cond, message_if_not_satisfied);
+    };
+}
+
+#[macro_export]
+macro_rules! wait_for_eq {
+    ($left:expr, $right:expr) => {
+        let message_if_not_satisfied = format!(
+            "Failed to wait for `{}` to equal `{}` ({} != {})",
+            stringify!($left),
+            stringify!($right),
+            $left,
+            $right
+        );
+        crate::wait_for_condition!($left == $right, message_if_not_satisfied);
+    };
+}
+
+#[macro_export]
+macro_rules! wait_for_condition {
+    ($cond:expr, $message_if_not_satisfied:expr) => {
+        (|| {
+            let attempts = 600;
+            let sleep_duration = Duration::from_millis(100);
+            for _ in 0..attempts {
+                if $cond {
+                    return;
+                }
+
+                sleep(sleep_duration);
+            }
+
+            let total_duration = sleep_duration * attempts;
+            panic!("{} [after {total_duration:?}]", $message_if_not_satisfied);
+        })();
+    };
+}
+
 #[cfg(feature = "nigiri")]
 fn node_connect_to_rgs_cln(node: NodeInstance) {
     nigiri::node_connect(node, RGS_CLN_ID, RGS_CLN_HOST, RGS_CLN_PORT).unwrap();
@@ -144,7 +186,7 @@ pub mod nigiri {
     }
 
     pub fn wait_for_healthy_lspd() {
-        wait_for_sync(NodeInstance::LspdLnd);
+        wait_for!(is_node_synced(NodeInstance::LspdLnd));
     }
 
     pub fn ensure_environment_running() {
@@ -171,20 +213,9 @@ pub mod nigiri {
     }
 
     fn wait_for_healthy_nigiri() {
-        wait_for_sync(NodeInstance::NigiriLnd);
-        wait_for_sync(NodeInstance::NigiriCln);
+        wait_for!(is_node_synced(NodeInstance::NigiriLnd));
+        wait_for!(is_node_synced(NodeInstance::NigiriCln));
         wait_for_esplora();
-    }
-
-    pub fn wait_for_sync(node: NodeInstance) {
-        for _ in 0..40 {
-            if is_node_synced(node) {
-                return;
-            }
-            sleep(Duration::from_millis(500));
-        }
-
-        panic!("Failed to start {:?}. Not synced after 20 sec.", node);
     }
 
     pub fn is_node_synced(node: NodeInstance) -> bool {
