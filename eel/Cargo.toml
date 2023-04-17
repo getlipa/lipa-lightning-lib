@@ -24,7 +24,7 @@ lightning-persister = "0.0.114"
 lightning-rapid-gossip-sync = "0.0.114"
 lightning-transaction-sync = { version = "0.0.114", features = ["esplora-async"] }
 log = "0.4.17"
-num_enum = "0.6.0"
+num_enum = "0.6.1"
 prost = "0.11.9"
 rand = "0.8.5"
 reqwest = { version = "0.11.16", default-features = false, features = ["blocking", "rustls-tls"] }
