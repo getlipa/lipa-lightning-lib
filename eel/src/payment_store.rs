@@ -1,6 +1,9 @@
 use crate::config::TzConfig;
 use crate::errors::Result;
 use crate::invoice;
+use crate::migrations::get_migrations;
+use crate::schema_migration::migrate_schema;
+
 use lightning_invoice::Invoice;
 use perro::{MapToError, OptionToError};
 use rusqlite::types::Type;
@@ -17,9 +20,9 @@ pub(crate) struct PaymentStore {
 
 impl PaymentStore {
     pub fn new(db_path: &str, timezone_config: TzConfig) -> Result<Self> {
-        let db_conn = Connection::open(db_path).map_to_invalid_input("Invalid db path")?;
+        let mut db_conn = Connection::open(db_path).map_to_invalid_input("Invalid db path")?;
 
-        apply_migrations(&db_conn)?;
+        migrate_schema(&mut db_conn, get_migrations())?;
 
         Ok(PaymentStore {
             db_conn,
@@ -372,66 +375,15 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     })
 }
 
-fn apply_migrations(db_conn: &Connection) -> Result<()> {
-    db_conn
-        .execute_batch(
-            "\
-            CREATE TABLE IF NOT EXISTS payments (
-              payment_id INTEGER NOT NULL PRIMARY KEY,
-              type INTEGER CHECK( type IN (0, 1) ) NOT NULL,
-              hash TEXT NOT NULL UNIQUE,
-              amount_msat INTEGER NOT NULL,
-              invoice TEXT NOT NULL,
-              description TEXT NOT NULL,
-              preimage TEXT,
-              network_fees_msat INTEGER,
-              lsp_fees_msat INTEGER,
-              amount_usd INTEGER,
-              amount_fiat INTEGER,
-              fiat_currency TEXT,
-              metadata TEXT
-            );
-            CREATE TABLE IF NOT EXISTS events (
-              event_id INTEGER NOT NULL PRIMARY KEY,
-              payment_id INTEGER NOT NULL,
-              type INTEGER CHECK( type in (0, 1, 2, 3, 4) ) NOT NULL,
-              inserted_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              timezone_id TEXT NOT NULL,
-              timezone_utc_offset_secs INTEGER NOT NULL,
-              FOREIGN KEY (payment_id) REFERENCES payments(payment_id)
-            );
-            CREATE VIEW IF NOT EXISTS creation_events
-            AS
-            SELECT *
-            FROM events
-            JOIN (
-                SELECT MIN(event_id) AS min_event_id
-                FROM events
-                GROUP BY payment_id
-            ) AS min_ids ON min_event_id=events.event_id;
-            CREATE VIEW IF NOT EXISTS recent_events
-            AS
-            SELECT *
-            FROM events
-            JOIN (
-                SELECT MAX(event_id) AS max_event_id
-                FROM events
-                GROUP BY payment_id
-            ) AS max_ids ON max_event_id=events.event_id;
-        ",
-        )
-        .map_to_permanent_failure("Failed to set up local payment database")
-}
-
 #[cfg(test)]
 mod tests {
     use crate::config::TzConfig;
     use crate::interfaces::ExchangeRates;
     use crate::payment::{FiatValues, PaymentState, PaymentType};
-    use crate::payment_store::{apply_migrations, PaymentStore};
+    use crate::payment_store::PaymentStore;
+
     use lightning::ln::PaymentSecret;
     use lightning_invoice::{Currency, InvoiceBuilder};
-    use rusqlite::Connection;
     use secp256k1::hashes::{sha256, Hash};
     use secp256k1::{Secp256k1, SecretKey};
     use std::fs;
@@ -441,17 +393,6 @@ mod tests {
     const TEST_DB_PATH: &str = ".3l_local_test";
     const TEST_TZ_ID: &str = "test_timezone_id";
     const TEST_TZ_OFFSET: i32 = -1352;
-
-    #[test]
-    fn test_migrations() {
-        let db_name = String::from("migrations.db3");
-        reset_db(&db_name);
-        let db_conn = Connection::open(format!("{TEST_DB_PATH}/{db_name}")).unwrap();
-        apply_migrations(&db_conn).unwrap();
-        // Applying migrations on an already setup db is fine
-        let db_conn = Connection::open(format!("{TEST_DB_PATH}/{db_name}")).unwrap();
-        apply_migrations(&db_conn).unwrap();
-    }
 
     #[test]
     fn test_payment_exists() {
