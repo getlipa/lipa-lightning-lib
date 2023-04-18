@@ -37,7 +37,7 @@ mod rapid_gossip_sync_test {
             nigiri::issue_invoice(NodeInstance::NigiriCln, "test", ONE_K_SATS, 3600).unwrap();
 
         {
-            let node = node_handle.start().unwrap();
+            let node = node_handle.start_or_panic();
             let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
             wait_for_eq!(node.get_node_info().num_peers, 1);
 
@@ -106,7 +106,7 @@ mod rapid_gossip_sync_test {
         sleep(Duration::from_secs(5));
 
         {
-            let node = node_handle.start().unwrap();
+            let node = node_handle.start_or_panic();
 
             // Wait for p2p connection to be reestablished and channels marked active
             sleep(Duration::from_secs(5));
@@ -144,7 +144,7 @@ mod rapid_gossip_sync_test {
         sleep(Duration::from_secs(5));
 
         {
-            let node = node_handle.start().unwrap();
+            let node = node_handle.start_or_panic();
 
             // Wait for p2p connection to be reestablished and channels marked active
             sleep(Duration::from_secs(5));

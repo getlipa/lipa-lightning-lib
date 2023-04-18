@@ -22,7 +22,7 @@ mod chain_sync_test {
     fn test_react_to_events() {
         nigiri::setup_environment_with_lsp();
 
-        let node = mocked_storage_node().start().unwrap();
+        let node = mocked_storage_node().start_or_panic();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
         let tx_id = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap();
@@ -87,7 +87,7 @@ mod chain_sync_test {
         sleep(Duration::from_secs(5));
 
         {
-            let node = node_handle.start().unwrap();
+            let node = node_handle.start_or_panic();
 
             assert_eq!(node.get_node_info().channels_info.num_channels, 1);
             wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
@@ -95,7 +95,7 @@ mod chain_sync_test {
 
         // test node remains usable after restart
         {
-            let node = node_handle.start().unwrap();
+            let node = node_handle.start_or_panic();
 
             assert_eq!(node.get_node_info().channels_info.num_channels, 1);
             wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
@@ -107,7 +107,7 @@ mod chain_sync_test {
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
-        let node = node_handle.start().unwrap();
+        let node = node_handle.start_or_panic();
 
         // Wait for the local node to learn from esplora that the channel has been force closed
         wait_for_eq!(node.get_node_info().channels_info.num_channels, 0);
@@ -120,13 +120,15 @@ mod chain_sync_test {
         let node_handle = mocked_storage_node();
 
         let tx_id = start_node_open_channel_without_confirm_stop_node(&node_handle);
+        log::debug!("Eel node stopped");
 
         nigiri::lnd_node_force_close_channel(NodeInstance::LspdLnd, tx_id).unwrap();
         nigiri::node_stop(NodeInstance::LspdLnd).unwrap();
+        log::debug!("Nigiri node stopped");
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
-        let node = node_handle.start().unwrap();
+        let node = node_handle.start_or_panic();
 
         sleep(Duration::from_secs(10));
 
@@ -137,7 +139,7 @@ mod chain_sync_test {
     fn start_node_open_channel_without_confirm_stop_node<S: RemoteStorage + Clone + 'static>(
         node_handle: &NodeHandle<S>,
     ) -> String {
-        let node = node_handle.start().unwrap();
+        let node = node_handle.start_or_panic();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
         let tx_id = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap();

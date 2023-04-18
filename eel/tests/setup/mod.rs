@@ -34,6 +34,7 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
     }
 
     pub fn start(&self) -> eel::errors::Result<LightningNode> {
+        log::debug!("Starting eel node ...");
         let events_handler = PrintEventsHandler {};
 
         LightningNode::new(
@@ -42,6 +43,13 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
             Box::new(events_handler),
             Box::new(ExchangeRateProviderMock {}),
         )
+    }
+
+    pub fn start_or_panic(&self) -> LightningNode {
+        let node = self.start();
+        log::debug!("Eel node started");
+
+        node.unwrap()
     }
 
     pub fn get_storage(&mut self) -> &mut S {
