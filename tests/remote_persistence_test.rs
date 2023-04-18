@@ -44,7 +44,7 @@ mod remote_persistence_test {
         } // Shut down the node
 
         // Contains 2 files, one for each channel, with the channel id as the file name
-        let monitor_dir_contents = get_monitors_dir_contents().stdout;
+        let original_monitor_dir = String::from_utf8(get_monitors_dir_contents().stdout).unwrap();
 
         NodeHandle::reset_state();
         assert!(!get_monitors_dir_contents().status.success()); // prove monitor files are gone
@@ -55,7 +55,8 @@ mod remote_persistence_test {
         let node = node_handle.start().unwrap();
 
         // prove monitor files are back for the same channels (file names = same channel ids)
-        assert_eq!(monitor_dir_contents, get_monitors_dir_contents().stdout);
+        let updated_monitor_dir = String::from_utf8(get_monitors_dir_contents().stdout).unwrap();
+        assert_eq!(original_monitor_dir, updated_monitor_dir);
 
         assert_eq!(node.get_node_info().channels_info.num_channels, 2);
     }
