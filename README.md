@@ -18,7 +18,7 @@ A Rust library that implements the main lightning logic of the lipa wallet app.
 ## Prerequisites
 
 * [docker](https://docs.docker.com/get-docker/) with [docker-compose](https://docs.docker.com/compose/install/)
-* [nigiri](https://nigiri.vulpem.com/) (at least **v0.4.4**)
+* [nigiri](https://nigiri.vulpem.com/)
 
 ## Getting started
 
@@ -55,18 +55,19 @@ make stop-dev-env
 
 To start the example node included in this repository, run:
 ```sh
-make runnode
+make run-3l
 ```
 
 #### Logs
-View logs in `./.ldk/logs.txt`.
+View logs in `.3l_node/logs.txt`.
 
 #### Reset node
-To start a fresh node, delete the `./.ldk` directory.
+To start a fresh node, delete the `./.3l_node` directory.
 
 ***
 # Interface documentation
-The consumer interface is most aptly documented in the interface file `src/lipalightninglib.udl`.
+The consumer interface is most aptly documented in the interface file
+[`src/lipalightninglib.udl`](src/lipalightninglib.udl).
 For the language-specific calls, refer to the respective language bindings:
  - [Kotlin](https://github.com/getlipa/lipa-lightning-lib-android)
  - [Swift](https://github.com/getlipa/lipa-lightning-lib-swift)
