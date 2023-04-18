@@ -8,11 +8,13 @@ pub mod interfaces;
 pub mod key_derivation;
 pub mod keys_manager;
 pub mod lsp;
+mod migrations;
 pub mod node_info;
 pub mod p2p_networking;
 pub mod payment;
 mod payment_store;
 pub mod recovery;
+mod schema_migration;
 pub mod secret;
 
 mod async_runtime;
