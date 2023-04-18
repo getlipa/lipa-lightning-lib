@@ -12,6 +12,7 @@ use mocked_remote_storage::MockedRemoteStorage;
 use print_events_handler::PrintEventsHandler;
 use std::fs;
 use std::sync::Arc;
+use std::time::Instant;
 use storage_mock::Storage;
 
 #[allow(dead_code)]
@@ -46,8 +47,14 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
     }
 
     pub fn start_or_panic(&self) -> LightningNode {
+        let start = Instant::now();
         let node = self.start();
-        log::debug!("Eel node started");
+
+        let end = Instant::now();
+        log::debug!(
+            "Eel node started. Elapsed time: {:?}",
+            end.duration_since(start)
+        );
 
         node.unwrap()
     }
