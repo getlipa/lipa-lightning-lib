@@ -14,7 +14,7 @@ mod node_info_test {
     fn test_get_node_info() {
         nigiri::setup_environment_with_lsp();
 
-        let node = mocked_storage_node().start().unwrap();
+        let node = mocked_storage_node().start_or_panic();
         let node_info = node.get_node_info();
 
         assert!(

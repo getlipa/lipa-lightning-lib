@@ -37,7 +37,7 @@ mod receiving_payments_test {
         let node_handle = mocked_storage_node();
 
         {
-            let node = node_handle.start().unwrap();
+            let node = node_handle.start_or_panic();
             wait_for_eq!(node.get_node_info().num_peers, 1);
 
             let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
@@ -64,7 +64,7 @@ mod receiving_payments_test {
         sleep(Duration::from_secs(5));
 
         {
-            let node = node_handle.start().unwrap();
+            let node = node_handle.start_or_panic();
 
             // Wait for p2p connection to be reestablished and channels marked active
             sleep(Duration::from_secs(5));
@@ -82,7 +82,7 @@ mod receiving_payments_test {
         sleep(Duration::from_secs(5));
 
         {
-            let node = node_handle.start().unwrap();
+            let node = node_handle.start_or_panic();
 
             // Wait for p2p connection to be reestablished and channels marked active
             sleep(Duration::from_secs(5));
@@ -124,7 +124,7 @@ mod receiving_payments_test {
     fn receive_multiple_payments_for_same_invoice() {
         nigiri::ensure_environment_running();
 
-        let node = mocked_storage_node().start().unwrap();
+        let node = mocked_storage_node().start_or_panic();
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
         wait_for_eq!(node.get_node_info().num_peers, 1);
 

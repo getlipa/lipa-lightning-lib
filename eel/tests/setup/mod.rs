@@ -12,6 +12,7 @@ use mocked_remote_storage::MockedRemoteStorage;
 use print_events_handler::PrintEventsHandler;
 use std::fs;
 use std::sync::Arc;
+use std::time::Instant;
 use storage_mock::Storage;
 
 #[allow(dead_code)]
@@ -34,6 +35,7 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
     }
 
     pub fn start(&self) -> eel::errors::Result<LightningNode> {
+        log::debug!("Starting eel node ...");
         let events_handler = PrintEventsHandler {};
 
         LightningNode::new(
@@ -42,6 +44,19 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
             Box::new(events_handler),
             Box::new(ExchangeRateProviderMock {}),
         )
+    }
+
+    pub fn start_or_panic(&self) -> LightningNode {
+        let start = Instant::now();
+        let node = self.start();
+
+        let end = Instant::now();
+        log::debug!(
+            "Eel node started. Elapsed time: {:?}",
+            end.duration_since(start)
+        );
+
+        node.unwrap()
     }
 
     pub fn get_storage(&mut self) -> &mut S {

@@ -21,7 +21,7 @@ mod sending_payments_test {
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn pay_invoice_direct_peer_test_and_invoice_decoding_test() {
         nigiri::setup_environment_with_lsp();
-        let node = mocked_storage_node().start().unwrap();
+        let node = mocked_storage_node().start_or_panic();
 
         wait_for_eq!(node.get_node_info().num_peers, 1);
         nigiri::initiate_channel_from_remote(node.get_node_info().node_pubkey, LspdLnd);
