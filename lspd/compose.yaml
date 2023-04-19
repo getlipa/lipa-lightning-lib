@@ -43,7 +43,6 @@ services:
     environment:
       DATABASE_URL: postgresql://lipauser:lipapassword@lspd-db:5432/lipadb
       LISTEN_ADDRESS: 0.0.0.0:6666
-      NODE_HOST: 127.0.0.1:9739
       NODES: >
         [ {
           "name": "lipa",
