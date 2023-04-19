@@ -15,16 +15,17 @@ static INIT_LOGGER_ONCE: Once = Once::new();
 fn init_logger() {
     INIT_LOGGER_ONCE.call_once(|| {
         let config = ConfigBuilder::new()
-            .add_filter_ignore_str("ureq")
+            .add_filter_ignore_str("h2")
+            .add_filter_ignore_str("hyper")
             .add_filter_ignore_str("mio")
             .add_filter_ignore_str("reqwest")
-            .add_filter_ignore_str("want")
-            .add_filter_ignore_str("h2")
-            .add_filter_ignore_str("tracing")
-            .add_filter_ignore_str("hyper")
-            .add_filter_ignore_str("tonic")
+            .add_filter_ignore_str("rustls")
             .add_filter_ignore_str("tokio_util")
+            .add_filter_ignore_str("tonic")
             .add_filter_ignore_str("tower")
+            .add_filter_ignore_str("tracing")
+            .add_filter_ignore_str("ureq")
+            .add_filter_ignore_str("want")
             .build();
         SimpleLogger::init(LevelFilter::Trace, config).unwrap();
     });
