@@ -44,10 +44,10 @@ mod remote_persistence_test {
         } // Shut down the node
 
         // Contains 2 files, one for each channel, with the channel id as the file name
-        let original_monitor_dir = String::from_utf8(get_monitors_dir_contents().stdout).unwrap();
+        let original_monitor_dir = get_monitors_dir_content();
 
         NodeHandle::reset_state();
-        assert!(!get_monitors_dir_contents().status.success()); // prove monitor files are gone
+        assert!(!monitors_dir_exists()); // prove monitor files are gone
 
         // Recover node from remote persistence
         node_handle.recover().unwrap();
@@ -55,16 +55,23 @@ mod remote_persistence_test {
         let node = node_handle.start().unwrap();
 
         // prove monitor files are back for the same channels (file names = same channel ids)
-        let updated_monitor_dir = String::from_utf8(get_monitors_dir_contents().stdout).unwrap();
-        assert_eq!(original_monitor_dir, updated_monitor_dir);
+        assert_eq!(original_monitor_dir, get_monitors_dir_content());
 
         assert_eq!(node.get_node_info().channels_info.num_channels, 2);
     }
 
-    fn get_monitors_dir_contents() -> Output {
+    fn read_monitors_dir() -> Output {
         Command::new("ls")
             .args([".3l_local_test/monitors"])
             .output()
             .expect("Failed to execute process")
+    }
+
+    fn get_monitors_dir_content() -> String {
+        String::from_utf8(read_monitors_dir().stdout).unwrap()
+    }
+
+    fn monitors_dir_exists() -> bool {
+        read_monitors_dir().status.success()
     }
 }
