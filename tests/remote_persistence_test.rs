@@ -9,7 +9,7 @@ mod remote_persistence_test {
     use crate::setup_3l::NodeHandle;
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
-    use crate::try_cmd_repeatedly;
+    use crate::{try_cmd_repeatedly, wait_for_eq};
 
     use bitcoin::hashes::hex::ToHex;
     use serial_test::file_serial;
@@ -55,7 +55,7 @@ mod remote_persistence_test {
         let node = node_handle.start().unwrap();
 
         // prove monitor files are back for the same channels (file names = same channel ids)
-        assert_eq!(original_monitor_dir, get_monitors_dir_content());
+        wait_for_eq!(original_monitor_dir, get_monitors_dir_content());
 
         assert_eq!(node.get_node_info().channels_info.num_channels, 2);
     }
