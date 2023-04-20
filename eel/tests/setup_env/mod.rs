@@ -525,26 +525,28 @@ pub mod nigiri {
     ) -> Result<String, String> {
         match node {
             NodeInstance::NigiriCln => cln_issue_invoice(node, description, amount_msat, expiry),
-            _ => lnd_issue_invoice(node, description, amount_msat, expiry),
+            _ => lnd_issue_invoice(node, description, Some(amount_msat), expiry),
         }
     }
 
     pub fn lnd_issue_invoice(
         node: NodeInstance,
         description: &str,
-        amount_msat: u64,
+        amount_msat: Option<u64>,
         expiry: u64,
     ) -> Result<String, String> {
-        let sub_cmd = &[
-            "addinvoice",
-            "--memo",
-            description,
-            "--amt_msat",
-            &amount_msat.to_string(),
-            "--expiry",
-            &expiry.to_string(),
-        ];
-        let cmd = [get_node_prefix(node), sub_cmd].concat();
+        let amount_msat = amount_msat.unwrap_or(0);
+        let amount_owned_string = amount_msat.to_string();
+        let expiry = expiry.to_string();
+
+        let mut sub_cmd = vec!["addinvoice", "--memo", description, "--expiry", &expiry];
+
+        if amount_msat > 0 {
+            sub_cmd.push("--amt_msat");
+            sub_cmd.push(&amount_owned_string);
+        }
+
+        let cmd = [get_node_prefix(node), &sub_cmd].concat();
 
         let output = exec(cmd.as_slice());
         if !output.status.success() {
