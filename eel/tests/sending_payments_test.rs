@@ -80,7 +80,7 @@ mod sending_payments_test {
 
         assert_invoice_details(
             invoice_details,
-            THOUSAND_SATS,
+            Some(THOUSAND_SATS),
             DESCRIPTION_SAMPLE,
             Duration::from_secs(SECONDS_IN_AN_HOUR),
             &nigiri::query_node_info(NigiriCln).unwrap().pub_key,
@@ -99,7 +99,7 @@ mod sending_payments_test {
 
         assert_invoice_details(
             invoice_details,
-            THOUSAND_SATS,
+            Some(THOUSAND_SATS),
             DESCRIPTION_SAMPLE,
             Duration::from_secs(SECONDS_IN_AN_HOUR),
             &nigiri::query_node_info(LspdLnd).unwrap().pub_key,
@@ -118,21 +118,36 @@ mod sending_payments_test {
 
         assert_invoice_details(
             invoice_details,
-            THOUSAND_SATS,
+            Some(THOUSAND_SATS),
             DESCRIPTION_SAMPLE,
             Duration::from_secs(SECONDS_IN_AN_HOUR),
             &nigiri::query_node_info(NigiriLnd).unwrap().pub_key,
+        );
+
+        // Test open amount invoice (no amount specified)
+        let invoice =
+            nigiri::lnd_issue_invoice(LspdLnd, DESCRIPTION_SAMPLE, None, SECONDS_IN_AN_HOUR)
+                .unwrap();
+
+        let invoice_details = node.decode_invoice(invoice).unwrap();
+
+        assert_invoice_details(
+            invoice_details,
+            None,
+            DESCRIPTION_SAMPLE,
+            Duration::from_secs(SECONDS_IN_AN_HOUR),
+            &nigiri::query_node_info(LspdLnd).unwrap().pub_key,
         );
     }
 
     fn assert_invoice_details(
         invoice_details: InvoiceDetails,
-        amount_msat: u64,
+        amount_msat: Option<u64>,
         description: &str,
         expiry_time: Duration,
         payee_pub_key: &str,
     ) {
-        assert_eq!(invoice_details.amount_msat.unwrap(), amount_msat);
+        assert_eq!(invoice_details.amount_msat, amount_msat);
         assert_eq!(invoice_details.description, description);
         assert_eq!(invoice_details.expiry_interval, expiry_time);
         assert_eq!(invoice_details.payee_pub_key, payee_pub_key);
