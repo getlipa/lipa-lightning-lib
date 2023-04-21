@@ -68,10 +68,11 @@ interface LightningNode {
     //    - invoice - a BOLT-11 invoice (normally starts with lnbc). The invoice must:
     //          * use the same network as the one this node operates on
     //          * have not expired
+    //    - amount_msat - amount in millisats to be paid for open invoices (no amount specified)
     //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
     //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
     [Throws=LnError]
-    void pay_invoice(string invoice, string metadata);
+    void pay_invoice(string invoice, u64? amount_msat, string metadata);
 
     // Get a list of the latest payments
     //    - number_of_payments - the maximum number of payments that will be returned

@@ -204,15 +204,20 @@ fn decode_invoice<'a>(
     Ok(())
 }
 
-fn pay_invoice<'a>(
-    node: &LightningNode,
-    words: &mut dyn Iterator<Item = &'a str>,
-) -> Result<(), String> {
+fn pay_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<(), String> {
     let invoice = words
         .next()
         .ok_or_else(|| "invoice is required".to_string())?;
 
-    match node.pay_invoice(invoice.to_string(), String::new()) {
+    let amount_argument = match words.next() {
+        Some(amount) => match amount.parse::<u64>() {
+            Ok(parsed) => Some(parsed),
+            Err(_) => return Err("Error: millisat amount must be an integer".to_string()),
+        },
+        None => None,
+    };
+
+    match node.pay_invoice(invoice.to_string(), amount_argument, String::new()) {
         Ok(_) => {}
         Err(e) => return Err(e.to_string()),
     };

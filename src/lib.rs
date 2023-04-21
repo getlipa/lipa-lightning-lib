@@ -119,8 +119,13 @@ impl LightningNode {
         self.core_node.decode_invoice(invoice)
     }
 
-    pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
-        self.core_node.pay_invoice(invoice, metadata)
+    pub fn pay_invoice(
+        &self,
+        invoice: String,
+        amount_msat: Option<u64>,
+        metadata: String,
+    ) -> Result<()> {
+        self.core_node.pay_invoice(invoice, amount_msat, metadata)
     }
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {

@@ -64,7 +64,7 @@ use lightning::ln::channelmanager::{ChainParameters, Retry, RetryableSendFailure
 use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
-use lightning_invoice::payment::{pay_invoice, PaymentError};
+use lightning_invoice::payment::{pay_invoice, pay_zero_value_invoice, PaymentError};
 use lightning_invoice::{Currency, Invoice, InvoiceDescription};
 use log::error;
 pub use log::Level as LogLevel;
@@ -107,6 +107,11 @@ pub struct LightningNode {
     peer_manager: Arc<PeerManager>,
     task_manager: Arc<Mutex<TaskManager>>,
     payment_store: Arc<Mutex<PaymentStore>>,
+}
+
+enum InvoiceType {
+    SpecifiedAmount, // Common invoices => amount is specified
+    OpenInvoice,     // No amount specified within the invoice
 }
 
 impl LightningNode {
@@ -403,15 +408,30 @@ impl LightningNode {
         invoice::get_invoice_details(&invoice)
     }
 
-    pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
-        let invoice_struct =
-            self.validate_persist_new_outgoing_payment_attempt(&invoice, &metadata)?;
+    pub fn pay_invoice(
+        &self,
+        invoice: String,
+        amount_msat: Option<u64>,
+        metadata: String,
+    ) -> Result<()> {
+        let (invoice_struct, invoice_type, amount_msat) =
+            self.validate_persist_new_outgoing_payment_attempt(&invoice, amount_msat, &metadata)?;
 
-        match pay_invoice(
-            &invoice_struct,
-            Retry::Timeout(Duration::from_secs(10)),
-            &self.channel_manager,
-        ) {
+        let payment_result = match invoice_type {
+            InvoiceType::SpecifiedAmount => pay_invoice(
+                &invoice_struct,
+                Retry::Timeout(Duration::from_secs(10)),
+                &self.channel_manager,
+            ),
+            InvoiceType::OpenInvoice => pay_zero_value_invoice(
+                &invoice_struct,
+                amount_msat,
+                Retry::Timeout(Duration::from_secs(10)),
+                &self.channel_manager,
+            ),
+        };
+
+        match payment_result {
             Ok(_payment_id) => {
                 info!(
                     "Initiated payment of {:?} msats",
@@ -456,15 +476,38 @@ impl LightningNode {
     fn validate_persist_new_outgoing_payment_attempt(
         &self,
         invoice: &str,
+        explicit_amount_msat: Option<u64>,
         metadata: &str,
-    ) -> Result<Invoice> {
+    ) -> Result<(Invoice, InvoiceType, u64)> {
         let invoice_struct = invoice::parse_invoice(invoice)?;
 
         validate_invoice(self.config.network, &invoice_struct)?;
 
-        let amount_msat = invoice_struct
-            .amount_milli_satoshis()
-            .ok_or_invalid_input("Invalid invoice - invoice is a zero value invoice and paying such invoice is not supported yet")?;
+        let mut amount_msat = invoice_struct.amount_milli_satoshis().unwrap_or(0);
+
+        let invoice_type = if amount_msat > 0 {
+            InvoiceType::SpecifiedAmount
+        } else {
+            InvoiceType::OpenInvoice
+        };
+
+        if let Some(explicit_amount_msat) = explicit_amount_msat {
+            if explicit_amount_msat < amount_msat {
+                return Err(invalid_input("Manually specified payment amount is less than the amount specified in the invoice"));
+            }
+
+            // Remove this clause to support overpaying invoices
+            if matches!(invoice_type, InvoiceType::SpecifiedAmount) {
+                return Err(invalid_input("Overpaying invoices is not yet supported"));
+            }
+
+            amount_msat = explicit_amount_msat;
+        } else if matches!(invoice_type, InvoiceType::OpenInvoice) {
+            return Err(invalid_input(
+                "Invoice does not specify an amount and no amount was specified manually",
+            ));
+        }
+
         let description = match invoice_struct.description() {
             InvoiceDescription::Direct(d) => d.clone().into_inner(),
             InvoiceDescription::Hash(h) => h.0.to_hex(),
@@ -501,7 +544,7 @@ impl LightningNode {
                 fiat_values,
             )?;
         }
-        Ok(invoice_struct)
+        Ok((invoice_struct, invoice_type, amount_msat))
     }
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {

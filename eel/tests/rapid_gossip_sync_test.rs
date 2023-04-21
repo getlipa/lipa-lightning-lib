@@ -89,7 +89,7 @@ mod rapid_gossip_sync_test {
 
             // The node hasn't yet learned about the new channels so it won't be able to pay
             assert!(matches!(
-                node.pay_invoice(invoice_test_payment_retry.clone(), String::new()),
+                node.pay_invoice(invoice_test_payment_retry.clone(), None, String::new()),
                 Err(perro::Error::RuntimeError {
                     code: eel::errors::RuntimeErrorCode::NoRouteFound,
                     ..
@@ -117,7 +117,7 @@ mod rapid_gossip_sync_test {
             send_payment_flow(&node, NodeInstance::NigiriCln, ONE_K_SATS);
 
             // If paying an invoice has failed, retrying is possible
-            node.pay_invoice(invoice_test_payment_retry, String::new())
+            node.pay_invoice(invoice_test_payment_retry, None, String::new())
                 .unwrap();
 
             // Create new channel - the 3L node will have to learn about it in a partial sync
@@ -159,7 +159,7 @@ mod rapid_gossip_sync_test {
     fn send_payment_flow(node: &LightningNode, target: NodeInstance, amount_msat: u64) {
         let invoice = nigiri::issue_invoice(target, "test", amount_msat, 3600).unwrap();
         let initial_balance = nigiri::query_node_balance(target).unwrap();
-        node.pay_invoice(invoice, String::new()).unwrap();
+        node.pay_invoice(invoice, None, String::new()).unwrap();
         sleep(Duration::from_secs(2));
         let final_balance = nigiri::query_node_balance(target).unwrap();
         assert_eq!(final_balance - initial_balance, amount_msat);

@@ -54,12 +54,93 @@ mod sending_payments_test {
 
         let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
 
-        node.pay_invoice(invoice, String::new()).unwrap();
+        node.pay_invoice(invoice, None, String::new()).unwrap();
+
+        wait_for_eq!(
+            nigiri::query_node_balance(LspdLnd).unwrap() - initial_balance,
+            PAYMENT_AMOUNT
+        );
+
+        // Test underpaying 10 sats
+        let invoice = nigiri::issue_invoice(LspdLnd, "test", PAYMENT_AMOUNT, 3600).unwrap();
+
+        let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
+
+        let payment_result =
+            node.pay_invoice(invoice, Some(PAYMENT_AMOUNT - 10_000), String::new());
+        assert!(matches!(
+            payment_result,
+            Err(perro::Error::InvalidInput { .. })
+        ));
+
+        // no payment took place
         sleep(Duration::from_secs(2));
+        assert_eq!(
+            initial_balance,
+            nigiri::query_node_balance(LspdLnd).unwrap()
+        );
 
-        let final_balance = nigiri::query_node_balance(LspdLnd).unwrap();
+        // Test overpaying 10 sats (not yet supported)
+        let invoice = nigiri::issue_invoice(LspdLnd, "test", PAYMENT_AMOUNT, 3600).unwrap();
 
-        assert_eq!(final_balance - initial_balance, PAYMENT_AMOUNT);
+        let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
+
+        let payment_result =
+            node.pay_invoice(invoice, Some(PAYMENT_AMOUNT + 10_000), String::new());
+        assert!(matches!(
+            payment_result,
+            Err(perro::Error::InvalidInput { .. })
+        ));
+
+        // no payment took place
+        sleep(Duration::from_secs(2));
+        assert_eq!(
+            initial_balance,
+            nigiri::query_node_balance(LspdLnd).unwrap()
+        );
+
+        // Test overpaying more than double the amount
+        let invoice = nigiri::issue_invoice(LspdLnd, "test", PAYMENT_AMOUNT, 3600).unwrap();
+
+        let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
+
+        let payment_result =
+            node.pay_invoice(invoice, Some(PAYMENT_AMOUNT * 2 + 10_000), String::new());
+        assert!(matches!(
+            payment_result,
+            Err(perro::Error::InvalidInput { .. })
+        ));
+
+        // no payment took place
+        sleep(Duration::from_secs(2));
+        assert_eq!(
+            initial_balance,
+            nigiri::query_node_balance(LspdLnd).unwrap()
+        );
+
+        // Test paying open invoices
+        let invoice =
+            nigiri::lnd_issue_invoice(LspdLnd, "open amount invoice", None, 3600).unwrap();
+
+        let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
+
+        node.pay_invoice(invoice, Some(PAYMENT_AMOUNT), String::new())
+            .unwrap();
+
+        wait_for_eq!(
+            nigiri::query_node_balance(LspdLnd).unwrap() - initial_balance,
+            PAYMENT_AMOUNT
+        );
+
+        // Test paying open invoices without specifying a payment amount
+        let invoice =
+            nigiri::lnd_issue_invoice(LspdLnd, "open amount invoice", None, 3600).unwrap();
+
+        let payment_result = node.pay_invoice(invoice, None, String::new());
+        assert!(matches!(
+            payment_result,
+            Err(perro::Error::InvalidInput { .. })
+        ));
     }
 
     const THOUSAND_SATS: u64 = 1_000_000;
