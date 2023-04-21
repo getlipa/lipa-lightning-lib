@@ -19,56 +19,78 @@ static BASE_DIR: &str = ".3l_node";
 static LOG_FILE: &str = "logs.txt";
 
 fn main() {
-    // Create dir for node data persistence.
-    fs::create_dir_all(BASE_DIR).unwrap();
+    let environment = env::args().nth(1).unwrap_or("local".to_string());
+    let base_dir = format!("{BASE_DIR}_{environment}");
 
-    init_logger();
+    // Create dir for node data persistence.
+    fs::create_dir_all(&base_dir).unwrap();
+
+    init_logger(&base_dir);
     info!("Logger initialized");
 
     let events = Box::new(PrintEventsHandler {});
 
-    let mut args = env::args();
-    let _ = args.next();
-    let fiat_currency = args.next().unwrap_or("EUR".to_string());
-
-    let seed = match fs::read(format!("{}/seed", BASE_DIR)) {
+    let seed = match fs::read(format!("{}/seed", base_dir)) {
         Ok(s) => s,
         Err(_) => {
             let seed = generate_seed();
-            fs::write(format!("{}/seed", BASE_DIR), &seed).unwrap();
+            fs::write(format!("{}/seed", base_dir), &seed).unwrap();
             seed
         }
     };
 
-    let config = Config {
-        network: Network::Regtest,
-        seed,
-        fiat_currency,
-        esplora_api_url: "http://localhost:30000".to_string(),
-        rgs_url: "http://localhost:8080/snapshot/".to_string(),
-        lsp_url: "http://127.0.0.1:6666".to_string(),
-        lsp_token: "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l".to_string(),
-        local_persistence_path: BASE_DIR.to_string(),
-        timezone_config: TzConfig {
-            timezone_id: String::from("Africa/Tunis"),
-            timezone_utc_offset_secs: 1 * 60 * 60,
-        },
-        graphql_url: get_backend_url(),
-        backend_health_url: get_backend_health_url(),
+    let config = if environment == "local" {
+        Config {
+            network: Network::Regtest,
+            seed,
+            fiat_currency: "EUR".to_string(),
+            esplora_api_url: "http://localhost:30000".to_string(),
+            rgs_url: "http://localhost:8080/snapshot/".to_string(),
+            lsp_url: "http://127.0.0.1:6666".to_string(),
+            lsp_token: "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l"
+                .to_string(),
+            local_persistence_path: base_dir.clone(),
+            timezone_config: TzConfig {
+                timezone_id: String::from("Africa/Tunis"),
+                timezone_utc_offset_secs: 1 * 60 * 60,
+            },
+            graphql_url: get_backend_url(),
+            backend_health_url: get_backend_health_url(),
+        }
+    } else if environment == "dev" {
+        Config {
+            network: Network::Testnet,
+            seed,
+            fiat_currency: "EUR".to_string(),
+            esplora_api_url: "https://blockstream.info/testnet/api".to_string(),
+            rgs_url: "https://rgs-test.lipa.dev/snapshot/".to_string(),
+            lsp_url: "http://lsp-test.getlipa.com:6666".to_string(),
+            lsp_token: "2ySbPtxkUun3sQzsXl3VW0zWq7qYea4t6tqy4X9NedNgoXoGKnKc95jSyxxjGUm7"
+                .to_string(),
+            local_persistence_path: base_dir.clone(),
+            timezone_config: TzConfig {
+                timezone_id: String::from("Africa/Tunis"),
+                timezone_utc_offset_secs: 1 * 60 * 60,
+            },
+            graphql_url: get_backend_url(),
+            backend_health_url: get_backend_health_url(),
+        }
+    } else {
+        panic!("Unsupported environment: `{environment}`");
     };
 
     let node = LightningNode::new(config, events).unwrap();
 
     // Lauch CLI
     sleep(Duration::from_secs(1));
-    cli::poll_for_user_input(&node, &format!("{BASE_DIR}/{LOG_FILE}"));
+    cli::poll_for_user_input(&node, &format!("{base_dir}/{LOG_FILE}"));
 }
 
-fn init_logger() {
+fn init_logger(path: &String) {
     let log_file = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(format!("{}/{}", BASE_DIR, LOG_FILE))
+        .open(format!("{}/{}", path, LOG_FILE))
         .unwrap();
     simplelog::CombinedLogger::init(vec![
         simplelog::TermLogger::new(
