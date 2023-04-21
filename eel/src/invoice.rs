@@ -21,6 +21,11 @@ use log::info;
 use perro::{invalid_input, MapToError, MapToErrorForUnitType, ResultTrait};
 use secp256k1::ecdsa::RecoverableSignature;
 
+pub(crate) enum InvoiceType {
+    SpecifiedAmount, // Common invoices => amount is specified
+    OpenInvoice,     // No amount specified within the invoice
+}
+
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct InvoiceDetails {
     pub invoice: String,
@@ -65,9 +70,17 @@ pub(crate) fn get_invoice_details(invoice: &Invoice) -> Result<InvoiceDetails> {
     })
 }
 
-pub(crate) fn parse_invoice(invoice: &str) -> Result<Invoice> {
-    Invoice::from_str(chomp_prefix(invoice.trim()))
-        .map_to_invalid_input("Invalid invoice - parse failure")
+pub(crate) fn parse_invoice(invoice: &str) -> Result<(Invoice, InvoiceType)> {
+    let invoice = Invoice::from_str(chomp_prefix(invoice.trim()))
+        .map_to_invalid_input("Invalid invoice - parse failure")?;
+
+    let invoice_type = if invoice.amount_milli_satoshis().unwrap_or(0) > 0 {
+        InvoiceType::SpecifiedAmount
+    } else {
+        InvoiceType::OpenInvoice
+    };
+
+    Ok((invoice, invoice_type))
 }
 
 pub(crate) fn validate_invoice(network: Network, invoice: &Invoice) -> Result<()> {
@@ -302,7 +315,7 @@ mod tests {
     #[test]
     fn test_invoice_parsing() {
         // Test valid hardcoded regtest invoice
-        let invoice = parse_invoice(REGTEST_INVOICE).unwrap();
+        let (invoice, _) = parse_invoice(REGTEST_INVOICE).unwrap();
         let invoice_details = get_invoice_details(&invoice).unwrap();
         assert_eq!(invoice_details.payment_hash, REGTEST_INVOICE_HASH);
         assert_eq!(
@@ -324,7 +337,7 @@ mod tests {
         );
 
         // Test valid hardcoded mainnet invoice
-        let invoice = parse_invoice(MAINNET_INVOICE).unwrap();
+        let (invoice, _) = parse_invoice(MAINNET_INVOICE).unwrap();
         let invoice_details = get_invoice_details(&invoice).unwrap();
         assert_eq!(invoice_details.payment_hash, MAINNET_INVOICE_HASH);
         assert_eq!(

@@ -40,6 +40,7 @@ use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::interfaces::{EventHandler, ExchangeRateProvider, ExchangeRates, RemoteStorage};
 pub use crate::invoice::InvoiceDetails;
+use crate::invoice::InvoiceType;
 use crate::invoice::{create_invoice, validate_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
 use crate::logger::LightningLogger;
@@ -107,11 +108,6 @@ pub struct LightningNode {
     peer_manager: Arc<PeerManager>,
     task_manager: Arc<Mutex<TaskManager>>,
     payment_store: Arc<Mutex<PaymentStore>>,
-}
-
-enum InvoiceType {
-    SpecifiedAmount, // Common invoices => amount is specified
-    OpenInvoice,     // No amount specified within the invoice
 }
 
 impl LightningNode {
@@ -404,7 +400,7 @@ impl LightningNode {
     }
 
     pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
-        let invoice = invoice::parse_invoice(&invoice)?;
+        let (invoice, _) = invoice::parse_invoice(&invoice)?;
         invoice::get_invoice_details(&invoice)
     }
 
@@ -479,17 +475,11 @@ impl LightningNode {
         explicit_amount_msat: Option<u64>,
         metadata: &str,
     ) -> Result<(Invoice, InvoiceType, u64)> {
-        let invoice_struct = invoice::parse_invoice(invoice)?;
+        let (invoice_struct, invoice_type) = invoice::parse_invoice(invoice)?;
 
         validate_invoice(self.config.network, &invoice_struct)?;
 
         let mut amount_msat = invoice_struct.amount_milli_satoshis().unwrap_or(0);
-
-        let invoice_type = if amount_msat > 0 {
-            InvoiceType::SpecifiedAmount
-        } else {
-            InvoiceType::OpenInvoice
-        };
 
         if let Some(explicit_amount_msat) = explicit_amount_msat {
             if explicit_amount_msat < amount_msat {
