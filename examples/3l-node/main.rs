@@ -70,6 +70,22 @@ fn init_logger() {
         .append(true)
         .open(format!("{}/{}", BASE_DIR, LOG_FILE))
         .unwrap();
+
+    let config = simplelog::ConfigBuilder::new()
+        .add_filter_ignore_str("h2")
+        .add_filter_ignore_str("hyper")
+        .add_filter_ignore_str("mio")
+        .add_filter_ignore_str("reqwest")
+        .add_filter_ignore_str("rustls")
+        .add_filter_ignore_str("rustyline")
+        .add_filter_ignore_str("tokio_util")
+        .add_filter_ignore_str("tonic")
+        .add_filter_ignore_str("tower")
+        .add_filter_ignore_str("tracing")
+        .add_filter_ignore_str("ureq")
+        .add_filter_ignore_str("want")
+        .build();
+
     simplelog::CombinedLogger::init(vec![
         simplelog::TermLogger::new(
             log::LevelFilter::Info,
@@ -77,11 +93,7 @@ fn init_logger() {
             simplelog::TerminalMode::Mixed,
             simplelog::ColorChoice::Auto,
         ),
-        simplelog::WriteLogger::new(
-            log::LevelFilter::Trace,
-            simplelog::Config::default(),
-            log_file,
-        ),
+        simplelog::WriteLogger::new(log::LevelFilter::Trace, config, log_file),
     ])
     .unwrap();
 }

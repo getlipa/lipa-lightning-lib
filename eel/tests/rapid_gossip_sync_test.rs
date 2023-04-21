@@ -58,7 +58,9 @@ mod rapid_gossip_sync_test {
                 LSPD_LND_PORT,
             )
             .unwrap();
-            sleep(Duration::from_secs(20));
+
+            // TODO: Wait for funds to be available.
+            sleep(Duration::from_secs(30));
 
             nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
             nigiri::cln_node_open_pub_channel(NodeInstance::NigiriCln, &lspd_node_id).unwrap();
