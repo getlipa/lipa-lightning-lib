@@ -718,7 +718,7 @@ dependencies = [
  "ecies",
  "esplora-client 0.4.0",
  "futures",
- "lightning",
+ "lightning 0.0.114",
  "lightning-background-processor",
  "lightning-invoice",
  "lightning-net-tokio",
@@ -1552,13 +1552,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightning"
+version = "0.0.115"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e009e1c0c21f66378b491bb40f548682138c63e09db6f3a05af59f8804bb9f4a"
+dependencies = [
+ "bitcoin",
+]
+
+[[package]]
 name = "lightning-background-processor"
 version = "0.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7af76b912df8827d9e6bde2fadbbb7b1e2d04f7da92009d244394bd2faa37380"
 dependencies = [
  "bitcoin",
- "lightning",
+ "lightning 0.0.114",
  "lightning-rapid-gossip-sync",
 ]
 
@@ -1570,7 +1579,7 @@ checksum = "adfb59c6d13e130aece30fc72a7c17d74b201aed0ffb201b740f36e07aaece32"
 dependencies = [
  "bech32",
  "bitcoin_hashes",
- "lightning",
+ "lightning 0.0.114",
  "num-traits",
  "secp256k1",
 ]
@@ -1582,19 +1591,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19197703db1195ed908ccd84cd76baaa5916e0d22750a2e1b7188f66516812bd"
 dependencies = [
  "bitcoin",
- "lightning",
+ "lightning 0.0.114",
  "tokio",
 ]
 
 [[package]]
 name = "lightning-persister"
-version = "0.0.114"
+version = "0.0.115"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fce2d2ebf01ec7c9f4fad02846207999118a4ec3992c06d6eab93df7a862066c"
+checksum = "c52ed57ec33fb945f464b7e91b5df49f49fec649e1b44909f3ce517e96b0449a"
 dependencies = [
  "bitcoin",
  "libc",
- "lightning",
+ "lightning 0.0.115",
  "winapi",
 ]
 
@@ -1605,7 +1614,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6073e6cac4019f39e0bb02d3c92ebbb22950a46a663059b3b0e19f7928e00edb"
 dependencies = [
  "bitcoin",
- "lightning",
+ "lightning 0.0.114",
 ]
 
 [[package]]
@@ -1618,7 +1627,7 @@ dependencies = [
  "bitcoin",
  "esplora-client 0.3.0",
  "futures",
- "lightning",
+ "lightning 0.0.114",
 ]
 
 [[package]]
