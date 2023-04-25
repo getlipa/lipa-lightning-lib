@@ -716,9 +716,9 @@ dependencies = [
  "colored",
  "ctor",
  "ecies",
- "esplora-client 0.4.0",
+ "esplora-client",
  "futures",
- "lightning",
+ "lightning 0.0.114",
  "lightning-background-processor",
  "lightning-invoice",
  "lightning-net-tokio",
@@ -826,24 +826,13 @@ dependencies = [
 
 [[package]]
 name = "esplora-client"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38bbba572d03ca4d628b653f01e60ba6947c67df65ee8910c79daaf252897924"
-dependencies = [
- "bitcoin",
- "log",
- "reqwest",
- "serde",
-]
-
-[[package]]
-name = "esplora-client"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "847e59bd6ee1c3f2bdf217118ee3640b97a1b1d8becb55771e67e533b87da66f"
 dependencies = [
  "bitcoin",
  "log",
+ "reqwest",
  "serde",
  "ureq",
 ]
@@ -1552,13 +1541,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightning"
+version = "0.0.115"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e009e1c0c21f66378b491bb40f548682138c63e09db6f3a05af59f8804bb9f4a"
+dependencies = [
+ "bitcoin",
+]
+
+[[package]]
 name = "lightning-background-processor"
 version = "0.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7af76b912df8827d9e6bde2fadbbb7b1e2d04f7da92009d244394bd2faa37380"
 dependencies = [
  "bitcoin",
- "lightning",
+ "lightning 0.0.114",
  "lightning-rapid-gossip-sync",
 ]
 
@@ -1570,7 +1568,7 @@ checksum = "adfb59c6d13e130aece30fc72a7c17d74b201aed0ffb201b740f36e07aaece32"
 dependencies = [
  "bech32",
  "bitcoin_hashes",
- "lightning",
+ "lightning 0.0.114",
  "num-traits",
  "secp256k1",
 ]
@@ -1582,7 +1580,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19197703db1195ed908ccd84cd76baaa5916e0d22750a2e1b7188f66516812bd"
 dependencies = [
  "bitcoin",
- "lightning",
+ "lightning 0.0.114",
  "tokio",
 ]
 
@@ -1594,7 +1592,7 @@ checksum = "fce2d2ebf01ec7c9f4fad02846207999118a4ec3992c06d6eab93df7a862066c"
 dependencies = [
  "bitcoin",
  "libc",
- "lightning",
+ "lightning 0.0.114",
  "winapi",
 ]
 
@@ -1605,20 +1603,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6073e6cac4019f39e0bb02d3c92ebbb22950a46a663059b3b0e19f7928e00edb"
 dependencies = [
  "bitcoin",
- "lightning",
+ "lightning 0.0.114",
 ]
 
 [[package]]
 name = "lightning-transaction-sync"
-version = "0.0.114"
+version = "0.0.115"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7095f2bf734c03c5ed13714d90a951f39860cf58b65f887a16f32377774464b"
+checksum = "173e4fc554de3fdb88dde6d4fb63fbaa01a44b466a0e4d0a07abdcfcd4869ac8"
 dependencies = [
  "bdk-macros",
  "bitcoin",
- "esplora-client 0.3.0",
+ "esplora-client",
  "futures",
- "lightning",
+ "lightning 0.0.115",
 ]
 
 [[package]]
@@ -1648,7 +1646,7 @@ dependencies = [
  "colored",
  "ctor",
  "eel",
- "esplora-client 0.4.0",
+ "esplora-client",
  "honey-badger",
  "log",
  "mole",
