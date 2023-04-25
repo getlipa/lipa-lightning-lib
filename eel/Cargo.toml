@@ -19,7 +19,7 @@ futures = "0.3.24"
 lightning = { version = "0.0.114", features = ["max_level_trace"] }
 lightning-background-processor = "0.0.114"
 lightning-invoice = "0.22.0"
-lightning-net-tokio = "0.0.114"
+lightning-net-tokio = "0.0.115"
 lightning-persister = "0.0.114"
 lightning-rapid-gossip-sync = "0.0.114"
 lightning-transaction-sync = { version = "0.0.114", features = ["esplora-async"] }
