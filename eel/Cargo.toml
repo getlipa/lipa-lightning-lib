@@ -18,7 +18,7 @@ esplora-client = { version = "0.4.0", default-features = false, features = ["blo
 futures = "0.3.24"
 lightning = { version = "0.0.114", features = ["max_level_trace"] }
 lightning-background-processor = "0.0.114"
-lightning-invoice = "0.22.0"
+lightning-invoice = "0.23.0"
 lightning-net-tokio = "0.0.114"
 lightning-persister = "0.0.114"
 lightning-rapid-gossip-sync = "0.0.114"
