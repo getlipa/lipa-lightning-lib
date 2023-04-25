@@ -130,10 +130,8 @@ mod chain_sync_test {
 
         let node = node_handle.start_or_panic();
 
-        sleep(Duration::from_secs(10));
-
-        // This only passes with the sleep that precedes it. TODO: confirm that's not a problem
-        assert_eq!(node.get_node_info().channels_info.num_channels, 0);
+        // Wait for the local node to learn that the channel has been force closed (esplora sync)
+        wait_for_eq!(node.get_node_info().channels_info.num_channels, 0);
     }
 
     fn start_node_open_channel_without_confirm_stop_node<S: RemoteStorage + Clone + 'static>(
