@@ -59,11 +59,12 @@ mod rapid_gossip_sync_test {
             )
             .unwrap();
 
-            // TODO: Wait for funds to be available.
-            sleep(Duration::from_secs(30));
-
-            nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
-            nigiri::cln_node_open_pub_channel(NodeInstance::NigiriCln, &lspd_node_id).unwrap();
+            wait_for!(
+                nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).is_ok()
+            );
+            wait_for!(
+                nigiri::cln_node_open_pub_channel(NodeInstance::NigiriCln, &lspd_node_id).is_ok()
+            );
             try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
             wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &lipa_node_id);
             wait_for_new_channel_to_confirm(NodeInstance::NigiriCln, &lspd_node_id);
