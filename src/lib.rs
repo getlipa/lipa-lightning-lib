@@ -160,7 +160,7 @@ pub fn accept_terms_and_conditions(seed: Vec<u8>, graphql_url: String) -> Result
     let seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = build_auth(&seed, graphql_url)?;
     auth.accept_terms_and_conditions()
-        .map_err(map_runtime_error)
+        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)
 }
 
 fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
@@ -179,21 +179,6 @@ fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
         RuntimeErrorCode::GenericError,
         "Failed to build auth client",
     )
-}
-
-// TODO: It will be replaced with a native perro mapping function.
-fn map_runtime_error<C: std::fmt::Display>(e: perro::Error<C>) -> LnError {
-    match e {
-        perro::Error::InvalidInput { msg } => LnError::InvalidInput { msg },
-        perro::Error::RuntimeError { code, msg } => {
-            let msg = format!("{code}: {msg}");
-            LnError::RuntimeError {
-                code: RuntimeErrorCode::AuthServiceUnvailable,
-                msg,
-            }
-        }
-        perro::Error::PermanentFailure { msg } => LnError::PermanentFailure { msg },
-    }
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));

@@ -1,6 +1,7 @@
-use eel::errors::{Error, Result, RuntimeErrorCode};
+use eel::errors::{Result, RuntimeErrorCode};
 use eel::interfaces::ExchangeRateProvider;
 use honey_badger::Auth;
+use perro::ResultTrait;
 use std::sync::Arc;
 
 pub struct ExchangeRateProviderImpl {
@@ -16,7 +17,7 @@ impl ExchangeRateProviderImpl {
     pub fn list_currency_codes(&self) -> Result<Vec<String>> {
         self.provider
             .list_currency_codes()
-            .map_err(map_runtime_error)
+            .map_runtime_error_to(RuntimeErrorCode::ExchangeRateProviderUnavailable)
     }
 }
 
@@ -24,20 +25,6 @@ impl ExchangeRateProvider for ExchangeRateProviderImpl {
     fn query_exchange_rate(&self, code: String) -> Result<u32> {
         self.provider
             .query_exchange_rate(code)
-            .map_err(map_runtime_error)
-    }
-}
-
-fn map_runtime_error<C: std::fmt::Display>(e: perro::Error<C>) -> Error {
-    match e {
-        perro::Error::InvalidInput { msg } => Error::InvalidInput { msg },
-        perro::Error::RuntimeError { code, msg } => {
-            let msg = format!("{code}: {msg}");
-            Error::RuntimeError {
-                code: RuntimeErrorCode::ExchangeRateProviderUnavailable,
-                msg,
-            }
-        }
-        perro::Error::PermanentFailure { msg } => Error::PermanentFailure { msg },
+            .map_runtime_error_to(RuntimeErrorCode::ExchangeRateProviderUnavailable)
     }
 }
