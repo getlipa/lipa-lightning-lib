@@ -26,7 +26,6 @@ mod sending_payments_test {
         wait_for_eq!(node.get_node_info().num_peers, 1);
         nigiri::initiate_channel_from_remote(node.get_node_info().node_pubkey, LspdLnd);
 
-        // Test hardcoded invoices here to avoid an additional test env set up
         invoice_decode_test(&node);
 
         assert!(node.get_node_info().channels_info.num_channels > 0);
@@ -50,62 +49,25 @@ mod sending_payments_test {
                 < CHANNEL_SIZE - REBALANCE_AMOUNT
         ); // smaller instead of equal because of channel reserves
 
+        // Test vanilla payment
         let invoice = nigiri::issue_invoice(LspdLnd, "test", PAYMENT_AMOUNT, 3600).unwrap();
 
         let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
 
-        node.pay_invoice(invoice, None, String::new()).unwrap();
+        node.pay_invoice(invoice, String::new()).unwrap();
 
         wait_for_eq!(
             nigiri::query_node_balance(LspdLnd).unwrap() - initial_balance,
             PAYMENT_AMOUNT
         );
 
-        // Test underpaying 10 sats
-        let invoice = nigiri::issue_invoice(LspdLnd, "test", PAYMENT_AMOUNT, 3600).unwrap();
+        // Test a regular payment but using an invoice that has no amount specified
+        let invoice =
+            nigiri::lnd_issue_invoice(LspdLnd, "open amount invoice", None, 3600).unwrap();
 
         let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
 
-        let payment_result =
-            node.pay_invoice(invoice, Some(PAYMENT_AMOUNT - 10_000), String::new());
-        assert!(matches!(
-            payment_result,
-            Err(perro::Error::InvalidInput { .. })
-        ));
-
-        // no payment took place
-        sleep(Duration::from_secs(2));
-        assert_eq!(
-            initial_balance,
-            nigiri::query_node_balance(LspdLnd).unwrap()
-        );
-
-        // Test overpaying 10 sats (not yet supported)
-        let invoice = nigiri::issue_invoice(LspdLnd, "test", PAYMENT_AMOUNT, 3600).unwrap();
-
-        let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
-
-        let payment_result =
-            node.pay_invoice(invoice, Some(PAYMENT_AMOUNT + 10_000), String::new());
-        assert!(matches!(
-            payment_result,
-            Err(perro::Error::InvalidInput { .. })
-        ));
-
-        // no payment took place
-        sleep(Duration::from_secs(2));
-        assert_eq!(
-            initial_balance,
-            nigiri::query_node_balance(LspdLnd).unwrap()
-        );
-
-        // Test overpaying more than double the amount
-        let invoice = nigiri::issue_invoice(LspdLnd, "test", PAYMENT_AMOUNT, 3600).unwrap();
-
-        let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
-
-        let payment_result =
-            node.pay_invoice(invoice, Some(PAYMENT_AMOUNT * 2 + 10_000), String::new());
+        let payment_result = node.pay_invoice(invoice, String::new());
         assert!(matches!(
             payment_result,
             Err(perro::Error::InvalidInput { .. })
@@ -124,7 +86,7 @@ mod sending_payments_test {
 
         let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
 
-        node.pay_invoice(invoice, Some(PAYMENT_AMOUNT), String::new())
+        node.pay_open_invoice(invoice, PAYMENT_AMOUNT, String::new())
             .unwrap();
 
         wait_for_eq!(
@@ -132,15 +94,42 @@ mod sending_payments_test {
             PAYMENT_AMOUNT
         );
 
-        // Test paying open invoices without specifying a payment amount
+        // Test paying open invoices specifying 0 as the payment amount
         let invoice =
             nigiri::lnd_issue_invoice(LspdLnd, "open amount invoice", None, 3600).unwrap();
 
-        let payment_result = node.pay_invoice(invoice, None, String::new());
+        let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
+
+        let payment_result = node.pay_open_invoice(invoice, 0, String::new());
         assert!(matches!(
             payment_result,
             Err(perro::Error::InvalidInput { .. })
         ));
+
+        // no payment took place
+        sleep(Duration::from_secs(2));
+        assert_eq!(
+            initial_balance,
+            nigiri::query_node_balance(LspdLnd).unwrap()
+        );
+
+        // Test paying open invoices using an invoice with a specified amount
+        let invoice = nigiri::issue_invoice(LspdLnd, "test", PAYMENT_AMOUNT, 3600).unwrap();
+
+        let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
+
+        let payment_result = node.pay_open_invoice(invoice, PAYMENT_AMOUNT, String::new());
+        assert!(matches!(
+            payment_result,
+            Err(perro::Error::InvalidInput { .. })
+        ));
+
+        // no payment took place
+        sleep(Duration::from_secs(2));
+        assert_eq!(
+            initial_balance,
+            nigiri::query_node_balance(LspdLnd).unwrap()
+        );
     }
 
     const THOUSAND_SATS: u64 = 1_000_000;

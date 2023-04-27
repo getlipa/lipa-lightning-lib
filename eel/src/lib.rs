@@ -400,32 +400,24 @@ impl LightningNode {
     }
 
     pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
-        let (invoice, _) = invoice::parse_invoice(&invoice)?;
+        let (invoice, _, _) = invoice::parse_invoice(&invoice)?;
         invoice::get_invoice_details(&invoice)
     }
 
-    pub fn pay_invoice(
-        &self,
-        invoice: String,
-        amount_msat: Option<u64>,
-        metadata: String,
-    ) -> Result<()> {
-        let (invoice_struct, invoice_type, amount_msat) =
-            self.validate_persist_new_outgoing_payment_attempt(&invoice, amount_msat, &metadata)?;
+    pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
+        let (invoice_struct, _invoice_type, _amount_msat) = self
+            .validate_persist_new_outgoing_payment_attempt(
+                &invoice,
+                None,
+                &InvoiceType::SpecifiedAmount,
+                &metadata,
+            )?;
 
-        let payment_result = match invoice_type {
-            InvoiceType::SpecifiedAmount => pay_invoice(
-                &invoice_struct,
-                Retry::Timeout(Duration::from_secs(10)),
-                &self.channel_manager,
-            ),
-            InvoiceType::OpenInvoice => pay_zero_value_invoice(
-                &invoice_struct,
-                amount_msat,
-                Retry::Timeout(Duration::from_secs(10)),
-                &self.channel_manager,
-            ),
-        };
+        let payment_result = pay_invoice(
+            &invoice_struct,
+            Retry::Timeout(Duration::from_secs(10)),
+            &self.channel_manager,
+        );
 
         match payment_result {
             Ok(_payment_id) => {
@@ -433,66 +425,120 @@ impl LightningNode {
                     "Initiated payment of {:?} msats",
                     invoice_struct.amount_milli_satoshis()
                 );
+
+                Ok(())
             }
             Err(e) => {
-                return match e {
-                    PaymentError::Invoice(e) => {
-                        self.payment_store.lock().unwrap().new_payment_state(
-                            &invoice_struct.payment_hash().to_string(),
-                            PaymentState::Failed,
-                        )?;
-                        Err(invalid_input(format!("Invalid invoice - {e}")))
-                    }
-                    PaymentError::Sending(e) => {
-                        self.payment_store.lock().unwrap().new_payment_state(
-                            &invoice_struct.payment_hash().to_string(),
-                            PaymentState::Failed,
-                        )?;
-                        match e {
-                            RetryableSendFailure::PaymentExpired => Err(runtime_error(
-                                RuntimeErrorCode::SendFailure,
-                                format!("Failed to send payment - {e:?}"),
-                            )),
-                            RetryableSendFailure::RouteNotFound => Err(runtime_error(
-                                RuntimeErrorCode::NoRouteFound,
-                                "Failed to find a route",
-                            )),
-                            RetryableSendFailure::DuplicatePayment => Err(runtime_error(
-                                RuntimeErrorCode::SendFailure,
-                                format!("Failed to send payment - {e:?}"),
-                            )),
-                        }
-                    }
+                self.process_failed_payment_attempts(e, &invoice_struct.payment_hash().to_string())
+            }
+        }
+    }
+
+    pub fn pay_open_invoice(
+        &self,
+        invoice: String,
+        amount_msat: u64,
+        metadata: String,
+    ) -> Result<()> {
+        let (invoice_struct, invoice_type, amount_msat) = self
+            .validate_persist_new_outgoing_payment_attempt(
+                &invoice,
+                Some(amount_msat),
+                &InvoiceType::OpenInvoice,
+                &metadata,
+            )?;
+
+        // use method pay_invoice for regular invoices
+        assert!(!matches!(invoice_type, InvoiceType::SpecifiedAmount));
+
+        let payment_result = pay_zero_value_invoice(
+            &invoice_struct,
+            amount_msat,
+            Retry::Timeout(Duration::from_secs(10)),
+            &self.channel_manager,
+        );
+
+        match payment_result {
+            Ok(_payment_id) => {
+                info!(
+                    "Initiated payment of {:?} msats (open amount invoice)",
+                    invoice_struct.amount_milli_satoshis()
+                );
+
+                Ok(())
+            }
+            Err(e) => {
+                self.process_failed_payment_attempts(e, &invoice_struct.payment_hash().to_string())
+            }
+        }
+    }
+
+    fn process_failed_payment_attempts(
+        &self,
+        error: PaymentError,
+        payment_hash: &str,
+    ) -> Result<()> {
+        match error {
+            PaymentError::Invoice(e) => {
+                self.payment_store
+                    .lock()
+                    .unwrap()
+                    .new_payment_state(payment_hash, PaymentState::Failed)?;
+                Err(invalid_input(format!("Invalid invoice - {e}")))
+            }
+            PaymentError::Sending(e) => {
+                self.payment_store
+                    .lock()
+                    .unwrap()
+                    .new_payment_state(payment_hash, PaymentState::Failed)?;
+                match e {
+                    RetryableSendFailure::PaymentExpired => Err(runtime_error(
+                        RuntimeErrorCode::SendFailure,
+                        format!("Failed to send payment - {e:?}"),
+                    )),
+                    RetryableSendFailure::RouteNotFound => Err(runtime_error(
+                        RuntimeErrorCode::NoRouteFound,
+                        "Failed to find a route",
+                    )),
+                    RetryableSendFailure::DuplicatePayment => Err(runtime_error(
+                        RuntimeErrorCode::SendFailure,
+                        format!("Failed to send payment - {e:?}"),
+                    )),
                 }
             }
         }
-        Ok(())
     }
 
     fn validate_persist_new_outgoing_payment_attempt(
         &self,
         invoice: &str,
         explicit_amount_msat: Option<u64>,
+        intended_type: &InvoiceType,
         metadata: &str,
     ) -> Result<(Invoice, InvoiceType, u64)> {
-        let (invoice_struct, invoice_type) = invoice::parse_invoice(invoice)?;
+        let explicit_amount_msat = explicit_amount_msat.unwrap_or(0);
 
-        validate_invoice(self.config.network, &invoice_struct)?;
+        let (invoice_struct, invoice_type, mut amount_msat) = invoice::parse_invoice(invoice)?;
 
-        let mut amount_msat = invoice_struct.amount_milli_satoshis().unwrap_or(0);
+        if intended_type != &invoice_type {
+            return Err(invalid_input(format!(
+                "{intended_type:?}-invoice expected, but {invoice_type:?}-invoice was provided",
+            )));
+        }
 
-        if let Some(explicit_amount_msat) = explicit_amount_msat {
-            if explicit_amount_msat < amount_msat {
-                return Err(invalid_input("Manually specified payment amount is less than the amount specified in the invoice"));
-            }
-
-            // Remove this clause to support overpaying invoices
-            if matches!(invoice_type, InvoiceType::SpecifiedAmount) {
-                return Err(invalid_input("Overpaying invoices is not yet supported"));
+        if explicit_amount_msat != 0 {
+            if invoice_type == InvoiceType::SpecifiedAmount {
+                return Err(invalid_input(
+                    "Overwriting payment amounts specified in invoices is not allowed for now",
+                ));
             }
 
             amount_msat = explicit_amount_msat;
-        } else if matches!(invoice_type, InvoiceType::OpenInvoice) {
+        }
+
+        validate_invoice(self.config.network, &invoice_struct)?;
+
+        if invoice_type == InvoiceType::OpenInvoice && explicit_amount_msat == 0 {
             return Err(invalid_input(
                 "Invoice does not specify an amount and no amount was specified manually",
             ));
