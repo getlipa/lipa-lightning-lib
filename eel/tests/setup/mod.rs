@@ -24,12 +24,13 @@ pub struct NodeHandle<S: RemoteStorage + Clone + 'static> {
 #[allow(dead_code)]
 impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
     pub fn new(remote_storage: S) -> Self {
+        std::env::set_var("TESTING_TASK_PERIODS", "5");
         let config = get_testing_config();
         let _ = fs::remove_dir_all(&config.local_persistence_path);
         fs::create_dir(&config.local_persistence_path).unwrap();
 
         NodeHandle {
-            config: config,
+            config,
             storage: remote_storage,
         }
     }

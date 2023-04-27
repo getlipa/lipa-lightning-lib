@@ -79,7 +79,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::Duration;
 
 const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
-    sync_blockchain: Duration::from_secs(5),
+    sync_blockchain: Duration::from_secs(5 * 60),
     update_lsp_info: Some(Duration::from_secs(10 * 60)),
     reconnect_to_lsp: Duration::from_secs(10),
     update_fees: Some(Duration::from_secs(5 * 60)),
@@ -280,7 +280,10 @@ impl LightningNode {
             config.fiat_currency.clone(),
             exchange_rate_provider,
         )));
-        task_manager.lock().unwrap().restart(FOREGROUND_PERIODS);
+        task_manager
+            .lock()
+            .unwrap()
+            .restart(get_foreground_periods());
 
         // Step 21: Initialize the PaymentStore
         let payment_store_path = Path::new(&config.local_persistence_path).join("payment_db.db3");
@@ -516,7 +519,7 @@ impl LightningNode {
         self.task_manager
             .lock()
             .unwrap()
-            .restart(FOREGROUND_PERIODS);
+            .restart(get_foreground_periods());
     }
 
     pub fn background(&self) {
@@ -541,7 +544,7 @@ impl LightningNode {
         let mut task_manager = self.task_manager.lock().unwrap();
         task_manager.change_fiat_currency(fiat_currency);
         // if the fiat currency is being changed, we can assume the app is in the foreground
-        task_manager.restart(FOREGROUND_PERIODS);
+        task_manager.restart(get_foreground_periods());
     }
 
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
@@ -617,4 +620,24 @@ fn init_peer_manager(
         logger,
         keys_manager,
     ))
+}
+
+fn get_foreground_periods() -> TaskPeriods {
+    match std::env::var("TESTING_TASK_PERIODS") {
+        Ok(period) => {
+            let period: u64 = period
+                .parse()
+                .expect("TESTING_TASK_PERIODS should be an integer number");
+            let period = Duration::from_secs(period);
+            TaskPeriods {
+                sync_blockchain: period,
+                update_lsp_info: Some(period),
+                reconnect_to_lsp: period,
+                update_fees: Some(period),
+                update_graph: Some(period),
+                update_exchange_rates: Some(period),
+            }
+        }
+        Err(_) => FOREGROUND_PERIODS,
+    }
 }

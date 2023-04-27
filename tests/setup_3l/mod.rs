@@ -22,6 +22,8 @@ pub struct NodeHandle {
 #[allow(dead_code)]
 impl NodeHandle {
     pub fn new() -> Self {
+        std::env::set_var("TESTING_TASK_PERIODS", "5");
+
         Self::reset_state();
 
         let eel_config = get_testing_config();
