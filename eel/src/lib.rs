@@ -448,9 +448,6 @@ impl LightningNode {
                 &metadata,
             )?;
 
-        // use method pay_invoice for regular invoices
-        assert!(!matches!(invoice_type, InvoiceType::SpecifiedAmount));
-
         let payment_result = pay_zero_value_invoice(
             &invoice_struct,
             amount_msat,
