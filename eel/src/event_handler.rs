@@ -6,7 +6,7 @@ use crate::task_manager::TaskManager;
 use crate::types::ChannelManager;
 
 use bitcoin::hashes::hex::ToHex;
-use lightning::util::events::{Event, EventHandler, PaymentPurpose};
+use lightning::events::{Event, EventHandler, PaymentPurpose};
 use log::{error, info, trace};
 use std::sync::{Arc, Mutex};
 
@@ -44,8 +44,7 @@ impl EventHandler for LipaEventHandler {
                 payment_hash,
                 amount_msat,
                 purpose,
-                via_channel_id: _,
-                via_user_channel_id: _,
+                ..
             } => {
                 // Note: LDK will not stop an inbound payment from being paid multiple times,
                 //       so multiple PaymentReceived events may be generated for the same payment.
@@ -193,8 +192,12 @@ impl EventHandler for LipaEventHandler {
             Event::PaymentFailed {
                 payment_id: _,
                 payment_hash,
+                reason,
             } => {
-                info!("EVENT: PaymentFailed - hash: {}", payment_hash.0.to_hex());
+                info!(
+                    "EVENT: PaymentFailed - hash: {}, {reason:?}",
+                    payment_hash.0.to_hex()
+                );
                 if self
                     .payment_store
                     .lock()
@@ -324,6 +327,9 @@ impl EventHandler for LipaEventHandler {
             }
             Event::HTLCIntercepted { .. } => {
                 info!("EVENT: HTLCIntercepted");
+            }
+            Event::ChannelPending { .. } => {
+                info!("EVENT: ChannelPending");
             }
             Event::ChannelReady { .. } => {
                 info!("EVENT: ChannelReady");

@@ -16,13 +16,13 @@ cipher = { version = "0.4.3", features = ["block-padding", "alloc"] }
 ecies = { version = "0.2.3", default-features = false, features = ["pure"] }
 esplora-client = { version = "0.4.0", default-features = false, features = ["blocking"] }
 futures = "0.3.24"
-lightning = { version = "0.0.114", features = ["max_level_trace"] }
-lightning-background-processor = "0.0.114"
-lightning-invoice = "0.22.0"
-lightning-net-tokio = "0.0.114"
-lightning-persister = "0.0.114"
-lightning-rapid-gossip-sync = "0.0.114"
-lightning-transaction-sync = { version = "0.0.114", features = ["esplora-async"] }
+lightning = { version = "0.0.115", features = ["max_level_trace"] }
+lightning-background-processor = "0.0.115"
+lightning-invoice = "0.23.0"
+lightning-net-tokio = "0.0.115"
+lightning-persister = "0.0.115"
+lightning-rapid-gossip-sync = "0.0.115"
+lightning-transaction-sync = { version = "0.0.115", features = ["esplora-async"] }
 log = "0.4.17"
 num_enum = "0.6.1"
 prost = "0.11.9"
