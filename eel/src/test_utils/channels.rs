@@ -39,6 +39,7 @@ pub fn channel() -> ChannelDetails {
         channel_value_satoshis: 0u64,
         unspendable_punishment_reserve: None,
         user_channel_id: 0u128,
+        feerate_sat_per_1000_weight: None,
         balance_msat: 0u64,
         outbound_capacity_msat: 0u64,
         next_outbound_htlc_limit_msat: 0u64,
