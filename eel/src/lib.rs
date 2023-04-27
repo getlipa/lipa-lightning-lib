@@ -40,7 +40,6 @@ use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::interfaces::{EventHandler, ExchangeRateProvider, ExchangeRates, RemoteStorage};
 pub use crate::invoice::InvoiceDetails;
-use crate::invoice::InvoiceType;
 use crate::invoice::{create_invoice, validate_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
 use crate::logger::LightningLogger;
@@ -400,21 +399,24 @@ impl LightningNode {
     }
 
     pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
-        let (invoice, _, _) = invoice::parse_invoice(&invoice)?;
+        let invoice = invoice::parse_invoice(&invoice)?;
         invoice::get_invoice_details(&invoice)
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
-        let (invoice_struct, _invoice_type, _amount_msat) = self
-            .validate_persist_new_outgoing_payment_attempt(
-                &invoice,
-                None,
-                &InvoiceType::SpecifiedAmount,
-                &metadata,
-            )?;
+        let invoice = invoice::parse_invoice(&invoice)?;
+        let amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
+
+        if amount_msat == 0 {
+            return Err(invalid_input(
+                "Expected invoice with a specified amount, but an open invoice was provided",
+            ));
+        }
+
+        self.validate_persist_new_outgoing_payment_attempt(&invoice, None, &metadata)?;
 
         let payment_result = pay_invoice(
-            &invoice_struct,
+            &invoice,
             Retry::Timeout(Duration::from_secs(10)),
             &self.channel_manager,
         );
@@ -423,14 +425,12 @@ impl LightningNode {
             Ok(_payment_id) => {
                 info!(
                     "Initiated payment of {:?} msats",
-                    invoice_struct.amount_milli_satoshis()
+                    invoice.amount_milli_satoshis()
                 );
 
                 Ok(())
             }
-            Err(e) => {
-                self.process_failed_payment_attempts(e, &invoice_struct.payment_hash().to_string())
-            }
+            Err(e) => self.process_failed_payment_attempts(e, &invoice.payment_hash().to_string()),
         }
     }
 
@@ -440,16 +440,19 @@ impl LightningNode {
         amount_msat: u64,
         metadata: String,
     ) -> Result<()> {
-        let (invoice_struct, invoice_type, amount_msat) = self
-            .validate_persist_new_outgoing_payment_attempt(
-                &invoice,
-                Some(amount_msat),
-                &InvoiceType::OpenInvoice,
-                &metadata,
-            )?;
+        let invoice = invoice::parse_invoice(&invoice)?;
+        let invoice_amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
+
+        if invoice_amount_msat != 0 {
+            return Err(invalid_input(
+                "Expected open invoice, but an invoice with a specified amount was provided",
+            ));
+        }
+
+        self.validate_persist_new_outgoing_payment_attempt(&invoice, Some(amount_msat), &metadata)?;
 
         let payment_result = pay_zero_value_invoice(
-            &invoice_struct,
+            &invoice,
             amount_msat,
             Retry::Timeout(Duration::from_secs(10)),
             &self.channel_manager,
@@ -459,14 +462,12 @@ impl LightningNode {
             Ok(_payment_id) => {
                 info!(
                     "Initiated payment of {:?} msats (open amount invoice)",
-                    invoice_struct.amount_milli_satoshis()
+                    invoice.amount_milli_satoshis()
                 );
 
                 Ok(())
             }
-            Err(e) => {
-                self.process_failed_payment_attempts(e, &invoice_struct.payment_hash().to_string())
-            }
+            Err(e) => self.process_failed_payment_attempts(e, &invoice.payment_hash().to_string()),
         }
     }
 
@@ -508,47 +509,41 @@ impl LightningNode {
 
     fn validate_persist_new_outgoing_payment_attempt(
         &self,
-        invoice: &str,
+        invoice: &Invoice,
         explicit_amount_msat: Option<u64>,
-        intended_type: &InvoiceType,
         metadata: &str,
-    ) -> Result<(Invoice, InvoiceType, u64)> {
+    ) -> Result<()> {
+        let invoice_amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
         let explicit_amount_msat = explicit_amount_msat.unwrap_or(0);
 
-        let (invoice_struct, invoice_type, mut amount_msat) = invoice::parse_invoice(invoice)?;
+        let amount_msat = if invoice_amount_msat == 0 {
+            if explicit_amount_msat == 0 {
+                return Err(invalid_input(
+                    "Invoice does not specify an amount and no amount was specified manually",
+                ));
+            }
 
-        if intended_type != &invoice_type {
-            return Err(invalid_input(format!(
-                "{intended_type:?}-invoice expected, but {invoice_type:?}-invoice was provided",
-            )));
-        }
-
-        if explicit_amount_msat != 0 {
-            if invoice_type == InvoiceType::SpecifiedAmount {
+            explicit_amount_msat
+        } else {
+            if explicit_amount_msat != 0 {
                 return Err(invalid_input(
                     "Overwriting payment amounts specified in invoices is not allowed for now",
                 ));
             }
 
-            amount_msat = explicit_amount_msat;
-        }
+            invoice_amount_msat
+        };
 
-        validate_invoice(self.config.network, &invoice_struct)?;
+        validate_invoice(self.config.network, invoice)?;
 
-        if invoice_type == InvoiceType::OpenInvoice && explicit_amount_msat == 0 {
-            return Err(invalid_input(
-                "Invoice does not specify an amount and no amount was specified manually",
-            ));
-        }
-
-        let description = match invoice_struct.description() {
+        let description = match invoice.description() {
             InvoiceDescription::Direct(d) => d.clone().into_inner(),
             InvoiceDescription::Hash(h) => h.0.to_hex(),
         };
         let fiat_values = self.get_fiat_values(amount_msat);
 
         let mut payment_store = self.payment_store.lock().unwrap();
-        if let Ok(payment) = payment_store.get_payment(&invoice_struct.payment_hash().to_string()) {
+        if let Ok(payment) = payment_store.get_payment(&invoice.payment_hash().to_string()) {
             match payment.payment_type {
                 PaymentType::Receiving => return Err(runtime_error(
                     RuntimeErrorCode::PayingToSelf,
@@ -562,22 +557,22 @@ impl LightningNode {
                         ));
                     }
                     payment_store.new_payment_state(
-                        &invoice_struct.payment_hash().to_string(),
+                        &invoice.payment_hash().to_string(),
                         PaymentState::Retried,
                     )?;
                 }
             }
         } else {
             payment_store.new_outgoing_payment(
-                &invoice_struct.payment_hash().to_string(),
+                &invoice.payment_hash().to_string(),
                 amount_msat,
                 &description,
-                invoice,
+                &invoice.to_string(),
                 metadata,
                 fiat_values,
             )?;
         }
-        Ok((invoice_struct, invoice_type, amount_msat))
+        Ok(())
     }
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
