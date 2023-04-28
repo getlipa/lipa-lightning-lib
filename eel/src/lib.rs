@@ -413,7 +413,7 @@ impl LightningNode {
             ));
         }
 
-        self.validate_persist_new_outgoing_payment_attempt(&invoice, None, &metadata)?;
+        self.validate_persist_new_outgoing_payment_attempt(&invoice, amount_msat, &metadata)?;
 
         let payment_result = pay_invoice(
             &invoice,
@@ -423,11 +423,7 @@ impl LightningNode {
 
         match payment_result {
             Ok(_payment_id) => {
-                info!(
-                    "Initiated payment of {:?} msats",
-                    invoice.amount_milli_satoshis()
-                );
-
+                info!("Initiated payment of {amount_msat} msats");
                 Ok(())
             }
             Err(e) => self.process_failed_payment_attempts(e, &invoice.payment_hash().to_string()),
@@ -447,9 +443,13 @@ impl LightningNode {
             return Err(invalid_input(
                 "Expected open invoice, but an invoice with a specified amount was provided",
             ));
+        } else if amount_msat == 0 {
+            return Err(invalid_input(
+                "Invoice does not specify an amount and no amount was specified manually",
+            ));
         }
 
-        self.validate_persist_new_outgoing_payment_attempt(&invoice, Some(amount_msat), &metadata)?;
+        self.validate_persist_new_outgoing_payment_attempt(&invoice, amount_msat, &metadata)?;
 
         let payment_result = pay_zero_value_invoice(
             &invoice,
@@ -460,11 +460,7 @@ impl LightningNode {
 
         match payment_result {
             Ok(_payment_id) => {
-                info!(
-                    "Initiated payment of {:?} msats (open amount invoice)",
-                    invoice.amount_milli_satoshis()
-                );
-
+                info!("Initiated payment of {amount_msat} msats (open amount invoice)");
                 Ok(())
             }
             Err(e) => self.process_failed_payment_attempts(e, &invoice.payment_hash().to_string()),
@@ -510,30 +506,9 @@ impl LightningNode {
     fn validate_persist_new_outgoing_payment_attempt(
         &self,
         invoice: &Invoice,
-        explicit_amount_msat: Option<u64>,
+        amount_msat: u64,
         metadata: &str,
     ) -> Result<()> {
-        let invoice_amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
-        let explicit_amount_msat = explicit_amount_msat.unwrap_or(0);
-
-        let amount_msat = if invoice_amount_msat == 0 {
-            if explicit_amount_msat == 0 {
-                return Err(invalid_input(
-                    "Invoice does not specify an amount and no amount was specified manually",
-                ));
-            }
-
-            explicit_amount_msat
-        } else {
-            if explicit_amount_msat != 0 {
-                return Err(invalid_input(
-                    "Overwriting payment amounts specified in invoices is not allowed for now",
-                ));
-            }
-
-            invoice_amount_msat
-        };
-
         validate_invoice(self.config.network, invoice)?;
 
         let description = match invoice.description() {
