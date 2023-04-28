@@ -31,7 +31,7 @@ perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.1" }
 bitcoin = "0.29.2"
 colored = "2.0.0"
 chrono = { version = "0.4.23", default-features = false }
-ctor = "0.1.26"
+ctor = "0.2.0"
 esplora-client = { version = "0.4.0", default-features = false, features = ["blocking"] }
 rand = "0.8.5"
 rustyline = { version = "11.0.0", features = ["derive"] }
