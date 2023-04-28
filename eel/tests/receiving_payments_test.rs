@@ -101,7 +101,7 @@ mod receiving_payments_test {
             run_payment_flow(&node, NodeInstance::LspdLnd, TEN_K_SATS);
 
             // Receive multiple payments
-            let initial_balance = node.get_node_info().channels_info.local_balance_msat;
+            let initial_balance = node.get_node_info().channels_info.local_balance_sat;
             let amt_of_payments = 10;
             assert_channel_ready(&node, TWO_K_SATS * amt_of_payments);
             for i in 1..=amt_of_payments {
@@ -109,7 +109,7 @@ mod receiving_payments_test {
 
                 nigiri::lnd_pay_invoice(NodeInstance::LspdLnd, &invoice).unwrap();
                 assert_eq!(
-                    node.get_node_info().channels_info.local_balance_msat,
+                    node.get_node_info().channels_info.local_balance_sat,
                     initial_balance + TWO_K_SATS * i
                 );
             }
@@ -161,7 +161,7 @@ mod receiving_payments_test {
         payment_amount: u64,
         lsp_fee: u64,
     ) {
-        let initial_balance = node.get_node_info().channels_info.local_balance_msat;
+        let initial_balance = node.get_node_info().channels_info.local_balance_sat;
 
         let invoice = issue_invoice(&node, payment_amount);
 
@@ -171,7 +171,7 @@ mod receiving_payments_test {
     }
 
     fn run_payment_flow(node: &LightningNode, paying_node: NodeInstance, payment_amount: u64) {
-        let initial_balance = node.get_node_info().channels_info.local_balance_msat;
+        let initial_balance = node.get_node_info().channels_info.local_balance_sat;
 
         assert_channel_ready(&node, payment_amount);
         let invoice = issue_invoice(&node, payment_amount);
@@ -184,15 +184,15 @@ mod receiving_payments_test {
     fn assert_channel_ready(node: &LightningNode, payment_amount: u64) {
         assert!(node.get_node_info().channels_info.num_channels > 0);
         assert!(node.get_node_info().channels_info.num_usable_channels > 0);
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat > payment_amount);
+        assert!(node.get_node_info().channels_info.inbound_capacity_sat > payment_amount);
     }
 
     fn assert_payment_received(node: &LightningNode, expected_balance: u64) {
         assert_eq!(
-            node.get_node_info().channels_info.local_balance_msat,
+            node.get_node_info().channels_info.local_balance_sat,
             expected_balance
         );
-        assert!(node.get_node_info().channels_info.outbound_capacity_msat < expected_balance);
+        assert!(node.get_node_info().channels_info.outbound_capacity_sat < expected_balance);
         // because of channel reserves
     }
 

@@ -26,6 +26,7 @@ mod invoice;
 mod logger;
 mod random;
 mod rapid_sync_client;
+pub mod rounding;
 mod storage_persister;
 mod task_manager;
 mod test_utils;

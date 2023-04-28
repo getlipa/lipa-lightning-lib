@@ -3,7 +3,6 @@ mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod persistence_test {
-    use crate::setup::mocked_remote_storage::Config;
     use eel::errors::RuntimeErrorCode;
     use eel::interfaces::RemoteStorage;
     use eel::LightningNode;
@@ -14,6 +13,7 @@ mod persistence_test {
     use std::thread::sleep;
     use std::time::Duration;
 
+    use crate::setup::mocked_remote_storage::Config;
     use crate::setup::{mocked_storage_node_configurable, NodeHandle};
     use crate::setup_env::config::LOCAL_PERSISTENCE_PATH;
     use crate::setup_env::nigiri;
@@ -149,7 +149,7 @@ mod persistence_test {
         payment_amount: u64,
         lsp_fee: u64,
     ) {
-        let initial_balance = node.get_node_info().channels_info.local_balance_msat;
+        let initial_balance = node.get_node_info().channels_info.local_balance_sat;
 
         let invoice_details = node
             .create_invoice(payment_amount, "test".to_string(), String::new())
@@ -157,15 +157,18 @@ mod persistence_test {
 
         nigiri::pay_invoice(paying_node, &invoice_details.invoice).unwrap();
 
-        assert_payment_received(node, initial_balance + payment_amount - lsp_fee);
+        assert_payment_received(
+            node,
+            initial_balance + payment_amount / 1000 - lsp_fee / 1000,
+        );
     }
 
     fn assert_payment_received(node: &LightningNode, expected_balance: u64) {
         assert_eq!(
-            node.get_node_info().channels_info.local_balance_msat,
+            node.get_node_info().channels_info.local_balance_sat,
             expected_balance
         );
-        assert!(node.get_node_info().channels_info.outbound_capacity_msat < expected_balance);
+        assert!(node.get_node_info().channels_info.outbound_capacity_sat < expected_balance);
         // because of channel reserves
     }
 

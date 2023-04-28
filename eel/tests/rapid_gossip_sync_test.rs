@@ -72,7 +72,7 @@ mod rapid_gossip_sync_test {
             assert_eq!(node.get_node_info().channels_info.num_channels, 1);
             assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
 
-            assert!(node.get_node_info().channels_info.inbound_capacity_msat > 2 * HUNDRED_K_SATS);
+            assert!(node.get_node_info().channels_info.inbound_capacity_sat > 2 * HUNDRED_K_SATS);
 
             // Pay from NigiriCln to 3L to create outbound liquidity
             let invoice_cln = node
@@ -83,10 +83,10 @@ mod rapid_gossip_sync_test {
             nigiri::cln_pay_invoice(NodeInstance::NigiriCln, &invoice_cln.invoice).unwrap();
 
             assert_eq!(
-                node.get_node_info().channels_info.local_balance_msat,
+                node.get_node_info().channels_info.local_balance_sat,
                 HUNDRED_K_SATS
             );
-            wait_for!(node.get_node_info().channels_info.outbound_capacity_msat > 0);
+            wait_for!(node.get_node_info().channels_info.outbound_capacity_sat > 0);
 
             // The node hasn't yet learned about the new channels so it won't be able to pay
             assert!(matches!(

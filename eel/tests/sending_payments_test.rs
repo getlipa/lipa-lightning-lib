@@ -30,7 +30,7 @@ mod sending_payments_test {
 
         assert!(node.get_node_info().channels_info.num_channels > 0);
         assert!(node.get_node_info().channels_info.num_usable_channels > 0);
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat > REBALANCE_AMOUNT);
+        assert!(node.get_node_info().channels_info.inbound_capacity_sat > REBALANCE_AMOUNT / 1000);
 
         let invoice_details = node
             .create_invoice(REBALANCE_AMOUNT, "test".to_string(), String::new())
@@ -40,13 +40,13 @@ mod sending_payments_test {
         nigiri::pay_invoice(LspdLnd, &invoice_details.invoice).unwrap();
 
         assert_eq!(
-            node.get_node_info().channels_info.local_balance_msat,
-            REBALANCE_AMOUNT
+            node.get_node_info().channels_info.local_balance_sat,
+            REBALANCE_AMOUNT / 1000
         );
-        assert!(node.get_node_info().channels_info.outbound_capacity_msat < REBALANCE_AMOUNT); // because of channel reserves
+        assert!(node.get_node_info().channels_info.outbound_capacity_sat < REBALANCE_AMOUNT / 1000); // because of channel reserves
         assert!(
-            node.get_node_info().channels_info.inbound_capacity_msat
-                < CHANNEL_SIZE - REBALANCE_AMOUNT
+            node.get_node_info().channels_info.inbound_capacity_sat
+                < (CHANNEL_SIZE - REBALANCE_AMOUNT) / 1000
         ); // smaller instead of equal because of channel reserves
 
         // Test vanilla payment

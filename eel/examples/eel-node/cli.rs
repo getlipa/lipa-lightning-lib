@@ -139,16 +139,16 @@ fn node_info(node: &LightningNode) {
         node_info.channels_info.num_usable_channels
     );
     println!(
-        "    Local balance in msat: {}",
-        node_info.channels_info.local_balance_msat
+        "    Local balance in sat: {}",
+        node_info.channels_info.local_balance_sat
     );
     println!(
-        " Inbound capacity in msat: {}",
-        node_info.channels_info.inbound_capacity_msat
+        " Inbound capacity in sat: {}",
+        node_info.channels_info.inbound_capacity_sat
     );
     println!(
-        "Outbound capacity in msat: {}",
-        node_info.channels_info.outbound_capacity_msat
+        "Outbound capacity in sat: {}",
+        node_info.channels_info.outbound_capacity_sat
     );
 }
 

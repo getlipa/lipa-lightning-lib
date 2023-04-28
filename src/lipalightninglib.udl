@@ -219,16 +219,16 @@ dictionary NodeInfo {
 dictionary ChannelsInfo {
     u16 num_channels; // Number of currently open channels
     u16 num_usable_channels; // Number of usable channels. E.g. if a peer if offline, channels with that peer won't be usable.
-    u64 local_balance_msat; // The balance of the local node. Please keep in mind not all of this balance is spendable
+    u64 local_balance_sat; // The balance of the local node. Please keep in mind not all of this balance is spendable
         // due to Lightning channel reserves
 
     // Capacity the node can actually receive.
     // It excludes non usable channels, pending htlcs, channels reserves, etc.
-    u64 inbound_capacity_msat;
+    u64 inbound_capacity_sat;
 
     // Capacity the node can actually send.
     // It excludes non usable channels, pending HTLCs, channels reserves, etc.
-    u64 outbound_capacity_msat;
+    u64 outbound_capacity_sat;
 };
 
 // The fee charged by the Lightning Service Provider (LSP) for opening a channel with the node.
