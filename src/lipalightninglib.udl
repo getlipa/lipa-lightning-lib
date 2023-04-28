@@ -73,6 +73,14 @@ interface LightningNode {
     [Throws=LnError]
     void pay_invoice(string invoice, string metadata);
 
+    // Differs from pay_invoice(string invoice, string metadata) in that the passed in invoice does not have any payment amount specified,
+    // and allows the caller of the method to specify an amount instead.
+    //
+    // Additional Parameters:
+    //    - amount_msat - amount in millisats to be paid
+    [Throws=LnError]
+    void pay_open_invoice(string invoice, u64 amount_msat, string metadata);
+
     // Get a list of the latest payments
     //    - number_of_payments - the maximum number of payments that will be returned
     [Throws=LnError]

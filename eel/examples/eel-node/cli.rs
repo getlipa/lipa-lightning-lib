@@ -64,6 +64,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", message.red());
                     }
                 }
+                "payopeninvoice" => {
+                    if let Err(message) = pay_open_invoice(node, &mut words) {
+                        println!("{}", message.red());
+                    }
+                }
                 "listpayments" => {
                     if let Err(message) = list_payments(node) {
                         println!("{}", message.red());
@@ -96,6 +101,7 @@ fn help() {
     println!("  invoice <amount in millisats> [description]");
     println!("  decodeinvoice <invoice>");
     println!("  payinvoice <invoice>");
+    println!("  payopeninvoice <invoice> <amount in millisats>");
     println!("");
     println!("  listpayments");
     println!("");
@@ -204,15 +210,43 @@ fn decode_invoice<'a>(
     Ok(())
 }
 
-fn pay_invoice<'a>(
+fn pay_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<(), String> {
+    let invoice = words
+        .next()
+        .ok_or_else(|| "invoice is required".to_string())?;
+
+    if words.next().is_some() {
+        return Err("To many arguments. Specifying an amount is only allowed for open invoices.  To pay an open invoice use 'payopeninvoice'.".to_string());
+    }
+
+    match node.pay_invoice(invoice.to_string(), String::new()) {
+        Ok(_) => {}
+        Err(e) => return Err(e.to_string()),
+    };
+
+    Ok(())
+}
+
+fn pay_open_invoice(
     node: &LightningNode,
-    words: &mut dyn Iterator<Item = &'a str>,
+    words: &mut dyn Iterator<Item = &str>,
 ) -> Result<(), String> {
     let invoice = words
         .next()
         .ok_or_else(|| "invoice is required".to_string())?;
 
-    match node.pay_invoice(invoice.to_string(), String::new()) {
+    let amount_argument = match words.next() {
+        Some(amount) => match amount.parse::<u64>() {
+            Ok(parsed) => Ok(parsed),
+            Err(_) => return Err("Error: millisat amount must be an integer".to_string()),
+        },
+        None => Err(
+            "Open amount invoices require an amount in millisats as an additional argument"
+                .to_string(),
+        ),
+    }?;
+
+    match node.pay_open_invoice(invoice.to_string(), amount_argument, String::new()) {
         Ok(_) => {}
         Err(e) => return Err(e.to_string()),
     };
