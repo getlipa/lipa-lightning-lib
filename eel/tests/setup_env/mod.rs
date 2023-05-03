@@ -57,7 +57,7 @@ macro_rules! wait_for_eq {
 macro_rules! wait_for_condition {
     ($cond:expr, $message_if_not_satisfied:expr) => {
         (|| {
-            let attempts = 600;
+            let attempts = 1100;
             let sleep_duration = Duration::from_millis(100);
             for _ in 0..attempts {
                 if $cond {
@@ -517,6 +517,21 @@ pub mod nigiri {
         Ok(())
     }
 
+    pub fn cln_owns_utxos(node: NodeInstance) -> Result<bool, String> {
+        let sub_cmd = &["listfunds", "-F"];
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(cmd.as_slice(), output));
+        }
+        if output.stdout.is_empty() {
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
     pub fn issue_invoice(
         node: NodeInstance,
         description: &str,
@@ -708,44 +723,35 @@ pub mod nigiri {
         lnd_node_open_channel(remote_node, &node_pubkey.to_hex(), false).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
 
-        wait_for_new_channel_to_confirm(remote_node, &node_pubkey.to_hex());
+        wait_for!(is_channel_confirmed(remote_node, &node_pubkey.to_hex()));
     }
 
-    pub fn wait_for_new_channel_to_confirm(node: NodeInstance, target_node_id: &str) {
+    pub fn is_channel_confirmed(node: NodeInstance, target_node_id: &str) -> bool {
         let remote_node_json_keyword = match node {
             NodeInstance::NigiriCln => "destination",
             _ => "remote_pubkey",
         };
 
         let node_id = if node == NodeInstance::NigiriCln {
-            Some(nigiri::query_cln_node_info(node).unwrap().pub_key)
+            Some(query_cln_node_info(node).unwrap().pub_key)
         } else {
             None
         };
 
-        let mut retries = 0;
-        loop {
-            for channel in list_channels(node, &node_id) {
-                if let (Some(pubkey), Some(active)) = (
-                    channel[remote_node_json_keyword].as_str(),
-                    channel["active"].as_bool(),
-                ) {
-                    if pubkey.eq(target_node_id) && active {
-                        // Wait a bit to avoid insufficient balance errors
-                        sleep(Duration::from_secs(1));
-                        return;
-                    }
+        for channel in list_channels(node, &node_id) {
+            if let (Some(pubkey), Some(active)) = (
+                channel[remote_node_json_keyword].as_str(),
+                channel["active"].as_bool(),
+            ) {
+                if pubkey.eq(target_node_id) && active {
+                    // Wait a bit to avoid insufficient balance errors
+                    sleep(Duration::from_secs(1));
+                    return true;
                 }
             }
-            sleep(Duration::from_millis(500));
-            retries += 1;
-            if retries >= 220 {
-                panic!(
-                    "Failed to create channel from {:?} to {}",
-                    node, target_node_id
-                );
-            }
         }
+
+        false
     }
 
     fn list_channels(node: NodeInstance, node_id: &Option<String>) -> Vec<serde_json::Value> {

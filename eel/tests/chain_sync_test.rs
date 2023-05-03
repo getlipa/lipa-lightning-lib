@@ -11,7 +11,7 @@ mod chain_sync_test {
 
     use crate::setup::{mocked_storage_node, NodeHandle};
     use crate::setup_env::nigiri;
-    use crate::setup_env::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
+    use crate::setup_env::nigiri::{is_channel_confirmed, NodeInstance};
     use crate::{try_cmd_repeatedly, wait_for, wait_for_eq};
 
     const HALF_SEC: Duration = Duration::from_millis(500);
@@ -39,7 +39,7 @@ mod chain_sync_test {
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
-        wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &node_id);
+        wait_for!(is_channel_confirmed(NodeInstance::LspdLnd, &node_id));
 
         assert_eq!(node.get_node_info().channels_info.num_channels, 1);
         assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
