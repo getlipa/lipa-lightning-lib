@@ -5,7 +5,7 @@ mod setup_env;
 mod rapid_gossip_sync_test {
     use crate::setup::mocked_storage_node;
     use crate::setup_env::nigiri;
-    use crate::setup_env::nigiri::{wait_for_new_channel_to_confirm, NodeInstance};
+    use crate::setup_env::nigiri::{is_channel_confirmed, NodeInstance};
     use crate::{try_cmd_repeatedly, wait_for, wait_for_eq};
     use bitcoin::hashes::hex::ToHex;
     use eel::LightningNode;
@@ -66,8 +66,8 @@ mod rapid_gossip_sync_test {
                 nigiri::cln_node_open_pub_channel(NodeInstance::NigiriCln, &lspd_node_id).is_ok()
             );
             try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-            wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &lipa_node_id);
-            wait_for_new_channel_to_confirm(NodeInstance::NigiriCln, &lspd_node_id);
+            wait_for!(is_channel_confirmed(NodeInstance::LspdLnd, &lipa_node_id));
+            wait_for!(is_channel_confirmed(NodeInstance::NigiriCln, &lspd_node_id));
 
             assert_eq!(node.get_node_info().channels_info.num_channels, 1);
             assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
@@ -125,7 +125,10 @@ mod rapid_gossip_sync_test {
             nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false)
                 .unwrap();
             try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-            wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
+            wait_for!(nigiri::is_channel_confirmed(
+                NodeInstance::NigiriLnd,
+                &lspd_node_id
+            ));
 
             // Pay from NigiriLnd to 3L to create outbound liquidity (LspdLnd -> NigiriLnd)
             let invoice_lnd = node

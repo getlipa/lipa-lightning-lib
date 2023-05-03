@@ -9,7 +9,7 @@ mod remote_persistence_test {
     use crate::setup_3l::NodeHandle;
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
-    use crate::{try_cmd_repeatedly, wait_for_eq};
+    use crate::{try_cmd_repeatedly, wait_for, wait_for_eq};
 
     use bitcoin::hashes::hex::ToHex;
     use serial_test::file_serial;
@@ -38,7 +38,10 @@ mod remote_persistence_test {
             nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap();
             try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
 
-            nigiri::wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &node_id);
+            wait_for!(nigiri::is_channel_confirmed(
+                NodeInstance::LspdLnd,
+                &node_id
+            ));
 
             log::info!("Shutting down the node to trigger persistence flow...");
         } // Shut down the node

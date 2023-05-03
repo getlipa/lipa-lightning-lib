@@ -13,7 +13,7 @@ mod receiving_payments_test {
     use crate::setup::mocked_storage_node;
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
-    use crate::{try_cmd_repeatedly, wait_for_eq};
+    use crate::{try_cmd_repeatedly, wait_for, wait_for_eq};
 
     const ONE_SAT: u64 = 1_000;
     const ONE_K_SATS: u64 = 1_000_000;
@@ -49,7 +49,10 @@ mod receiving_payments_test {
             nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false)
                 .unwrap();
             try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-            nigiri::wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
+            wait_for!(nigiri::is_channel_confirmed(
+                NodeInstance::NigiriLnd,
+                &lspd_node_id
+            ));
 
             run_jit_channel_open_flow(
                 &node,
@@ -67,8 +70,7 @@ mod receiving_payments_test {
             let node = node_handle.start_or_panic();
 
             // Wait for p2p connection to be reestablished and channels marked active
-            sleep(Duration::from_secs(5));
-            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
+            wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
 
             // Test receiving an amount that needs a new channel open when we already have existing channels.
             // We should have 102001 sat channel and have received a 1 sat payment. A 0.5M payment is not
@@ -85,8 +87,7 @@ mod receiving_payments_test {
             let node = node_handle.start_or_panic();
 
             // Wait for p2p connection to be reestablished and channels marked active
-            sleep(Duration::from_secs(5));
-            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
+            wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
 
             // Test receiving an invoice on a node that already has an open channel
             run_payment_flow(&node, NodeInstance::LspdLnd, TWENTY_K_SATS);
@@ -134,15 +135,24 @@ mod receiving_payments_test {
 
         connect_node_to_lsp(NodeInstance::NigiriLnd, &lspd_node_id);
         connect_node_to_lsp(NodeInstance::NigiriCln, &lspd_node_id);
-        sleep(Duration::from_secs(20)); // If removed CLN complains that no UTXOs are available
+        wait_for!(nigiri::cln_owns_utxos(NodeInstance::NigiriCln).unwrap());
 
         nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &lipa_node_id, false).unwrap();
         nigiri::lnd_node_open_channel(NodeInstance::NigiriLnd, &lspd_node_id, false).unwrap();
         nigiri::cln_node_open_pub_channel(NodeInstance::NigiriCln, &lspd_node_id).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-        nigiri::wait_for_new_channel_to_confirm(NodeInstance::LspdLnd, &lipa_node_id);
-        nigiri::wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
-        nigiri::wait_for_new_channel_to_confirm(NodeInstance::NigiriCln, &lspd_node_id);
+        wait_for!(nigiri::is_channel_confirmed(
+            NodeInstance::LspdLnd,
+            &lipa_node_id
+        ));
+        wait_for!(nigiri::is_channel_confirmed(
+            NodeInstance::NigiriLnd,
+            &lspd_node_id
+        ));
+        wait_for!(nigiri::is_channel_confirmed(
+            NodeInstance::NigiriCln,
+            &lspd_node_id
+        ));
 
         assert_channel_ready(&node, TWENTY_K_SATS * 3);
         let invoice = issue_invoice(&node, TWENTY_K_SATS);

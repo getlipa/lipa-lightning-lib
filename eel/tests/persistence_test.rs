@@ -18,7 +18,7 @@ mod persistence_test {
     use crate::setup_env::config::LOCAL_PERSISTENCE_PATH;
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
-    use crate::{try_cmd_repeatedly, wait_for_eq};
+    use crate::{try_cmd_repeatedly, wait_for, wait_for_eq};
 
     const ONE_SAT: u64 = 1_000;
     const TWO_K_SATS: u64 = 2_000_000;
@@ -119,7 +119,10 @@ mod persistence_test {
             nigiri::lnd_node_open_pub_channel(NodeInstance::NigiriLnd, &lspd_node_id, false)
                 .unwrap();
             try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-            nigiri::wait_for_new_channel_to_confirm(NodeInstance::NigiriLnd, &lspd_node_id);
+            wait_for!(nigiri::is_channel_confirmed(
+                NodeInstance::NigiriLnd,
+                &lspd_node_id
+            ));
 
             run_jit_channel_open_flow(
                 &node,
