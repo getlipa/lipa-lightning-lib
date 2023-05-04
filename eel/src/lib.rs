@@ -551,6 +551,12 @@ impl LightningNode {
     }
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
+        if number_of_payments < 1 {
+            return Err(invalid_input(
+                "Number of requested payments must be greater than 0",
+            ));
+        }
+
         self.payment_store
             .lock()
             .unwrap()
