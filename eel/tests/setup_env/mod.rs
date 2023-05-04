@@ -745,7 +745,7 @@ pub mod nigiri {
             ) {
                 if pubkey.eq(target_node_id) && active {
                     // Wait a bit to avoid insufficient balance errors
-                    sleep(Duration::from_secs(1));
+                    sleep(Duration::from_secs(2));
                     return true;
                 }
             }
