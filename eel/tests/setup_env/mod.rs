@@ -43,7 +43,7 @@ macro_rules! wait_for {
 macro_rules! wait_for_eq {
     ($left:expr, $right:expr) => {
         let message_if_not_satisfied = format!(
-            "Failed to wait for `{}` to equal `{}` ({} != {})",
+            "Failed to wait for `{}` to equal `{}` ({:?} != {:?})",
             stringify!($left),
             stringify!($right),
             $left,
@@ -348,6 +348,25 @@ pub mod nigiri {
             return Err(produce_cmd_err_msg(cmd, output));
         }
         Ok(())
+    }
+
+    pub fn get_number_of_txs_in_mempool() -> Result<u64, String> {
+        let cmd = &["nigiri", "rpc", "getmempoolinfo"];
+
+        let output = exec(cmd);
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(cmd, output));
+        }
+
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).map_err(|_| {
+            format!(
+                "Invalid json:\n{}",
+                String::from_utf8(output.stdout).unwrap()
+            )
+        })?;
+        let amount_of_txs = json["size"].as_u64().unwrap();
+
+        Ok(amount_of_txs)
     }
 
     pub fn fund_node(node: NodeInstance, amount_btc: f32) {
