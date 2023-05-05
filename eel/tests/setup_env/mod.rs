@@ -460,6 +460,7 @@ pub mod nigiri {
 
         let cmd = [get_node_prefix(node), &sub_cmd].concat();
 
+        wait_for!(query_lnd_node_info(node).is_ok());
         let output = exec(cmd.as_slice());
         if !output.status.success() {
             return Err(produce_cmd_err_msg(&cmd, output));
