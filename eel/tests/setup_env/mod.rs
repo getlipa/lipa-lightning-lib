@@ -58,7 +58,7 @@ macro_rules! wait_for_condition {
     ($cond:expr, $message_if_not_satisfied:expr) => {
         (|| {
             let attempts = 1100;
-            let sleep_duration = Duration::from_millis(100);
+            let sleep_duration = std::time::Duration::from_millis(100);
             for _ in 0..attempts {
                 if $cond {
                     return;

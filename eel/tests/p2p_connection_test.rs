@@ -10,7 +10,6 @@ mod p2p_connection_test {
     use serial_test::file_parallel;
     use serial_test::file_serial;
     use std::thread::sleep;
-    use std::time::Duration;
 
     use crate::setup::mocked_storage_node;
     use crate::setup_env::nigiri;
