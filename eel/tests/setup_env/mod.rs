@@ -358,12 +358,9 @@ pub mod nigiri {
             return Err(produce_cmd_err_msg(cmd, output));
         }
 
-        let json: serde_json::Value = serde_json::from_slice(&output.stdout).map_err(|_| {
-            format!(
-                "Invalid json:\n{}",
-                String::from_utf8(output.stdout).unwrap()
-            )
-        })?;
+        let uncolored_output = strip_ansi_escapes::strip(&output.stdout).unwrap();
+        let json: serde_json::Value =
+            serde_json::from_slice(&uncolored_output).map_err(|_| "Invalid json")?;
         let amount_of_txs = json["size"].as_u64().unwrap();
 
         Ok(amount_of_txs)
