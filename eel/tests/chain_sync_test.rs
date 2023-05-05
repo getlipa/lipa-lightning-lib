@@ -162,6 +162,8 @@ mod chain_sync_test {
             }
         }
 
+        wait_for_eq!(nigiri::get_number_of_txs_in_mempool(), Ok::<u64, String>(3));
+
         open_channels
     }
 }

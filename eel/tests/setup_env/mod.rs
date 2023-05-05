@@ -43,7 +43,7 @@ macro_rules! wait_for {
 macro_rules! wait_for_eq {
     ($left:expr, $right:expr) => {
         let message_if_not_satisfied = format!(
-            "Failed to wait for `{}` to equal `{}` ({} != {})",
+            "Failed to wait for `{}` to equal `{}` ({:?} != {:?})",
             stringify!($left),
             stringify!($right),
             $left,
@@ -350,6 +350,22 @@ pub mod nigiri {
         Ok(())
     }
 
+    pub fn get_number_of_txs_in_mempool() -> Result<u64, String> {
+        let cmd = &["nigiri", "rpc", "getmempoolinfo"];
+
+        let output = exec(cmd);
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(cmd, output));
+        }
+
+        let uncolored_output = strip_ansi_escapes::strip(&output.stdout).unwrap();
+        let json: serde_json::Value =
+            serde_json::from_slice(&uncolored_output).map_err(|_| "Invalid json")?;
+        let amount_of_txs = json["size"].as_u64().unwrap();
+
+        Ok(amount_of_txs)
+    }
+
     pub fn fund_node(node: NodeInstance, amount_btc: f32) {
         let address = match node {
             NodeInstance::NigiriCln => get_cln_node_funding_address(node).unwrap(),
@@ -441,6 +457,7 @@ pub mod nigiri {
 
         let cmd = [get_node_prefix(node), &sub_cmd].concat();
 
+        wait_for!(query_lnd_node_info(node).is_ok());
         let output = exec(cmd.as_slice());
         if !output.status.success() {
             return Err(produce_cmd_err_msg(&cmd, output));
