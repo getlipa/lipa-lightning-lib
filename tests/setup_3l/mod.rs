@@ -5,7 +5,6 @@ use uniffi_lipalightninglib::LightningNode;
 use uniffi_lipalightninglib::{recover_lightning_node, Config};
 
 use crate::wait_for_eq;
-use core::time::Duration;
 use eel::config::TzConfig;
 use eel::errors::RuntimeErrorCode;
 use std::env;

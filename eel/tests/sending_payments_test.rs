@@ -3,7 +3,7 @@ mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod sending_payments_test {
-    use crate::setup::mocked_storage_node;
+    use crate::setup::{mocked_storage_node, setup_outbound_capacity};
     use eel::{InvoiceDetails, LightningNode};
     use serial_test::file_serial;
     use std::thread::sleep;
@@ -13,8 +13,6 @@ mod sending_payments_test {
     use crate::setup_env::nigiri::NodeInstance::{LspdLnd, NigiriCln, NigiriLnd};
     use crate::wait_for_eq;
 
-    const REBALANCE_AMOUNT: u64 = 50_000_000;
-    const CHANNEL_SIZE: u64 = 1_000_000_000;
     const PAYMENT_AMOUNT: u64 = 1_000_000;
 
     #[test]
@@ -22,32 +20,8 @@ mod sending_payments_test {
     fn pay_invoice_direct_peer_test_and_invoice_decoding_test() {
         nigiri::setup_environment_with_lsp();
         let node = mocked_storage_node().start_or_panic();
-
-        wait_for_eq!(node.get_node_info().num_peers, 1);
-        nigiri::initiate_channel_from_remote(node.get_node_info().node_pubkey, LspdLnd);
-
         invoice_decode_test(&node);
-
-        assert!(node.get_node_info().channels_info.num_channels > 0);
-        assert!(node.get_node_info().channels_info.num_usable_channels > 0);
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat > REBALANCE_AMOUNT);
-
-        let invoice_details = node
-            .create_invoice(REBALANCE_AMOUNT, "test".to_string(), String::new())
-            .unwrap();
-        assert!(invoice_details.invoice.starts_with("lnbc"));
-
-        nigiri::pay_invoice(LspdLnd, &invoice_details.invoice).unwrap();
-
-        assert_eq!(
-            node.get_node_info().channels_info.local_balance_msat,
-            REBALANCE_AMOUNT
-        );
-        assert!(node.get_node_info().channels_info.outbound_capacity_msat < REBALANCE_AMOUNT); // because of channel reserves
-        assert!(
-            node.get_node_info().channels_info.inbound_capacity_msat
-                < CHANNEL_SIZE - REBALANCE_AMOUNT
-        ); // smaller instead of equal because of channel reserves
+        setup_outbound_capacity(&node);
 
         // Test vanilla payment
         let invoice = nigiri::issue_invoice(LspdLnd, "test", PAYMENT_AMOUNT, 3600).unwrap();

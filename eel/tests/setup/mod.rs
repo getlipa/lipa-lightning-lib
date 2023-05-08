@@ -4,6 +4,9 @@ pub mod mocked_remote_storage;
 mod print_events_handler;
 
 use crate::setup_env::config::get_testing_config;
+use crate::setup_env::nigiri;
+use crate::setup_env::nigiri::NodeInstance::LspdLnd;
+use crate::wait_for_eq;
 use eel::config::Config;
 use eel::interfaces::{ExchangeRateProvider, RemoteStorage};
 use eel::recovery::recover_lightning_node;
@@ -12,8 +15,12 @@ use mocked_remote_storage::MockedRemoteStorage;
 use print_events_handler::PrintEventsHandler;
 use std::fs;
 use std::sync::Arc;
+use std::thread::sleep;
 use std::time::Instant;
 use storage_mock::Storage;
+
+const REBALANCE_AMOUNT: u64 = 50_000_000; // Msats to be sent to the Lipa node to generate outbound capacity
+const CHANNEL_SIZE: u64 = 1_000_000_000; // The capacity of the channel opened by the LSP: See https://github.com/getlipa/lipa-lightning-lib/blob/5657ff45fdf0c45065025d4ff9cb4ab97a32e9f3/lspd/compose.yaml#L54
 
 #[allow(dead_code)]
 pub struct NodeHandle<S: RemoteStorage + Clone + 'static> {
@@ -71,6 +78,32 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
             Box::new(self.storage.clone()),
         )
     }
+}
+
+#[allow(dead_code)]
+pub fn setup_outbound_capacity(node: &LightningNode) {
+    wait_for_eq!(node.get_node_info().num_peers, 1);
+    nigiri::initiate_channel_from_remote(node.get_node_info().node_pubkey, LspdLnd);
+
+    assert!(node.get_node_info().channels_info.num_channels > 0);
+    assert!(node.get_node_info().channels_info.num_usable_channels > 0);
+    assert!(node.get_node_info().channels_info.inbound_capacity_msat > REBALANCE_AMOUNT);
+
+    let invoice_details = node
+        .create_invoice(REBALANCE_AMOUNT, "test".to_string(), String::new())
+        .unwrap();
+    assert!(invoice_details.invoice.starts_with("lnbc"));
+
+    nigiri::pay_invoice(LspdLnd, &invoice_details.invoice).unwrap();
+
+    assert_eq!(
+        node.get_node_info().channels_info.local_balance_msat,
+        REBALANCE_AMOUNT
+    );
+    assert!(node.get_node_info().channels_info.outbound_capacity_msat < REBALANCE_AMOUNT); // because of channel reserves
+    assert!(
+        node.get_node_info().channels_info.inbound_capacity_msat < CHANNEL_SIZE - REBALANCE_AMOUNT
+    ); // smaller instead of equal because of channel reserves
 }
 
 #[allow(dead_code)]
