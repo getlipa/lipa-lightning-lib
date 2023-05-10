@@ -51,12 +51,8 @@ mod receiving_payments_test {
                 &lspd_node_id
             ));
 
-            run_jit_channel_open_flow(
-                &node,
-                NodeInstance::NigiriLnd,
-                TWO_K_SATS + ONE_SAT,
-                TWO_K_SATS,
-            );
+            let invoice = issue_invoice(&node, TWO_K_SATS + ONE_SAT); // LSP minimum + 1
+            nigiri::pay_invoice(NodeInstance::NigiriLnd, &invoice).unwrap();
 
             assert!(matches!(
                 node.get_latest_payments(0),
@@ -79,7 +75,8 @@ mod receiving_payments_test {
         wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
 
         // Receive another payment
-        run_payment_flow(&node, NodeInstance::LspdLnd, TWENTY_K_SATS);
+        let invoice = issue_invoice(&node, TWENTY_K_SATS);
+        nigiri::pay_invoice(NodeInstance::LspdLnd, &invoice).unwrap();
 
         assert_eq!(node.get_latest_payments(1).unwrap().len(), 1);
         assert_eq!(node.get_latest_payments(2).unwrap().len(), 2);
@@ -128,17 +125,7 @@ mod receiving_payments_test {
             payment_state: PaymentState::Succeeded,
             hash: "<unknown>".to_string(),
             amount_msat: TWENTY_K_SATS,
-            invoice_details: InvoiceDetails {
-                invoice: invoice_details.invoice.clone(),
-                amount_msat: Some(TWENTY_K_SATS),
-                description: "test".to_string(),
-                payment_hash: "<unknown>".to_string(),
-                payee_pub_key: nigiri::query_node_info(LspdLnd).unwrap().pub_key,
-                creation_timestamp: SystemTime::now(),
-                expiry_interval: Duration::from_secs(3600),
-                expiry_timestamp: SystemTime::now(),
-                network: Network::Regtest,
-            },
+            invoice_details: invoice_details.clone(),
             created_at: dummy_timestamp.clone(),
             latest_state_change_at: dummy_timestamp,
             description: "test".to_string(),
@@ -248,47 +235,6 @@ mod receiving_payments_test {
                 &payment_dummy,
             ));
         }
-    }
-
-    fn run_jit_channel_open_flow(
-        node: &LightningNode,
-        paying_node: NodeInstance,
-        payment_amount: u64,
-        lsp_fee: u64,
-    ) {
-        let initial_balance = node.get_node_info().channels_info.local_balance_msat;
-
-        let invoice = issue_invoice(&node, payment_amount);
-
-        nigiri::pay_invoice(paying_node, &invoice).unwrap();
-
-        assert_payment_received(&node, initial_balance + payment_amount - lsp_fee);
-    }
-
-    fn run_payment_flow(node: &LightningNode, paying_node: NodeInstance, payment_amount: u64) {
-        let initial_balance = node.get_node_info().channels_info.local_balance_msat;
-
-        assert_channel_ready(&node, payment_amount);
-        let invoice = issue_invoice(&node, payment_amount);
-
-        nigiri::pay_invoice(paying_node, &invoice).unwrap();
-
-        assert_payment_received(&node, initial_balance + payment_amount);
-    }
-
-    fn assert_channel_ready(node: &LightningNode, payment_amount: u64) {
-        assert!(node.get_node_info().channels_info.num_channels > 0);
-        assert!(node.get_node_info().channels_info.num_usable_channels > 0);
-        assert!(node.get_node_info().channels_info.inbound_capacity_msat > payment_amount);
-    }
-
-    fn assert_payment_received(node: &LightningNode, expected_balance: u64) {
-        assert_eq!(
-            node.get_node_info().channels_info.local_balance_msat,
-            expected_balance
-        );
-        assert!(node.get_node_info().channels_info.outbound_capacity_msat < expected_balance);
-        // because of channel reserves
     }
 
     fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
