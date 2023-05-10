@@ -135,7 +135,7 @@ mod receiving_payments_test {
             metadata: "".to_string(),
         };
 
-        nigiri::pay_invoice(NigiriLnd, &invoice_details.invoice).unwrap();
+        wait_for_unwrap!(nigiri::pay_invoice(NigiriLnd, &invoice_details.invoice));
         assert_payments_are_partially_equal(
             node.get_latest_payments(10).unwrap().first().unwrap(),
             &payment_dummy,

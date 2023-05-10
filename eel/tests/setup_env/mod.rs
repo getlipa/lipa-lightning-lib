@@ -80,9 +80,11 @@ macro_rules! wait_for_unwrap {
             let attempts = 100;
             let sleep_duration = std::time::Duration::from_millis(100);
             for _ in 0..attempts {
-                if $result_generating_expr.is_err() {
-                    sleep(sleep_duration);
+                if $result_generating_expr.is_ok() {
+                    return;
                 }
+
+                sleep(sleep_duration);
             }
 
             $result_generating_expr.unwrap();
