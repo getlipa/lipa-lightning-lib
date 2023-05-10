@@ -109,6 +109,7 @@ pub fn setup_outbound_capacity(node: &LightningNode) {
     ); // smaller instead of equal because of channel reserves
 }
 
+#[allow(dead_code)]
 pub fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
     let invoice_details = node
         .create_invoice(payment_amount, "test".to_string(), String::new())
@@ -118,6 +119,7 @@ pub fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
     invoice_details.invoice
 }
 
+#[allow(dead_code)]
 pub fn connect_node_to_lsp(node: NodeInstance, lsp_node_id: &str) {
     nigiri::node_connect(node, lsp_node_id, LSPD_LND_HOST, LSPD_LND_PORT).unwrap();
 }
