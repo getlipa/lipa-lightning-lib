@@ -75,6 +75,23 @@ fn main() {
             graphql_url: get_backend_url(),
             backend_health_url: get_backend_health_url(),
         }
+    } else if environment == "stage" {
+        Config {
+            network: Network::Bitcoin,
+            seed,
+            fiat_currency: "EUR".to_string(),
+            esplora_api_url: "https://blockstream.info/api".to_string(),
+            rgs_url: "https://rgs-stage.lipa.dev/snapshot/".to_string(),
+            lsp_url: get_lsp_url(),
+            lsp_token: get_lsp_token(),
+            local_persistence_path: base_dir.clone(),
+            timezone_config: TzConfig {
+                timezone_id: String::from("Africa/Tunis"),
+                timezone_utc_offset_secs: 1 * 60 * 60,
+            },
+            graphql_url: get_backend_url(),
+            backend_health_url: get_backend_health_url(),
+        }
     } else {
         panic!("Unsupported environment: `{environment}`");
     };
@@ -140,6 +157,14 @@ fn get_base_url() -> String {
     sanitize_backend_base_url(&base_url);
 
     base_url
+}
+
+fn get_lsp_url() -> String {
+    env::var("LSP_URL").expect("LSP_URL environment variable is not set")
+}
+
+fn get_lsp_token() -> String {
+    env::var("LSP_TOKEN").expect("LSP_TOKEN environment variable is not set")
 }
 
 fn sanitize_backend_base_url(url: &str) {
