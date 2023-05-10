@@ -14,7 +14,7 @@ mod persistence_test {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use crate::setup::{mocked_storage_node_configurable, NodeHandle};
+    use crate::setup::{connect_node_to_lsp, mocked_storage_node_configurable, NodeHandle};
     use crate::setup_env::config::LOCAL_PERSISTENCE_PATH;
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
@@ -170,9 +170,5 @@ mod persistence_test {
         );
         assert!(node.get_node_info().channels_info.outbound_capacity_msat < expected_balance);
         // because of channel reserves
-    }
-
-    fn connect_node_to_lsp(node: NodeInstance, lsp_node_id: &str) {
-        nigiri::node_connect(node, lsp_node_id, LSPD_LND_HOST, LSPD_LND_PORT).unwrap();
     }
 }

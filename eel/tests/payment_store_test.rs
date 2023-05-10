@@ -5,13 +5,15 @@ mod setup_env;
 mod receiving_payments_test {
     use bitcoin::Network;
     use eel::payment::{Payment, PaymentState, PaymentType, TzTime};
-    use eel::{InvoiceDetails, LightningNode};
+    use eel::InvoiceDetails;
     use log::info;
     use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
 
-    use crate::setup::{mocked_storage_node, setup_outbound_capacity};
+    use crate::setup::{
+        connect_node_to_lsp, issue_invoice, mocked_storage_node, setup_outbound_capacity,
+    };
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
     use crate::setup_env::nigiri::NodeInstance::{LspdLnd, NigiriLnd};
@@ -23,9 +25,6 @@ mod receiving_payments_test {
 
     const HALF_SEC: Duration = Duration::from_millis(500);
     const N_RETRIES: u8 = 10;
-
-    const LSPD_LND_HOST: &str = "lspd-lnd";
-    const LSPD_LND_PORT: u16 = 9739;
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
@@ -235,19 +234,6 @@ mod receiving_payments_test {
                 &payment_dummy,
             ));
         }
-    }
-
-    fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
-        let invoice_details = node
-            .create_invoice(payment_amount, "test".to_string(), String::new())
-            .unwrap();
-        assert!(invoice_details.invoice.starts_with("lnbc"));
-
-        invoice_details.invoice
-    }
-
-    fn connect_node_to_lsp(node: NodeInstance, lsp_node_id: &str) {
-        nigiri::node_connect(node, lsp_node_id, LSPD_LND_HOST, LSPD_LND_PORT).unwrap();
     }
 
     fn assert_payments_are_partially_equal(left: &Payment, right: &Payment) -> Result<(), String> {
