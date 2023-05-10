@@ -25,9 +25,6 @@ mod receiving_payments_test {
     const HALF_SEC: Duration = Duration::from_millis(500);
     const N_RETRIES: u8 = 10;
 
-    const LSPD_LND_HOST: &str = "lspd-lnd";
-    const LSPD_LND_PORT: u16 = 9739;
-
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_multiple_receive_scenarios() {
