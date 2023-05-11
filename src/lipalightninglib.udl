@@ -143,17 +143,11 @@ interface LightningNode {
 // * graphql_url - url of lipa's GraphQL backend
 // * backend_health_url - url used to check lipa's backend liveliness
 dictionary Config {
-    Network network;
+    EnvironmentCode environment;
     sequence<u8> seed;
     string fiat_currency;
-    string esplora_api_url;
-    string rgs_url;
-    string lsp_url;
-    string lsp_token;
     string local_persistence_path;
     TzConfig timezone_config;
-    string graphql_url;
-    string backend_health_url;
 };
 
 // Use "Bitcoin" for production code (runs on the Bitcoin mainnet)
@@ -163,6 +157,13 @@ enum Network {
     "Testnet",
     "Signet",
     "Regtest",
+};
+
+enum EnvironmentCode {
+    "Local",
+    "Dev",
+    "Stage",
+    "Prod",
 };
 
 // An object that holds timezone configuration values necessary for 3L to do timestamp annotation. These values get tied
@@ -335,7 +336,7 @@ namespace lipalightninglib {
     // It should and can only be called on a fresh install of the app, if the user wants to recover a previously created wallet.
     // If no existing wallet is found, returns an error.
     [Throws=LnError]
-    void recover_lightning_node(sequence<u8> seed, string local_persistence_path, string graphql_url, string backend_health_url);
+    void recover_lightning_node(EnvironmentCode environment, sequence<u8> seed, string local_persistence_path);
 };
 
 enum LogLevel {

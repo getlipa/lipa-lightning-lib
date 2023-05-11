@@ -7,7 +7,6 @@ use uniffi_lipalightninglib::{recover_lightning_node, Config};
 use crate::wait_for_eq;
 use eel::config::TzConfig;
 use eel::errors::RuntimeErrorCode;
-use std::env;
 use std::fs;
 use std::thread::sleep;
 
@@ -29,20 +28,14 @@ impl NodeHandle {
 
         NodeHandle {
             config: Config {
-                network: eel_config.network,
+                environment: uniffi_lipalightninglib::EnvironmentCode::Local,
                 seed: eel_config.seed.to_vec(),
                 fiat_currency: "EUR".to_string(),
-                esplora_api_url: eel_config.esplora_api_url,
-                rgs_url: eel_config.rgs_url,
-                lsp_url: eel_config.lsp_url,
-                lsp_token: eel_config.lsp_token,
                 local_persistence_path: eel_config.local_persistence_path,
                 timezone_config: TzConfig {
                     timezone_id: String::from("int_test_timezone_id"),
                     timezone_utc_offset_secs: 1234,
                 },
-                graphql_url: get_backend_url(),
-                backend_health_url: get_backend_health_url(),
             },
         }
     }
@@ -64,32 +57,9 @@ impl NodeHandle {
 
     pub fn recover(&self) -> eel::errors::Result<()> {
         recover_lightning_node(
+            self.config.environment,
             self.config.seed.to_vec(),
             self.config.local_persistence_path.clone(),
-            self.config.graphql_url.clone(),
-            self.config.backend_health_url.clone(),
         )
-    }
-}
-
-fn get_backend_url() -> String {
-    format!("{}/v1/graphql", get_base_url())
-}
-
-fn get_backend_health_url() -> String {
-    format!("{}/healthz", get_base_url())
-}
-
-fn get_base_url() -> String {
-    let base_url =
-        env::var("BACKEND_BASE_URL").expect("BACKEND_BASE_URL environment variable is not set");
-    sanitize_backend_base_url(&base_url);
-
-    base_url
-}
-
-fn sanitize_backend_base_url(url: &str) {
-    if url.contains("healthz") || url.contains("graphql") {
-        panic!("Make sure the BACKEND_BASE_URL environment variable does not include any path like '/v1/graphql'. It's a base URL.");
     }
 }
