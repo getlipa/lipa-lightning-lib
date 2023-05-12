@@ -3,7 +3,6 @@ mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod receiving_payments_test {
-    use bitcoin::Network;
     use eel::payment::{Payment, PaymentState, PaymentType, TzTime};
     use eel::InvoiceDetails;
     use log::info;
@@ -174,7 +173,6 @@ mod receiving_payments_test {
                 creation_timestamp: SystemTime::now(),
                 expiry_interval: Duration::from_secs(3600),
                 expiry_timestamp: SystemTime::now(),
-                network: Network::Regtest,
             },
             created_at: dummy_timestamp.clone(),
             latest_state_change_at: dummy_timestamp,
@@ -262,7 +260,6 @@ mod receiving_payments_test {
             left.invoice_details.description,
             right.invoice_details.description
         );
-        assert_eq!(left.invoice_details.network, right.invoice_details.network);
         assert_eq!(left.description, right.description);
         assert_eq!(left.network_fees_msat, right.network_fees_msat);
         assert_eq!(left.lsp_fees_msat, right.lsp_fees_msat);
