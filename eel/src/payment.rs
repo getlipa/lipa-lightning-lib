@@ -28,7 +28,7 @@ pub struct TzTime {
     pub timezone_utc_offset_secs: i32,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct FiatValues {
     pub fiat: String,
     pub amount: u64,
@@ -48,7 +48,7 @@ impl FiatValues {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,

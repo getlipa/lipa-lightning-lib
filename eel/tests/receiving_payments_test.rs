@@ -10,7 +10,7 @@ mod receiving_payments_test {
     use std::thread::sleep;
     use std::time::Duration;
 
-    use crate::setup::mocked_storage_node;
+    use crate::setup::{connect_node_to_lsp, issue_invoice, mocked_storage_node};
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
     use crate::{try_cmd_repeatedly, wait_for, wait_for_eq};
@@ -24,9 +24,6 @@ mod receiving_payments_test {
 
     const HALF_SEC: Duration = Duration::from_millis(500);
     const N_RETRIES: u8 = 10;
-
-    const LSPD_LND_HOST: &str = "lspd-lnd";
-    const LSPD_LND_PORT: u16 = 9739;
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
@@ -204,18 +201,5 @@ mod receiving_payments_test {
         );
         assert!(node.get_node_info().channels_info.outbound_capacity_msat < expected_balance);
         // because of channel reserves
-    }
-
-    fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
-        let invoice_details = node
-            .create_invoice(payment_amount, "test".to_string(), String::new())
-            .unwrap();
-        assert!(invoice_details.invoice.starts_with("lnbc"));
-
-        invoice_details.invoice
-    }
-
-    fn connect_node_to_lsp(node: NodeInstance, lsp_node_id: &str) {
-        nigiri::node_connect(node, lsp_node_id, LSPD_LND_HOST, LSPD_LND_PORT).unwrap();
     }
 }

@@ -5,6 +5,7 @@ mod print_events_handler;
 
 use crate::setup_env::config::get_testing_config;
 use crate::setup_env::nigiri;
+use crate::setup_env::nigiri::NodeInstance;
 use crate::setup_env::nigiri::NodeInstance::LspdLnd;
 use crate::wait_for_eq;
 use eel::config::Config;
@@ -19,6 +20,8 @@ use std::thread::sleep;
 use std::time::Instant;
 use storage_mock::Storage;
 
+const LSPD_LND_HOST: &str = "lspd-lnd";
+const LSPD_LND_PORT: u16 = 9739;
 const REBALANCE_AMOUNT: u64 = 50_000_000; // Msats to be sent to the Lipa node to generate outbound capacity
 const CHANNEL_SIZE: u64 = 1_000_000_000; // The capacity of the channel opened by the LSP: See https://github.com/getlipa/lipa-lightning-lib/blob/5657ff45fdf0c45065025d4ff9cb4ab97a32e9f3/lspd/compose.yaml#L54
 
@@ -104,6 +107,21 @@ pub fn setup_outbound_capacity(node: &LightningNode) {
     assert!(
         node.get_node_info().channels_info.inbound_capacity_msat < CHANNEL_SIZE - REBALANCE_AMOUNT
     ); // smaller instead of equal because of channel reserves
+}
+
+#[allow(dead_code)]
+pub fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
+    let invoice_details = node
+        .create_invoice(payment_amount, "test".to_string(), String::new())
+        .unwrap();
+    assert!(invoice_details.invoice.starts_with("lnbc"));
+
+    invoice_details.invoice
+}
+
+#[allow(dead_code)]
+pub fn connect_node_to_lsp(node: NodeInstance, lsp_node_id: &str) {
+    nigiri::node_connect(node, lsp_node_id, LSPD_LND_HOST, LSPD_LND_PORT).unwrap();
 }
 
 #[allow(dead_code)]

@@ -604,7 +604,7 @@ impl LightningNode {
         payment_store.update_timezone_config(timezone_config);
     }
 
-    fn get_fiat_values(&self, amount_msat: u64) -> Option<FiatValues> {
+    pub fn get_fiat_values(&self, amount_msat: u64) -> Option<FiatValues> {
         self.get_exchange_rates()
             .ok()
             .map(|e| FiatValues::from_amount_msat(amount_msat, &e))
