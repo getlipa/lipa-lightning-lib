@@ -18,7 +18,7 @@ pub fn recover_lightning_node(
 
     let seed = sanitize_input::strong_type_seed(&seed)?;
 
-    let environment = Environment::for_(environment);
+    let environment = Environment::load(environment);
 
     let auth = Arc::new(build_auth(&seed, environment.backend_url.clone())?);
 

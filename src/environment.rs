@@ -19,13 +19,13 @@ pub(crate) struct Environment {
 }
 
 impl Environment {
-    pub fn for_(environment: EnvironmentCode) -> Environment {
+    pub fn load(environment: EnvironmentCode) -> Self {
         let base_url = get_backend_base_url(environment);
         let backend_url = format!("{base_url}/v1/graphql");
         let backend_health_url = format!("{base_url}/healthz");
 
         match environment {
-            EnvironmentCode::Local => Environment {
+            EnvironmentCode::Local => Self {
                 network: Network::Regtest,
                 backend_url,
                 backend_health_url,
@@ -34,7 +34,7 @@ impl Environment {
                 esplora_url: env!("ESPLORA_URL_LOCAL").to_string(),
                 rgs_url: env!("RGS_URL_LOCAL").to_string(),
             },
-            EnvironmentCode::Dev => Environment {
+            EnvironmentCode::Dev => Self {
                 network: Network::Testnet,
                 backend_url,
                 backend_health_url,
@@ -43,7 +43,7 @@ impl Environment {
                 esplora_url: env!("ESPLORA_URL_DEV").to_string(),
                 rgs_url: env!("RGS_URL_DEV").to_string(),
             },
-            EnvironmentCode::Stage => Environment {
+            EnvironmentCode::Stage => Self {
                 network: Network::Bitcoin,
                 backend_url,
                 backend_health_url,
@@ -52,7 +52,7 @@ impl Environment {
                 esplora_url: env!("ESPLORA_URL_STAGE").to_string(),
                 rgs_url: env!("RGS_URL_STAGE").to_string(),
             },
-            EnvironmentCode::Prod => Environment {
+            EnvironmentCode::Prod => Self {
                 network: Network::Bitcoin,
                 backend_url,
                 backend_health_url,

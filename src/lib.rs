@@ -54,7 +54,7 @@ impl LightningNode {
 
         let seed = sanitize_input::strong_type_seed(&config.seed)?;
 
-        let environment = Environment::for_(config.environment);
+        let environment = Environment::load(config.environment);
 
         let eel_config = eel::config::Config {
             network: environment.network,
