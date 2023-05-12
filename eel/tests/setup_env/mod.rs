@@ -74,7 +74,7 @@ macro_rules! wait_for_condition {
 }
 
 #[macro_export]
-macro_rules! wait_for_unwrap {
+macro_rules! wait_for_ok {
     ($result_generating_expr:expr) => {
         (|| {
             let attempts = 100;

@@ -17,7 +17,7 @@ mod receiving_payments_test {
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
     use crate::setup_env::nigiri::NodeInstance::{LspdLnd, NigiriLnd};
-    use crate::{eq_or_err, try_cmd_repeatedly, wait_for, wait_for_eq, wait_for_unwrap};
+    use crate::{eq_or_err, try_cmd_repeatedly, wait_for, wait_for_eq, wait_for_ok};
 
     const ONE_SAT: u64 = 1_000;
     const TWO_K_SATS: u64 = 2_000_000;
@@ -135,7 +135,7 @@ mod receiving_payments_test {
             metadata: "".to_string(),
         };
 
-        wait_for_unwrap!(nigiri::pay_invoice(NigiriLnd, &invoice_details.invoice));
+        wait_for_ok!(nigiri::pay_invoice(NigiriLnd, &invoice_details.invoice));
         assert_payments_are_partially_equal(
             node.get_latest_payments(10).unwrap().first().unwrap(),
             &payment_dummy,
@@ -198,7 +198,7 @@ mod receiving_payments_test {
 
             payment_dummy.payment_state = PaymentState::Succeeded;
             payment_dummy.network_fees_msat = Some(0);
-            wait_for_unwrap!(assert_payments_are_partially_equal(
+            wait_for_ok!(assert_payments_are_partially_equal(
                 node.get_latest_payments(10).unwrap().first().unwrap(),
                 &payment_dummy,
             ));
@@ -229,7 +229,7 @@ mod receiving_payments_test {
 
             payment_dummy.payment_state = PaymentState::Succeeded;
             payment_dummy.network_fees_msat = Some(0);
-            wait_for_unwrap!(assert_payments_are_partially_equal(
+            wait_for_ok!(assert_payments_are_partially_equal(
                 node.get_latest_payments(10).unwrap().first().unwrap(),
                 &payment_dummy,
             ));
