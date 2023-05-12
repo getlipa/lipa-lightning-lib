@@ -122,26 +122,15 @@ interface LightningNode {
 // An object that holds all configuration needed to start a LightningNode instance.
 //
 // Fields:
-// * network - the Bitcoin Network the node should run on (see enum above)
+// * environment - a code of the environment to run the node.
 // * seed - the seed derived from the mnemonic optionally including a pass phrase
 // * fiat_currency - ISO 4217 currency code. The backend does not support all of them,
 //     but supports at least USD and EUR, so it is safe to default to one of them.
 //     Providing an invalid code will result in missing fiat values for payments.
-// * esplora_api_url - url of the esplora API from where chain data is retrieved and over which transactions are published
-//     possible values:
-//     - "https://blockstream.info/api" for Mainnet (PROD)
-//     - "https://blockstream.info/testnet/api" for Testnet
-// * rgs_url - the url of the Rapid Gossip Sync (RGS) server. Possible values:
-//     - "https://rapidsync.lightningdevkit.org/snapshot/" for Mainnet (PROD)
-//     - "https://rapidsync.lightningdevkit.org/snapshot/testnet/" for Testnet
-// * lsp_url - the url of the LSP. *No LSP deployment is available yet*
-// * lsp_token - an auth token to gain access to the LSP. *No LSP deployment is available yet*
 // * local_persistence_path - a path on the local filesystem where this library will directly persist data.
 //      Only the current instance of the app should have access to the provided directory.
 //      On app uninstall/deletion, the directory should be purged.
 // * timezone_config - a timezone configuration object
-// * graphql_url - url of lipa's GraphQL backend
-// * backend_health_url - url used to check lipa's backend liveliness
 dictionary Config {
     EnvironmentCode environment;
     sequence<u8> seed;
@@ -150,15 +139,7 @@ dictionary Config {
     TzConfig timezone_config;
 };
 
-// Use "Bitcoin" for production code (runs on the Bitcoin mainnet)
-// Testnet and Signet are test *networks*, while Regtest enables an entirely local test environment
-enum Network {
-    "Bitcoin",
-    "Testnet",
-    "Signet",
-    "Regtest",
-};
-
+// A code of the environment for the node to run.
 enum EnvironmentCode {
     "Local",
     "Dev",
@@ -252,7 +233,6 @@ dictionary InvoiceDetails {
     timestamp creation_timestamp; // The moment an invoice was created (UTC)
     duration expiry_interval; // The interval after which the invoice expires (creation_timestamp + expiry_interval = expiry_timestamp)
     timestamp expiry_timestamp; // The moment an invoice expires (UTC)
-    Network network; // The Bitcoin network the invoice relates to
 };
 
 // Information about an incoming or outgoing payment
