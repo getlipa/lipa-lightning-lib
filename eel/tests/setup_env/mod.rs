@@ -349,7 +349,7 @@ pub mod nigiri {
         for channel in channels {
             balance += channel["our_amount_msat"]
                 .as_str()
-                .unwrap()
+                .unwrap_or("0msat") // CLN response sometimes lacks `our_amount_msat`
                 .strip_suffix("msat")
                 .unwrap()
                 .parse::<u64>()
