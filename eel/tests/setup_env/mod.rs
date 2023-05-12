@@ -92,21 +92,6 @@ macro_rules! wait_for_ok {
     };
 }
 
-#[macro_export]
-macro_rules! eq_or_err {
-    ($left:expr, $right:expr) => {
-        if $left != $right {
-            return Err(format!(
-                "`{}` is not equal to `{}` => {:?} != {:?})",
-                stringify!($left),
-                stringify!($right),
-                $left,
-                $right
-            ));
-        }
-    };
-}
-
 #[cfg(feature = "nigiri")]
 fn node_connect_to_rgs_cln(node: NodeInstance) {
     nigiri::node_connect(node, RGS_CLN_ID, RGS_CLN_HOST, RGS_CLN_PORT).unwrap();

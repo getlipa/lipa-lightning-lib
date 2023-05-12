@@ -17,7 +17,7 @@ mod receiving_payments_test {
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
     use crate::setup_env::nigiri::NodeInstance::{LspdLnd, NigiriLnd};
-    use crate::{eq_or_err, try_cmd_repeatedly, wait_for, wait_for_eq, wait_for_ok};
+    use crate::{try_cmd_repeatedly, wait_for, wait_for_eq, wait_for_ok};
 
     const ONE_SAT: u64 = 1_000;
     const TWO_K_SATS: u64 = 2_000_000;
@@ -139,8 +139,7 @@ mod receiving_payments_test {
         assert_payments_are_partially_equal(
             node.get_latest_payments(10).unwrap().first().unwrap(),
             &payment_dummy,
-        )
-        .unwrap();
+        );
     }
 
     #[test]
@@ -193,15 +192,22 @@ mod receiving_payments_test {
             assert_payments_are_partially_equal(
                 node.get_latest_payments(10).unwrap().first().unwrap(),
                 &payment_dummy,
-            )
-            .unwrap();
+            );
 
             payment_dummy.payment_state = PaymentState::Succeeded;
             payment_dummy.network_fees_msat = Some(0);
-            wait_for_ok!(assert_payments_are_partially_equal(
+            wait_for_eq!(
+                node.get_latest_payments(10)
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .payment_state,
+                payment_dummy.payment_state
+            );
+            assert_payments_are_partially_equal(
                 node.get_latest_payments(10).unwrap().first().unwrap(),
                 &payment_dummy,
-            ));
+            );
         }
 
         // Open amount invoice
@@ -224,38 +230,43 @@ mod receiving_payments_test {
             assert_payments_are_partially_equal(
                 node.get_latest_payments(10).unwrap().first().unwrap(),
                 &payment_dummy,
-            )
-            .unwrap();
+            );
 
             payment_dummy.payment_state = PaymentState::Succeeded;
             payment_dummy.network_fees_msat = Some(0);
-            wait_for_ok!(assert_payments_are_partially_equal(
+            wait_for_eq!(
+                node.get_latest_payments(10)
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .payment_state,
+                payment_dummy.payment_state
+            );
+            assert_payments_are_partially_equal(
                 node.get_latest_payments(10).unwrap().first().unwrap(),
                 &payment_dummy,
-            ));
+            );
         }
     }
 
-    fn assert_payments_are_partially_equal(left: &Payment, right: &Payment) -> Result<(), String> {
-        eq_or_err!(left.payment_type, right.payment_type);
-        eq_or_err!(left.payment_state, right.payment_state);
-        eq_or_err!(left.amount_msat, right.amount_msat);
-        eq_or_err!(left.invoice_details.invoice, right.invoice_details.invoice);
-        eq_or_err!(
+    fn assert_payments_are_partially_equal(left: &Payment, right: &Payment) {
+        assert_eq!(left.payment_type, right.payment_type);
+        assert_eq!(left.payment_state, right.payment_state);
+        assert_eq!(left.amount_msat, right.amount_msat);
+        assert_eq!(left.invoice_details.invoice, right.invoice_details.invoice);
+        assert_eq!(
             left.invoice_details.amount_msat,
             right.invoice_details.amount_msat
         );
-        eq_or_err!(
+        assert_eq!(
             left.invoice_details.description,
             right.invoice_details.description
         );
-        eq_or_err!(left.invoice_details.network, right.invoice_details.network);
-        eq_or_err!(left.description, right.description);
-        eq_or_err!(left.network_fees_msat, right.network_fees_msat);
-        eq_or_err!(left.lsp_fees_msat, right.lsp_fees_msat);
-        eq_or_err!(left.fiat_values, right.fiat_values);
-        eq_or_err!(left.metadata, right.metadata);
-
-        Ok(())
+        assert_eq!(left.invoice_details.network, right.invoice_details.network);
+        assert_eq!(left.description, right.description);
+        assert_eq!(left.network_fees_msat, right.network_fees_msat);
+        assert_eq!(left.lsp_fees_msat, right.lsp_fees_msat);
+        assert_eq!(left.fiat_values, right.fiat_values);
+        assert_eq!(left.metadata, right.metadata);
     }
 }
