@@ -5,6 +5,7 @@ extern crate core;
 mod callbacks;
 mod config;
 mod eel_interface_impl;
+mod environment;
 mod exchange_rate_provider;
 mod native_logger;
 mod recovery;
@@ -13,6 +14,8 @@ mod sanitize_input;
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::Config;
 use crate::eel_interface_impl::{EventsImpl, RemoteStorageGraphql};
+use crate::environment::Environment;
+pub use crate::environment::EnvironmentCode;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::recovery::recover_lightning_node;
 use std::fs;
@@ -51,30 +54,32 @@ impl LightningNode {
 
         let seed = sanitize_input::strong_type_seed(&config.seed)?;
 
+        let environment = Environment::load(config.environment);
+
         let eel_config = eel::config::Config {
-            network: config.network,
+            network: environment.network,
             seed,
             fiat_currency: config.fiat_currency,
-            esplora_api_url: config.esplora_api_url,
-            rgs_url: config.rgs_url,
-            lsp_url: config.lsp_url,
-            lsp_token: config.lsp_token,
+            esplora_api_url: environment.esplora_url,
+            rgs_url: environment.rgs_url,
+            lsp_url: environment.lsp_url,
+            lsp_token: environment.lsp_token,
             local_persistence_path: config.local_persistence_path,
             timezone_config: config.timezone_config,
         };
 
-        let auth = Arc::new(build_auth(&seed, config.graphql_url.clone())?);
+        let auth = Arc::new(build_auth(&seed, environment.backend_url.clone())?);
 
         let remote_storage = Box::new(RemoteStorageGraphql::new(
-            config.graphql_url.clone(),
-            config.backend_health_url,
+            environment.backend_url.clone(),
+            environment.backend_health_url.clone(),
             Arc::clone(&auth),
         )?);
 
         let user_event_handler = Box::new(EventsImpl { events_callback });
 
         let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
-            config.graphql_url.clone(),
+            environment.backend_url.clone(),
             Arc::clone(&auth),
         ));
 
@@ -85,7 +90,7 @@ impl LightningNode {
             exchange_rate_provider,
         )?;
 
-        let exchange_rate_provider = ExchangeRateProviderImpl::new(config.graphql_url, auth);
+        let exchange_rate_provider = ExchangeRateProviderImpl::new(environment.backend_url, auth);
 
         Ok(LightningNode {
             exchange_rate_provider,

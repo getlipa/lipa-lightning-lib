@@ -31,7 +31,6 @@ pub struct InvoiceDetails {
     pub creation_timestamp: SystemTime,
     pub expiry_interval: Duration,
     pub expiry_timestamp: SystemTime,
-    pub network: Network,
 }
 
 pub(crate) struct CreateInvoiceParams {
@@ -61,7 +60,6 @@ pub(crate) fn get_invoice_details(invoice: &Invoice) -> Result<InvoiceDetails> {
         creation_timestamp: invoice.timestamp(),
         expiry_interval: invoice.expiry_time(),
         expiry_timestamp: invoice.timestamp() + invoice.expiry_time(),
-        network: network_from_currency(invoice.currency()),
     })
 }
 
@@ -320,7 +318,6 @@ mod tests {
             REGTEST_INVOICE_EXPIRY,
             REGTEST_INVOICE_PAYEE_PUB_KEY,
             REGTEST_INVOICE_HASH,
-            Network::Regtest,
         );
 
         // Test valid hardcoded mainnet invoice
@@ -342,7 +339,6 @@ mod tests {
             MAINNET_INVOICE_EXPIRY,
             MAINNET_INVOICE_PAYEE_PUB_KEY,
             MAINNET_INVOICE_HASH,
-            Network::Bitcoin,
         );
 
         // Test invalid hardcoded invoice (fail to parse)
@@ -364,7 +360,6 @@ mod tests {
         expiry: Duration,
         payee_pub_key: &str,
         payment_hash: &str,
-        network: Network,
     ) {
         assert_eq!(invoice_details.amount_msat.unwrap(), amount_msat);
         assert_eq!(invoice_details.description, description);
@@ -372,6 +367,5 @@ mod tests {
         assert_eq!(invoice_details.expiry_interval, expiry);
         assert_eq!(invoice_details.payee_pub_key, payee_pub_key);
         assert_eq!(invoice_details.payment_hash, payment_hash);
-        assert_eq!(invoice_details.network, network);
     }
 }

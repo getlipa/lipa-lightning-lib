@@ -25,6 +25,10 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: true
+      - name: Config cargo
+        run: echo -e "$CARGO_CONFIG_TOML" > .cargo/config.toml
+        env:
+          CARGO_CONFIG_TOML: ${{ secrets.CARGO_CONFIG_TOML }}
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.2.0
       - name: Run Nigiri
@@ -33,6 +37,4 @@ jobs:
           use_liquid: false
           use_ln: true
       - name: Run integration tests
-        env:
-          BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
         run: make integrationtests

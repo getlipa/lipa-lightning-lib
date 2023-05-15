@@ -6,9 +6,8 @@ mod print_events_handler;
 use crate::print_events_handler::PrintEventsHandler;
 
 use uniffi_lipalightninglib::LightningNode;
-use uniffi_lipalightninglib::{Config, TzConfig};
+use uniffi_lipalightninglib::{Config, EnvironmentCode, TzConfig};
 
-use bitcoin::Network;
 use eel::keys_manager::generate_secret;
 use log::info;
 use std::thread::sleep;
@@ -21,6 +20,7 @@ static LOG_FILE: &str = "logs.txt";
 fn main() {
     let environment = env::args().nth(1).unwrap_or("local".to_string());
     let base_dir = format!("{BASE_DIR}_{environment}");
+    let environment = map_environment_code(&environment);
 
     // Create dir for node data persistence.
     fs::create_dir_all(&base_dir).unwrap();
@@ -39,44 +39,15 @@ fn main() {
         }
     };
 
-    let config = if environment == "local" {
-        Config {
-            network: Network::Regtest,
-            seed,
-            fiat_currency: "EUR".to_string(),
-            esplora_api_url: "http://localhost:30000".to_string(),
-            rgs_url: "http://localhost:8080/snapshot/".to_string(),
-            lsp_url: "http://127.0.0.1:6666".to_string(),
-            lsp_token: "iQUvOsdk4ognKshZB/CKN2vScksLhW8i13vTO+8SPvcyWJ+fHi8OLgUEvW1N3k2l"
-                .to_string(),
-            local_persistence_path: base_dir.clone(),
-            timezone_config: TzConfig {
-                timezone_id: String::from("Africa/Tunis"),
-                timezone_utc_offset_secs: 1 * 60 * 60,
-            },
-            graphql_url: get_backend_url(),
-            backend_health_url: get_backend_health_url(),
-        }
-    } else if environment == "dev" {
-        Config {
-            network: Network::Testnet,
-            seed,
-            fiat_currency: "EUR".to_string(),
-            esplora_api_url: "https://blockstream.info/testnet/api".to_string(),
-            rgs_url: "https://rgs-test.lipa.dev/snapshot/".to_string(),
-            lsp_url: "http://lsp-test.getlipa.com:6666".to_string(),
-            lsp_token: "2ySbPtxkUun3sQzsXl3VW0zWq7qYea4t6tqy4X9NedNgoXoGKnKc95jSyxxjGUm7"
-                .to_string(),
-            local_persistence_path: base_dir.clone(),
-            timezone_config: TzConfig {
-                timezone_id: String::from("Africa/Tunis"),
-                timezone_utc_offset_secs: 1 * 60 * 60,
-            },
-            graphql_url: get_backend_url(),
-            backend_health_url: get_backend_health_url(),
-        }
-    } else {
-        panic!("Unsupported environment: `{environment}`");
+    let config = Config {
+        environment,
+        seed,
+        fiat_currency: "EUR".to_string(),
+        local_persistence_path: base_dir.clone(),
+        timezone_config: TzConfig {
+            timezone_id: String::from("Africa/Tunis"),
+            timezone_utc_offset_secs: 1 * 60 * 60,
+        },
     };
 
     let node = LightningNode::new(config, events).unwrap();
@@ -126,24 +97,12 @@ fn generate_seed() -> Vec<u8> {
     secret.seed
 }
 
-fn get_backend_url() -> String {
-    format!("{}/v1/graphql", get_base_url())
-}
-
-fn get_backend_health_url() -> String {
-    format!("{}/healthz", get_base_url())
-}
-
-fn get_base_url() -> String {
-    let base_url =
-        env::var("BACKEND_BASE_URL").expect("BACKEND_BASE_URL environment variable is not set");
-    sanitize_backend_base_url(&base_url);
-
-    base_url
-}
-
-fn sanitize_backend_base_url(url: &str) {
-    if url.contains("healthz") || url.contains("graphql") {
-        panic!("Make sure the BACKEND_BASE_URL environment variable does not include any path like '/v1/graphql'. It's a base URL.");
+fn map_environment_code(code: &str) -> EnvironmentCode {
+    match code {
+        "local" => EnvironmentCode::Local,
+        "dev" => EnvironmentCode::Dev,
+        "stage" => EnvironmentCode::Stage,
+        "prod" => EnvironmentCode::Prod,
+        code => panic!("Unknown environment code: `{code}`"),
     }
 }
