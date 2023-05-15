@@ -7,6 +7,7 @@ pub struct ChannelsInfo {
     pub local_balance_msat: u64,
     pub inbound_capacity_msat: u64,
     pub outbound_capacity_msat: u64,
+    pub total_channel_capacities_msat: u64,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -30,6 +31,10 @@ pub(crate) fn get_channels_info(channels: &[ChannelDetails]) -> ChannelsInfo {
         .iter()
         .map(|c| c.outbound_capacity_msat)
         .sum();
+    let total_channel_capacities_msat = usable_channels
+        .iter()
+        .map(|c| c.channel_value_satoshis * 1_000)
+        .sum();
 
     ChannelsInfo {
         num_channels,
@@ -37,6 +42,7 @@ pub(crate) fn get_channels_info(channels: &[ChannelDetails]) -> ChannelsInfo {
         local_balance_msat,
         inbound_capacity_msat,
         outbound_capacity_msat,
+        total_channel_capacities_msat,
     }
 }
 
@@ -61,6 +67,7 @@ mod tests {
                 local_balance_msat: 0,
                 inbound_capacity_msat: 0,
                 outbound_capacity_msat: 0,
+                total_channel_capacities_msat: 0,
             }
         );
 
@@ -68,6 +75,7 @@ mod tests {
         channel1.is_usable = true;
         channel1.inbound_capacity_msat = 1_111;
         channel1.outbound_capacity_msat = 1_222;
+        channel1.channel_value_satoshis = 3;
         assert_eq!(
             get_channels_info(&vec![channel1.clone()]),
             ChannelsInfo {
@@ -76,6 +84,7 @@ mod tests {
                 local_balance_msat: 0,
                 inbound_capacity_msat: 1_111,
                 outbound_capacity_msat: 1_222,
+                total_channel_capacities_msat: 3000,
             }
         );
 
@@ -83,6 +92,7 @@ mod tests {
         channel2.is_usable = true;
         channel2.inbound_capacity_msat = 90_000;
         channel2.outbound_capacity_msat = 90_111;
+        channel2.channel_value_satoshis = 181;
         assert_eq!(
             get_channels_info(&vec![channel2.clone()]),
             ChannelsInfo {
@@ -91,6 +101,7 @@ mod tests {
                 local_balance_msat: 0,
                 inbound_capacity_msat: 90_000,
                 outbound_capacity_msat: 90_111,
+                total_channel_capacities_msat: 181000,
             }
         );
         assert_eq!(
@@ -101,6 +112,7 @@ mod tests {
                 local_balance_msat: 0,
                 inbound_capacity_msat: 91_111,
                 outbound_capacity_msat: 91_333,
+                total_channel_capacities_msat: 184000,
             }
         );
 
@@ -115,6 +127,7 @@ mod tests {
                 local_balance_msat: 0,
                 inbound_capacity_msat: 0,
                 outbound_capacity_msat: 0,
+                total_channel_capacities_msat: 0,
             }
         );
         assert_eq!(
@@ -129,6 +142,7 @@ mod tests {
                 local_balance_msat: 0,
                 inbound_capacity_msat: 91_111,
                 outbound_capacity_msat: 91_333,
+                total_channel_capacities_msat: 184000,
             }
         );
     }
