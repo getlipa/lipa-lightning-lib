@@ -22,6 +22,10 @@ mod receiving_payments_test {
     const TWENTY_K_SATS: u64 = 20_000_000;
     const HALF_M_SATS: u64 = 500_000_000;
 
+    // The amount of sats the LSP provides to the user as inbound capacity.
+    // See https://github.com/getlipa/lipa-lightning-lib/blob/b821162df982799c497e083e9707aa421aee43a8/lspd/compose.yaml#LL63C44-L63C46
+    const LSP_TOPUP: u64 = 100_000_000; // 100K sats
+
     const HALF_SEC: Duration = Duration::from_millis(500);
     const N_RETRIES: u8 = 10;
 
@@ -56,6 +60,7 @@ mod receiving_payments_test {
                 NodeInstance::NigiriLnd,
                 TWO_K_SATS + ONE_SAT,
                 TWO_K_SATS,
+                LSP_TOPUP,
             );
             info!("Restarting node..."); // to test that channel monitors and manager are persisted and retrieved correctly
         } // Shut down the node
@@ -72,7 +77,13 @@ mod receiving_payments_test {
             // Test receiving an amount that needs a new channel open when we already have existing channels.
             // We should have 102001 sat channel and have received a 1 sat payment. A 0.5M payment is not
             // possible. A new channel with 0.6M size should be created
-            run_jit_channel_open_flow(&node, NodeInstance::NigiriLnd, HALF_M_SATS, TWO_K_SATS);
+            run_jit_channel_open_flow(
+                &node,
+                NodeInstance::NigiriLnd,
+                HALF_M_SATS,
+                TWO_K_SATS,
+                LSP_TOPUP,
+            );
             assert_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
             info!("Restarting node..."); // to test that the graph is persisted and retrieved correctly
         } // Shut down the node
@@ -167,13 +178,17 @@ mod receiving_payments_test {
         paying_node: NodeInstance,
         payment_amount: u64,
         lsp_fee: u64,
+        lsp_topup: u64,
     ) {
-        let initial_balance = node.get_node_info().channels_info.local_balance_msat;
+        let channels_info = node.get_node_info().channels_info;
+        let initial_balance = channels_info.local_balance_msat;
+        let initial_channel_capacity = channels_info.total_channel_capacities_msat;
 
         let invoice = issue_invoice(&node, payment_amount);
 
         nigiri::pay_invoice(paying_node, &invoice).unwrap();
 
+        assert_channel_capacity(&node, initial_channel_capacity + payment_amount + lsp_topup);
         assert_payment_received(&node, initial_balance + payment_amount - lsp_fee);
     }
 
@@ -192,6 +207,15 @@ mod receiving_payments_test {
         assert!(node.get_node_info().channels_info.num_channels > 0);
         assert!(node.get_node_info().channels_info.num_usable_channels > 0);
         assert!(node.get_node_info().channels_info.inbound_capacity_msat > payment_amount);
+    }
+
+    fn assert_channel_capacity(node: &LightningNode, expected_capacity: u64) {
+        let new_capacity = node
+            .get_node_info()
+            .channels_info
+            .total_channel_capacities_msat;
+
+        assert_eq!(new_capacity, expected_capacity);
     }
 
     fn assert_payment_received(node: &LightningNode, expected_balance: u64) {
