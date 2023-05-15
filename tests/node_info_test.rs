@@ -4,6 +4,7 @@ mod setup_3l;
 #[path = "../eel/tests/setup_env/mod.rs"]
 mod setup_env;
 
+
 #[cfg(feature = "nigiri")]
 mod node_info_test {
     use crate::setup_3l::NodeHandle;
