@@ -10,6 +10,7 @@ use simplelog::{ConfigBuilder, LevelFilter, SimpleLogger};
 use std::sync::Once;
 
 static INIT_LOGGER_ONCE: Once = Once::new();
+pub const CHANNEL_SIZE_MSAT: u64 = 1_000_000_000;
 
 #[ctor::ctor]
 fn init_logger() {
@@ -464,7 +465,8 @@ pub mod nigiri {
         zero_conf: bool,
         private: bool,
     ) -> Result<String, String> {
-        let mut sub_cmd = vec!["openchannel", target_node_id, "1000000"];
+        let channel_size = (CHANNEL_SIZE_MSAT / 1_000).to_string();
+        let mut sub_cmd = vec!["openchannel", target_node_id, &channel_size];
 
         if private {
             sub_cmd.insert(1, "--private");
@@ -508,7 +510,8 @@ pub mod nigiri {
         node: NodeInstance,
         target_node_id: &str,
     ) -> Result<String, String> {
-        let sub_cmd = vec!["fundchannel", target_node_id, "1000000"];
+        let channel_size = (CHANNEL_SIZE_MSAT / 1_000).to_string();
+        let sub_cmd = vec!["fundchannel", target_node_id, &channel_size];
         let cmd = [get_node_prefix(node), &sub_cmd].concat();
 
         let output = exec(cmd.as_slice());

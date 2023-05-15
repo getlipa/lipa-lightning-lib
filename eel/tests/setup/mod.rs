@@ -4,9 +4,9 @@ pub mod mocked_remote_storage;
 mod print_events_handler;
 
 use crate::setup_env::config::get_testing_config;
-use crate::setup_env::nigiri;
 use crate::setup_env::nigiri::NodeInstance;
 use crate::setup_env::nigiri::NodeInstance::LspdLnd;
+use crate::setup_env::{nigiri, CHANNEL_SIZE_MSAT};
 use crate::wait_for_eq;
 use eel::config::Config;
 use eel::interfaces::{ExchangeRateProvider, RemoteStorage};
@@ -23,7 +23,6 @@ use storage_mock::Storage;
 const LSPD_LND_HOST: &str = "lspd-lnd";
 const LSPD_LND_PORT: u16 = 9739;
 const REBALANCE_AMOUNT: u64 = 50_000_000; // Msats to be sent to the Lipa node to generate outbound capacity
-const CHANNEL_SIZE: u64 = 1_000_000_000; // The capacity of the channel opened by the LSP: See https://github.com/getlipa/lipa-lightning-lib/blob/5657ff45fdf0c45065025d4ff9cb4ab97a32e9f3/lspd/compose.yaml#L54
 
 #[allow(dead_code)]
 pub struct NodeHandle<S: RemoteStorage + Clone + 'static> {
@@ -105,7 +104,8 @@ pub fn setup_outbound_capacity(node: &LightningNode) {
     );
     assert!(node.get_node_info().channels_info.outbound_capacity_msat < REBALANCE_AMOUNT); // because of channel reserves
     assert!(
-        node.get_node_info().channels_info.inbound_capacity_msat < CHANNEL_SIZE - REBALANCE_AMOUNT
+        node.get_node_info().channels_info.inbound_capacity_msat
+            < CHANNEL_SIZE_MSAT - REBALANCE_AMOUNT
     ); // smaller instead of equal because of channel reserves
 }
 
