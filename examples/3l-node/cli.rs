@@ -258,7 +258,9 @@ fn node_info(node: &LightningNode) {
 }
 
 fn get_exchange_rates(node: &LightningNode) -> Result<(), String> {
-    let rates = node.get_exchange_rates().map_err(|e| e.to_string())?;
+    let rates = node
+        .get_exchange_rates()
+        .ok_or("No exchange rates available")?;
     println!("{}: {} sats", rates.currency_code, rates.rate);
     println!("USD: {} sats", rates.usd_rate);
     Ok(())

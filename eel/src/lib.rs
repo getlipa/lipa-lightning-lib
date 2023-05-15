@@ -581,15 +581,8 @@ impl LightningNode {
             .restart(BACKGROUND_PERIODS);
     }
 
-    pub fn get_exchange_rates(&self) -> Result<ExchangeRates> {
-        self.task_manager
-            .lock()
-            .unwrap()
-            .get_exchange_rates()
-            .ok_or_runtime_error(
-                RuntimeErrorCode::ExchangeRateProviderUnavailable,
-                "Failed to get exchange rates",
-            )
+    pub fn get_exchange_rates(&self) -> Option<ExchangeRates> {
+        self.task_manager.lock().unwrap().get_exchange_rates()
     }
 
     pub fn change_fiat_currency(&self, fiat_currency: String) {
@@ -606,7 +599,6 @@ impl LightningNode {
 
     pub fn get_fiat_values(&self, amount_msat: u64) -> Option<FiatValues> {
         self.get_exchange_rates()
-            .ok()
             .map(|e| FiatValues::from_amount_msat(amount_msat, &e))
     }
 }

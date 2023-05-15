@@ -158,7 +158,7 @@ impl LightningNode {
         self.exchange_rate_provider.list_currency_codes()
     }
 
-    pub fn get_exchange_rates(&self) -> Result<ExchangeRates> {
+    pub fn get_exchange_rates(&self) -> Option<ExchangeRates> {
         self.core_node.get_exchange_rates()
     }
 
