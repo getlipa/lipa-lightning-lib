@@ -107,6 +107,12 @@ interface LightningNode {
     // Get exchange rates on BTC/USD and BTC/<default currency> pairs
     // Please keep in mind that this method doesn't make any network calls. It simply retrieves
     // previously fetched values that are frequently updated by a background task.
+    //
+    // The fetched exchange rates will be persisted across restarts to alleviate the consequences of a
+    // slow or unresponsive exchange rate service.
+    //
+    // The return value is an optional to deal with the possibility
+    // of no exchange rate values being known.
     ExchangeRates? get_exchange_rates();
 
     // Change the fiat currency (ISO 4217 currency code) - not all are supported
