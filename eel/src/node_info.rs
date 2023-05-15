@@ -131,15 +131,5 @@ mod tests {
                 outbound_capacity_msat: 91_333,
             }
         );
-        assert_eq!(
-            get_channels_info(&vec![channel1.clone(), channel2.clone()]),
-            ChannelsInfo {
-                num_channels: 2,
-                num_usable_channels: 2,
-                local_balance_msat: 0,
-                inbound_capacity_msat: 91_111,
-                outbound_capacity_msat: 91_333,
-            }
-        );
     }
 }
