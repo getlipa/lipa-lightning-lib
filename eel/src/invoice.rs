@@ -6,9 +6,9 @@ use bitcoin::bech32::ToBase32;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
+use crate::data_store::DataStore;
 use crate::lsp;
 use crate::payment::FiatValues;
-use crate::payment_store::PaymentStore;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::Network;
@@ -101,7 +101,7 @@ pub(crate) async fn create_invoice(
     channel_manager: &ChannelManager,
     lsp_client: &LspClient,
     keys_manager: &KeysManager,
-    payment_store: &mut PaymentStore,
+    data_store: &mut DataStore,
     fiat_values: Option<FiatValues>,
 ) -> Result<SignedRawInvoice> {
     let amount_msat = params.amount_msat;
@@ -195,7 +195,7 @@ pub(crate) async fn create_invoice(
         .sign(|_| Ok::<RecoverableSignature, ()>(signature))
         .map_to_permanent_failure("Failed to sign invoice")?;
 
-    payment_store
+    data_store
         .new_incoming_payment(
             &payment_hash.to_hex(),
             amount_msat,

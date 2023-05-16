@@ -7,6 +7,7 @@ use crate::p2p_networking::{connect_peer, LnPeer};
 use crate::rapid_sync_client::RapidSyncClient;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager, TxSync};
 
+use crate::data_store::DataStore;
 use lightning::chain::Confirm;
 use log::{debug, error};
 use std::sync::{Arc, Mutex};
@@ -41,6 +42,7 @@ pub(crate) struct TaskManager {
     fiat_currency: String,
     exchange_rate_provider: Arc<dyn ExchangeRateProvider>,
     exchange_rates: Arc<Mutex<Option<ExchangeRates>>>,
+    data_store: Arc<Mutex<DataStore>>,
 
     task_handles: Vec<RepeatingTaskHandle>,
 }
@@ -58,8 +60,11 @@ impl TaskManager {
         tx_sync: Arc<TxSync>,
         fiat_currency: String,
         exchange_rate_provider: Box<dyn ExchangeRateProvider>,
-    ) -> Self {
-        Self {
+        data_store: Arc<Mutex<DataStore>>,
+    ) -> Result<Self> {
+        let exchange_rates = recover_exchange_rates(Arc::clone(&data_store), &fiat_currency)?;
+
+        Ok(Self {
             runtime_handle,
             lsp_client,
             peer_manager,
@@ -71,9 +76,10 @@ impl TaskManager {
             tx_sync,
             fiat_currency,
             exchange_rate_provider: Arc::from(exchange_rate_provider),
-            exchange_rates: Arc::new(Mutex::new(None)),
+            exchange_rates: Arc::new(Mutex::new(exchange_rates)),
+            data_store,
             task_handles: Vec::new(),
-        }
+        })
     }
 
     pub fn get_lsp_info(&self) -> Option<LspInfo> {
@@ -244,10 +250,12 @@ impl TaskManager {
         let fiat_currency = self.fiat_currency.clone();
         let exchange_rate_provider = Arc::clone(&self.exchange_rate_provider);
         let exchange_rates = Arc::clone(&self.exchange_rates);
+        let data_store = Arc::clone(&self.data_store);
         self.runtime_handle.spawn_repeating_task(period, move || {
             let fiat_currency = fiat_currency.clone();
             let exchange_rate_provider = Arc::clone(&exchange_rate_provider);
             let exchange_rates = Arc::clone(&exchange_rates);
+            let data_store = Arc::clone(&data_store);
             async move {
                 match tokio::task::spawn_blocking(move || {
                     let rate = exchange_rate_provider.query_exchange_rate(fiat_currency.clone())?;
@@ -262,6 +270,7 @@ impl TaskManager {
                 .await
                 {
                     Ok(Ok(rates)) => {
+                        persist_exchange_rates(&data_store, &rates);
                         *exchange_rates.lock().unwrap() = Some(rates);
                     }
                     Ok(Err(e)) => {
@@ -277,6 +286,42 @@ impl TaskManager {
 
     pub fn change_fiat_currency(&mut self, fiat_currency: String) {
         self.fiat_currency = fiat_currency;
+    }
+}
+
+fn recover_exchange_rates(
+    data_store: Arc<Mutex<DataStore>>,
+    fiat_currency: &str,
+) -> Result<Option<ExchangeRates>> {
+    let data_store = data_store.lock().unwrap();
+    let usd_rate = match data_store.get_exchange_rate("USD")? {
+        None => return Ok(None),
+        Some(r) => r,
+    };
+    let rate = match data_store.get_exchange_rate(fiat_currency)? {
+        None => return Ok(None),
+        Some(r) => r,
+    };
+    Ok(Some(ExchangeRates {
+        currency_code: String::from(fiat_currency),
+        rate,
+        usd_rate,
+    }))
+}
+
+fn persist_exchange_rates(data_store: &Arc<Mutex<DataStore>>, rates: &ExchangeRates) {
+    let data_store = data_store.lock().unwrap();
+    match data_store.update_exchange_rate("USD", rates.usd_rate) {
+        Ok(_) => {}
+        Err(e) => {
+            error!("Failed to update exchange rate in db: {}", e)
+        }
+    }
+    match data_store.update_exchange_rate(&rates.currency_code, rates.rate) {
+        Ok(_) => {}
+        Err(e) => {
+            error!("Failed to update exchange rate in db: {}", e)
+        }
     }
 }
 

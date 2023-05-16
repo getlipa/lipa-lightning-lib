@@ -1,7 +1,7 @@
+use crate::data_store::DataStore;
 use crate::errors::Result;
 use crate::interfaces;
 use crate::payment::PaymentState;
-use crate::payment_store::PaymentStore;
 use crate::task_manager::TaskManager;
 use crate::types::ChannelManager;
 
@@ -14,7 +14,7 @@ pub(crate) struct LipaEventHandler {
     channel_manager: Arc<ChannelManager>,
     task_manager: Arc<Mutex<TaskManager>>,
     user_event_handler: Box<dyn interfaces::EventHandler>,
-    payment_store: Arc<Mutex<PaymentStore>>,
+    data_store: Arc<Mutex<DataStore>>,
 }
 
 impl LipaEventHandler {
@@ -22,13 +22,13 @@ impl LipaEventHandler {
         channel_manager: Arc<ChannelManager>,
         task_manager: Arc<Mutex<TaskManager>>,
         user_event_handler: Box<dyn interfaces::EventHandler>,
-        payment_store: Arc<Mutex<PaymentStore>>,
+        data_store: Arc<Mutex<DataStore>>,
     ) -> Result<Self> {
         Ok(Self {
             channel_manager,
             task_manager,
             user_event_handler,
-            payment_store,
+            data_store,
         })
     }
 }
@@ -57,9 +57,9 @@ impl EventHandler for LipaEventHandler {
                     amount_msat,
                 );
 
-                let payment_store = self.payment_store.lock().unwrap();
+                let data_store = self.data_store.lock().unwrap();
 
-                if let Ok(payment) = payment_store.get_payment(&payment_hash.0.to_hex()) {
+                if let Ok(payment) = data_store.get_payment(&payment_hash.0.to_hex()) {
                     if payment.payment_state == PaymentState::Succeeded {
                         info!("Registered incoming payment for {} msat with hash {}. Rejecting because we've already claimed a payment with the same hash", amount_msat, payment_hash.0.to_hex());
                         self.channel_manager.fail_htlc_backwards(&payment_hash);
@@ -81,7 +81,7 @@ impl EventHandler for LipaEventHandler {
                             amount_msat,
                             payment_hash.0.to_hex()
                         );
-                        if payment_store
+                        if data_store
                             .fill_preimage(
                                 &payment_hash.0.as_slice().to_hex(),
                                 &payment_preimage.0.as_slice().to_hex(),
@@ -134,7 +134,7 @@ impl EventHandler for LipaEventHandler {
                             payment_hash.0.to_hex()
                         );
                         if self
-                            .payment_store
+                            .data_store
                             .lock()
                             .unwrap()
                             .incoming_payment_succeeded(&payment_hash.0.as_slice().to_hex())
@@ -171,7 +171,7 @@ impl EventHandler for LipaEventHandler {
                     fee_paid_msat,
                 );
                 if self
-                    .payment_store
+                    .data_store
                     .lock()
                     .unwrap()
                     .outgoing_payment_succeeded(
@@ -199,7 +199,7 @@ impl EventHandler for LipaEventHandler {
                     payment_hash.0.to_hex()
                 );
                 if self
-                    .payment_store
+                    .data_store
                     .lock()
                     .unwrap()
                     .new_payment_state(&payment_hash.0.as_slice().to_hex(), PaymentState::Failed)

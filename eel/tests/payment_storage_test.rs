@@ -2,7 +2,7 @@ mod setup;
 mod setup_env;
 
 #[cfg(feature = "nigiri")]
-mod receiving_payments_test {
+mod payment_storage_test {
     use eel::payment::{Payment, PaymentState, PaymentType, TzTime};
     use eel::InvoiceDetails;
     use log::info;
@@ -27,7 +27,7 @@ mod receiving_payments_test {
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
-    fn test_payment_store_by_amount_of_entries() {
+    fn test_payment_storage_by_amount_of_entries() {
         nigiri::setup_environment_with_lsp();
         let node_handle = mocked_storage_node();
 
@@ -94,7 +94,7 @@ mod receiving_payments_test {
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
-    fn test_payment_store_for_received_payments() {
+    fn test_payment_storage_for_received_payments() {
         nigiri::setup_environment_with_lsp();
         let node_handle = mocked_storage_node();
         let node = node_handle.start_or_panic();
@@ -143,7 +143,7 @@ mod receiving_payments_test {
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
-    fn test_payment_store_for_sent_payments() {
+    fn test_payment_storage_for_sent_payments() {
         nigiri::setup_environment_with_lsp();
         let node_handle = mocked_storage_node();
         let node = node_handle.start_or_panic();
