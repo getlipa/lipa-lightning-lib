@@ -8,7 +8,7 @@ use crate::print_events_handler::PrintEventsHandler;
 use uniffi_lipalightninglib::LightningNode;
 use uniffi_lipalightninglib::{Config, EnvironmentCode, TzConfig};
 
-use eel::keys_manager::generate_secret;
+use eel::keys_manager::{generate_secret, mnemonic_to_secret};
 use log::info;
 use std::thread::sleep;
 use std::time::Duration;
@@ -30,14 +30,7 @@ fn main() {
 
     let events = Box::new(PrintEventsHandler {});
 
-    let seed = match fs::read(format!("{}/seed", base_dir)) {
-        Ok(s) => s,
-        Err(_) => {
-            let seed = generate_seed();
-            fs::write(format!("{}/seed", base_dir), &seed).unwrap();
-            seed
-        }
-    };
+    let seed = read_or_generate_seed(&base_dir);
 
     let config = Config {
         environment,
@@ -55,6 +48,24 @@ fn main() {
     // Lauch CLI
     sleep(Duration::from_secs(1));
     cli::poll_for_user_input(&node, &format!("{base_dir}/{LOG_FILE}"));
+}
+
+fn read_or_generate_seed(base_dir: &str) -> Vec<u8> {
+    let passphrase = "".to_string();
+    let filename = format!("{base_dir}/recovery_phrase");
+    match fs::read(filename.clone()) {
+        Ok(mnemonic) => {
+            let mnemonic = std::str::from_utf8(&mnemonic).unwrap();
+            let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
+            mnemonic_to_secret(mnemonic, passphrase).unwrap().seed
+        }
+        Err(_) => {
+            let secret = generate_secret(passphrase).unwrap();
+            let recovery_phrase = secret.mnemonic.join(" ");
+            fs::write(filename, &recovery_phrase).unwrap();
+            secret.seed
+        }
+    }
 }
 
 fn init_logger(path: &String) {
@@ -89,12 +100,6 @@ fn init_logger(path: &String) {
         simplelog::WriteLogger::new(log::LevelFilter::Trace, config, log_file),
     ])
     .unwrap();
-}
-
-fn generate_seed() -> Vec<u8> {
-    let passphrase = "".to_string();
-    let secret = generate_secret(passphrase).unwrap();
-    secret.seed
 }
 
 fn map_environment_code(code: &str) -> EnvironmentCode {
