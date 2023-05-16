@@ -240,7 +240,7 @@ dictionary Payment {
     PaymentType payment_type;
     PaymentState payment_state;
     string hash; // Hex representation of payment hash
-    u64 amount_msat;
+    u64 amount_msat; // Nominal amount of the invoice associated with this Payment
     InvoiceDetails invoice_details;
     TzTime created_at;
     TzTime latest_state_change_at;
@@ -248,7 +248,10 @@ dictionary Payment {
         // it is possible that a hex hash of the description is provided instead, but that is uncommon.
     string? preimage; // Hex representation of the preimage. Will only be present on successful payments.
     u64? network_fees_msat; // Routing fees paid in an `Sending` payment. Will only be present if payment was successful.
-    u64? lsp_fees_msat; // LSP fees paid in a `Receiving` payment. Will always be present for `Receiving` payments but the amount is only paid if successful.
+        // The cost of sending a payment is `amount_msat` + `network_fees_msat`
+    u64? lsp_fees_msat; // LSP fees paid in a `Receiving` payment. Will always be present for `Receiving` payments but
+        // the amount is only paid if successful.
+        // The value that is received in practice is given by `amount_msat` - `lsp_fees_msat`
     FiatValues? fiat_values;
     string metadata;
 };
