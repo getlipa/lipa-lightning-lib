@@ -4,7 +4,7 @@ mod setup_env;
 #[cfg(feature = "nigiri")]
 mod chain_sync_test {
     use bitcoin::hashes::hex::ToHex;
-    use eel::interfaces::RemoteStorage;
+    use eel::interfaces::{ExchangeRateProvider, RemoteStorage};
     use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::Duration;
@@ -134,8 +134,11 @@ mod chain_sync_test {
         wait_for_eq!(node.get_node_info().channels_info.num_channels, 0);
     }
 
-    fn start_node_open_channel_without_confirm_stop_node<S: RemoteStorage + Clone + 'static>(
-        node_handle: &NodeHandle<S>,
+    fn start_node_open_channel_without_confirm_stop_node<
+        S: RemoteStorage + Clone + 'static,
+        X: ExchangeRateProvider + Clone,
+    >(
+        node_handle: &NodeHandle<S, X>,
     ) -> String {
         let node = node_handle.start_or_panic();
         let node_id = node.get_node_info().node_pubkey.to_hex();

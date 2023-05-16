@@ -9,10 +9,12 @@ use crate::setup_env::nigiri::NodeInstance::LspdLnd;
 use crate::setup_env::{nigiri, CHANNEL_SIZE_MSAT};
 use crate::wait_for_eq;
 use eel::config::Config;
+use eel::errors::RuntimeErrorCode;
 use eel::interfaces::{ExchangeRateProvider, RemoteStorage};
 use eel::recovery::recover_lightning_node;
 use eel::LightningNode;
 use mocked_remote_storage::MockedRemoteStorage;
+use perro::runtime_error;
 use print_events_handler::PrintEventsHandler;
 use std::fs;
 use std::sync::Arc;
@@ -25,14 +27,16 @@ const LSPD_LND_PORT: u16 = 9739;
 const REBALANCE_AMOUNT: u64 = 50_000_000; // Msats to be sent to the Lipa node to generate outbound capacity
 
 #[allow(dead_code)]
-pub struct NodeHandle<S: RemoteStorage + Clone + 'static> {
+pub struct NodeHandle<S: RemoteStorage + Clone + 'static, X: ExchangeRateProvider + Clone + 'static>
+{
     config: Config,
     storage: S,
+    exchange_rate_provider: X,
 }
 
 #[allow(dead_code)]
-impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
-    pub fn new(remote_storage: S) -> Self {
+impl<S: RemoteStorage + Clone + 'static, X: ExchangeRateProvider + Clone> NodeHandle<S, X> {
+    pub fn new(remote_storage: S, exchange_rate_provider: X) -> Self {
         std::env::set_var("TESTING_TASK_PERIODS", "5");
         let config = get_testing_config();
         let _ = fs::remove_dir_all(&config.local_persistence_path);
@@ -41,6 +45,7 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
         NodeHandle {
             config,
             storage: remote_storage,
+            exchange_rate_provider,
         }
     }
 
@@ -52,7 +57,7 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
             self.config.clone(),
             Box::new(self.storage.clone()),
             Box::new(events_handler),
-            Box::new(ExchangeRateProviderMock {}),
+            Box::new(self.exchange_rate_provider.clone()),
         )
     }
 
@@ -71,6 +76,10 @@ impl<S: RemoteStorage + Clone + 'static> NodeHandle<S> {
 
     pub fn get_storage(&mut self) -> &mut S {
         &mut self.storage
+    }
+
+    pub fn get_exchange_rate_provider(&mut self) -> &mut X {
+        &mut self.exchange_rate_provider
     }
 
     pub fn recover(&self) -> eel::errors::Result<()> {
@@ -125,21 +134,48 @@ pub fn connect_node_to_lsp(node: NodeInstance, lsp_node_id: &str) {
 }
 
 #[allow(dead_code)]
-pub fn mocked_storage_node() -> NodeHandle<MockedRemoteStorage> {
+pub fn mocked_storage_node() -> NodeHandle<MockedRemoteStorage, ExchangeRateProviderMock> {
     mocked_storage_node_configurable(mocked_remote_storage::Config::default())
 }
 
 #[allow(dead_code)]
 pub fn mocked_storage_node_configurable(
     config: mocked_remote_storage::Config,
-) -> NodeHandle<MockedRemoteStorage> {
+) -> NodeHandle<MockedRemoteStorage, ExchangeRateProviderMock> {
     let storage = MockedRemoteStorage::new(Arc::new(Storage::new()), config);
-    NodeHandle::new(storage)
+    NodeHandle::new(storage, ExchangeRateProviderMock::default())
 }
 
-struct ExchangeRateProviderMock;
+#[derive(Clone)]
+pub struct ExchangeRateProviderMock {
+    available: bool,
+}
+
+impl Default for ExchangeRateProviderMock {
+    fn default() -> Self {
+        ExchangeRateProviderMock { available: true }
+    }
+}
+
+#[allow(dead_code)]
+impl ExchangeRateProviderMock {
+    pub fn enable(&mut self) {
+        self.available = true;
+    }
+
+    pub fn disable(&mut self) {
+        self.available = false;
+    }
+}
+
 impl ExchangeRateProvider for ExchangeRateProviderMock {
     fn query_exchange_rate(&self, _code: String) -> eel::errors::Result<u32> {
-        Ok(1234)
+        match self.available {
+            true => Ok(1234),
+            false => Err(runtime_error(
+                RuntimeErrorCode::ExchangeRateProviderUnavailable,
+                "Mocked exchange rate provider set to unavailable",
+            )),
+        }
     }
 }

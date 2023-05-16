@@ -2,7 +2,7 @@ mod setup;
 mod setup_env;
 
 #[cfg(feature = "nigiri")]
-mod payment_storage_test {
+mod data_store_test {
     use eel::payment::{Payment, PaymentState, PaymentType, TzTime};
     use eel::InvoiceDetails;
     use log::info;
@@ -245,6 +245,45 @@ mod payment_storage_test {
                 &payment_dummy,
             );
         }
+    }
+
+    #[test]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
+    fn test_exchange_rate_storage() {
+        //nigiri::setup_environment_with_lsp();
+        let mut node_handle = mocked_storage_node();
+
+        node_handle.get_exchange_rate_provider().disable();
+
+        {
+            let node = node_handle.start_or_panic();
+
+            sleep(Duration::from_secs(1));
+            assert!(node.get_exchange_rates().is_none());
+
+            info!("Restarting node...");
+        } // Shut down the node
+          // Wait for shutdown to complete
+        sleep(Duration::from_secs(5));
+
+        node_handle.get_exchange_rate_provider().enable();
+
+        {
+            let node = node_handle.start_or_panic();
+
+            sleep(Duration::from_secs(1));
+            assert!(node.get_exchange_rates().is_some());
+
+            info!("Restarting node...");
+        } // Shut down the node
+          // Wait for shutdown to complete
+        sleep(Duration::from_secs(5));
+
+        node_handle.get_exchange_rate_provider().disable();
+
+        let node = node_handle.start_or_panic();
+        sleep(Duration::from_secs(1));
+        assert!(node.get_exchange_rates().is_some());
     }
 
     fn assert_payments_are_partially_equal(left: &Payment, right: &Payment) {
