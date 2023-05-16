@@ -171,9 +171,10 @@ impl LightningNode {
     }
 }
 
-pub fn accept_terms_and_conditions(seed: Vec<u8>, graphql_url: String) -> Result<()> {
+pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) -> Result<()> {
+    let environment = Environment::load(environment);
     let seed = sanitize_input::strong_type_seed(&seed)?;
-    let auth = build_auth(&seed, graphql_url)?;
+    let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions()
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)
 }
