@@ -9,13 +9,13 @@ use crate::print_events_handler::PrintEventsHandler;
 
 use bitcoin::Network;
 use eel::config::{Config, TzConfig};
-use eel::interfaces::{ExchangeRateProvider, RemoteStorage};
+use eel::interfaces::{ExchangeRate, ExchangeRateProvider, RemoteStorage};
 use eel::keys_manager::mnemonic_to_secret;
 use eel::LightningNode;
 use log::info;
 use std::fs;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 static BASE_DIR: &str = ".eel_node";
 static BASE_DIR_REMOTE: &str = ".eel_remote";
@@ -130,7 +130,18 @@ fn generate_seed(storage: &FileStorage, seed_file_name: &str) -> Vec<u8> {
 
 struct ExchangeRateProviderMock;
 impl ExchangeRateProvider for ExchangeRateProviderMock {
-    fn query_exchange_rate(&self, _code: String) -> eel::errors::Result<u32> {
-        Ok(1234)
+    fn query_all_exchange_rates(&self) -> eel::errors::Result<Vec<ExchangeRate>> {
+        Ok(vec![
+            ExchangeRate {
+                currency_code: "USD".to_string(),
+                rate: 1234,
+                updated_at: SystemTime::now(),
+            },
+            ExchangeRate {
+                currency_code: "EUR".to_string(),
+                rate: 4321,
+                updated_at: SystemTime::now(),
+            },
+        ])
     }
 }

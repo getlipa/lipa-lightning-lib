@@ -22,7 +22,7 @@ use std::fs;
 
 pub use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
-pub use eel::interfaces::ExchangeRates;
+pub use eel::interfaces::ExchangeRate;
 use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix};
 use eel::lsp::LspFee;
@@ -158,8 +158,8 @@ impl LightningNode {
         self.exchange_rate_provider.list_currency_codes()
     }
 
-    pub fn get_exchange_rates(&self) -> Result<ExchangeRates> {
-        self.core_node.get_exchange_rates()
+    pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
+        self.core_node.get_exchange_rate()
     }
 
     pub fn change_fiat_currency(&self, fiat_currency: String) {

@@ -2,7 +2,7 @@ mod setup;
 mod setup_env;
 
 #[cfg(feature = "nigiri")]
-mod receiving_payments_test {
+mod data_store_test {
     use eel::payment::{Payment, PaymentState, PaymentType, TzTime};
     use eel::InvoiceDetails;
     use log::info;
@@ -27,7 +27,7 @@ mod receiving_payments_test {
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
-    fn test_payment_store_by_amount_of_entries() {
+    fn test_payment_storage_by_amount_of_entries() {
         nigiri::setup_environment_with_lsp();
         let node_handle = mocked_storage_node();
 
@@ -94,7 +94,7 @@ mod receiving_payments_test {
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
-    fn test_payment_store_for_received_payments() {
+    fn test_payment_storage_for_received_payments() {
         nigiri::setup_environment_with_lsp();
         let node_handle = mocked_storage_node();
         let node = node_handle.start_or_panic();
@@ -130,7 +130,7 @@ mod receiving_payments_test {
             preimage: None,
             network_fees_msat: None,
             lsp_fees_msat: Some(node.calculate_lsp_fee(TWENTY_K_SATS).unwrap()),
-            fiat_values: node.get_fiat_values(TWENTY_K_SATS), // Todo: What should be persisted? The fiat value of what the payer sended, or the fiat value of what the lipa user received (subtracting potential LSP fee)?
+            fiat_values: node.get_fiat_values(TWENTY_K_SATS, String::from("EUR")), // Todo: What should be persisted? The fiat value of what the payer sended, or the fiat value of what the lipa user received (subtracting potential LSP fee)?
             metadata: "".to_string(),
         };
 
@@ -143,7 +143,7 @@ mod receiving_payments_test {
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
-    fn test_payment_store_for_sent_payments() {
+    fn test_payment_storage_for_sent_payments() {
         nigiri::setup_environment_with_lsp();
         let node_handle = mocked_storage_node();
         let node = node_handle.start_or_panic();
@@ -180,7 +180,7 @@ mod receiving_payments_test {
             preimage: None,
             network_fees_msat: None,
             lsp_fees_msat: None,
-            fiat_values: node.get_fiat_values(TWO_K_SATS),
+            fiat_values: node.get_fiat_values(TWO_K_SATS, String::from("EUR")),
             metadata: "".to_string(),
         };
 
@@ -216,7 +216,7 @@ mod receiving_payments_test {
             payment_dummy.amount_msat = ONE_SAT;
             payment_dummy.description = "Open amount".to_string();
             payment_dummy.network_fees_msat = None;
-            payment_dummy.fiat_values = node.get_fiat_values(ONE_SAT);
+            payment_dummy.fiat_values = node.get_fiat_values(ONE_SAT, String::from("EUR"));
             payment_dummy.metadata = "Some metadata".to_string();
             payment_dummy.invoice_details.invoice = invoice.clone();
             payment_dummy.invoice_details.description = "Open amount".to_string();
@@ -245,6 +245,45 @@ mod receiving_payments_test {
                 &payment_dummy,
             );
         }
+    }
+
+    #[test]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
+    fn test_exchange_rate_storage() {
+        //nigiri::setup_environment_with_lsp();
+        let mut node_handle = mocked_storage_node();
+
+        node_handle.get_exchange_rate_provider().disable();
+
+        {
+            let node = node_handle.start_or_panic();
+
+            sleep(Duration::from_secs(1));
+            assert!(node.get_exchange_rate().is_none());
+
+            info!("Restarting node...");
+        } // Shut down the node
+          // Wait for shutdown to complete
+        sleep(Duration::from_secs(5));
+
+        node_handle.get_exchange_rate_provider().enable();
+
+        {
+            let node = node_handle.start_or_panic();
+
+            sleep(Duration::from_secs(1));
+            assert!(node.get_exchange_rate().is_some());
+
+            info!("Restarting node...");
+        } // Shut down the node
+          // Wait for shutdown to complete
+        sleep(Duration::from_secs(5));
+
+        node_handle.get_exchange_rate_provider().disable();
+
+        let node = node_handle.start_or_panic();
+        sleep(Duration::from_secs(1));
+        assert!(node.get_exchange_rate().is_some());
     }
 
     fn assert_payments_are_partially_equal(left: &Payment, right: &Payment) {

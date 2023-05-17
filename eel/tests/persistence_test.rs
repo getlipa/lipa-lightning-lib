@@ -5,7 +5,7 @@ mod setup_env;
 mod persistence_test {
     use crate::setup::mocked_remote_storage::Config;
     use eel::errors::RuntimeErrorCode;
-    use eel::interfaces::RemoteStorage;
+    use eel::interfaces::{ExchangeRateProvider, RemoteStorage};
     use eel::LightningNode;
     use log::info;
     use perro::Error::RuntimeError;
@@ -75,7 +75,12 @@ mod persistence_test {
         ));
     }
 
-    fn run_flow_normal_restart<S: RemoteStorage + Clone + 'static>(node_handle: &NodeHandle<S>) {
+    fn run_flow_normal_restart<
+        S: RemoteStorage + Clone + 'static,
+        X: ExchangeRateProvider + Clone,
+    >(
+        node_handle: &NodeHandle<S, X>,
+    ) {
         run_flow_1st_jit_channel(node_handle);
 
         // Wait for eel-node to shutdown
@@ -84,7 +89,12 @@ mod persistence_test {
         run_flow_2nd_jit_channel(node_handle);
     }
 
-    fn run_flow_recovery_restart<S: RemoteStorage + Clone + 'static>(node_handle: &NodeHandle<S>) {
+    fn run_flow_recovery_restart<
+        S: RemoteStorage + Clone + 'static,
+        X: ExchangeRateProvider + Clone,
+    >(
+        node_handle: &NodeHandle<S, X>,
+    ) {
         run_flow_1st_jit_channel(node_handle);
 
         // Wait for eel-node to shutdown
@@ -102,7 +112,12 @@ mod persistence_test {
         run_flow_2nd_jit_channel(node_handle);
     }
 
-    fn run_flow_1st_jit_channel<S: RemoteStorage + Clone + 'static>(node_handle: &NodeHandle<S>) {
+    fn run_flow_1st_jit_channel<
+        S: RemoteStorage + Clone + 'static,
+        X: ExchangeRateProvider + Clone,
+    >(
+        node_handle: &NodeHandle<S, X>,
+    ) {
         {
             let node = node_handle.start_or_panic();
             wait_for_eq!(node.get_node_info().num_peers, 1);
@@ -131,7 +146,12 @@ mod persistence_test {
         } // Shut down the node
     }
 
-    fn run_flow_2nd_jit_channel<S: RemoteStorage + Clone + 'static>(node_handle: &NodeHandle<S>) {
+    fn run_flow_2nd_jit_channel<
+        S: RemoteStorage + Clone + 'static,
+        X: ExchangeRateProvider + Clone,
+    >(
+        node_handle: &NodeHandle<S, X>,
+    ) {
         {
             let node = node_handle.start_or_panic();
 

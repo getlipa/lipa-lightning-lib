@@ -4,6 +4,8 @@ use crate::invoice;
 use crate::migrations::get_migrations;
 use crate::schema_migration::migrate_schema;
 
+use crate::interfaces::ExchangeRate;
+use chrono::{DateTime, Utc};
 use lightning_invoice::Invoice;
 use perro::{MapToError, OptionToError};
 use rusqlite::types::Type;
@@ -13,18 +15,18 @@ use std::time::SystemTime;
 
 use crate::payment::{FiatValues, Payment, PaymentState, PaymentType, TzTime};
 
-pub(crate) struct PaymentStore {
+pub(crate) struct DataStore {
     db_conn: Connection,
     timezone_config: TzConfig,
 }
 
-impl PaymentStore {
+impl DataStore {
     pub fn new(db_path: &str, timezone_config: TzConfig) -> Result<Self> {
         let mut db_conn = Connection::open(db_path).map_to_invalid_input("Invalid db path")?;
 
         migrate_schema(&mut db_conn, get_migrations())?;
 
-        Ok(PaymentStore {
+        Ok(DataStore {
             db_conn,
             timezone_config,
         })
@@ -182,7 +184,7 @@ impl PaymentStore {
             ",
                 (preimage, hash),
             )
-            .map_to_invalid_input("Failed to insert preimage into payment db")?;
+            .map_to_invalid_input("Failed to insert preimage into db")?;
 
         Ok(())
     }
@@ -197,7 +199,7 @@ impl PaymentStore {
             ",
                 (network_fees_msat, hash),
             )
-            .map_to_invalid_input("Failed to insert network fee into payment db")?;
+            .map_to_invalid_input("Failed to insert network fee into db")?;
 
         Ok(())
     }
@@ -226,7 +228,7 @@ impl PaymentStore {
 
         let mut payments = Vec::new();
         for payment in payment_iter {
-            payments.push(payment.map_to_permanent_failure("Corrupted payment db")?);
+            payments.push(payment.map_to_permanent_failure("Corrupted db")?);
         }
 
         Ok(payments)
@@ -258,7 +260,7 @@ impl PaymentStore {
             .ok_or_invalid_input(
                 "Invalid hash: no payment with the provided payment hash was found",
             )?
-            .map_to_permanent_failure("Corrupted payment db")?;
+            .map_to_permanent_failure("Corrupted db")?;
         Ok(payment)
     }
 
@@ -288,7 +290,7 @@ impl PaymentStore {
             .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
 
         for payment in non_expired_payment_iter {
-            let payment = payment.map_to_permanent_failure("Corrupted payment db")?;
+            let payment = payment.map_to_permanent_failure("Corrupted db")?;
             debug_assert!(
                 payment.payment_state != PaymentState::Succeeded
                     && payment.payment_state != PaymentState::InvoiceExpired
@@ -299,6 +301,48 @@ impl PaymentStore {
         }
 
         Ok(())
+    }
+
+    pub fn update_exchange_rate(
+        &self,
+        currency_code: &str,
+        rate: u32,
+        updated_at: SystemTime,
+    ) -> Result<()> {
+        let dt: DateTime<Utc> = updated_at.into();
+        self.db_conn
+            .execute(
+                "\
+                REPLACE INTO exchange_rates (fiat_currency, rate, updated_at) \
+                VALUES (?1, ?2, ?3)
+                ",
+                (currency_code, rate, dt),
+            )
+            .map_to_invalid_input("Failed to update exchange rate in db")?;
+
+        Ok(())
+    }
+
+    pub fn get_all_exchange_rates(&self) -> Result<Vec<ExchangeRate>> {
+        let mut statement = self
+            .db_conn
+            .prepare(
+                " \
+            SELECT fiat_currency, rate, updated_at \
+            FROM exchange_rates \
+            ",
+            )
+            .map_to_permanent_failure("Failed to prepare SQL query")?;
+
+        let rate_iter = statement
+            .query_map([], exchange_rate_from_row)
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
+
+        let mut rates = Vec::new();
+        for rate in rate_iter {
+            rates.push(rate.map_to_permanent_failure("Corrupted db")?);
+        }
+        Ok(rates)
     }
 }
 
@@ -375,12 +419,23 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     })
 }
 
+fn exchange_rate_from_row(row: &Row) -> rusqlite::Result<ExchangeRate> {
+    let fiat_currency: String = row.get(0)?;
+    let rate: u32 = row.get(1)?;
+    let updated_at: chrono::DateTime<chrono::Utc> = row.get(2)?;
+    Ok(ExchangeRate {
+        currency_code: fiat_currency,
+        rate,
+        updated_at: SystemTime::from(updated_at),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use crate::config::TzConfig;
-    use crate::interfaces::ExchangeRates;
+    use crate::data_store::DataStore;
+    use crate::interfaces::ExchangeRate;
     use crate::payment::{FiatValues, PaymentState, PaymentType};
-    use crate::payment_store::PaymentStore;
 
     use lightning::ln::PaymentSecret;
     use lightning_invoice::{Currency, InvoiceBuilder};
@@ -388,7 +443,7 @@ mod tests {
     use secp256k1::{Secp256k1, SecretKey};
     use std::fs;
     use std::thread::sleep;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
 
     const TEST_DB_PATH: &str = ".3l_local_test";
     const TEST_TZ_ID: &str = "test_timezone_id";
@@ -402,8 +457,8 @@ mod tests {
             timezone_id: String::from(TEST_TZ_ID),
             timezone_utc_offset_secs: TEST_TZ_OFFSET,
         };
-        let mut payment_store =
-            PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}"), tz_config).unwrap();
+        let mut data_store =
+            DataStore::new(&format!("{TEST_DB_PATH}/{db_name}"), tz_config).unwrap();
 
         let hash = "1234";
         let _preimage = "5678";
@@ -414,9 +469,9 @@ mod tests {
         let metadata = String::from("Test metadata 1");
         let fiat_value = None;
 
-        assert!(payment_store.get_payment(hash).is_err());
+        assert!(data_store.get_payment(hash).is_err());
 
-        payment_store
+        data_store
             .new_incoming_payment(
                 hash,
                 amount_msat,
@@ -428,7 +483,7 @@ mod tests {
             )
             .unwrap();
 
-        assert!(payment_store.get_payment(hash).is_ok());
+        assert!(data_store.get_payment(hash).is_ok());
     }
 
     #[test]
@@ -439,10 +494,10 @@ mod tests {
             timezone_id: String::from(TEST_TZ_ID),
             timezone_utc_offset_secs: TEST_TZ_OFFSET,
         };
-        let mut payment_store =
-            PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}"), tz_config).unwrap();
+        let mut data_store =
+            DataStore::new(&format!("{TEST_DB_PATH}/{db_name}"), tz_config).unwrap();
 
-        let payments = payment_store.get_latest_payments(100).unwrap();
+        let payments = data_store.get_latest_payments(100).unwrap();
         assert!(payments.is_empty());
 
         // New incoming payment
@@ -459,7 +514,7 @@ mod tests {
             amount_usd: 3913,
         });
 
-        payment_store
+        data_store
             .new_incoming_payment(
                 hash,
                 amount_msat,
@@ -471,7 +526,7 @@ mod tests {
             )
             .unwrap();
 
-        let payments = payment_store.get_latest_payments(100).unwrap();
+        let payments = data_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_type, PaymentType::Receiving);
@@ -491,9 +546,9 @@ mod tests {
         assert_eq!(payment.created_at, payment.latest_state_change_at);
         let created_at = payment.created_at.time;
 
-        payment_store.fill_preimage(hash, preimage).unwrap();
+        data_store.fill_preimage(hash, preimage).unwrap();
 
-        let payments = payment_store.get_latest_payments(100).unwrap();
+        let payments = data_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.preimage, Some(preimage.to_string()));
@@ -501,9 +556,9 @@ mod tests {
         // To be able to test the difference between created_at and latest_state_change_at
         sleep(Duration::from_secs(1));
 
-        payment_store.incoming_payment_succeeded(hash).unwrap();
+        data_store.incoming_payment_succeeded(hash).unwrap();
 
-        let payments = payment_store.get_latest_payments(100).unwrap();
+        let payments = data_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 1);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Succeeded);
@@ -532,7 +587,7 @@ mod tests {
             amount_usd: 4103,
         });
 
-        payment_store
+        data_store
             .new_outgoing_payment(
                 hash,
                 amount_msat,
@@ -543,7 +598,7 @@ mod tests {
             )
             .unwrap();
 
-        let payments = payment_store.get_latest_payments(100).unwrap();
+        let payments = data_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 2);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_type, PaymentType::Sending);
@@ -566,10 +621,10 @@ mod tests {
         // To be able to test the difference between created_at and latest_state_change_at
         sleep(Duration::from_secs(1));
 
-        payment_store
+        data_store
             .new_payment_state(hash, PaymentState::Failed)
             .unwrap();
-        let payments = payment_store.get_latest_payments(100).unwrap();
+        let payments = data_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 2);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Failed);
@@ -584,10 +639,10 @@ mod tests {
         assert_ne!(payment.created_at.time, payment.latest_state_change_at.time);
         assert!(payment.created_at.time < payment.latest_state_change_at.time);
 
-        payment_store
+        data_store
             .new_payment_state(hash, PaymentState::Retried)
             .unwrap();
-        let payments = payment_store.get_latest_payments(100).unwrap();
+        let payments = data_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 2);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Retried);
@@ -616,7 +671,7 @@ mod tests {
             amount_usd: 3592,
         });
 
-        payment_store
+        data_store
             .new_outgoing_payment(
                 hash,
                 amount_msat,
@@ -627,7 +682,7 @@ mod tests {
             )
             .unwrap();
 
-        let payments = payment_store.get_latest_payments(100).unwrap();
+        let payments = data_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 3);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_type, PaymentType::Sending);
@@ -650,10 +705,10 @@ mod tests {
         // To be able to test the difference between created_at and latest_state_change_at
         sleep(Duration::from_secs(1));
 
-        payment_store
+        data_store
             .outgoing_payment_succeeded(hash, preimage, network_fees_msat)
             .unwrap();
-        let payments = payment_store.get_latest_payments(100).unwrap();
+        let payments = data_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 3);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Succeeded);
@@ -670,7 +725,7 @@ mod tests {
         assert_ne!(payment.created_at.time, payment.latest_state_change_at.time);
         assert!(payment.created_at.time < payment.latest_state_change_at.time);
 
-        let payment_by_hash = payment_store.get_payment(hash).unwrap();
+        let payment_by_hash = data_store.get_payment(hash).unwrap();
         assert_eq!(payment, &payment_by_hash);
     }
 
@@ -681,29 +736,34 @@ mod tests {
 
     #[test]
     fn test_fiat_value_from_exchange_rate() {
-        let exchange_rates = ExchangeRates {
+        let exchange_rate = ExchangeRate {
             currency_code: "EUR".to_string(),
             rate: 5_000,
-            usd_rate: 5_000,
+            updated_at: SystemTime::now(),
+        };
+        let exchange_rate_usd = ExchangeRate {
+            currency_code: "USD".to_string(),
+            rate: 5_050,
+            updated_at: SystemTime::now(),
         };
         assert_eq!(
-            FiatValues::from_amount_msat(1_000, &exchange_rates).amount,
+            FiatValues::from_amount_msat(1_000, &exchange_rate, &exchange_rate_usd).amount,
             0
         );
         assert_eq!(
-            FiatValues::from_amount_msat(10_000, &exchange_rates).amount,
+            FiatValues::from_amount_msat(10_000, &exchange_rate, &exchange_rate_usd).amount,
             2
         );
         assert_eq!(
-            FiatValues::from_amount_msat(100_000, &exchange_rates).amount,
+            FiatValues::from_amount_msat(100_000, &exchange_rate, &exchange_rate_usd).amount,
             20
         );
         assert_eq!(
-            FiatValues::from_amount_msat(1_000_000, &exchange_rates).amount,
+            FiatValues::from_amount_msat(1_000_000, &exchange_rate, &exchange_rate_usd).amount,
             200
         );
         assert_eq!(
-            FiatValues::from_amount_msat(10_000_000, &exchange_rates).amount,
+            FiatValues::from_amount_msat(10_000_000, &exchange_rate, &exchange_rate_usd).amount,
             2_000
         );
     }
@@ -716,8 +776,8 @@ mod tests {
             timezone_id: String::from(TEST_TZ_ID),
             timezone_utc_offset_secs: TEST_TZ_OFFSET,
         };
-        let mut payment_store =
-            PaymentStore::new(&format!("{TEST_DB_PATH}/{db_name}"), tz_config).unwrap();
+        let mut data_store =
+            DataStore::new(&format!("{TEST_DB_PATH}/{db_name}"), tz_config).unwrap();
 
         let amount_msat = 5_000_000;
         let _network_fees_msat = 2_000;
@@ -734,7 +794,7 @@ mod tests {
         //      * Receiving payments can only have state "Created", "Succeeded" or "InvoiceExpired"
         //      * Sending payments can have any of the 5 existing states
         for i in 0..5 {
-            payment_store
+            data_store
                 .new_outgoing_payment(
                     &i.to_string(),
                     amount_msat,
@@ -746,7 +806,7 @@ mod tests {
                 .unwrap();
         }
         for i in 5..8 {
-            payment_store
+            data_store
                 .new_incoming_payment(
                     &i.to_string(),
                     amount_msat,
@@ -760,57 +820,57 @@ mod tests {
         }
 
         // Set the states
-        payment_store
+        data_store
             .new_payment_state("1", PaymentState::Succeeded)
             .unwrap();
-        payment_store
+        data_store
             .new_payment_state("2", PaymentState::Failed)
             .unwrap();
-        payment_store
+        data_store
             .new_payment_state("3", PaymentState::Retried)
             .unwrap();
-        payment_store
+        data_store
             .new_payment_state("4", PaymentState::InvoiceExpired)
             .unwrap();
-        payment_store
+        data_store
             .new_payment_state("6", PaymentState::Succeeded)
             .unwrap();
-        payment_store
+        data_store
             .new_payment_state("7", PaymentState::InvoiceExpired)
             .unwrap();
 
-        payment_store.process_expired_payments().unwrap();
+        data_store.process_expired_payments().unwrap();
 
         assert_eq!(
-            payment_store.get_payment("0").unwrap().payment_state,
+            data_store.get_payment("0").unwrap().payment_state,
             PaymentState::Created
         );
         assert_eq!(
-            payment_store.get_payment("1").unwrap().payment_state,
+            data_store.get_payment("1").unwrap().payment_state,
             PaymentState::Succeeded
         );
         assert_eq!(
-            payment_store.get_payment("2").unwrap().payment_state,
+            data_store.get_payment("2").unwrap().payment_state,
             PaymentState::InvoiceExpired
         );
         assert_eq!(
-            payment_store.get_payment("3").unwrap().payment_state,
+            data_store.get_payment("3").unwrap().payment_state,
             PaymentState::Retried
         );
         assert_eq!(
-            payment_store.get_payment("4").unwrap().payment_state,
+            data_store.get_payment("4").unwrap().payment_state,
             PaymentState::InvoiceExpired
         );
         assert_eq!(
-            payment_store.get_payment("5").unwrap().payment_state,
+            data_store.get_payment("5").unwrap().payment_state,
             PaymentState::InvoiceExpired
         );
         assert_eq!(
-            payment_store.get_payment("6").unwrap().payment_state,
+            data_store.get_payment("6").unwrap().payment_state,
             PaymentState::Succeeded
         );
         assert_eq!(
-            payment_store.get_payment("7").unwrap().payment_state,
+            data_store.get_payment("7").unwrap().payment_state,
             PaymentState::InvoiceExpired
         );
     }
@@ -840,5 +900,79 @@ mod tests {
             .unwrap();
 
         invoice.to_string()
+    }
+
+    #[test]
+    fn test_exchange_rate_storage() {
+        let db_name = String::from("rates.db3");
+        reset_db(&db_name);
+        let tz_config = TzConfig {
+            timezone_id: String::from(TEST_TZ_ID),
+            timezone_utc_offset_secs: TEST_TZ_OFFSET,
+        };
+        let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}"), tz_config).unwrap();
+
+        assert!(data_store.get_all_exchange_rates().unwrap().is_empty());
+
+        data_store
+            .update_exchange_rate(
+                "USD",
+                1234,
+                SystemTime::UNIX_EPOCH + Duration::from_secs(10),
+            )
+            .unwrap();
+        let rates = data_store.get_all_exchange_rates().unwrap();
+        let usd_rate = rates.iter().find(|r| r.currency_code == "USD").unwrap();
+        assert_eq!(usd_rate.rate, 1234);
+        assert_eq!(
+            usd_rate.updated_at,
+            SystemTime::UNIX_EPOCH + Duration::from_secs(10)
+        );
+
+        sleep(Duration::from_secs(2));
+
+        data_store
+            .update_exchange_rate(
+                "EUR",
+                5678,
+                SystemTime::UNIX_EPOCH + Duration::from_secs(20),
+            )
+            .unwrap();
+        let rates = data_store.get_all_exchange_rates().unwrap();
+        let usd_rate = rates.iter().find(|r| r.currency_code == "USD").unwrap();
+        let eur_rate = rates.iter().find(|r| r.currency_code == "EUR").unwrap();
+        assert_eq!(usd_rate.rate, 1234);
+        assert_eq!(
+            usd_rate.updated_at,
+            SystemTime::UNIX_EPOCH + Duration::from_secs(10)
+        );
+        assert_eq!(eur_rate.rate, 5678);
+        assert_eq!(
+            eur_rate.updated_at,
+            SystemTime::UNIX_EPOCH + Duration::from_secs(20)
+        );
+
+        sleep(Duration::from_secs(2));
+
+        data_store
+            .update_exchange_rate(
+                "USD",
+                4321,
+                SystemTime::UNIX_EPOCH + Duration::from_secs(30),
+            )
+            .unwrap();
+        let rates = data_store.get_all_exchange_rates().unwrap();
+        let usd_rate = rates.iter().find(|r| r.currency_code == "USD").unwrap();
+        let eur_rate = rates.iter().find(|r| r.currency_code == "EUR").unwrap();
+        assert_eq!(usd_rate.rate, 4321);
+        assert_eq!(
+            usd_rate.updated_at,
+            SystemTime::UNIX_EPOCH + Duration::from_secs(30)
+        );
+        assert_eq!(eur_rate.rate, 5678);
+        assert_eq!(
+            eur_rate.updated_at,
+            SystemTime::UNIX_EPOCH + Duration::from_secs(20)
+        );
     }
 }

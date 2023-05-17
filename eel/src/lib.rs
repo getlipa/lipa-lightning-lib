@@ -3,6 +3,7 @@
 extern crate core;
 
 pub mod config;
+mod data_store;
 pub mod errors;
 pub mod interfaces;
 pub mod key_derivation;
@@ -12,7 +13,6 @@ mod migrations;
 pub mod node_info;
 pub mod p2p_networking;
 pub mod payment;
-mod payment_store;
 pub mod recovery;
 mod schema_migration;
 pub mod secret;
@@ -34,11 +34,12 @@ mod types;
 
 use crate::async_runtime::AsyncRuntime;
 use crate::config::{Config, TzConfig};
+use crate::data_store::DataStore;
 use crate::errors::*;
 use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
-use crate::interfaces::{EventHandler, ExchangeRateProvider, ExchangeRates, RemoteStorage};
+use crate::interfaces::{EventHandler, ExchangeRate, ExchangeRateProvider, RemoteStorage};
 pub use crate::invoice::InvoiceDetails;
 use crate::invoice::{create_invoice, validate_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
@@ -46,13 +47,13 @@ use crate::logger::LightningLogger;
 use crate::lsp::{calculate_fee, LspClient, LspFee};
 use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info, NodeInfo};
 use crate::payment::{FiatValues, Payment, PaymentState, PaymentType};
-use crate::payment_store::PaymentStore;
 use crate::random::generate_random_bytes;
 use crate::rapid_sync_client::RapidSyncClient;
 use crate::storage_persister::StoragePersister;
 use crate::task_manager::{RestartIfFailedPeriod, TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router, TxSync};
+use std::fs;
 
 use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
@@ -98,7 +99,7 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
 
 #[allow(dead_code)]
 pub struct LightningNode {
-    config: Config,
+    config: Mutex<Config>,
     rt: AsyncRuntime,
     lsp_client: Arc<LspClient>,
     keys_manager: Arc<KeysManager>,
@@ -106,7 +107,7 @@ pub struct LightningNode {
     channel_manager: Arc<ChannelManager>,
     peer_manager: Arc<PeerManager>,
     task_manager: Arc<Mutex<TaskManager>>,
-    payment_store: Arc<Mutex<PaymentStore>>,
+    data_store: Arc<Mutex<DataStore>>,
 }
 
 impl LightningNode {
@@ -267,7 +268,24 @@ impl LightningNode {
             config.lsp_token.clone(),
         )?);
 
-        // Step 20: Initialize the TaskManager
+        // Step 20: Initialize the DataStore
+        let payment_store_path = Path::new(&config.local_persistence_path).join("payment_db.db3");
+        let data_store_path = Path::new(&config.local_persistence_path).join("db.db3");
+        if !data_store_path.exists() && payment_store_path.exists() {
+            fs::copy(&payment_store_path, &data_store_path)
+                .map_to_permanent_failure("Failed to migrate db location")?;
+            fs::remove_file(payment_store_path)
+                .map_to_permanent_failure("Failed to migrate db location")?;
+        }
+        let data_store_path = data_store_path
+            .to_str()
+            .ok_or_invalid_input("Invalid local persistence path")?;
+        let data_store = Arc::new(Mutex::new(DataStore::new(
+            data_store_path,
+            config.timezone_config.clone(),
+        )?));
+
+        // Step 21: Initialize the TaskManager
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),
             Arc::clone(&lsp_client),
@@ -277,30 +295,20 @@ impl LightningNode {
             Arc::clone(&channel_manager),
             Arc::clone(&chain_monitor),
             Arc::clone(&tx_sync),
-            config.fiat_currency.clone(),
             exchange_rate_provider,
-        )));
+            Arc::clone(&data_store),
+        )?));
         task_manager
             .lock()
             .unwrap()
             .restart(get_foreground_periods());
-
-        // Step 21: Initialize the PaymentStore
-        let payment_store_path = Path::new(&config.local_persistence_path).join("payment_db.db3");
-        let payment_store_path = payment_store_path
-            .to_str()
-            .ok_or_invalid_input("Invalid local persistence path")?;
-        let payment_store = Arc::new(Mutex::new(PaymentStore::new(
-            payment_store_path,
-            config.timezone_config.clone(),
-        )?));
 
         // Step 22. Initialize an EventHandler
         let event_handler = Arc::new(LipaEventHandler::new(
             Arc::clone(&channel_manager),
             Arc::clone(&task_manager),
             user_event_handler,
-            Arc::clone(&payment_store),
+            Arc::clone(&data_store),
         )?);
 
         // Step 23. Start Background Processing
@@ -323,7 +331,7 @@ impl LightningNode {
         );
 
         Ok(Self {
-            config,
+            config: Mutex::new(config),
             rt,
             lsp_client,
             keys_manager,
@@ -331,7 +339,7 @@ impl LightningNode {
             channel_manager: Arc::clone(&channel_manager),
             peer_manager,
             task_manager,
-            payment_store,
+            data_store,
         })
     }
 
@@ -374,13 +382,16 @@ impl LightningNode {
         description: String,
         metadata: String,
     ) -> Result<InvoiceDetails> {
-        let currency = match self.config.network {
+        let currency = match self.config.lock().unwrap().network {
             Network::Bitcoin => Currency::Bitcoin,
             Network::Testnet => Currency::BitcoinTestnet,
             Network::Regtest => Currency::Regtest,
             Network::Signet => Currency::Signet,
         };
-        let fiat_values = self.get_fiat_values(amount_msat);
+        let fiat_values = self.get_fiat_values(
+            amount_msat,
+            self.config.lock().unwrap().fiat_currency.clone(),
+        );
         let signed_invoice = self.rt.handle().block_on(create_invoice(
             CreateInvoiceParams {
                 amount_msat,
@@ -391,7 +402,7 @@ impl LightningNode {
             &self.channel_manager,
             &self.lsp_client,
             &self.keys_manager,
-            &mut self.payment_store.lock().unwrap(),
+            &mut self.data_store.lock().unwrap(),
             fiat_values,
         ))?;
         let invoice_str = signed_invoice.to_string();
@@ -474,14 +485,14 @@ impl LightningNode {
     ) -> Result<()> {
         match error {
             PaymentError::Invoice(e) => {
-                self.payment_store
+                self.data_store
                     .lock()
                     .unwrap()
                     .new_payment_state(payment_hash, PaymentState::Failed)?;
                 Err(invalid_input(format!("Invalid invoice - {e}")))
             }
             PaymentError::Sending(e) => {
-                self.payment_store
+                self.data_store
                     .lock()
                     .unwrap()
                     .new_payment_state(payment_hash, PaymentState::Failed)?;
@@ -509,16 +520,19 @@ impl LightningNode {
         amount_msat: u64,
         metadata: &str,
     ) -> Result<()> {
-        validate_invoice(self.config.network, invoice)?;
+        validate_invoice(self.config.lock().unwrap().network, invoice)?;
 
         let description = match invoice.description() {
             InvoiceDescription::Direct(d) => d.clone().into_inner(),
             InvoiceDescription::Hash(h) => h.0.to_hex(),
         };
-        let fiat_values = self.get_fiat_values(amount_msat);
+        let fiat_values = self.get_fiat_values(
+            amount_msat,
+            self.config.lock().unwrap().fiat_currency.clone(),
+        );
 
-        let mut payment_store = self.payment_store.lock().unwrap();
-        if let Ok(payment) = payment_store.get_payment(&invoice.payment_hash().to_string()) {
+        let mut data_store = self.data_store.lock().unwrap();
+        if let Ok(payment) = data_store.get_payment(&invoice.payment_hash().to_string()) {
             match payment.payment_type {
                 PaymentType::Receiving => return Err(runtime_error(
                     RuntimeErrorCode::PayingToSelf,
@@ -531,14 +545,14 @@ impl LightningNode {
                             "This invoice has already been paid or is in the process of being paid. Please use a different one or wait until the current payment attempt fails before retrying.",
                         ));
                     }
-                    payment_store.new_payment_state(
+                    data_store.new_payment_state(
                         &invoice.payment_hash().to_string(),
                         PaymentState::Retried,
                     )?;
                 }
             }
         } else {
-            payment_store.new_outgoing_payment(
+            data_store.new_outgoing_payment(
                 &invoice.payment_hash().to_string(),
                 amount_msat,
                 &description,
@@ -557,14 +571,14 @@ impl LightningNode {
             ));
         }
 
-        self.payment_store
+        self.data_store
             .lock()
             .unwrap()
             .get_latest_payments(number_of_payments)
     }
 
     pub fn get_payment(&self, hash: &str) -> Result<Payment> {
-        self.payment_store.lock().unwrap().get_payment(hash)
+        self.data_store.lock().unwrap().get_payment(hash)
     }
 
     pub fn foreground(&self) {
@@ -581,33 +595,33 @@ impl LightningNode {
             .restart(BACKGROUND_PERIODS);
     }
 
-    pub fn get_exchange_rates(&self) -> Result<ExchangeRates> {
-        self.task_manager
-            .lock()
-            .unwrap()
-            .get_exchange_rates()
-            .ok_or_runtime_error(
-                RuntimeErrorCode::ExchangeRateProviderUnavailable,
-                "Failed to get exchange rates",
-            )
+    pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
+        let rates = self.task_manager.lock().unwrap().get_exchange_rates();
+        rates
+            .iter()
+            .find(|r| r.currency_code == self.config.lock().unwrap().fiat_currency)
+            .cloned()
     }
 
     pub fn change_fiat_currency(&self, fiat_currency: String) {
         let mut task_manager = self.task_manager.lock().unwrap();
-        task_manager.change_fiat_currency(fiat_currency);
+        self.config.lock().unwrap().fiat_currency = fiat_currency;
         // if the fiat currency is being changed, we can assume the app is in the foreground
         task_manager.restart(get_foreground_periods());
     }
 
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
-        let mut payment_store = self.payment_store.lock().unwrap();
-        payment_store.update_timezone_config(timezone_config);
+        let mut data_store = self.data_store.lock().unwrap();
+        data_store.update_timezone_config(timezone_config);
     }
 
-    pub fn get_fiat_values(&self, amount_msat: u64) -> Option<FiatValues> {
-        self.get_exchange_rates()
-            .ok()
-            .map(|e| FiatValues::from_amount_msat(amount_msat, &e))
+    pub fn get_fiat_values(&self, amount_msat: u64, currency_code: String) -> Option<FiatValues> {
+        let rates = self.task_manager.lock().unwrap().get_exchange_rates();
+        let usd_rate = rates.iter().find(|r| r.currency_code == "USD")?;
+        rates
+            .iter()
+            .find(|r| r.currency_code == currency_code)
+            .map(|r| FiatValues::from_amount_msat(amount_msat, r, usd_rate))
     }
 }
 
