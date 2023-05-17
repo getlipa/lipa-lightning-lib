@@ -153,8 +153,7 @@ mod rapid_gossip_sync_test {
             let node = node_handle.start_or_panic();
 
             // Wait for p2p connection to be reestablished and channels marked active
-            sleep(Duration::from_secs(5));
-            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
+            wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
 
             send_payment_flow(&node, NodeInstance::NigiriLnd, ONE_K_SATS);
         }
@@ -164,8 +163,10 @@ mod rapid_gossip_sync_test {
         let invoice = nigiri::issue_invoice(target, "test", amount_msat, 3600).unwrap();
         let initial_balance = nigiri::query_node_balance(target).unwrap();
         node.pay_invoice(invoice, String::new()).unwrap();
-        sleep(Duration::from_secs(2));
-        let final_balance = nigiri::query_node_balance(target).unwrap();
-        assert_eq!(final_balance - initial_balance, amount_msat);
+
+        wait_for_eq!(
+            nigiri::query_node_balance(target).unwrap(),
+            initial_balance + amount_msat
+        );
     }
 }
