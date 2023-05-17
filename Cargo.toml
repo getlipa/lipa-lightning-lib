@@ -22,9 +22,9 @@ log = "0.4.17"
 uniffi = "0.23.0"
 thiserror = "1.0.40"
 
-chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.0.6" }
-honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.0.6" }
-mole = { git = "https://github.com/getlipa/wild", tag = "v1.0.6" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.1.1" }
+honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.1.1" }
+mole = { git = "https://github.com/getlipa/wild", tag = "v1.1.1" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.1" }
 
 [dev-dependencies]
