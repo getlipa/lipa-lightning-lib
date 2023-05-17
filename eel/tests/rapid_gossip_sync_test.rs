@@ -25,7 +25,6 @@ mod rapid_gossip_sync_test {
 
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
-    #[ignore]
     fn test_update_from_0_and_partial_update() {
         nigiri::setup_environment_with_lsp_rgs();
         let node_handle = mocked_storage_node();
