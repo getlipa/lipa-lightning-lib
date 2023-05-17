@@ -348,13 +348,7 @@ pub mod nigiri {
         let channels = json["channels"].as_array().unwrap();
         let mut balance: u64 = 0;
         for channel in channels {
-            balance += channel["our_amount_msat"]
-                .as_str()
-                .unwrap()
-                .strip_suffix("msat")
-                .unwrap()
-                .parse::<u64>()
-                .unwrap();
+            balance += channel["our_amount_msat"].as_u64().unwrap();
         }
 
         Ok(balance)
