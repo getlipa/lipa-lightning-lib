@@ -429,10 +429,11 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.0.6#d0c619887c4981fa14692e362722630c13507d54"
+source = "git+https://github.com/getlipa/wild?tag=v1.1.0#dde17866761087e34004ed8ae49d72d3cc56c290"
 dependencies = [
- "graphql",
- "honey-badger",
+ "chrono",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.1.0)",
+ "honey-badger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.1.0)",
  "log",
 ]
 
@@ -1093,6 +1094,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql"
+version = "0.1.0"
+source = "git+https://github.com/getlipa/wild?tag=v1.1.0#dde17866761087e34004ed8ae49d72d3cc56c290"
+dependencies = [
+ "graphql_client",
+ "log",
+ "perro",
+ "reqwest",
+ "serde",
+]
+
+[[package]]
 name = "graphql-introspection-query"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1271,7 +1284,22 @@ dependencies = [
  "base64 0.21.0",
  "bdk",
  "chrono",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.0.6)",
+ "log",
+ "rand",
+ "secp256k1",
+ "serde_json",
+]
+
+[[package]]
+name = "honey-badger"
+version = "1.0.1"
+source = "git+https://github.com/getlipa/wild?tag=v1.1.0#dde17866761087e34004ed8ae49d72d3cc56c290"
+dependencies = [
+ "base64 0.21.0",
+ "bdk",
+ "chrono",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.1.0)",
  "log",
  "rand",
  "secp256k1",
@@ -1644,7 +1672,7 @@ dependencies = [
  "ctor",
  "eel",
  "esplora-client",
- "honey-badger",
+ "honey-badger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.0.6)",
  "log",
  "mole",
  "oslog",
@@ -1758,9 +1786,9 @@ name = "mole"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.0.6#d0c619887c4981fa14692e362722630c13507d54"
 dependencies = [
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.0.6)",
  "hex",
- "honey-badger",
+ "honey-badger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.0.6)",
  "log",
 ]
 
