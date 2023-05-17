@@ -251,6 +251,10 @@ fn node_info(node: &LightningNode) {
         "Outbound capacity in msat: {}",
         node_info.channels_info.outbound_capacity_msat
     );
+    println!(
+        " Capacity of all channels: {}",
+        node_info.channels_info.total_channel_capacities_msat
+    );
 }
 
 fn get_exchange_rates(node: &LightningNode) -> Result<(), String> {

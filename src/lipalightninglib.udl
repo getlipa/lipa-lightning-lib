@@ -203,6 +203,7 @@ dictionary ChannelsInfo {
     u16 num_usable_channels; // Number of usable channels. E.g. if a peer if offline, channels with that peer won't be usable.
     u64 local_balance_msat; // The balance of the local node. Please keep in mind not all of this balance is spendable
         // due to Lightning channel reserves
+    u64 total_channel_capacities_msat; // Total capacity of all usable channels of the node
 
     // Capacity the node can actually receive.
     // It excludes non usable channels, pending htlcs, channels reserves, etc.
@@ -248,10 +249,10 @@ dictionary Payment {
         // it is possible that a hex hash of the description is provided instead, but that is uncommon.
     string? preimage; // Hex representation of the preimage. Will only be present on successful payments.
     u64? network_fees_msat; // Routing fees paid in an `Sending` payment. Will only be present if payment was successful.
-                        // The cost of sending a payment is `amount_msat` + `network_fees_msat`
+        // The cost of sending a payment is `amount_msat` + `network_fees_msat`
     u64? lsp_fees_msat; // LSP fees paid in a `Receiving` payment. Will never be present for `Sending` payments but might be 0 for `Receiving` payments.
-                        // The amount is only paid if successful.
-                        // The value that is received in practice is given by `amount_msat` - `lsp_fees_msat`
+        // The amount is only paid if successful.
+        // The value that is received in practice is given by `amount_msat` - `lsp_fees_msat`
     FiatValues? fiat_values;
     string metadata;
 };
