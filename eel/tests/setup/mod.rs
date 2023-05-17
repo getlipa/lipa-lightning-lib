@@ -10,7 +10,7 @@ use crate::setup_env::{nigiri, CHANNEL_SIZE_MSAT};
 use crate::wait_for_eq;
 use eel::config::Config;
 use eel::errors::RuntimeErrorCode;
-use eel::interfaces::{ExchangeRateProvider, RemoteStorage};
+use eel::interfaces::{ExchangeRate, ExchangeRateProvider, RemoteStorage};
 use eel::recovery::recover_lightning_node;
 use eel::LightningNode;
 use mocked_remote_storage::MockedRemoteStorage;
@@ -19,7 +19,7 @@ use print_events_handler::PrintEventsHandler;
 use std::fs;
 use std::sync::Arc;
 use std::thread::sleep;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 use storage_mock::Storage;
 
 const LSPD_LND_HOST: &str = "lspd-lnd";
@@ -169,9 +169,20 @@ impl ExchangeRateProviderMock {
 }
 
 impl ExchangeRateProvider for ExchangeRateProviderMock {
-    fn query_exchange_rate(&self, _code: String) -> eel::errors::Result<u32> {
+    fn query_all_exchange_rates(&self) -> eel::errors::Result<Vec<ExchangeRate>> {
         match self.available {
-            true => Ok(1234),
+            true => Ok(vec![
+                ExchangeRate {
+                    currency_code: "USD".to_string(),
+                    rate: 1234,
+                    updated_at: SystemTime::now(),
+                },
+                ExchangeRate {
+                    currency_code: "EUR".to_string(),
+                    rate: 4321,
+                    updated_at: SystemTime::now(),
+                },
+            ]),
             false => Err(runtime_error(
                 RuntimeErrorCode::ExchangeRateProviderUnavailable,
                 "Mocked exchange rate provider set to unavailable",

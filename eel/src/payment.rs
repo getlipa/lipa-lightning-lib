@@ -1,4 +1,4 @@
-use crate::interfaces::ExchangeRates;
+use crate::interfaces::ExchangeRate;
 use crate::InvoiceDetails;
 
 use num_enum::TryFromPrimitive;
@@ -36,12 +36,16 @@ pub struct FiatValues {
 }
 
 impl FiatValues {
-    pub fn from_amount_msat(amount_msat: u64, exchange_rates: &ExchangeRates) -> Self {
+    pub fn from_amount_msat(
+        amount_msat: u64,
+        exchange_rate: &ExchangeRate,
+        exchange_rate_usd: &ExchangeRate,
+    ) -> Self {
         // Fiat amount in thousandths of the major fiat unit.
-        let amount = amount_msat / (exchange_rates.rate as u64);
-        let amount_usd = amount_msat / (exchange_rates.usd_rate as u64);
+        let amount = amount_msat / (exchange_rate.rate as u64);
+        let amount_usd = amount_msat / (exchange_rate_usd.rate as u64);
         FiatValues {
-            fiat: exchange_rates.currency_code.clone(),
+            fiat: exchange_rate.currency_code.clone(),
             amount,
             amount_usd,
         }

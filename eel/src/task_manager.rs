@@ -1,7 +1,7 @@
 use crate::async_runtime::{Handle, RepeatingTaskHandle};
 use crate::errors::Result;
 use crate::fee_estimator::FeeEstimator;
-use crate::interfaces::{ExchangeRateProvider, ExchangeRates};
+use crate::interfaces::{ExchangeRate, ExchangeRateProvider};
 use crate::lsp::{LspClient, LspInfo};
 use crate::p2p_networking::{connect_peer, LnPeer};
 use crate::rapid_sync_client::RapidSyncClient;
@@ -39,9 +39,8 @@ pub(crate) struct TaskManager {
     chain_monitor: Arc<ChainMonitor>,
     tx_sync: Arc<TxSync>,
 
-    fiat_currency: String,
     exchange_rate_provider: Arc<dyn ExchangeRateProvider>,
-    exchange_rates: Arc<Mutex<Option<ExchangeRates>>>,
+    exchange_rates: Arc<Mutex<Vec<ExchangeRate>>>,
     data_store: Arc<Mutex<DataStore>>,
 
     task_handles: Vec<RepeatingTaskHandle>,
@@ -58,11 +57,10 @@ impl TaskManager {
         channel_manager: Arc<ChannelManager>,
         chain_monitor: Arc<ChainMonitor>,
         tx_sync: Arc<TxSync>,
-        fiat_currency: String,
         exchange_rate_provider: Box<dyn ExchangeRateProvider>,
         data_store: Arc<Mutex<DataStore>>,
     ) -> Result<Self> {
-        let exchange_rates = recover_exchange_rates(Arc::clone(&data_store), &fiat_currency)?;
+        let exchange_rates = data_store.lock().unwrap().get_all_exchange_rates()?;
 
         Ok(Self {
             runtime_handle,
@@ -74,7 +72,6 @@ impl TaskManager {
             channel_manager,
             chain_monitor,
             tx_sync,
-            fiat_currency,
             exchange_rate_provider: Arc::from(exchange_rate_provider),
             exchange_rates: Arc::new(Mutex::new(exchange_rates)),
             data_store,
@@ -86,7 +83,7 @@ impl TaskManager {
         (*self.lsp_info.lock().unwrap()).clone()
     }
 
-    pub fn get_exchange_rates(&self) -> Option<ExchangeRates> {
+    pub fn get_exchange_rates(&self) -> Vec<ExchangeRate> {
         (*self.exchange_rates.lock().unwrap()).clone()
     }
 
@@ -247,31 +244,22 @@ impl TaskManager {
     }
 
     fn start_exchange_rate_update(&self, period: Duration) -> RepeatingTaskHandle {
-        let fiat_currency = self.fiat_currency.clone();
         let exchange_rate_provider = Arc::clone(&self.exchange_rate_provider);
         let exchange_rates = Arc::clone(&self.exchange_rates);
         let data_store = Arc::clone(&self.data_store);
         self.runtime_handle.spawn_repeating_task(period, move || {
-            let fiat_currency = fiat_currency.clone();
             let exchange_rate_provider = Arc::clone(&exchange_rate_provider);
             let exchange_rates = Arc::clone(&exchange_rates);
             let data_store = Arc::clone(&data_store);
             async move {
                 match tokio::task::spawn_blocking(move || {
-                    let rate = exchange_rate_provider.query_exchange_rate(fiat_currency.clone())?;
-                    let usd_rate = exchange_rate_provider.query_exchange_rate("USD".to_string())?;
-                    let rates = ExchangeRates {
-                        currency_code: fiat_currency,
-                        rate,
-                        usd_rate,
-                    };
-                    Ok(rates) as Result<ExchangeRates>
+                    exchange_rate_provider.query_all_exchange_rates()
                 })
                 .await
                 {
                     Ok(Ok(rates)) => {
                         persist_exchange_rates(&data_store, &rates);
-                        *exchange_rates.lock().unwrap() = Some(rates);
+                        *exchange_rates.lock().unwrap() = rates;
                     }
                     Ok(Err(e)) => {
                         error!("Failed to update exchange rates: {e}");
@@ -283,44 +271,16 @@ impl TaskManager {
             }
         })
     }
-
-    pub fn change_fiat_currency(&mut self, fiat_currency: String) {
-        self.fiat_currency = fiat_currency;
-    }
 }
 
-fn recover_exchange_rates(
-    data_store: Arc<Mutex<DataStore>>,
-    fiat_currency: &str,
-) -> Result<Option<ExchangeRates>> {
+fn persist_exchange_rates(data_store: &Arc<Mutex<DataStore>>, rates: &[ExchangeRate]) {
     let data_store = data_store.lock().unwrap();
-    let usd_rate = match data_store.get_exchange_rate("USD")? {
-        None => return Ok(None),
-        Some(r) => r,
-    };
-    let rate = match data_store.get_exchange_rate(fiat_currency)? {
-        None => return Ok(None),
-        Some(r) => r,
-    };
-    Ok(Some(ExchangeRates {
-        currency_code: String::from(fiat_currency),
-        rate,
-        usd_rate,
-    }))
-}
-
-fn persist_exchange_rates(data_store: &Arc<Mutex<DataStore>>, rates: &ExchangeRates) {
-    let data_store = data_store.lock().unwrap();
-    match data_store.update_exchange_rate("USD", rates.usd_rate) {
-        Ok(_) => {}
-        Err(e) => {
-            error!("Failed to update exchange rate in db: {}", e)
-        }
-    }
-    match data_store.update_exchange_rate(&rates.currency_code, rates.rate) {
-        Ok(_) => {}
-        Err(e) => {
-            error!("Failed to update exchange rate in db: {}", e)
+    for rate in rates {
+        match data_store.update_exchange_rate(&rate.currency_code, rate.rate, rate.updated_at) {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Failed to update exchange rate in db: {}", e)
+            }
         }
     }
 }

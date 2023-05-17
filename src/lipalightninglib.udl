@@ -104,7 +104,7 @@ interface LightningNode {
     [Throws=LnError]
     sequence<string> list_currency_codes();
 
-    // Get exchange rates on BTC/USD and BTC/<default currency> pairs
+    // Get exchange rate on the BTC/<default currency> pair
     // Please keep in mind that this method doesn't make any network calls. It simply retrieves
     // previously fetched values that are frequently updated by a background task.
     //
@@ -113,7 +113,7 @@ interface LightningNode {
     //
     // The return value is an optional to deal with the possibility
     // of no exchange rate values being known.
-    ExchangeRates? get_exchange_rates();
+    ExchangeRate? get_exchange_rate();
 
     // Change the fiat currency (ISO 4217 currency code) - not all are supported
     //      The method `list_currency_codes()` can used to list supported codes.
@@ -291,11 +291,11 @@ dictionary FiatValues {
     u64 amount_usd;
 };
 
-// Exchange rates as sats per major unit.
-dictionary ExchangeRates {
+// Exchange rate as sats per major unit.
+dictionary ExchangeRate {
     string currency_code;
     u32 rate;
-    u32 usd_rate;
+    timestamp updated_at;
 };
 
 //

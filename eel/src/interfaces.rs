@@ -1,4 +1,5 @@
 use crate::errors::Result;
+use std::time::SystemTime;
 
 pub trait RemoteStorage: Send + Sync {
     fn check_health(&self) -> bool;
@@ -23,12 +24,12 @@ pub trait EventHandler: Send + Sync {
 }
 
 #[derive(Clone)]
-pub struct ExchangeRates {
+pub struct ExchangeRate {
     pub currency_code: String,
     pub rate: u32,
-    pub usd_rate: u32,
+    pub updated_at: SystemTime,
 }
 
 pub trait ExchangeRateProvider: Send + Sync {
-    fn query_exchange_rate(&self, code: String) -> Result<u32>;
+    fn query_all_exchange_rates(&self) -> Result<Vec<ExchangeRate>>;
 }

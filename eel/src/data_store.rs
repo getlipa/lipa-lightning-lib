@@ -4,10 +4,12 @@ use crate::invoice;
 use crate::migrations::get_migrations;
 use crate::schema_migration::migrate_schema;
 
+use crate::interfaces::ExchangeRate;
+use chrono::{DateTime, Utc};
 use lightning_invoice::Invoice;
 use perro::{MapToError, OptionToError};
 use rusqlite::types::Type;
-use rusqlite::{Connection, OptionalExtension, Row};
+use rusqlite::{Connection, Row};
 use std::str::FromStr;
 use std::time::SystemTime;
 
@@ -301,33 +303,46 @@ impl DataStore {
         Ok(())
     }
 
-    pub fn update_exchange_rate(&self, currency_code: &str, rate: u32) -> Result<()> {
+    pub fn update_exchange_rate(
+        &self,
+        currency_code: &str,
+        rate: u32,
+        updated_at: SystemTime,
+    ) -> Result<()> {
+        let dt: DateTime<Utc> = updated_at.into();
         self.db_conn
             .execute(
                 "\
-                REPLACE INTO exchange_rates (fiat_currency, rate) \
-                VALUES (?1, ?2)
+                REPLACE INTO exchange_rates (fiat_currency, rate, updated_at) \
+                VALUES (?1, ?2, ?3)
                 ",
-                (currency_code, rate),
+                (currency_code, rate, dt),
             )
             .map_to_invalid_input("Failed to update exchange rate in db")?;
 
         Ok(())
     }
 
-    pub fn get_exchange_rate(&self, currency_code: &str) -> Result<Option<u32>> {
-        self.db_conn
-            .query_row(
-                "\
-            SELECT rate \
+    pub fn get_all_exchange_rates(&self) -> Result<Vec<ExchangeRate>> {
+        let mut statement = self
+            .db_conn
+            .prepare(
+                " \
+            SELECT fiat_currency, rate, updated_at \
             FROM exchange_rates \
-            WHERE fiat_currency=? \
             ",
-                [currency_code],
-                |row| row.get(0),
             )
-            .optional()
-            .map_to_permanent_failure("Failed to query exchange rate in db")
+            .map_to_permanent_failure("Failed to prepare SQL query")?;
+
+        let rate_iter = statement
+            .query_map([], exchange_rate_from_row)
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
+
+        let mut rates = Vec::new();
+        for rate in rate_iter {
+            rates.push(rate.map_to_permanent_failure("Corrupted db")?);
+        }
+        Ok(rates)
     }
 }
 
@@ -404,11 +419,22 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     })
 }
 
+fn exchange_rate_from_row(row: &Row) -> rusqlite::Result<ExchangeRate> {
+    let fiat_currency: String = row.get(0)?;
+    let rate: u32 = row.get(1)?;
+    let updated_at: chrono::DateTime<chrono::Utc> = row.get(2)?;
+    Ok(ExchangeRate {
+        currency_code: fiat_currency,
+        rate,
+        updated_at: SystemTime::from(updated_at),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use crate::config::TzConfig;
     use crate::data_store::DataStore;
-    use crate::interfaces::ExchangeRates;
+    use crate::interfaces::ExchangeRate;
     use crate::payment::{FiatValues, PaymentState, PaymentType};
 
     use lightning::ln::PaymentSecret;
@@ -417,7 +443,7 @@ mod tests {
     use secp256k1::{Secp256k1, SecretKey};
     use std::fs;
     use std::thread::sleep;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
 
     const TEST_DB_PATH: &str = ".3l_local_test";
     const TEST_TZ_ID: &str = "test_timezone_id";
@@ -710,29 +736,34 @@ mod tests {
 
     #[test]
     fn test_fiat_value_from_exchange_rate() {
-        let exchange_rates = ExchangeRates {
+        let exchange_rate = ExchangeRate {
             currency_code: "EUR".to_string(),
             rate: 5_000,
-            usd_rate: 5_000,
+            updated_at: SystemTime::now(),
+        };
+        let exchange_rate_usd = ExchangeRate {
+            currency_code: "USD".to_string(),
+            rate: 5_050,
+            updated_at: SystemTime::now(),
         };
         assert_eq!(
-            FiatValues::from_amount_msat(1_000, &exchange_rates).amount,
+            FiatValues::from_amount_msat(1_000, &exchange_rate, &exchange_rate_usd).amount,
             0
         );
         assert_eq!(
-            FiatValues::from_amount_msat(10_000, &exchange_rates).amount,
+            FiatValues::from_amount_msat(10_000, &exchange_rate, &exchange_rate_usd).amount,
             2
         );
         assert_eq!(
-            FiatValues::from_amount_msat(100_000, &exchange_rates).amount,
+            FiatValues::from_amount_msat(100_000, &exchange_rate, &exchange_rate_usd).amount,
             20
         );
         assert_eq!(
-            FiatValues::from_amount_msat(1_000_000, &exchange_rates).amount,
+            FiatValues::from_amount_msat(1_000_000, &exchange_rate, &exchange_rate_usd).amount,
             200
         );
         assert_eq!(
-            FiatValues::from_amount_msat(10_000_000, &exchange_rates).amount,
+            FiatValues::from_amount_msat(10_000_000, &exchange_rate, &exchange_rate_usd).amount,
             2_000
         );
     }
@@ -881,17 +912,67 @@ mod tests {
         };
         let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}"), tz_config).unwrap();
 
-        assert!(data_store.get_exchange_rate("USD").unwrap().is_none());
+        assert!(data_store.get_all_exchange_rates().unwrap().is_empty());
 
-        data_store.update_exchange_rate("USD", 1234).unwrap();
-        assert_eq!(data_store.get_exchange_rate("USD").unwrap(), Some(1234));
+        data_store
+            .update_exchange_rate(
+                "USD",
+                1234,
+                SystemTime::UNIX_EPOCH + Duration::from_secs(10),
+            )
+            .unwrap();
+        let rates = data_store.get_all_exchange_rates().unwrap();
+        let usd_rate = rates.iter().find(|r| r.currency_code == "USD").unwrap();
+        assert_eq!(usd_rate.rate, 1234);
+        assert_eq!(
+            usd_rate.updated_at,
+            SystemTime::UNIX_EPOCH + Duration::from_secs(10)
+        );
 
-        data_store.update_exchange_rate("EUR", 5678).unwrap();
-        assert_eq!(data_store.get_exchange_rate("USD").unwrap(), Some(1234));
-        assert_eq!(data_store.get_exchange_rate("EUR").unwrap(), Some(5678));
+        sleep(Duration::from_secs(2));
 
-        data_store.update_exchange_rate("USD", 4321).unwrap();
-        assert_eq!(data_store.get_exchange_rate("USD").unwrap(), Some(4321));
-        assert_eq!(data_store.get_exchange_rate("EUR").unwrap(), Some(5678));
+        data_store
+            .update_exchange_rate(
+                "EUR",
+                5678,
+                SystemTime::UNIX_EPOCH + Duration::from_secs(20),
+            )
+            .unwrap();
+        let rates = data_store.get_all_exchange_rates().unwrap();
+        let usd_rate = rates.iter().find(|r| r.currency_code == "USD").unwrap();
+        let eur_rate = rates.iter().find(|r| r.currency_code == "EUR").unwrap();
+        assert_eq!(usd_rate.rate, 1234);
+        assert_eq!(
+            usd_rate.updated_at,
+            SystemTime::UNIX_EPOCH + Duration::from_secs(10)
+        );
+        assert_eq!(eur_rate.rate, 5678);
+        assert_eq!(
+            eur_rate.updated_at,
+            SystemTime::UNIX_EPOCH + Duration::from_secs(20)
+        );
+
+        sleep(Duration::from_secs(2));
+
+        data_store
+            .update_exchange_rate(
+                "USD",
+                4321,
+                SystemTime::UNIX_EPOCH + Duration::from_secs(30),
+            )
+            .unwrap();
+        let rates = data_store.get_all_exchange_rates().unwrap();
+        let usd_rate = rates.iter().find(|r| r.currency_code == "USD").unwrap();
+        let eur_rate = rates.iter().find(|r| r.currency_code == "EUR").unwrap();
+        assert_eq!(usd_rate.rate, 4321);
+        assert_eq!(
+            usd_rate.updated_at,
+            SystemTime::UNIX_EPOCH + Duration::from_secs(30)
+        );
+        assert_eq!(eur_rate.rate, 5678);
+        assert_eq!(
+            eur_rate.updated_at,
+            SystemTime::UNIX_EPOCH + Duration::from_secs(20)
+        );
     }
 }

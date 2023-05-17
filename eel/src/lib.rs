@@ -39,7 +39,7 @@ use crate::errors::*;
 use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
-use crate::interfaces::{EventHandler, ExchangeRateProvider, ExchangeRates, RemoteStorage};
+use crate::interfaces::{EventHandler, ExchangeRate, ExchangeRateProvider, RemoteStorage};
 pub use crate::invoice::InvoiceDetails;
 use crate::invoice::{create_invoice, validate_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
@@ -99,7 +99,7 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
 
 #[allow(dead_code)]
 pub struct LightningNode {
-    config: Config,
+    config: Mutex<Config>,
     rt: AsyncRuntime,
     lsp_client: Arc<LspClient>,
     keys_manager: Arc<KeysManager>,
@@ -295,7 +295,6 @@ impl LightningNode {
             Arc::clone(&channel_manager),
             Arc::clone(&chain_monitor),
             Arc::clone(&tx_sync),
-            config.fiat_currency.clone(),
             exchange_rate_provider,
             Arc::clone(&data_store),
         )?));
@@ -332,7 +331,7 @@ impl LightningNode {
         );
 
         Ok(Self {
-            config,
+            config: Mutex::new(config),
             rt,
             lsp_client,
             keys_manager,
@@ -383,13 +382,16 @@ impl LightningNode {
         description: String,
         metadata: String,
     ) -> Result<InvoiceDetails> {
-        let currency = match self.config.network {
+        let currency = match self.config.lock().unwrap().network {
             Network::Bitcoin => Currency::Bitcoin,
             Network::Testnet => Currency::BitcoinTestnet,
             Network::Regtest => Currency::Regtest,
             Network::Signet => Currency::Signet,
         };
-        let fiat_values = self.get_fiat_values(amount_msat);
+        let fiat_values = self.get_fiat_values(
+            amount_msat,
+            self.config.lock().unwrap().fiat_currency.clone(),
+        );
         let signed_invoice = self.rt.handle().block_on(create_invoice(
             CreateInvoiceParams {
                 amount_msat,
@@ -518,13 +520,16 @@ impl LightningNode {
         amount_msat: u64,
         metadata: &str,
     ) -> Result<()> {
-        validate_invoice(self.config.network, invoice)?;
+        validate_invoice(self.config.lock().unwrap().network, invoice)?;
 
         let description = match invoice.description() {
             InvoiceDescription::Direct(d) => d.clone().into_inner(),
             InvoiceDescription::Hash(h) => h.0.to_hex(),
         };
-        let fiat_values = self.get_fiat_values(amount_msat);
+        let fiat_values = self.get_fiat_values(
+            amount_msat,
+            self.config.lock().unwrap().fiat_currency.clone(),
+        );
 
         let mut data_store = self.data_store.lock().unwrap();
         if let Ok(payment) = data_store.get_payment(&invoice.payment_hash().to_string()) {
@@ -590,13 +595,17 @@ impl LightningNode {
             .restart(BACKGROUND_PERIODS);
     }
 
-    pub fn get_exchange_rates(&self) -> Option<ExchangeRates> {
-        self.task_manager.lock().unwrap().get_exchange_rates()
+    pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
+        let rates = self.task_manager.lock().unwrap().get_exchange_rates();
+        rates
+            .iter()
+            .find(|r| r.currency_code == self.config.lock().unwrap().fiat_currency)
+            .cloned()
     }
 
     pub fn change_fiat_currency(&self, fiat_currency: String) {
         let mut task_manager = self.task_manager.lock().unwrap();
-        task_manager.change_fiat_currency(fiat_currency);
+        self.config.lock().unwrap().fiat_currency = fiat_currency;
         // if the fiat currency is being changed, we can assume the app is in the foreground
         task_manager.restart(get_foreground_periods());
     }
@@ -606,9 +615,13 @@ impl LightningNode {
         data_store.update_timezone_config(timezone_config);
     }
 
-    pub fn get_fiat_values(&self, amount_msat: u64) -> Option<FiatValues> {
-        self.get_exchange_rates()
-            .map(|e| FiatValues::from_amount_msat(amount_msat, &e))
+    pub fn get_fiat_values(&self, amount_msat: u64, currency_code: String) -> Option<FiatValues> {
+        let rates = self.task_manager.lock().unwrap().get_exchange_rates();
+        let usd_rate = rates.iter().find(|r| r.currency_code == "USD")?;
+        rates
+            .iter()
+            .find(|r| r.currency_code == currency_code)
+            .map(|r| FiatValues::from_amount_msat(amount_msat, r, usd_rate))
     }
 }
 

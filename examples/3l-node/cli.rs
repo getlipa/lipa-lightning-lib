@@ -53,7 +53,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     }
                 }
                 "exchangerates" => {
-                    if let Err(message) = get_exchange_rates(node) {
+                    if let Err(message) = get_exchange_rate(node) {
                         println!("{}", message.red());
                     }
                 }
@@ -257,12 +257,21 @@ fn node_info(node: &LightningNode) {
     );
 }
 
-fn get_exchange_rates(node: &LightningNode) -> Result<(), String> {
-    let rates = node
-        .get_exchange_rates()
-        .ok_or("No exchange rates available")?;
-    println!("{}: {} sats", rates.currency_code, rates.rate);
-    println!("USD: {} sats", rates.usd_rate);
+fn get_exchange_rate(node: &LightningNode) -> Result<(), String> {
+    match node.get_exchange_rate() {
+        Some(r) => {
+            let dt: DateTime<Utc> = r.updated_at.into();
+            println!(
+                "{}: {} sats - updated at {} UTC",
+                r.currency_code,
+                r.rate,
+                dt.format("%d/%m/%Y %T")
+            );
+        }
+        None => {
+            println!("Exchange rate not available");
+        }
+    }
     Ok(())
 }
 

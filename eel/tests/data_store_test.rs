@@ -130,7 +130,7 @@ mod data_store_test {
             preimage: None,
             network_fees_msat: None,
             lsp_fees_msat: Some(node.calculate_lsp_fee(TWENTY_K_SATS).unwrap()),
-            fiat_values: node.get_fiat_values(TWENTY_K_SATS), // Todo: What should be persisted? The fiat value of what the payer sended, or the fiat value of what the lipa user received (subtracting potential LSP fee)?
+            fiat_values: node.get_fiat_values(TWENTY_K_SATS, String::from("EUR")), // Todo: What should be persisted? The fiat value of what the payer sended, or the fiat value of what the lipa user received (subtracting potential LSP fee)?
             metadata: "".to_string(),
         };
 
@@ -180,7 +180,7 @@ mod data_store_test {
             preimage: None,
             network_fees_msat: None,
             lsp_fees_msat: None,
-            fiat_values: node.get_fiat_values(TWO_K_SATS),
+            fiat_values: node.get_fiat_values(TWO_K_SATS, String::from("EUR")),
             metadata: "".to_string(),
         };
 
@@ -216,7 +216,7 @@ mod data_store_test {
             payment_dummy.amount_msat = ONE_SAT;
             payment_dummy.description = "Open amount".to_string();
             payment_dummy.network_fees_msat = None;
-            payment_dummy.fiat_values = node.get_fiat_values(ONE_SAT);
+            payment_dummy.fiat_values = node.get_fiat_values(ONE_SAT, String::from("EUR"));
             payment_dummy.metadata = "Some metadata".to_string();
             payment_dummy.invoice_details.invoice = invoice.clone();
             payment_dummy.invoice_details.description = "Open amount".to_string();
@@ -259,7 +259,7 @@ mod data_store_test {
             let node = node_handle.start_or_panic();
 
             sleep(Duration::from_secs(1));
-            assert!(node.get_exchange_rates().is_none());
+            assert!(node.get_exchange_rate().is_none());
 
             info!("Restarting node...");
         } // Shut down the node
@@ -272,7 +272,7 @@ mod data_store_test {
             let node = node_handle.start_or_panic();
 
             sleep(Duration::from_secs(1));
-            assert!(node.get_exchange_rates().is_some());
+            assert!(node.get_exchange_rate().is_some());
 
             info!("Restarting node...");
         } // Shut down the node
@@ -283,7 +283,7 @@ mod data_store_test {
 
         let node = node_handle.start_or_panic();
         sleep(Duration::from_secs(1));
-        assert!(node.get_exchange_rates().is_some());
+        assert!(node.get_exchange_rate().is_some());
     }
 
     fn assert_payments_are_partially_equal(left: &Payment, right: &Payment) {
