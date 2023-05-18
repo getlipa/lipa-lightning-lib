@@ -722,7 +722,7 @@ dependencies = [
  "colored",
  "ctor",
  "ecies",
- "esplora-client",
+ "esplora-client 0.5.0",
  "futures",
  "lightning",
  "lightning-background-processor",
@@ -840,6 +840,17 @@ dependencies = [
  "bitcoin",
  "log",
  "reqwest",
+ "serde",
+]
+
+[[package]]
+name = "esplora-client"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3e11244e7fd8b0beee0a3c62137c4bd9f756fe2c492ccf93171f81467b59200"
+dependencies = [
+ "bitcoin",
+ "log",
  "serde",
  "ureq",
 ]
@@ -1612,7 +1623,7 @@ checksum = "173e4fc554de3fdb88dde6d4fb63fbaa01a44b466a0e4d0a07abdcfcd4869ac8"
 dependencies = [
  "bdk-macros",
  "bitcoin",
- "esplora-client",
+ "esplora-client 0.4.0",
  "futures",
  "lightning",
 ]
@@ -1644,7 +1655,7 @@ dependencies = [
  "colored",
  "ctor",
  "eel",
- "esplora-client",
+ "esplora-client 0.5.0",
  "honey-badger",
  "log",
  "mole",
