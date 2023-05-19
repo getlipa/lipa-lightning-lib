@@ -18,8 +18,9 @@ use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::recovery::recover_lightning_node;
-use std::fs;
+use std::{env, fs};
 
+use backtrace::Backtrace;
 pub use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 pub use eel::interfaces::ExchangeRate;
@@ -47,10 +48,15 @@ pub struct LightningNode {
 
 impl LightningNode {
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
-        fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
-            "Failed to create directory: {}",
-            config.local_persistence_path,
-        ))?;
+        env::set_var("RUST_BACKTRACE", "1");
+        let _ = Backtrace::new();
+
+        let _ = fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(
+            format!(
+                "Failed to create directory: {}",
+                config.local_persistence_path,
+            ),
+        )?;
 
         let seed = sanitize_input::strong_type_seed(&config.seed)?;
 
