@@ -45,9 +45,6 @@ jobs:
   build-ios:
     name: Build for iOS targets
     runs-on: macos-latest
-    strategy:
-      matrix:
-        target: [ x86_64-apple-ios, aarch64-apple-ios, aarch64-apple-ios-sim ]
     steps:
       - name: Install rust
         uses: actions-rs/toolchain@v1
@@ -75,7 +72,7 @@ jobs:
         with:
           use-cross: false
           command: test
-          args: --target ${{ matrix.target }} --workspace --lib --verbose -- debug_panic
+          args: --workspace --lib --verbose -- debug_panic
   build-android:
     name: Build for Android targets
     runs-on: ubuntu-latest

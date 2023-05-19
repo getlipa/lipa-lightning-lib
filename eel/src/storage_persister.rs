@@ -814,7 +814,7 @@ mod tests {
         use std::time::SystemTime;
         use std::time::{Duration, Instant};
 
-        let duration_since_epoch = Duration::new(1684151216, 4947335);
+        let duration_since_epoch = Duration::new(1684151216, 494_733_500);
         let wall_clock_now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
