@@ -227,6 +227,22 @@ dictionary LspFee {
     u64 channel_fee_permyriad; // Parts per myriad (aka basis points) -> 100 is 1%
 };
 
+dictionary PaymentAmountLimits {
+    u64 max_receive_sat; // Hard limit: The maximum sat amount a user is allowed to receive per payment
+    ChannelRelatedLimit? channel_related_limit; // Only provided if inbound capacity < max_receive
+};
+
+dictionary ChannelRelatedLimit {
+    AmountLimitType limit_type;
+    u64 amount_sat;
+};
+
+enum AmountLimitType {
+    "MaxFreeReceive", // Soft limit: The maximum sat amount a user can receive without being charged a setup fee
+    "MinReceive", // Hard limit: The minimum sat amount a user must receive with the next payment
+        // If this limit is provided, that means a setup fee will be charged for the incoming payment
+};
+
 // Information embedded in an invoice
 dictionary InvoiceDetails {
     string invoice; // The BOLT11 invoice.

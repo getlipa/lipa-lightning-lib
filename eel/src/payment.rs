@@ -4,6 +4,8 @@ use crate::InvoiceDetails;
 use num_enum::TryFromPrimitive;
 use std::time::SystemTime;
 
+const MAX_RECEIVE_AMOUNT_BETA_SAT: u64 = 1_000_000;
+
 #[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
 pub enum PaymentType {
@@ -79,4 +81,47 @@ impl Payment {
         }
         false
     }
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct PaymentAmountLimits {
+    pub max_receive_sat: u64,
+    pub channel_related_limit: Option<ChannelRelatedLimit>,
+}
+
+impl PaymentAmountLimits {
+    pub fn fetch(inbound_capacity: u64, lsp_min_fee: u64) -> Self {
+        let min_receive_amount = lsp_min_fee * 2;
+
+        let channel_related_limit = if inbound_capacity < min_receive_amount {
+            Some(ChannelRelatedLimit {
+                limit_type: AmountLimitType::MinReceive,
+                amount_sat: min_receive_amount,
+            })
+        } else if inbound_capacity < MAX_RECEIVE_AMOUNT_BETA_SAT {
+            Some(ChannelRelatedLimit {
+                limit_type: AmountLimitType::MaxFreeReceive,
+                amount_sat: inbound_capacity,
+            })
+        } else {
+            None
+        };
+
+        PaymentAmountLimits {
+            max_receive_sat: MAX_RECEIVE_AMOUNT_BETA_SAT,
+            channel_related_limit,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct ChannelRelatedLimit {
+    pub limit_type: AmountLimitType,
+    pub amount_sat: u64,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum AmountLimitType {
+    MaxFreeReceive,
+    MinReceive,
 }
