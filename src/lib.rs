@@ -113,6 +113,10 @@ impl LightningNode {
         self.core_node.calculate_lsp_fee(amount_msat)
     }
 
+    pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
+        self.core_node.get_payment_amount_limits()
+    }
+
     pub fn create_invoice(
         &self,
         amount_msat: u64,

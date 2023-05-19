@@ -6,6 +6,7 @@ use bitcoin::secp256k1::PublicKey;
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
+use eel::payment::AmountLimitType;
 use rustyline::config::{Builder, CompletionType};
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -51,6 +52,9 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     if let Err(message) = calculate_lsp_fee(node, &mut words) {
                         println!("{}", message.red());
                     }
+                }
+                "paymentamountlimits" => {
+                    payment_amount_limits(node);
                 }
                 "exchangerates" => {
                     if let Err(message) = get_exchange_rate(node) {
@@ -179,6 +183,7 @@ fn help() {
     println!("  nodeinfo");
     println!("  lspfee");
     println!("  calculatelspfee <amount in millisat>");
+    println!("  paymentamountlimits");
     println!("  exchangerates");
     println!("  listcurrencies");
     println!("  changecurrency <currency code>");
@@ -222,6 +227,27 @@ fn calculate_lsp_fee(
     let fee = node.calculate_lsp_fee(amount).unwrap();
     println!(" LSP fee: {} sats", fee as f64 / 1_000f64);
     Ok(())
+}
+
+fn payment_amount_limits(node: &LightningNode) {
+    let limits = node.get_payment_amount_limits().unwrap();
+
+    println!(" Beta maximum receive: {} sats", limits.max_receive_sat);
+
+    if let Some(channel_related_limit) = limits.channel_related_limit {
+        let amt = channel_related_limit.amount_sat;
+
+        match channel_related_limit.limit_type {
+            AmountLimitType::MinReceive => {
+                println!(" Minimum payment amount: {amt} sats. A setup fee will be charged.",);
+            }
+            AmountLimitType::MaxFreeReceive => {
+                println!(
+                    " If you want to receive more than {amt} sats, a setup fee will be charged.",
+                );
+            }
+        }
+    }
 }
 
 fn node_info(node: &LightningNode) {

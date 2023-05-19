@@ -1,6 +1,7 @@
 use bitcoin::secp256k1::PublicKey;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
+use eel::payment::AmountLimitType;
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -43,6 +44,9 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 }
                 "lspfee" => {
                     lsp_fee(node);
+                }
+                "paymentamountlimits" => {
+                    payment_amount_limits(node);
                 }
                 "exchangerates" => {
                     if let Err(message) = get_exchange_rates(node) {
@@ -96,6 +100,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
 fn help() {
     println!("  nodeinfo");
     println!("  lspfee");
+    println!("  paymentamountlimits");
     println!("  exchangerates");
     println!("");
     println!("  invoice <amount in millisats> [description]");
@@ -123,13 +128,34 @@ fn lsp_fee(node: &LightningNode) {
     );
 }
 
+fn payment_amount_limits(node: &LightningNode) {
+    let limits = node.get_payment_amount_limits().unwrap();
+
+    println!(" Beta maximum receive: {} sats", limits.max_receive_sat);
+
+    if let Some(channel_related_limit) = limits.channel_related_limit {
+        let amt = channel_related_limit.amount_sat;
+
+        match channel_related_limit.limit_type {
+            AmountLimitType::MinReceive => {
+                println!(" Minimum payment amount: {amt} sats. A setup fee will be charged.",);
+            }
+            AmountLimitType::MaxFreeReceive => {
+                println!(
+                    " If you want to receive more than {amt} sats, a setup fee will be charged.",
+                );
+            }
+        }
+    }
+}
+
 fn node_info(node: &LightningNode) {
     let node_info = node.get_node_info();
     println!(
         "Node PubKey: {}",
         PublicKey::from_slice(&node_info.node_pubkey).unwrap()
     );
-    println!("Number of connected peers: {}", node_info.num_peers);
+    println!(" Number of connected peers: {}", node_info.num_peers);
     println!(
         "       Number of channels: {}",
         node_info.channels_info.num_channels
