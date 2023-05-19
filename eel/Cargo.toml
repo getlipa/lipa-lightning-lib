@@ -16,13 +16,13 @@ cipher = { version = "0.4.3", features = ["block-padding", "alloc"] }
 ecies = { version = "0.2.3", default-features = false, features = ["pure"] }
 esplora-client = { version = "0.5.0", default-features = false, features = ["blocking"] }
 futures = "0.3.24"
-lightning = { version = "0.0.115", features = ["max_level_trace"] }
-lightning-background-processor = "0.0.115"
-lightning-invoice = "0.23.0"
-lightning-net-tokio = "0.0.115"
-lightning-persister = "0.0.115"
-lightning-rapid-gossip-sync = "0.0.115"
-lightning-transaction-sync = { version = "0.0.115", features = ["esplora-async"] }
+lightning = { git = "https://github.com/andrei-21/rust-lightning.git", branch = "debug/checked-sub", features = ["max_level_trace"] }
+lightning-background-processor  = { git = "https://github.com/andrei-21/rust-lightning.git", branch = "debug/checked-sub" }
+lightning-invoice = { git = "https://github.com/andrei-21/rust-lightning.git", branch = "debug/checked-sub" }
+lightning-net-tokio = { git = "https://github.com/andrei-21/rust-lightning.git", branch = "debug/checked-sub" }
+lightning-persister = { git = "https://github.com/andrei-21/rust-lightning.git", branch = "debug/checked-sub" }
+lightning-rapid-gossip-sync = { git = "https://github.com/andrei-21/rust-lightning.git", branch = "debug/checked-sub" }
+lightning-transaction-sync = { git = "https://github.com/andrei-21/rust-lightning.git", branch = "debug/checked-sub", features = ["esplora-async"] }
 log = "0.4.17"
 num_enum = "0.6.1"
 prost = "0.11.9"
