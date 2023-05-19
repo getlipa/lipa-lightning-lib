@@ -808,4 +808,21 @@ mod tests {
         )
         .unwrap()
     }
+
+    #[test]
+    fn debug_panic() {
+        use std::time::SystemTime;
+        use std::time::{Duration, Instant};
+
+        let duration_since_epoch = Duration::new(1684151216, 4947335);
+        let wall_clock_now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap();
+        let now = Instant::now();
+        let _last_updated = if wall_clock_now > duration_since_epoch {
+            now - (wall_clock_now - duration_since_epoch)
+        } else {
+            now
+        };
+    }
 }

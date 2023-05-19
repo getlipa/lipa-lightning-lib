@@ -74,8 +74,8 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           use-cross: false
-          command: build
-          args: --target ${{ matrix.target }}
+          command: test
+          args: --target ${{ matrix.target }} --workspace --lib --verbose -- debug_panic
   build-android:
     name: Build for Android targets
     runs-on: ubuntu-latest
