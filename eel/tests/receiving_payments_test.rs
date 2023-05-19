@@ -4,6 +4,8 @@ mod setup_env;
 #[cfg(feature = "nigiri")]
 mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
+    use eel::payment::{AmountLimitType, ChannelRelatedLimit};
+    use eel::utils::round_down_to_sat;
     use eel::LightningNode;
     use log::info;
     use serial_test::file_serial;
@@ -37,6 +39,8 @@ mod receiving_payments_test {
         nigiri::setup_environment_with_lsp();
         let node_handle = mocked_storage_node();
 
+        let capacity_first_channel;
+
         {
             let node = node_handle.start_or_panic();
             wait_for_eq!(node.get_node_info().num_peers, 1);
@@ -54,6 +58,10 @@ mod receiving_payments_test {
                 NodeInstance::NigiriLnd,
                 &lspd_node_id
             ));
+
+            assert_low_inbound_capacity(&node);
+
+            // todo: Also test assert_low_inbound_capacity(&node) with a low, yet > 0 sat inbound capacity. This requires the inbound_capacity provided by LDK to be more accurate.
 
             run_jit_channel_open_flow(
                 &node,
@@ -74,9 +82,15 @@ mod receiving_payments_test {
             // Wait for p2p connection to be reestablished and channels marked active
             wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
 
+            let channels_info = node.get_node_info().channels_info;
+            capacity_first_channel = channels_info.total_channel_capacities_msat;
+            assert_eq!(capacity_first_channel, 102_001_000); // channel size = 102_001 sat
+            assert_eq!(channels_info.inbound_capacity_msat, 100_980_000); // channel reserves = 1% | 102_001 * 0.99 = 100_980
+            assert_eq!(channels_info.local_balance_msat, 1000); // 1 sat received after paying LSP
+            assert_moderate_inbound_capacity(&node, channels_info.inbound_capacity_msat);
+
             // Test receiving an amount that needs a new channel open when we already have existing channels.
-            // We should have 102001 sat channel and have received a 1 sat payment. A 0.5M payment is not
-            // possible. A new channel with 0.6M size should be created
+            // A 0.5M payment exceeds the current inbound capacity. A new channel is required.
             run_jit_channel_open_flow(
                 &node,
                 NodeInstance::NigiriLnd,
@@ -96,6 +110,30 @@ mod receiving_payments_test {
 
             // Wait for p2p connection to be reestablished and channels marked active
             wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
+
+            let channels_info = node.get_node_info().channels_info;
+            assert_moderate_inbound_capacity(&node, channels_info.inbound_capacity_msat);
+            assert_eq!(channels_info.num_usable_channels, 2);
+            assert_eq!(
+                channels_info.total_channel_capacities_msat - capacity_first_channel,
+                600_000_000
+            ); // new channel has a 0.6M sats capacity
+            assert_eq!(channels_info.local_balance_msat, 498_001_000); // Paid 2k for LSP, but had already 1 sat
+            info!("Restarting node..."); // to test that the graph is persisted and retrieved correctly
+        } // Shut down the node
+
+        // Wait for shutdown to complete
+        sleep(Duration::from_secs(5));
+
+        {
+            let node = node_handle.start_or_panic();
+
+            // Wait for p2p connection to be reestablished and channels marked active
+            wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 2);
+            assert_moderate_inbound_capacity(
+                &node,
+                node.get_node_info().channels_info.inbound_capacity_msat,
+            );
 
             // Test receiving an invoice on a node that already has an open channel
             run_payment_flow(&node, NodeInstance::LspdLnd, TWENTY_K_SATS);
@@ -123,6 +161,17 @@ mod receiving_payments_test {
                 );
             }
             assert_payment_received(&node, initial_balance + TWO_K_SATS * amt_of_payments);
+
+            // Add 2M sats of inbound capacity - More than the max allowed receive amount
+            let node_id = node.get_node_info().node_pubkey.to_hex();
+            let _ = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap(); // 1M sats
+            let _ = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap(); // 1M sats
+            try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
+            wait_for!(node.get_node_info().channels_info.inbound_capacity_msat > 2_000_000_000);
+
+            assert_high_inbound_capacity(&node);
+
+            // todo also test multipath payments
         }
     }
 
@@ -225,5 +274,39 @@ mod receiving_payments_test {
         );
         assert!(node.get_node_info().channels_info.outbound_capacity_msat < expected_balance);
         // because of channel reserves
+    }
+
+    fn assert_low_inbound_capacity(node: &LightningNode) {
+        let limits = node.get_payment_amount_limits().unwrap();
+
+        assert_eq!(limits.max_receive_sat, 1_000_000);
+        assert_eq!(
+            limits.channel_related_limit.unwrap(),
+            ChannelRelatedLimit {
+                limit_type: AmountLimitType::MinReceive,
+                amount_sat: 4_000,
+            }
+        );
+    }
+
+    fn assert_moderate_inbound_capacity(node: &LightningNode, inbound_capacity_msat: u64) {
+        let limits = node.get_payment_amount_limits().unwrap();
+        let inbound_capacity = round_down_to_sat(inbound_capacity_msat);
+
+        assert_eq!(limits.max_receive_sat, 1_000_000);
+        assert_eq!(
+            limits.channel_related_limit.unwrap(),
+            ChannelRelatedLimit {
+                limit_type: AmountLimitType::MaxFreeReceive,
+                amount_sat: inbound_capacity,
+            }
+        );
+    }
+
+    fn assert_high_inbound_capacity(node: &LightningNode) {
+        let limits = node.get_payment_amount_limits().unwrap();
+
+        assert_eq!(limits.max_receive_sat, 1_000_000);
+        assert!(limits.channel_related_limit.is_none());
     }
 }

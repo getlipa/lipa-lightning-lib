@@ -104,6 +104,8 @@ mod sending_payments_test {
             initial_balance,
             nigiri::query_node_balance(LspdLnd).unwrap()
         );
+
+        // todo also test multipath payments
     }
 
     const THOUSAND_SATS: u64 = 1_000_000;
