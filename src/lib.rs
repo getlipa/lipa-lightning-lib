@@ -18,7 +18,6 @@ use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::recovery::recover_lightning_node;
-use std::fs;
 
 pub use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
@@ -37,6 +36,7 @@ use honey_badger::{Auth, AuthLevel};
 use native_logger::init_native_logger_once;
 use perro::{MapToError, ResultTrait};
 use std::sync::Arc;
+use std::{env, fs};
 
 const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 
@@ -47,6 +47,7 @@ pub struct LightningNode {
 
 impl LightningNode {
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
+        enable_backtrace();
         fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
             "Failed to create directory: {}",
             config.local_persistence_path,
@@ -172,6 +173,7 @@ impl LightningNode {
 }
 
 pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) -> Result<()> {
+    enable_backtrace();
     let environment = Environment::load(environment);
     let seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = build_auth(&seed, environment.backend_url)?;
@@ -195,6 +197,10 @@ fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
         RuntimeErrorCode::GenericError,
         "Failed to build auth client",
     )
+}
+
+fn enable_backtrace() {
+    env::set_var("RUST_BACKTRACE", "1");
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));

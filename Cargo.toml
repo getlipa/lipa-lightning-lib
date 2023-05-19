@@ -52,3 +52,31 @@ pre-build = ["apt update --no-show-upgraded && apt install --yes protobuf-compil
 [build-dependencies]
 camino = "1.1.1"
 uniffi_bindgen = "0.23.0"
+
+# Enable debug symbols for our and LDK crates, but not others.
+[profile.release]
+debug = 1
+[profile.release.package."*"]
+debug = 0
+[profile.release.package.eel]
+debug = 1
+[profile.release.package.chameleon]
+debug = 1
+[profile.release.package.honey-badger]
+debug = 1
+[profile.release.package.mole]
+debug = 1
+[profile.release.package.lightning]
+debug = 1
+[profile.release.package.lightning-background-processor]
+debug = 1
+[profile.release.package.lightning-invoice]
+debug = 1
+[profile.release.package.lightning-net-tokio]
+debug = 1
+[profile.release.package.lightning-persister]
+debug = 1
+[profile.release.package.lightning-rapid-gossip-sync]
+debug = 1
+[profile.release.package.lightning-transaction-sync]
+debug = 1
