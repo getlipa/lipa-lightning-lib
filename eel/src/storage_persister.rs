@@ -366,7 +366,12 @@ impl StoragePersister {
         let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(SCORER_KEY));
 
         let params = ProbabilisticScoringParameters::default();
-        if let Ok(file) = fs::File::open(&path) {
+        #[allow(unreachable_code, unused_variables)]
+        if let Ok(file) = fs::File::open(path) {
+            // TODO: Remove the code and the attribute above once the bug is fixed.
+            warn!("Do not read the previously persisted scorer, due to an LDK bug. Creating a new one...");
+            return Ok(Scorer::new(params, graph, logger));
+
             let args = (params.clone(), Arc::clone(&graph), Arc::clone(&logger));
             if let Ok(scorer) = Scorer::read(&mut BufReader::new(file), args) {
                 debug!("Successfully read the scorer from the local filesystem");
