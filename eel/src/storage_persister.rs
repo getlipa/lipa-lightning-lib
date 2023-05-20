@@ -810,6 +810,32 @@ mod tests {
     }
 
     #[test]
+    fn check_instance() {
+        use std::time::{Duration, Instant};
+
+        let now = Instant::now();
+        let duration = Duration::from_secs(1);
+        std::thread::sleep(duration);
+        let after = Instant::now();
+        eprintln!("moment {now:?} after {duration:?} is {after:?}");
+
+        now.checked_sub(Duration::from_millis(1)).unwrap();
+        now.checked_sub(Duration::from_millis(10)).unwrap();
+        now.checked_sub(Duration::from_millis(100)).unwrap();
+        now.checked_sub(Duration::from_secs(1)).unwrap();
+        now.checked_sub(Duration::from_secs(10)).unwrap();
+        now.checked_sub(Duration::from_secs(60)).unwrap();
+        now.checked_sub(Duration::from_secs(10 * 60)).unwrap();
+        now.checked_sub(Duration::from_secs(30 * 60)).unwrap();
+        now.checked_sub(Duration::from_secs(60 * 60)).unwrap();
+        now.checked_sub(Duration::from_secs(2 * 60 * 60)).unwrap();
+        now.checked_sub(Duration::from_secs(4 * 60 * 60)).unwrap();
+        now.checked_sub(Duration::from_secs(8 * 60 * 60)).unwrap();
+        now.checked_sub(Duration::from_secs(12 * 60 * 60)).unwrap();
+        now.checked_sub(Duration::from_secs(24 * 60 * 60)).unwrap();
+    }
+
+    #[test]
     fn debug_panic() {
         use std::time::SystemTime;
         use std::time::{Duration, Instant};

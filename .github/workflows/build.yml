@@ -72,7 +72,7 @@ jobs:
         with:
           use-cross: false
           command: test
-          args: --workspace --lib --verbose -- debug_panic
+          args: --workspace --lib --verbose -- check_instance --nocapture
   build-android:
     name: Build for Android targets
     runs-on: ubuntu-latest
