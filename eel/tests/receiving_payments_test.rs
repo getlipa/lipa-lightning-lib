@@ -4,7 +4,7 @@ mod setup_env;
 #[cfg(feature = "nigiri")]
 mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
-    use eel::payment::{AmountLimitType, ChannelRelatedLimit};
+    use eel::payment::LiquidityLimit;
     use eel::utils::round_down_to_sat;
     use eel::LightningNode;
     use log::info;
@@ -281,11 +281,8 @@ mod receiving_payments_test {
 
         assert_eq!(limits.max_receive_sat, 1_000_000);
         assert_eq!(
-            limits.channel_related_limit.unwrap(),
-            ChannelRelatedLimit {
-                limit_type: AmountLimitType::MinReceive,
-                amount_sat: 4_000,
-            }
+            limits.liquidity_limit,
+            LiquidityLimit::MinReceive { sat_amount: 4_000 },
         );
     }
 
@@ -295,11 +292,10 @@ mod receiving_payments_test {
 
         assert_eq!(limits.max_receive_sat, 1_000_000);
         assert_eq!(
-            limits.channel_related_limit.unwrap(),
-            ChannelRelatedLimit {
-                limit_type: AmountLimitType::MaxFreeReceive,
-                amount_sat: inbound_capacity,
-            }
+            limits.liquidity_limit,
+            LiquidityLimit::MaxFreeReceive {
+                sat_amount: inbound_capacity
+            },
         );
     }
 
@@ -307,6 +303,6 @@ mod receiving_payments_test {
         let limits = node.get_payment_amount_limits().unwrap();
 
         assert_eq!(limits.max_receive_sat, 1_000_000);
-        assert!(limits.channel_related_limit.is_none());
+        assert_eq!(limits.liquidity_limit, LiquidityLimit::None);
     }
 }

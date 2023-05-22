@@ -229,17 +229,14 @@ dictionary LspFee {
 
 dictionary PaymentAmountLimits {
     u64 max_receive_sat; // Hard limit: The maximum sat amount a user is allowed to receive per payment
-    ChannelRelatedLimit? channel_related_limit; // Only provided if inbound capacity < max_receive
+    LiquidityLimit liquidity_limit;
 };
 
-dictionary ChannelRelatedLimit {
-    AmountLimitType limit_type;
-    u64 amount_sat;
-};
-
-enum AmountLimitType {
-    "MaxFreeReceive", // Soft limit: The maximum sat amount a user can receive without being charged a setup fee
-    "MinReceive", // Hard limit: The minimum sat amount a user must receive with the next payment
+[Enum]
+interface LiquidityLimit {
+    None(); // inbound capacity >= max_receive_sat
+    MaxFreeReceive(u64 sat_amount); // Soft limit: The maximum sat amount a user can receive without being charged a setup fee
+    MinReceive(u64 sat_amount); // Hard limit: The minimum sat amount a user must receive with the next payment
         // If this limit is provided, that means a setup fee will be charged for the incoming payment
 };
 

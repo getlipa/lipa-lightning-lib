@@ -1,7 +1,7 @@
 use bitcoin::secp256k1::PublicKey;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
-use eel::payment::AmountLimitType;
+use eel::payment::LiquidityLimit;
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -133,19 +133,16 @@ fn payment_amount_limits(node: &LightningNode) {
 
     println!(" Beta maximum receive: {} sats", limits.max_receive_sat);
 
-    if let Some(channel_related_limit) = limits.channel_related_limit {
-        let amt = channel_related_limit.amount_sat;
-
-        match channel_related_limit.limit_type {
-            AmountLimitType::MinReceive => {
-                println!(" Minimum payment amount: {amt} sats. A setup fee will be charged.",);
-            }
-            AmountLimitType::MaxFreeReceive => {
-                println!(
-                    " If you want to receive more than {amt} sats, a setup fee will be charged.",
-                );
-            }
+    match limits.liquidity_limit {
+        LiquidityLimit::MinReceive { sat_amount } => {
+            println!(" Minimum payment amount: {sat_amount} sats. A setup fee will be charged.");
         }
+        LiquidityLimit::MaxFreeReceive { sat_amount } => {
+            println!(
+                " If you want to receive more than {sat_amount} sats, a setup fee will be charged."
+            );
+        }
+        LiquidityLimit::None => {}
     }
 }
 

@@ -28,8 +28,7 @@ use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix};
 use eel::lsp::LspFee;
 use eel::node_info::{ChannelsInfo, NodeInfo};
 use eel::payment::{
-    AmountLimitType, ChannelRelatedLimit, FiatValues, Payment, PaymentAmountLimits, PaymentState,
-    PaymentType, TzTime,
+    FiatValues, LiquidityLimit, Payment, PaymentAmountLimits, PaymentState, PaymentType, TzTime,
 };
 use eel::secret::Secret;
 use eel::InvoiceDetails;
