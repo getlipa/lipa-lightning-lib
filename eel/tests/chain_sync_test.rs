@@ -57,6 +57,7 @@ mod chain_sync_test {
         nigiri::lnd_node_force_close_channel(NodeInstance::LspdLnd, open_channels.pop().unwrap())
             .unwrap();
 
+        wait_for_eq!(nigiri::get_number_of_txs_in_mempool(), Ok::<u64, String>(4));
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
 
         wait_for_eq!(node.get_node_info().channels_info.num_channels, 2);
