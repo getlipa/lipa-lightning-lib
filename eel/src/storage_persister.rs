@@ -366,7 +366,16 @@ impl StoragePersister {
         let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(SCORER_KEY));
 
         let params = ProbabilisticScoringParameters::default();
+        #[allow(unreachable_code, unused_variables, clippy::needless_borrow)]
         if let Ok(file) = fs::File::open(&path) {
+            // TODO: Remove the code and the attributes above once the bug is fixed.
+            //       https://github.com/lightningdevkit/rust-lightning/issues/2311
+            #[cfg(target_os = "ios")]
+            {
+                warn!("Do not read the previously persisted scorer, due to the LDK bug. Creating a new one...");
+                return Ok(Scorer::new(params, graph, logger));
+            }
+
             let args = (params.clone(), Arc::clone(&graph), Arc::clone(&logger));
             if let Ok(scorer) = Scorer::read(&mut BufReader::new(file), args) {
                 debug!("Successfully read the scorer from the local filesystem");
