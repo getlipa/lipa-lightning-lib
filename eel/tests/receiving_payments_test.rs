@@ -119,7 +119,7 @@ mod receiving_payments_test {
                 600_000_000
             ); // new channel has a 0.6M sats capacity
             assert_eq!(channels_info.local_balance_msat, 498_001_000); // Paid 2k for LSP, but had already 1 sat
-            info!("Restarting node..."); // to test that the graph is persisted and retrieved correctly
+            info!("Restarting node...");
         } // Shut down the node
 
         // Wait for shutdown to complete
