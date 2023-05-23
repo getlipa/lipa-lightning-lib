@@ -84,7 +84,7 @@ mod chain_sync_test {
         let tx_id = start_node_open_channel_without_confirm_stop_node(&node_handle);
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 6);
-        // TODO: figure out why the following sleep is needed
+
         sleep(Duration::from_secs(5));
 
         {

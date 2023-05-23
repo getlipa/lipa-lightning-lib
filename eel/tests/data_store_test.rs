@@ -130,7 +130,7 @@ mod data_store_test {
             preimage: None,
             network_fees_msat: None,
             lsp_fees_msat: Some(node.calculate_lsp_fee(TWENTY_K_SATS).unwrap()),
-            fiat_values: node.get_fiat_values(TWENTY_K_SATS, String::from("EUR")), // Todo: What should be persisted? The fiat value of what the payer sended, or the fiat value of what the lipa user received (subtracting potential LSP fee)?
+            fiat_values: node.get_fiat_values(TWENTY_K_SATS, String::from("EUR")),
             metadata: "".to_string(),
         };
 
