@@ -1,23 +1,29 @@
+use chrono::{DateTime, Utc};
 use eel::interfaces::ExchangeRate;
-use eel::payment::FiatValues;
-use std::fmt;
+use std::{fmt, time::SystemTime};
 
-#[derive(Debug)]
+pub struct FiatValue {
+    pub minor_units: u64,
+    pub currency_code: String,
+    pub updated_at: SystemTime,
+}
+
 pub struct Amount {
     pub sats: u64,
-    pub fiat: Option<FiatValues>,
+    pub fiat: Option<FiatValue>,
 }
 
 impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} sats", self.sats)?;
         if let Some(fiat) = &self.fiat {
+            let dt: DateTime<Utc> = fiat.updated_at.into();
             write!(
                 f,
-                " ({:.2} {}, {:.2} USD)",
-                fiat.amount as f64 / 1000f64,
-                fiat.fiat,
-                fiat.amount_usd as f64 / 1000f64,
+                " ({:.2} {} as of {})",
+                fiat.minor_units as f64 / 100f64,
+                fiat.currency_code,
+                dt.format("%d/%m/%Y %T UTC"),
             )?;
         }
         Ok(())
@@ -39,6 +45,7 @@ impl ToAmount for u64 {
     }
 }
 
+#[derive(Copy, Clone)]
 enum Rounding {
     Up,
     Down,
@@ -59,6 +66,10 @@ fn round(msat: u64, rounding: Rounding) -> u64 {
 
 fn msats_to_amount(rounding: Rounding, msats: u64, rate: Option<ExchangeRate>) -> Amount {
     let sats = round(msats, rounding);
-    let fiat = rate.map(|rate| FiatValues::from_amount_msat(msats, &rate, &rate));
+    let fiat = rate.map(|rate| FiatValue {
+        minor_units: round(msats * 100 / rate.rate as u64, rounding),
+        currency_code: rate.currency_code,
+        updated_at: rate.updated_at,
+    });
     Amount { sats, fiat }
 }

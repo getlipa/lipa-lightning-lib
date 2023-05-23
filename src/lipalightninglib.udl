@@ -215,7 +215,7 @@ dictionary NodeInfo {
 
 dictionary Amount {
     u64 sats;
-	FiatValues? fiat;
+	FiatValue? fiat;
 };
 
 dictionary ChannelsInfo {
@@ -317,6 +317,12 @@ dictionary FiatValues {
     string fiat;
     u64 amount;
     u64 amount_usd;
+};
+
+dictionary FiatValue {
+    u64 minor_units;
+    string currency_code;
+	timestamp updated_at;
 };
 
 // Exchange rate as sats per major unit.
