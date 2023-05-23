@@ -25,11 +25,11 @@ use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 pub use eel::interfaces::ExchangeRate;
 use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix};
+use eel::limits::LiquidityLimit;
+use eel::limits::PaymentAmountLimits;
 use eel::lsp::LspFee;
 use eel::node_info::{ChannelsInfo, NodeInfo};
-use eel::payment::{
-    FiatValues, LiquidityLimit, Payment, PaymentAmountLimits, PaymentState, PaymentType, TzTime,
-};
+use eel::payment::{FiatValues, Payment, PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
 use eel::InvoiceDetails;
 use eel::LogLevel;

@@ -6,7 +6,7 @@ use bitcoin::secp256k1::PublicKey;
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
-use eel::payment::LiquidityLimit;
+use eel::limits::LiquidityLimit;
 use rustyline::config::{Builder, CompletionType};
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;

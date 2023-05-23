@@ -4,7 +4,7 @@ mod setup_env;
 #[cfg(feature = "nigiri")]
 mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
-    use eel::payment::LiquidityLimit;
+    use eel::limits::LiquidityLimit;
     use eel::utils::round_down_to_sat;
     use eel::LightningNode;
     use log::info;
