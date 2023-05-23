@@ -8,6 +8,7 @@ pub mod errors;
 pub mod interfaces;
 pub mod key_derivation;
 pub mod keys_manager;
+pub mod limits;
 pub mod lsp;
 mod migrations;
 pub mod node_info;
@@ -31,6 +32,7 @@ mod task_manager;
 mod test_utils;
 mod tx_broadcaster;
 mod types;
+pub mod utils;
 
 use crate::async_runtime::AsyncRuntime;
 use crate::config::{Config, TzConfig};
@@ -43,6 +45,7 @@ use crate::interfaces::{EventHandler, ExchangeRate, ExchangeRateProvider, Remote
 pub use crate::invoice::InvoiceDetails;
 use crate::invoice::{create_invoice, validate_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
+use crate::limits::PaymentAmountLimits;
 use crate::logger::LightningLogger;
 use crate::lsp::{calculate_fee, LspClient, LspFee};
 use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info, NodeInfo};
@@ -55,6 +58,7 @@ use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router, TxSync};
 use std::fs;
 
+use crate::utils::{round_down_to_sat, round_up_to_sat};
 use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
 use cipher::consts::U32;
@@ -621,6 +625,17 @@ impl LightningNode {
             .iter()
             .find(|r| r.currency_code == currency_code)
             .map(|r| FiatValues::from_amount_msat(amount_msat, r, usd_rate))
+    }
+
+    pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
+        let lsp_min_fee = round_up_to_sat(self.query_lsp_fee()?.channel_minimum_fee_msat);
+        let inbound_capacity =
+            round_down_to_sat(self.get_node_info().channels_info.inbound_capacity_msat);
+
+        Ok(PaymentAmountLimits::calculate(
+            inbound_capacity,
+            lsp_min_fee,
+        ))
     }
 }
 

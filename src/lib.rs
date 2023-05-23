@@ -25,6 +25,8 @@ use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 pub use eel::interfaces::ExchangeRate;
 use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix};
+use eel::limits::LiquidityLimit;
+use eel::limits::PaymentAmountLimits;
 use eel::lsp::LspFee;
 use eel::node_info::{ChannelsInfo, NodeInfo};
 use eel::payment::{FiatValues, Payment, PaymentState, PaymentType, TzTime};
@@ -108,6 +110,10 @@ impl LightningNode {
 
     pub fn calculate_lsp_fee(&self, amount_msat: u64) -> Result<u64> {
         self.core_node.calculate_lsp_fee(amount_msat)
+    }
+
+    pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
+        self.core_node.get_payment_amount_limits()
     }
 
     pub fn create_invoice(
