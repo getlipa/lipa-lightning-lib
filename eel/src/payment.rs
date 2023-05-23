@@ -5,6 +5,7 @@ use num_enum::TryFromPrimitive;
 use std::time::SystemTime;
 
 const MAX_RECEIVE_AMOUNT_BETA_SAT: u64 = 1_000_000;
+const MIN_RECEIVE_MULTIPLIER: u64 = 2; // Minimum receive = mutliple of setup fees
 
 #[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
@@ -91,7 +92,7 @@ pub struct PaymentAmountLimits {
 
 impl PaymentAmountLimits {
     pub fn fetch(inbound_capacity: u64, lsp_min_fee: u64) -> Self {
-        let min_receive_amount = lsp_min_fee * 2;
+        let min_receive_amount = lsp_min_fee * MIN_RECEIVE_MULTIPLIER;
 
         let liquidity_limit = if inbound_capacity < min_receive_amount {
             LiquidityLimit::MinReceive {
