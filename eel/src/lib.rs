@@ -633,7 +633,10 @@ impl LightningNode {
         let inbound_capacity =
             round_down_to_sat(self.get_node_info().channels_info.inbound_capacity_msat);
 
-        Ok(PaymentAmountLimits::fetch(inbound_capacity, lsp_min_fee))
+        Ok(PaymentAmountLimits::calculate(
+            inbound_capacity,
+            lsp_min_fee,
+        ))
     }
 }
 

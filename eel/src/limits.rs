@@ -15,7 +15,7 @@ pub enum LiquidityLimit {
 }
 
 impl PaymentAmountLimits {
-    pub fn fetch(inbound_capacity: u64, lsp_min_fee: u64) -> Self {
+    pub fn calculate(inbound_capacity: u64, lsp_min_fee: u64) -> Self {
         let min_receive_amount = lsp_min_fee * MIN_RECEIVE_MULTIPLIER;
 
         let liquidity_limit = if inbound_capacity < min_receive_amount {
