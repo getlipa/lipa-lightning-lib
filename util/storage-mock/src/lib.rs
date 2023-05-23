@@ -67,8 +67,6 @@ impl Storage {
 mod tests {
     use super::*;
 
-    // todo: add tests
-
     #[test]
     fn it_works() {
         let storage = Storage::new();

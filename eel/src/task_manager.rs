@@ -127,8 +127,6 @@ impl TaskManager {
             self.task_handles
                 .push(self.start_exchange_rate_update(period));
         }
-
-        // TODO: Reconnect to channels' peers.
     }
 
     fn start_blockchain_sync(&self, period: Duration) -> RepeatingTaskHandle {

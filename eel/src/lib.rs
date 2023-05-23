@@ -204,7 +204,6 @@ impl LightningNode {
 
         // Step 15: Initialize the ChannelManager
         let mobile_node_user_config = build_mobile_node_user_config();
-        // TODO: Init properly.
         let best_block = BestBlock::from_network(config.network);
         let chain_params = ChainParameters {
             network: config.network,

@@ -19,7 +19,6 @@ impl BroadcasterInterface for TxBroadcaster {
         let tx = tx.clone();
         let txid = tx.txid();
 
-        // TODO: Better handle errors. Should we retry?
         if let Err(e) = self.esplora_client.broadcast(&tx) {
             error!("Error on broadcasting txid: {} message: {}", txid, e);
         }

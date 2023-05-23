@@ -48,9 +48,6 @@ impl EventHandler for LipaEventHandler {
             } => {
                 // Note: LDK will not stop an inbound payment from being paid multiple times,
                 //       so multiple PaymentReceived events may be generated for the same payment.
-                // Todo: This needs more research on what exactly is happening under the hood
-                //       and what the correct behaviour should be to deal with this situation.
-
                 info!(
                     "EVENT: PaymentClaimable - hash: {} - amount msat: {}",
                     payment_hash.0.to_hex(),
@@ -152,8 +149,6 @@ impl EventHandler for LipaEventHandler {
                             payment_hash.0.to_hex()
                         );
                         // TODO: inform consumer of this library about a claimed spontaneous payment
-                        //      We can leave this for later as spontaneous payments are not a
-                        //      feature of the MVP.
                     }
                 }
             }
