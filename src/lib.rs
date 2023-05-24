@@ -175,6 +175,18 @@ impl LightningNode {
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
         self.core_node.change_timezone_config(timezone_config);
     }
+
+    pub fn panic_directly(&self) {
+        self.core_node.panic_directly();
+    }
+
+    pub fn panic_in_background_thread(&self) {
+        self.core_node.panic_in_background_thread()
+    }
+
+    pub fn panic_in_tokio(&self) {
+        self.core_node.panic_in_tokio()
+    }
 }
 
 pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) -> Result<()> {
