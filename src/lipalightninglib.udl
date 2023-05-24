@@ -213,11 +213,6 @@ dictionary NodeInfo {
     ChannelsInfo channels_info; // Information about the channels of the node
 };
 
-dictionary Amount {
-    u64 sats;
-	FiatValue? fiat;
-};
-
 dictionary ChannelsInfo {
     u16 num_channels; // Number of currently open channels
     u16 num_usable_channels; // Number of usable channels. E.g. if a peer if offline, channels with that peer won't be usable.
@@ -330,6 +325,11 @@ dictionary ExchangeRate {
     string currency_code;
     u32 rate;
     timestamp updated_at;
+};
+
+dictionary Amount {
+    u64 sats;
+	FiatValue? fiat;
 };
 
 //

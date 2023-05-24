@@ -19,9 +19,8 @@ nigiri = []
 eel = { path = "eel" }
 
 log = "0.4.17"
-uniffi = "0.23.0"
 thiserror = "1.0.40"
-chrono = { version = "0.4.23", default-features = false }
+uniffi = "0.23.0"
 
 chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.1.1" }
 honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.1.1" }
@@ -30,6 +29,7 @@ perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.1" }
 
 [dev-dependencies]
 bitcoin = "0.29.2"
+chrono = { version = "0.4.23", default-features = false }
 colored = "2.0.0"
 ctor = "0.2.0"
 esplora-client = { version = "0.5.0", default-features = false, features = ["blocking"] }

@@ -1,6 +1,5 @@
-use chrono::{DateTime, Utc};
 use eel::interfaces::ExchangeRate;
-use std::{fmt, time::SystemTime};
+use std::time::SystemTime;
 
 pub struct FiatValue {
     pub minor_units: u64,
@@ -11,23 +10,6 @@ pub struct FiatValue {
 pub struct Amount {
     pub sats: u64,
     pub fiat: Option<FiatValue>,
-}
-
-impl fmt::Display for Amount {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} sats", self.sats)?;
-        if let Some(fiat) = &self.fiat {
-            let dt: DateTime<Utc> = fiat.updated_at.into();
-            write!(
-                f,
-                " ({:.2} {} as of {})",
-                fiat.minor_units as f64 / 100f64,
-                fiat.currency_code,
-                dt.format("%d/%m/%Y %T UTC"),
-            )?;
-        }
-        Ok(())
-    }
 }
 
 pub(crate) trait ToAmount {
@@ -53,13 +35,7 @@ enum Rounding {
 
 fn round(msat: u64, rounding: Rounding) -> u64 {
     match rounding {
-        Rounding::Up => {
-            if msat % 1_000 == 0 {
-                msat / 1_000
-            } else {
-                msat / 1_000 + 1
-            }
-        }
+        Rounding::Up => (msat + 999) / 1_000,
         Rounding::Down => msat / 1_000,
     }
 }
@@ -72,4 +48,71 @@ fn msats_to_amount(rounding: Rounding, msats: u64, rate: Option<ExchangeRate>) -
         updated_at: rate.updated_at,
     });
     Amount { sats, fiat }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    pub fn rounding_up() {
+        assert_eq!(round(0, Rounding::Up), 0);
+
+        for i in 1..1000 {
+            assert_eq!(round(i, Rounding::Up), 1);
+        }
+
+        assert_eq!(round(1001, Rounding::Up), 2);
+    }
+
+    #[test]
+    pub fn rounding_down() {
+        for i in 0..1000 {
+            assert_eq!(round(i, Rounding::Down), 0);
+        }
+
+        assert_eq!(round(1000, Rounding::Down), 1);
+    }
+
+    #[test]
+    pub fn rounding_to_amount_up() {
+        let now = SystemTime::now();
+        let amount = 12349123u64.to_amount_up(None);
+        assert_eq!(amount.sats, 12350);
+        assert!(amount.fiat.is_none());
+
+        let rate = ExchangeRate {
+            currency_code: "EUR".to_string(),
+            rate: 4256,
+            updated_at: now,
+        };
+        let amount = 12349123u64.to_amount_up(Some(rate));
+        assert_eq!(amount.sats, 12350);
+        assert!(amount.fiat.is_some());
+        let fiat = amount.fiat.unwrap();
+        assert_eq!(fiat.currency_code, "EUR");
+        assert_eq!(fiat.minor_units, 291);
+        assert_eq!(fiat.updated_at, now);
+    }
+
+    #[test]
+    pub fn rounding_to_amount_down() {
+        let now = SystemTime::now();
+        let amount = 12349123u64.to_amount_down(None);
+        assert_eq!(amount.sats, 12349);
+        assert!(amount.fiat.is_none());
+
+        let rate = ExchangeRate {
+            currency_code: "EUR".to_string(),
+            rate: 4256,
+            updated_at: now,
+        };
+        let amount = 12349123u64.to_amount_down(Some(rate));
+        assert_eq!(amount.sats, 12349);
+        assert!(amount.fiat.is_some());
+        let fiat = amount.fiat.unwrap();
+        assert_eq!(fiat.currency_code, "EUR");
+        assert_eq!(fiat.minor_units, 290);
+        assert_eq!(fiat.updated_at, now);
+    }
 }
