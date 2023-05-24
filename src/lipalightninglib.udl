@@ -317,7 +317,7 @@ dictionary FiatValues {
 dictionary FiatValue {
     u64 minor_units;
     string currency_code;
-	timestamp updated_at;
+    timestamp converted_at;
 };
 
 // Exchange rate as sats per major unit.
@@ -329,7 +329,7 @@ dictionary ExchangeRate {
 
 dictionary Amount {
     u64 sats;
-	FiatValue? fiat;
+    FiatValue? fiat;
 };
 
 //

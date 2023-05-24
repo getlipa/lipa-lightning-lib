@@ -4,7 +4,7 @@ use std::time::SystemTime;
 pub struct FiatValue {
     pub minor_units: u64,
     pub currency_code: String,
-    pub updated_at: SystemTime,
+    pub converted_at: SystemTime,
 }
 
 pub struct Amount {
@@ -45,7 +45,7 @@ fn msats_to_amount(rounding: Rounding, msats: u64, rate: Option<ExchangeRate>) -
     let fiat = rate.map(|rate| FiatValue {
         minor_units: round(msats * 100 / rate.rate as u64, rounding),
         currency_code: rate.currency_code,
-        updated_at: rate.updated_at,
+        converted_at: rate.updated_at,
     });
     Amount { sats, fiat }
 }
@@ -92,7 +92,7 @@ mod tests {
         let fiat = amount.fiat.unwrap();
         assert_eq!(fiat.currency_code, "EUR");
         assert_eq!(fiat.minor_units, 291);
-        assert_eq!(fiat.updated_at, now);
+        assert_eq!(fiat.converted_at, now);
     }
 
     #[test]
@@ -113,6 +113,6 @@ mod tests {
         let fiat = amount.fiat.unwrap();
         assert_eq!(fiat.currency_code, "EUR");
         assert_eq!(fiat.minor_units, 290);
-        assert_eq!(fiat.updated_at, now);
+        assert_eq!(fiat.converted_at, now);
     }
 }

@@ -475,12 +475,12 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
 fn amount_to_string(amount: Amount) -> String {
     let fiat = match amount.fiat {
         Some(fiat) => {
-            let dt: DateTime<Utc> = fiat.updated_at.into();
+            let converted_at: DateTime<Utc> = fiat.converted_at.into();
             format!(
                 "{:.2} {} as of {}",
                 fiat.minor_units as f64 / 100f64,
                 fiat.currency_code,
-                dt.format("%d/%m/%Y %T UTC"),
+                converted_at.format("%d/%m/%Y %T UTC"),
             )
         }
         None => "exchange rate uknown".to_string(),
