@@ -122,6 +122,10 @@ interface LightningNode {
     // Change the timezone config.
     //    - timezone_config - the user's current timezone
     void change_timezone_config(TzConfig timezone_config);
+
+    void panic_directly();
+    void panic_in_background_thread();
+    void panic_in_tokio();
 };
 
 // An object that holds all configuration needed to start a LightningNode instance.
