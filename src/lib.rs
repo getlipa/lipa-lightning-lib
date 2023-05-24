@@ -2,6 +2,7 @@
 
 extern crate core;
 
+mod amount;
 mod callbacks;
 mod config;
 mod eel_interface_impl;
@@ -20,6 +21,8 @@ use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::recovery::recover_lightning_node;
 use std::fs;
 
+pub use crate::amount::Amount;
+use crate::amount::ToAmount;
 pub use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 pub use eel::interfaces::ExchangeRate;
@@ -45,6 +48,11 @@ const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 pub struct LightningNode {
     exchange_rate_provider: ExchangeRateProviderImpl,
     core_node: eel::LightningNode,
+}
+
+pub struct LspFee {
+    pub channel_minimum_fee: Amount,
+    pub channel_fee_permyriad: u64,
 }
 
 impl LightningNode {
@@ -105,7 +113,14 @@ impl LightningNode {
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        self.core_node.query_lsp_fee()
+        let fee = self.core_node.query_lsp_fee()?;
+        let channel_minimum_fee = fee
+            .channel_minimum_fee_msat
+            .to_amount_up(self.get_exchange_rate());
+        Ok(LspFee {
+            channel_minimum_fee,
+            channel_fee_permyriad: fee.channel_fee_permyriad,
+        })
     }
 
     pub fn calculate_lsp_fee(&self, amount_msat: u64) -> Result<u64> {
