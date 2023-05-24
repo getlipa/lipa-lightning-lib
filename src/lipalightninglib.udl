@@ -40,6 +40,12 @@ interface LightningNode {
     [Throws=LnError]
     LspFee query_lsp_fee();
 
+    // Get the current limits for the amount (in SAT) that can be transferred in a single payment. Currently there are only limits for receiving payments.
+    // The limits (partly) depend on the channel situation of the node, so it should be called again every time the user is about to receive a payment.
+    // The limits stay the same regardless of what amount wants to receive (= no changes while he's typing the amount)
+    [Throws=LnError]
+    PaymentAmountLimits get_payment_amount_limits();
+
     // Calculate the actual LSP fee in millisats for the given amount of an incoming payment.
     // If the already exisitng inbound capacity is enough, no new channel is required: The method returns 0.
     //    - amount_msat - amount in millisats to compute LSP fee for
