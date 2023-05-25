@@ -53,9 +53,13 @@ udeps:
 check-mod-test:
 	! grep --recursive --include="*.rs" "mod test " *
 
+.PHONY: check-udl
+check-udl:
+	! grep $$'\t' src/lipalightninglib.udl
+
 # Quick tests to run before creating a PR.
 .PHONY: pr
-pr: fmt buildall test clippy check-mod-test
+pr: fmt buildall test clippy check-mod-test check-udl
 
 .PHONY: run-eel
 run-eel:
