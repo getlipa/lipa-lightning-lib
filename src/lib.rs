@@ -29,7 +29,7 @@ use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix};
 use eel::limits::{LiquidityLimit, PaymentAmountLimits};
 pub use eel::payment::FiatValues;
-use eel::payment::{Payment, PaymentState, PaymentType, TzTime};
+use eel::payment::{PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
 use eel::InvoiceDetails;
 use eel::LogLevel;
@@ -61,6 +61,21 @@ pub struct ChannelsInfo {
     pub inbound_capacity: Amount,
     pub outbound_capacity: Amount,
     pub total_channel_capacities: Amount,
+}
+
+pub struct Payment {
+    pub payment_type: PaymentType,
+    pub payment_state: PaymentState,
+    pub hash: String,
+    pub amount: Amount,
+    pub invoice_details: InvoiceDetails,
+    pub created_at: TzTime,
+    pub latest_state_change_at: TzTime,
+    pub description: String,
+    pub preimage: Option<String>,
+    pub network_fees: Option<Amount>,
+    pub lsp_fees: Option<Amount>,
+    pub metadata: String,
 }
 
 pub struct LightningNode {
@@ -191,11 +206,13 @@ impl LightningNode {
     }
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
-        self.core_node.get_latest_payments(number_of_payments)
+        self.core_node
+            .get_latest_payments(number_of_payments)
+            .map(|ps| ps.into_iter().map(to_payment).collect())
     }
 
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
-        self.core_node.get_payment(&hash)
+        self.core_node.get_payment(&hash).map(to_payment)
     }
 
     pub fn foreground(&self) {
@@ -259,6 +276,42 @@ fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
         RuntimeErrorCode::GenericError,
         "Failed to build auth client",
     )
+}
+
+fn to_payment(payment: eel::payment::Payment) -> Payment {
+    // TODO: Store and get the rate from the payment.
+    let rate = match payment.fiat_values {
+        Some(fiat_values) => {
+            if fiat_values.amount > 0 {
+                Some(ExchangeRate {
+                    currency_code: fiat_values.fiat,
+                    rate: (payment.amount_msat / fiat_values.amount) as u32,
+                    updated_at: payment.created_at.time,
+                })
+            } else {
+                None
+            }
+        }
+        None => None,
+    };
+    let amount = match payment.payment_type {
+        PaymentType::Receiving => payment.amount_msat.to_amount_down(&rate),
+        PaymentType::Sending => payment.amount_msat.to_amount_up(&rate),
+    };
+    Payment {
+        payment_type: payment.payment_type,
+        payment_state: payment.payment_state,
+        hash: payment.hash,
+        amount,
+        invoice_details: payment.invoice_details,
+        created_at: payment.created_at,
+        latest_state_change_at: payment.latest_state_change_at,
+        description: payment.description,
+        preimage: payment.preimage,
+        network_fees: payment.network_fees_msat.map(|fee| fee.to_amount_up(&rate)),
+        lsp_fees: payment.lsp_fees_msat.map(|fee| fee.to_amount_up(&rate)),
+        metadata: payment.metadata,
+    }
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
