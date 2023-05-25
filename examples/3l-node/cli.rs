@@ -225,7 +225,7 @@ fn calculate_lsp_fee(
         .parse()
         .map_err(|_| "Error: amount should be an integer number".to_string())?;
     let fee = node.calculate_lsp_fee(amount).unwrap();
-    println!(" LSP fee: {} sats", fee as f64 / 1_000f64);
+    println!(" LSP fee: {} sats", amount_to_string(fee));
     Ok(())
 }
 

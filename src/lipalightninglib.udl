@@ -46,11 +46,11 @@ interface LightningNode {
     [Throws=LnError]
     PaymentAmountLimits get_payment_amount_limits();
 
-    // Calculate the actual LSP fee in millisats for the given amount of an incoming payment.
+    // Calculate the actual LSP fee for the given amount of an incoming payment.
     // If the already exisitng inbound capacity is enough, no new channel is required: The method returns 0.
-    //    - amount_msat - amount in millisats to compute LSP fee for
+    //    - amount_sat - amount in sats to compute LSP fee for
     [Throws=LnError]
-    u64 calculate_lsp_fee(u64 amount_msat);
+    Amount calculate_lsp_fee(u64 amount_sat);
 
     // Create an invoice to receive a payment with:
     //    - amount_msat - the smallest amount of millisats required for the node to accept the incoming payment (sender will have to pay fees on top of that amount)

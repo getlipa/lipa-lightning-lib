@@ -122,8 +122,11 @@ impl LightningNode {
         })
     }
 
-    pub fn calculate_lsp_fee(&self, amount_msat: u64) -> Result<u64> {
-        self.core_node.calculate_lsp_fee(amount_msat)
+    pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<Amount> {
+        let rate = self.get_exchange_rate();
+        self.core_node
+            .calculate_lsp_fee(amount_sat * 1_000)
+            .map(|fee| fee.to_amount_up(rate))
     }
 
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
