@@ -269,19 +269,18 @@ dictionary Payment {
     PaymentType payment_type;
     PaymentState payment_state;
     string hash; // Hex representation of payment hash
-    u64 amount_msat; // Nominal amount specified in the invoice
+    Amount amount; // Nominal amount specified in the invoice
     InvoiceDetails invoice_details;
     TzTime created_at;
     TzTime latest_state_change_at;
     string description; // The description embedded in the invoice. Given the length limit of this data,
         // it is possible that a hex hash of the description is provided instead, but that is uncommon.
     string? preimage; // Hex representation of the preimage. Will only be present on successful payments.
-    u64? network_fees_msat; // Routing fees paid in an `Sending` payment. Will only be present if payment was successful.
+    Amount? network_fees; // Routing fees paid in an `Sending` payment. Will only be present if payment was successful.
         // The cost of sending a payment is `amount_msat` + `network_fees_msat`
-    u64? lsp_fees_msat; // LSP fees paid in a `Receiving` payment. Will never be present for `Sending` payments but might be 0 for `Receiving` payments.
+    Amount? lsp_fees; // LSP fees paid in a `Receiving` payment. Will never be present for `Sending` payments but might be 0 for `Receiving` payments.
         // The amount is only paid if successful.
         // The value that is received in practice is given by `amount_msat` - `lsp_fees_msat`
-    FiatValues? fiat_values;
     string metadata;
 };
 
@@ -303,15 +302,6 @@ dictionary TzTime {
     timestamp time;
     string timezone_id;
     i32 timezone_utc_offset_secs;
-};
-
-// A pair of fiat values composed by a fiat string identifier, the corresponding amount, and an usd amount.
-// The amounts are stored in thousandths of the fiat currency.
-//      Example: 1.23 EUR would result in the `amount` 1230
-dictionary FiatValues {
-    string fiat;
-    u64 amount;
-    u64 amount_usd;
 };
 
 dictionary FiatValue {

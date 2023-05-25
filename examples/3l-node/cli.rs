@@ -454,18 +454,20 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
             "and with latest state change at {latest_change_at} {}",
             payment.latest_state_change_at.timezone_id
         );
-        println!("      State:              {:?}", payment.payment_state);
-        println!("      Amount msat:        {}", payment.amount_msat);
-        println!("      Amount fiat:        {:?}", payment.fiat_values);
-        println!("      Network fees msat:  {:?}", payment.network_fees_msat);
-        println!("      LSP fees:           {:?}", payment.lsp_fees_msat);
-        println!("      Hash:               {}", payment.hash);
-        println!("      Preimage:           {:?}", payment.preimage);
-        println!("      Description:        {}", payment.description);
+        println!("      State:        {:?}", payment.payment_state);
+        println!("      Amount:       {}", amount_to_string(payment.amount));
         println!(
-            "      Invoice:            {}",
-            payment.invoice_details.invoice
+            "      Network fees: {:?}",
+            payment.network_fees.map(amount_to_string)
         );
+        println!(
+            "      LSP fees:     {:?}",
+            payment.lsp_fees.map(amount_to_string)
+        );
+        println!("      Hash:         {}", payment.hash);
+        println!("      Preimage:     {:?}", payment.preimage);
+        println!("      Description:  {}", payment.description);
+        println!("      Invoice:      {}", payment.invoice_details.invoice);
         println!();
     }
 
