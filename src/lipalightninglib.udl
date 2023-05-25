@@ -233,7 +233,7 @@ dictionary ChannelsInfo {
 // This fee is being charged at the time of the channel creation.
 // The LSP simply subtracts this fee from an incoming payment (if this incoming payment leads to a channel creation).
 dictionary LspFee {
-    u64 channel_minimum_fee_msat;
+    Amount channel_minimum_fee;
     u64 channel_fee_permyriad; // Parts per myriad (aka basis points) -> 100 is 1%
 };
 
@@ -314,11 +314,22 @@ dictionary FiatValues {
     u64 amount_usd;
 };
 
+dictionary FiatValue {
+    u64 minor_units;
+    string currency_code;
+    timestamp converted_at;
+};
+
 // Exchange rate as sats per major unit.
 dictionary ExchangeRate {
     string currency_code;
     u32 rate;
     timestamp updated_at;
+};
+
+dictionary Amount {
+    u64 sats;
+    FiatValue? fiat;
 };
 
 //

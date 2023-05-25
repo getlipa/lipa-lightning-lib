@@ -1,6 +1,6 @@
 use crate::hinter::{CommandHint, CommandHinter};
 
-use uniffi_lipalightninglib::TzConfig;
+use uniffi_lipalightninglib::{Amount, TzConfig};
 
 use bitcoin::secp256k1::PublicKey;
 use chrono::offset::FixedOffset;
@@ -205,8 +205,8 @@ fn help() {
 fn lsp_fee(node: &LightningNode) {
     let lsp_fee = node.query_lsp_fee().unwrap();
     println!(
-        " Min fee: {} sats",
-        lsp_fee.channel_minimum_fee_msat as f64 / 1_000f64
+        " Min fee: {}",
+        amount_to_string(lsp_fee.channel_minimum_fee)
     );
     println!(
         "Fee rate: {}%",
@@ -470,4 +470,20 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn amount_to_string(amount: Amount) -> String {
+    let fiat = match amount.fiat {
+        Some(fiat) => {
+            let converted_at: DateTime<Utc> = fiat.converted_at.into();
+            format!(
+                "{:.2} {} as of {}",
+                fiat.minor_units as f64 / 100f64,
+                fiat.currency_code,
+                converted_at.format("%d/%m/%Y %T UTC"),
+            )
+        }
+        None => "exchange rate uknown".to_string(),
+    };
+    format!("{} sats ({fiat})", amount.sats)
 }

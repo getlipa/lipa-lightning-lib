@@ -2,6 +2,7 @@
 
 extern crate core;
 
+mod amount;
 mod callbacks;
 mod config;
 mod eel_interface_impl;
@@ -11,6 +12,8 @@ mod native_logger;
 mod recovery;
 mod sanitize_input;
 
+use crate::amount::ToAmount;
+pub use crate::amount::{Amount, FiatValue};
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::Config;
 use crate::eel_interface_impl::{EventsImpl, RemoteStorageGraphql};
@@ -18,18 +21,16 @@ use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::recovery::recover_lightning_node;
-use std::fs;
 
 pub use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 pub use eel::interfaces::ExchangeRate;
 use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix};
-use eel::limits::LiquidityLimit;
-use eel::limits::PaymentAmountLimits;
-use eel::lsp::LspFee;
+use eel::limits::{LiquidityLimit, PaymentAmountLimits};
 use eel::node_info::{ChannelsInfo, NodeInfo};
-use eel::payment::{FiatValues, Payment, PaymentState, PaymentType, TzTime};
+pub use eel::payment::FiatValues;
+use eel::payment::{Payment, PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
 use eel::InvoiceDetails;
 use eel::LogLevel;
@@ -38,9 +39,15 @@ use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel};
 use native_logger::init_native_logger_once;
 use perro::{MapToError, ResultTrait};
+use std::fs;
 use std::sync::Arc;
 
 const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
+
+pub struct LspFee {
+    pub channel_minimum_fee: Amount,
+    pub channel_fee_permyriad: u64,
+}
 
 pub struct LightningNode {
     exchange_rate_provider: ExchangeRateProviderImpl,
@@ -105,7 +112,14 @@ impl LightningNode {
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        self.core_node.query_lsp_fee()
+        let fee = self.core_node.query_lsp_fee()?;
+        let channel_minimum_fee = fee
+            .channel_minimum_fee_msat
+            .to_amount_up(self.get_exchange_rate());
+        Ok(LspFee {
+            channel_minimum_fee,
+            channel_fee_permyriad: fee.channel_fee_permyriad,
+        })
     }
 
     pub fn calculate_lsp_fee(&self, amount_msat: u64) -> Result<u64> {
