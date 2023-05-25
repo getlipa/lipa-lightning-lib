@@ -28,7 +28,6 @@ pub use eel::interfaces::ExchangeRate;
 use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix};
 use eel::limits::{LiquidityLimit, PaymentAmountLimits};
-use eel::node_info::{ChannelsInfo, NodeInfo};
 pub use eel::payment::FiatValues;
 use eel::payment::{Payment, PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
@@ -47,6 +46,21 @@ const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 pub struct LspFee {
     pub channel_minimum_fee: Amount,
     pub channel_fee_permyriad: u64,
+}
+
+pub struct NodeInfo {
+    pub node_pubkey: Vec<u8>,
+    pub num_peers: u16,
+    pub channels_info: ChannelsInfo,
+}
+
+pub struct ChannelsInfo {
+    pub num_channels: u16,
+    pub num_usable_channels: u16,
+    pub local_balance: Amount,
+    pub inbound_capacity: Amount,
+    pub outbound_capacity: Amount,
+    pub total_channel_capacities: Amount,
 }
 
 pub struct LightningNode {
@@ -108,14 +122,29 @@ impl LightningNode {
     }
 
     pub fn get_node_info(&self) -> NodeInfo {
-        self.core_node.get_node_info()
+        let rate = self.get_exchange_rate();
+        let node = self.core_node.get_node_info();
+        let channels = node.channels_info;
+        let channels_info = ChannelsInfo {
+            num_channels: channels.num_channels,
+            num_usable_channels: channels.num_usable_channels,
+            local_balance: channels.local_balance_msat.to_amount_down(&rate),
+            total_channel_capacities: channels.total_channel_capacities_msat.to_amount_down(&rate),
+            inbound_capacity: channels.inbound_capacity_msat.to_amount_down(&rate),
+            outbound_capacity: channels.outbound_capacity_msat.to_amount_down(&rate),
+        };
+        NodeInfo {
+            node_pubkey: node.node_pubkey.serialize().to_vec(),
+            num_peers: node.num_peers,
+            channels_info,
+        }
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
         let fee = self.core_node.query_lsp_fee()?;
         let channel_minimum_fee = fee
             .channel_minimum_fee_msat
-            .to_amount_up(self.get_exchange_rate());
+            .to_amount_up(&self.get_exchange_rate());
         Ok(LspFee {
             channel_minimum_fee,
             channel_fee_permyriad: fee.channel_fee_permyriad,
@@ -126,7 +155,7 @@ impl LightningNode {
         let rate = self.get_exchange_rate();
         self.core_node
             .calculate_lsp_fee(amount_sat * 1_000)
-            .map(|fee| fee.to_amount_up(rate))
+            .map(|fee| fee.to_amount_up(&rate))
     }
 
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {

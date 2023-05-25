@@ -350,7 +350,7 @@ impl LightningNode {
     pub fn get_node_info(&self) -> NodeInfo {
         let channels_info = get_channels_info(&self.channel_manager.list_channels());
         NodeInfo {
-            node_pubkey: self.channel_manager.get_our_node_id().serialize().to_vec(),
+            node_pubkey: self.channel_manager.get_our_node_id(),
             num_peers: self.peer_manager.get_peer_node_ids().len() as u16,
             channels_info,
         }

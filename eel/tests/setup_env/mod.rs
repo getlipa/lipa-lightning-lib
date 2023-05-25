@@ -105,6 +105,7 @@ pub mod nigiri {
 
     use crate::try_cmd_repeatedly;
     use bitcoin::hashes::hex::ToHex;
+    use bitcoin::secp256k1::PublicKey;
     use log::debug;
     use std::process::{Command, Output};
     use std::thread::sleep;
@@ -752,7 +753,7 @@ pub mod nigiri {
         }};
     }
 
-    pub fn initiate_channel_from_remote(node_pubkey: Vec<u8>, remote_node: NodeInstance) {
+    pub fn initiate_channel_from_remote(node_pubkey: PublicKey, remote_node: NodeInstance) {
         lnd_node_open_channel(remote_node, &node_pubkey.to_hex(), false).unwrap();
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
 
