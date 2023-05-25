@@ -3,7 +3,6 @@ mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod node_info_test {
-    use bitcoin::secp256k1::PublicKey;
     use serial_test::file_serial;
 
     use crate::setup::mocked_storage_node;
@@ -17,10 +16,6 @@ mod node_info_test {
         let node = mocked_storage_node().start_or_panic();
         let node_info = node.get_node_info();
 
-        assert!(
-            PublicKey::from_slice(&*node_info.node_pubkey).is_ok(),
-            "Node public key is not valid"
-        );
         assert!(
             node_info.channels_info.num_channels >= node_info.channels_info.num_usable_channels,
             "Number of channels must be greater or equal to number of usable channels"

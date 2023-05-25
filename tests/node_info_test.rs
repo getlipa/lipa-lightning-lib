@@ -29,7 +29,7 @@ mod node_info_test {
             "Number of channels must be greater or equal to number of usable channels"
         );
         assert!(
-            node_info.channels_info.local_balance_msat < 21_000_000 * 100_000_000,
+            node_info.channels_info.local_balance.sats < 21_000_000 * 100_000_000,
             "Node must not hold more than 21 million BTC"
         );
     }

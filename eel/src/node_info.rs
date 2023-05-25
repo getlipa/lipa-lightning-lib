@@ -1,3 +1,4 @@
+use bitcoin::secp256k1::PublicKey;
 use lightning::ln::channelmanager::ChannelDetails;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -12,7 +13,7 @@ pub struct ChannelsInfo {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct NodeInfo {
-    pub node_pubkey: Vec<u8>,
+    pub node_pubkey: PublicKey,
     pub num_peers: u16,
     pub channels_info: ChannelsInfo,
 }

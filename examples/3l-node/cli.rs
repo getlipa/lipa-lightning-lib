@@ -225,7 +225,7 @@ fn calculate_lsp_fee(
         .parse()
         .map_err(|_| "Error: amount should be an integer number".to_string())?;
     let fee = node.calculate_lsp_fee(amount).unwrap();
-    println!(" LSP fee: {} sats", fee as f64 / 1_000f64);
+    println!(" LSP fee: {} sats", amount_to_string(fee));
     Ok(())
 }
 
@@ -263,20 +263,20 @@ fn node_info(node: &LightningNode) {
         node_info.channels_info.num_usable_channels
     );
     println!(
-        "    Local balance in msat: {}",
-        node_info.channels_info.local_balance_msat
+        "           Local balance: {}",
+        amount_to_string(node_info.channels_info.local_balance)
     );
     println!(
-        " Inbound capacity in msat: {}",
-        node_info.channels_info.inbound_capacity_msat
+        "        Inbound capacity: {}",
+        amount_to_string(node_info.channels_info.inbound_capacity)
     );
     println!(
-        "Outbound capacity in msat: {}",
-        node_info.channels_info.outbound_capacity_msat
+        "       Outbound capacity: {}",
+        amount_to_string(node_info.channels_info.outbound_capacity)
     );
     println!(
-        " Capacity of all channels: {}",
-        node_info.channels_info.total_channel_capacities_msat
+        "Capacity of all channels: {}",
+        amount_to_string(node_info.channels_info.total_channel_capacities)
     );
 }
 
