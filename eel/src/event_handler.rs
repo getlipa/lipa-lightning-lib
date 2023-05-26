@@ -254,6 +254,10 @@ impl EventHandler for LipaEventHandler {
                 self.channel_manager.process_pending_htlc_forwards();
             }
             Event::SpendableOutputs { outputs } => {
+                info!(
+                    "EVENT: SpendableOutputs - {} spendable outputs provided",
+                    outputs.len()
+                );
                 let destination_address = match self.wallet.get_new_address() {
                     Ok(a) => a,
                     Err(e) => {
