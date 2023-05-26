@@ -25,21 +25,21 @@ mod onchain_test {
         let node = mocked_storage_node().start_or_panic();
         let funding_txid = setup_outbound_capacity(&node);
 
-        assert_eq!(node.get_onchain_balance().unwrap(), 0);
+        assert_eq!(node.get_onchain_balance().unwrap().confirmed, 0);
 
         nigiri::lnd_node_force_close_channel(NodeInstance::LspdLnd, funding_txid).unwrap();
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 6);
 
         wait_for_eq!(node.get_node_info().channels_info.num_channels, 0);
-        wait_for_eq!(node.get_onchain_balance().unwrap(), 50_000);
+        wait_for_eq!(node.get_onchain_balance().unwrap().confirmed, 50_000);
 
         // TEST COOP CLOSE
 
         // Set up a channel and receive 50k sats
         let funding_txid = setup_outbound_capacity(&node);
 
-        assert_eq!(node.get_onchain_balance().unwrap(), 50_000);
+        assert_eq!(node.get_onchain_balance().unwrap().confirmed, 50_000);
 
         nigiri::lnd_node_coop_close_channel(NodeInstance::LspdLnd, funding_txid).unwrap();
 
@@ -48,6 +48,6 @@ mod onchain_test {
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 6);
 
-        wait_for_eq!(node.get_onchain_balance().unwrap(), 100_000);
+        wait_for_eq!(node.get_onchain_balance().unwrap().confirmed, 100_000);
     }
 }

@@ -3,35 +3,36 @@
 extern crate core;
 
 pub mod config;
-mod data_store;
 pub mod errors;
 pub mod interfaces;
 pub mod key_derivation;
-pub mod keys_manager;
 pub mod limits;
 pub mod lsp;
-mod migrations;
 pub mod node_info;
 pub mod p2p_networking;
 pub mod payment;
 pub mod recovery;
-mod schema_migration;
 pub mod secret;
 
 mod async_runtime;
+mod data_store;
 mod encryption_symmetric;
 mod esplora_client;
 mod event_handler;
 mod fee_estimator;
 pub mod invoice;
+pub mod keys_manager;
 mod logger;
+mod migrations;
 mod random;
 mod rapid_sync_client;
+mod schema_migration;
 mod storage_persister;
 mod task_manager;
 mod test_utils;
 mod tx_broadcaster;
 mod types;
+mod wallet;
 
 use crate::async_runtime::AsyncRuntime;
 use crate::config::{Config, TzConfig};
@@ -42,7 +43,6 @@ use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::interfaces::{EventHandler, ExchangeRate, ExchangeRateProvider, RemoteStorage};
 use crate::invoice::{create_invoice, CreateInvoiceParams};
-use crate::keys_manager::init_keys_manager;
 use crate::limits::PaymentAmountLimits;
 use crate::logger::LightningLogger;
 use crate::lsp::{calculate_fee, LspClient, LspFee};
@@ -53,16 +53,18 @@ use crate::rapid_sync_client::RapidSyncClient;
 use crate::storage_persister::StoragePersister;
 use crate::task_manager::{PeriodConfig, RestartIfFailedPeriod, TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
-use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router, TxSync};
+use crate::types::{
+    ChainMonitor, ChannelManager, KeysManager, PeerManager, RapidGossipSync, Router, TxSync,
+};
+use crate::wallet::{init_wallet, init_wallet_keys_manager, Wallet};
 
+use bdk::Balance;
 use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
 use cipher::consts::U32;
 use invoice::DecodeInvoiceError;
 use lightning::chain::channelmonitor::ChannelMonitor;
-use lightning::chain::keysinterface::{
-    EntropySource, InMemorySigner, KeysManager, SpendableOutputDescriptor,
-};
+use lightning::chain::keysinterface::{EntropySource, InMemorySigner};
 use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Confirm, Watch};
 use lightning::ln::channelmanager::{ChainParameters, Retry, RetryableSendFailure};
 use lightning::ln::peer_handler::IgnoringMessageHandler;
@@ -94,6 +96,7 @@ const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_fees: Some(Duration::from_secs(5 * 60)),
     update_graph: Some(RestartIfFailedPeriod::from_secs(2 * 60)),
     update_exchange_rates: Some(Duration::from_secs(10 * 60)),
+    sync_onchain_wallet: Some(Duration::from_secs(60)),
 };
 
 const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
@@ -103,6 +106,7 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_fees: None,
     update_graph: None,
     update_exchange_rates: None,
+    sync_onchain_wallet: None,
 };
 
 #[allow(dead_code)]
@@ -116,6 +120,7 @@ pub struct LightningNode {
     peer_manager: Arc<PeerManager>,
     task_manager: Arc<Mutex<TaskManager>>,
     data_store: Arc<Mutex<DataStore>>,
+    wallet: Arc<Wallet>,
 }
 
 impl LightningNode {
@@ -138,10 +143,19 @@ impl LightningNode {
         // Step 2. Initialize the Logger
         let logger = Arc::new(LightningLogger {});
 
-        // Step 3. Initialize the BroadcasterInterface
+        // Step 3. Initialize on-chain wallet
+        let wallet_db_path = format!("{}/bdk-database", config.local_persistence_path);
+        let wallet = Arc::new(init_wallet(
+            &config.seed,
+            config.network,
+            &wallet_db_path,
+            &config.esplora_api_url,
+        )?);
+
+        // Step 4. Initialize the BroadcasterInterface
         let tx_broadcaster = Arc::new(TxBroadcaster::new(Arc::clone(&esplora_client)));
 
-        // Step 4. Initialize Persist
+        // Step 5. Initialize Persist
         let encryption_key = key_derivation::derive_persistence_encryption_key(&config.seed)?;
         let persister = Arc::new(StoragePersister::new(
             remote_storage,
@@ -152,13 +166,13 @@ impl LightningNode {
             warn!("Remote storage is unhealty");
         }
 
-        // Step 5. Initialize the Transaction Filter
+        // Step 6. Initialize the Transaction Filter
         let tx_sync = Arc::new(TxSync::new(
             config.esplora_api_url.clone(),
             Arc::clone(&logger),
         ));
 
-        // Step 6. Initialize the ChainMonitor
+        // Step 7. Initialize the ChainMonitor
         let chain_monitor = Arc::new(ChainMonitor::new(
             Some(Arc::clone(&tx_sync)),
             Arc::clone(&tx_broadcaster),
@@ -167,20 +181,23 @@ impl LightningNode {
             Arc::clone(&persister),
         ));
 
-        // Step 7. Provide the ChainMonitor to Persist
+        // Step 8. Provide the ChainMonitor to Persist
         persister.add_chain_monitor(Arc::downgrade(&chain_monitor));
 
-        // Step 8. Initialize the KeysManager
-        let keys_manager = Arc::new(init_keys_manager(&config.get_seed_first_half())?);
+        // Step 9. Initialize the KeysManager
+        let keys_manager = Arc::new(init_wallet_keys_manager(
+            &config.get_seed_first_half(),
+            Arc::clone(&wallet),
+        )?);
 
-        // Step 9. Read ChannelMonitor state from disk/remote
+        // Step 10. Read ChannelMonitor state from disk/remote
         let mut channel_monitors =
             persister.read_channel_monitors(&*keys_manager, &*keys_manager)?;
 
-        // Step 10: Initialize the NetworkGraph
+        // Step 11: Initialize the NetworkGraph
         let graph = Arc::new(persister.read_or_init_graph(config.network, Arc::clone(&logger))?);
 
-        // Step 11: Initialize the RapidSyncClient
+        // Step 12: Initialize the RapidSyncClient
         let rapid_sync = Arc::new(RapidGossipSync::new(
             Arc::clone(&graph),
             Arc::clone(&logger),
@@ -190,12 +207,12 @@ impl LightningNode {
             Arc::clone(&rapid_sync),
         )?);
 
-        // Step 12: Initialize the ProbabilisticScorer
+        // Step 13: Initialize the ProbabilisticScorer
         let scorer = Arc::new(Mutex::new(
             persister.read_or_init_scorer(Arc::clone(&graph), Arc::clone(&logger))?,
         ));
 
-        // Step 13: Initialize the Router
+        // Step 14: Initialize the Router
         let router = Arc::new(Router::new(
             Arc::clone(&graph),
             Arc::clone(&logger),
@@ -204,12 +221,12 @@ impl LightningNode {
         ));
 
         // (needed when using Electrum or BIP 157/158)
-        // Step 14: Prepare ChannelMonitors for chain sync
+        // Step 15: Prepare ChannelMonitors for chain sync
         for (_, channel_monitor) in channel_monitors.iter() {
             channel_monitor.load_outputs_to_watch(&tx_sync);
         }
 
-        // Step 15: Initialize the ChannelManager
+        // Step 16: Initialize the ChannelManager
         let mobile_node_user_config = build_mobile_node_user_config();
         let genesis_block = BestBlock::from_network(config.network);
         let chain_params = ChainParameters {
@@ -232,7 +249,7 @@ impl LightningNode {
         )?;
         let channel_manager = Arc::new(channel_manager);
 
-        // Step 16. Sync ChannelMonitors and ChannelManager to chain tip
+        // Step 17. Sync ChannelMonitors and ChannelManager to chain tip
         let confirmables = vec![
             &*channel_manager as &(dyn Confirm + Sync + Send),
             &*chain_monitor as &(dyn Confirm + Sync + Send),
@@ -247,7 +264,7 @@ impl LightningNode {
             }
         }
 
-        // Step 17. Give ChannelMonitors to ChainMonitor
+        // Step 18. Give ChannelMonitors to ChainMonitor
         for (_, channel_monitor) in channel_monitors {
             let funding_outpoint = channel_monitor.get_funding_txo().0;
             match chain_monitor.watch_channel(funding_outpoint, channel_monitor) {
@@ -261,20 +278,20 @@ impl LightningNode {
             }
         }
 
-        // Step 18. Initialize the PeerManager
+        // Step 19. Initialize the PeerManager
         let peer_manager = Arc::new(init_peer_manager(
             Arc::clone(&channel_manager),
             Arc::clone(&keys_manager),
             Arc::clone(&logger),
         )?);
 
-        // Step 19: Initialize the LspClient
+        // Step 20: Initialize the LspClient
         let lsp_client = Arc::new(LspClient::new(
             config.lsp_url.clone(),
             config.lsp_token.clone(),
         )?);
 
-        // Step 20: Initialize the DataStore
+        // Step 21: Initialize the DataStore
         let data_store_path = Path::new(&config.local_persistence_path).join("db.db3");
         let data_store_path = data_store_path
             .to_str()
@@ -284,7 +301,7 @@ impl LightningNode {
             config.timezone_config.clone(),
         )?));
 
-        // Step 21: Initialize the TaskManager
+        // Step 22: Initialize the TaskManager
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),
             Arc::clone(&lsp_client),
@@ -296,13 +313,14 @@ impl LightningNode {
             Arc::clone(&tx_sync),
             exchange_rate_provider,
             Arc::clone(&data_store),
+            Arc::clone(&wallet),
         )?));
         task_manager
             .lock()
             .unwrap()
             .restart(get_foreground_periods());
 
-        // Step 22. Initialize an EventHandler
+        // Step 23. Initialize an EventHandler
         let event_handler = Arc::new(LipaEventHandler::new(
             Arc::clone(&channel_manager),
             Arc::clone(&task_manager),
@@ -310,7 +328,7 @@ impl LightningNode {
             Arc::clone(&data_store),
         )?);
 
-        // Step 23. Start Background Processing
+        // Step 24. Start Background Processing
         // The fact that we do not restart the background process assumes that
         // it will never fail. However it may fail:
         //  1. on persisting channel manager, but it never fails since we ignore
@@ -339,6 +357,7 @@ impl LightningNode {
             peer_manager,
             task_manager,
             data_store,
+            wallet,
         })
     }
 
@@ -626,37 +645,9 @@ impl LightningNode {
         ))
     }
 
-    // This implementation assumes that we don't ever spend the outputs provided by LDK
-    // For now this is a reasonable assumption because we don't implement a way to spend them
-    // TODO: as soon as it's possible to spend outputs persisted in the data store, update this
-    //      implementation such that spent outputs are not contemplated
-    pub fn get_onchain_balance(&self) -> Result<u64> {
-        let mut balance = 0;
-
-        let outputs = self
-            .data_store
-            .lock()
-            .unwrap()
-            .get_all_spendable_outputs()?;
-
-        for output_descriptor in outputs {
-            match output_descriptor {
-                SpendableOutputDescriptor::StaticOutput {
-                    outpoint: _,
-                    output,
-                } => {
-                    balance += output.value;
-                }
-                SpendableOutputDescriptor::DelayedPaymentOutput(output_descriptor) => {
-                    balance += output_descriptor.output.value;
-                }
-                SpendableOutputDescriptor::StaticPaymentOutput(output_descriptor) => {
-                    balance += output_descriptor.output.value;
-                }
-            }
-        }
-
-        Ok(balance)
+    pub fn get_onchain_balance(&self) -> Result<Balance> {
+        self.wallet.sync()?;
+        self.wallet.get_balance()
     }
 
     pub fn panic_directly(&self) {
@@ -761,6 +752,7 @@ fn get_foreground_periods() -> TaskPeriods {
                 update_fees: Some(period),
                 update_graph: Some(period),
                 update_exchange_rates: Some(period),
+                sync_onchain_wallet: Some(period),
             }
         }
         Err(_) => FOREGROUND_PERIODS,

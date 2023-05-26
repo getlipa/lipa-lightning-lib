@@ -4,17 +4,8 @@ use crate::secret::Secret;
 
 use bip39::{Language, Mnemonic};
 use cipher::consts::U32;
-use lightning::chain::keysinterface::KeysManager;
 use perro::MapToError;
 use std::str::FromStr;
-use std::time::SystemTime;
-
-pub(crate) fn init_keys_manager(seed: &[u8; 32]) -> Result<KeysManager> {
-    let now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map_to_permanent_failure("System time before Unix epoch")?;
-    Ok(KeysManager::new(seed, now.as_secs(), now.subsec_nanos()))
-}
 
 pub fn generate_secret(passphrase: String) -> Result<Secret> {
     let entropy = random::generate_random_bytes::<U32>()?;

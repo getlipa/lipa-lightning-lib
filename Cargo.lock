@@ -257,6 +257,7 @@ dependencies = [
  "bip39",
  "bitcoin",
  "electrum-client",
+ "esplora-client 0.4.0",
  "getrandom",
  "js-sys",
  "log",
@@ -717,6 +718,7 @@ version = "0.1.0"
 dependencies = [
  "aes",
  "aes-gcm",
+ "bdk",
  "bip39",
  "bitcoin",
  "chrono",
@@ -745,6 +747,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "simplelog",
+ "sled",
  "storage-mock",
  "strip-ansi-escapes",
  "thiserror",
@@ -843,6 +846,7 @@ dependencies = [
  "log",
  "reqwest",
  "serde",
+ "ureq",
 ]
 
 [[package]]

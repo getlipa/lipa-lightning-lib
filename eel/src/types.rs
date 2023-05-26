@@ -2,10 +2,10 @@ use crate::fee_estimator::FeeEstimator;
 use crate::logger::LightningLogger;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
+use crate::wallet::WalletKeysManager;
 
 use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
-use lightning::chain::keysinterface::{InMemorySigner, KeysManager};
-use lightning::ln::channelmanager::SimpleArcChannelManager;
+use lightning::chain::keysinterface::InMemorySigner;
 use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::routing::router::DefaultRouter;
 use lightning::routing::scoring::ProbabilisticScorer;
@@ -22,6 +22,31 @@ pub(crate) type ChainMonitor = LdkChainMonitor<
     Arc<FeeEstimator>,
     Arc<LightningLogger>,
     Arc<StoragePersister>,
+>;
+
+// Similar to LDK's SimpleArcChannelManager, but with our KeysManager type
+pub type SimpleArcChannelManager<M, T, F, L> = lightning::ln::channelmanager::ChannelManager<
+    Arc<M>,
+    Arc<T>,
+    Arc<KeysManager>,
+    Arc<KeysManager>,
+    Arc<KeysManager>,
+    Arc<F>,
+    Arc<
+        DefaultRouter<
+            Arc<lightning::routing::gossip::NetworkGraph<Arc<L>>>,
+            Arc<L>,
+            Arc<
+                Mutex<
+                    ProbabilisticScorer<
+                        Arc<lightning::routing::gossip::NetworkGraph<Arc<L>>>,
+                        Arc<L>,
+                    >,
+                >,
+            >,
+        >,
+    >,
+    Arc<L>,
 >;
 
 pub(crate) type ChannelManager =
@@ -61,3 +86,5 @@ pub(crate) type Router = DefaultRouter<
 >;
 
 pub(crate) type Scorer = ProbabilisticScorer<Arc<NetworkGraph>, Arc<LightningLogger>>;
+
+pub(crate) type KeysManager = WalletKeysManager;
