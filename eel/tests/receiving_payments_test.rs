@@ -22,7 +22,10 @@ mod receiving_payments_test {
     const TWO_K_SATS: u64 = 2_000_000;
     const TEN_K_SATS: u64 = 10_000_000;
     const TWENTY_K_SATS: u64 = 20_000_000;
+    const TWO_HUNDRED_K_SATS: u64 = 200_000_000;
     const HALF_M_SATS: u64 = 500_000_000;
+    const ONE_M_SATS: u64 = 1_000_000_000;
+    const TWO_M_SATS: u64 = 2_000_000_000;
 
     // The amount of sats the LSP provides to the user as inbound capacity.
     // See https://github.com/getlipa/lipa-lightning-lib/blob/b821162df982799c497e083e9707aa421aee43a8/lspd/compose.yaml#LL63C44-L63C46
@@ -164,14 +167,27 @@ mod receiving_payments_test {
 
             // Add 2M sats of inbound capacity - More than the max allowed receive amount
             let node_id = node.get_node_info().node_pubkey.to_hex();
+            assert_eq!(nigiri::get_number_of_txs_in_mempool(), Ok::<u64, String>(2)); // 2 times jit channel open flow
             let _ = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap(); // 1M sats
             let _ = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap(); // 1M sats
+            wait_for_eq!(nigiri::get_number_of_txs_in_mempool(), Ok::<u64, String>(4));
             try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
-            wait_for!(node.get_node_info().channels_info.inbound_capacity_msat > 2_000_000_000);
+            wait_for!(node.get_node_info().channels_info.inbound_capacity_msat > TWO_M_SATS);
 
             assert_high_inbound_capacity(&node);
 
-            // todo also test multipath payments
+            // test receiving MPP
+            let inbound_capacity = node.get_node_info().channels_info.inbound_capacity_msat;
+            let payment_amount = inbound_capacity - TWO_HUNDRED_K_SATS; // todo use full inbound capacity as soon as the number is accurate
+            assert!(payment_amount > ONE_M_SATS); // Biggest channel is 1M sats; This payment involves transferring through more than 1 channel
+            let invoice = issue_invoice(
+                &node,
+                node.get_node_info().channels_info.inbound_capacity_msat - TWO_HUNDRED_K_SATS,
+            );
+
+            wait_for!(nigiri::lnd_pay_invoice(NodeInstance::LspdLnd, &invoice).is_ok());
+
+            assert!(node.get_node_info().channels_info.local_balance_msat > TWO_M_SATS);
         }
     }
 
