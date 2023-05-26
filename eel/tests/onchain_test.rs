@@ -20,7 +20,6 @@ mod onchain_test {
         nigiri::setup_environment_with_lsp();
 
         // TEST FORCE CLOSE
-
         // Set up a channel and receive 50k sats
         let node = mocked_storage_node().start_or_panic();
         let funding_txid = setup_outbound_capacity(&node);

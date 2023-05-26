@@ -15,6 +15,7 @@ use lightning::chain::keysinterface::{
 };
 use lightning::ln::msgs::{DecodeError, UnsignedGossipMessage};
 use lightning::ln::script::ShutdownScript;
+use log::info;
 use perro::MapToError;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
@@ -94,6 +95,10 @@ impl WalletKeysManager {
             .filter(|desc| !matches!(desc, SpendableOutputDescriptor::StaticOutput { .. }))
             .copied()
             .collect::<Vec<_>>();
+        info!(
+            "Creating spending tx only with non static outputs - {} non static output(s) was/were found",
+            only_non_static.len()
+        );
         self.inner.spend_spendable_outputs(
             only_non_static,
             outputs,
