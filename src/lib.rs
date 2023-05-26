@@ -8,6 +8,7 @@ mod config;
 mod eel_interface_impl;
 mod environment;
 mod exchange_rate_provider;
+mod invoice_details;
 mod native_logger;
 mod recovery;
 mod sanitize_input;
@@ -20,6 +21,7 @@ use crate::eel_interface_impl::{EventsImpl, RemoteStorageGraphql};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
+pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
 
 pub use eel::config::TzConfig;
@@ -31,7 +33,6 @@ use eel::limits::{LiquidityLimit, PaymentAmountLimits};
 pub use eel::payment::FiatValues;
 use eel::payment::{PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
-use eel::InvoiceDetails;
 use eel::LogLevel;
 pub use eel::Network;
 use honey_badger::secrets::{generate_keypair, KeyPair};
@@ -179,16 +180,21 @@ impl LightningNode {
 
     pub fn create_invoice(
         &self,
-        amount_msat: u64,
+        amount_sat: u64,
         description: String,
         metadata: String,
     ) -> Result<InvoiceDetails> {
-        self.core_node
-            .create_invoice(amount_msat, description, metadata)
+        let rate = self.get_exchange_rate();
+        let invoice = self
+            .core_node
+            .create_invoice(amount_sat * 1000, description, metadata)?;
+        Ok(InvoiceDetails::from_our_invoice(invoice, &rate))
     }
 
     pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
-        self.core_node.decode_invoice(invoice)
+        let invoice = self.core_node.decode_invoice(invoice)?;
+        let rate = self.get_exchange_rate();
+        Ok(InvoiceDetails::from_foreign_invoice(invoice, &rate))
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
@@ -198,11 +204,11 @@ impl LightningNode {
     pub fn pay_open_invoice(
         &self,
         invoice: String,
-        amount_msat: u64,
+        amount_sat: u64,
         metadata: String,
     ) -> Result<()> {
         self.core_node
-            .pay_open_invoice(invoice, amount_msat, metadata)
+            .pay_open_invoice(invoice, amount_sat * 1000, metadata)
     }
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
@@ -298,12 +304,16 @@ fn to_payment(payment: eel::payment::Payment) -> Payment {
         PaymentType::Receiving => payment.amount_msat.to_amount_down(&rate),
         PaymentType::Sending => payment.amount_msat.to_amount_up(&rate),
     };
+    let invoice_details = match payment.payment_type {
+        PaymentType::Receiving => InvoiceDetails::from_our_invoice(payment.invoice, &rate),
+        PaymentType::Sending => InvoiceDetails::from_foreign_invoice(payment.invoice, &rate),
+    };
     Payment {
         payment_type: payment.payment_type,
         payment_state: payment.payment_state,
         hash: payment.hash,
         amount,
-        invoice_details: payment.invoice_details,
+        invoice_details,
         created_at: payment.created_at,
         latest_state_change_at: payment.latest_state_change_at,
         description: payment.description,

@@ -78,9 +78,9 @@ mod rapid_gossip_sync_test {
             let invoice_cln = node
                 .create_invoice(HUNDRED_K_SATS, "test".to_string(), String::new())
                 .unwrap();
-            assert!(invoice_cln.invoice.starts_with("lnbc"));
+            assert!(invoice_cln.to_string().starts_with("lnbc"));
 
-            nigiri::cln_pay_invoice(NodeInstance::NigiriCln, &invoice_cln.invoice).unwrap();
+            nigiri::cln_pay_invoice(NodeInstance::NigiriCln, &invoice_cln.to_string()).unwrap();
 
             assert_eq!(
                 node.get_node_info().channels_info.local_balance_msat,
@@ -134,9 +134,9 @@ mod rapid_gossip_sync_test {
             let invoice_lnd = node
                 .create_invoice(HUNDRED_K_SATS, "test".to_string(), String::new())
                 .unwrap();
-            assert!(invoice_lnd.invoice.starts_with("lnbc"));
+            assert!(invoice_lnd.to_string().starts_with("lnbc"));
 
-            nigiri::lnd_pay_invoice(NodeInstance::NigiriLnd, &invoice_lnd.invoice).unwrap();
+            nigiri::lnd_pay_invoice(NodeInstance::NigiriLnd, &invoice_lnd.to_string()).unwrap();
 
             // wait for the RGS server to learn about the new channels (100 seconds isn't enough)
             sleep(Duration::from_secs(150));

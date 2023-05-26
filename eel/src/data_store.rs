@@ -6,11 +6,9 @@ use crate::schema_migration::migrate_schema;
 
 use crate::interfaces::ExchangeRate;
 use chrono::{DateTime, Utc};
-use lightning_invoice::Invoice;
 use perro::{MapToError, OptionToError};
 use rusqlite::types::Type;
 use rusqlite::{Connection, Row};
-use std::str::FromStr;
 use std::time::SystemTime;
 
 use crate::payment::{FiatValues, Payment, PaymentState, PaymentType, TzTime};
@@ -364,11 +362,8 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let network_fees_msat = row.get(5)?;
     let lsp_fees_msat = row.get(6)?;
     let invoice: String = row.get(7)?;
-    let invoice_details = invoice::get_invoice_details(
-        &Invoice::from_str(&invoice)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, Type::Text, Box::new(e)))?,
-    )
-    .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, Type::Text, Box::new(e)))?;
+    let invoice = invoice::parse_invoice(&invoice)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, Type::Text, Box::new(e)))?;
     let metadata = row.get(8)?;
     let payment_state: u8 = row.get(9)?;
     let payment_state = PaymentState::try_from(payment_state)
@@ -407,7 +402,7 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
         payment_state,
         hash,
         amount_msat,
-        invoice_details,
+        invoice,
         created_at,
         latest_state_change_at,
         description,
@@ -533,7 +528,7 @@ mod tests {
         assert_eq!(payment.payment_state, PaymentState::Created);
         assert_eq!(payment.hash, hash);
         assert_eq!(payment.amount_msat, amount_msat);
-        assert_eq!(payment.invoice_details.invoice, invoice);
+        assert_eq!(payment.invoice.to_string(), invoice);
         assert_eq!(payment.description, description);
         assert_eq!(payment.preimage, None);
         assert_eq!(payment.network_fees_msat, None);
@@ -605,7 +600,7 @@ mod tests {
         assert_eq!(payment.payment_state, PaymentState::Created);
         assert_eq!(payment.hash, hash);
         assert_eq!(payment.amount_msat, amount_msat);
-        assert_eq!(payment.invoice_details.invoice, invoice);
+        assert_eq!(payment.invoice.to_string(), invoice);
         assert_eq!(payment.description, description);
         assert_eq!(payment.preimage, None);
         assert_eq!(payment.network_fees_msat, None);
@@ -689,7 +684,7 @@ mod tests {
         assert_eq!(payment.payment_state, PaymentState::Created);
         assert_eq!(payment.hash, hash);
         assert_eq!(payment.amount_msat, amount_msat);
-        assert_eq!(payment.invoice_details.invoice, invoice);
+        assert_eq!(payment.invoice.to_string(), invoice);
         assert_eq!(payment.description, description);
         assert_eq!(payment.preimage, None);
         assert_eq!(payment.network_fees_msat, None);

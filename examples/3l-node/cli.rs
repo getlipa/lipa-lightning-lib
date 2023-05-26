@@ -138,7 +138,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("nodeinfo", "nodeinfo"));
     hints.insert(CommandHint::new("lspfee", "lspfee"));
     hints.insert(CommandHint::new(
-        "calculatelspfee <amount in millisat>",
+        "calculatelspfee <amount in sat>",
         "calculatelspfee ",
     ));
     hints.insert(CommandHint::new("exchangerates", "exchangerates"));
@@ -153,7 +153,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
 
     hints.insert(CommandHint::new(
-        "invoice <amount in millisats> [description]",
+        "invoice <amount in sats> [description]",
         "invoice ",
     ));
     hints.insert(CommandHint::new(
@@ -162,7 +162,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
     hints.insert(CommandHint::new("payinvoice <invoice>", "payinvoice "));
     hints.insert(CommandHint::new(
-        "payopeninvoice <invoice> <amount in msat>",
+        "payopeninvoice <invoice> <amount in sat>",
         "payopeninvoice ",
     ));
 
@@ -182,17 +182,17 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
 fn help() {
     println!("  nodeinfo");
     println!("  lspfee");
-    println!("  calculatelspfee <amount in millisat>");
+    println!("  calculatelspfee <amount in sat>");
     println!("  paymentamountlimits");
     println!("  exchangerates");
     println!("  listcurrencies");
     println!("  changecurrency <currency code>");
     println!("  changetimezone [timezone offset in mins] [timezone id]");
     println!();
-    println!("  invoice <amount in millisats> [description]");
+    println!("  invoice <amount in sats> [description]");
     println!("  decodeinvoice <invoice>");
     println!("  payinvoice <invoice>");
-    println!("  payopeninvoice <invoice> <amount in millisats>");
+    println!("  payopeninvoice <invoice> <amount in sats>");
     println!();
     println!("  listpayments");
     println!();
@@ -220,7 +220,7 @@ fn calculate_lsp_fee(
 ) -> Result<(), String> {
     let amount = words
         .next()
-        .ok_or_else(|| "Error: amount in millisats is required".to_string())?;
+        .ok_or_else(|| "Error: amount in sats is required".to_string())?;
     let amount: u64 = amount
         .parse()
         .map_err(|_| "Error: amount should be an integer number".to_string())?;
@@ -263,19 +263,19 @@ fn node_info(node: &LightningNode) {
         node_info.channels_info.num_usable_channels
     );
     println!(
-        "           Local balance: {}",
+        "            Local balance: {}",
         amount_to_string(node_info.channels_info.local_balance)
     );
     println!(
-        "        Inbound capacity: {}",
+        "         Inbound capacity: {}",
         amount_to_string(node_info.channels_info.inbound_capacity)
     );
     println!(
-        "       Outbound capacity: {}",
+        "        Outbound capacity: {}",
         amount_to_string(node_info.channels_info.outbound_capacity)
     );
     println!(
-        "Capacity of all channels: {}",
+        " Capacity of all channels: {}",
         amount_to_string(node_info.channels_info.total_channel_capacities)
     );
 }
@@ -339,7 +339,7 @@ fn create_invoice(
 ) -> Result<(), String> {
     let amount = words
         .next()
-        .ok_or_else(|| "Error: amount in millisats is required".to_string())?;
+        .ok_or_else(|| "Error: amount in sats is required".to_string())?;
     let amount: u64 = amount
         .parse()
         .map_err(|_| "Error: amount should be an integer number".to_string())?;
@@ -366,8 +366,8 @@ fn decode_invoice(
 
     println!("Invoice details:");
     println!(
-        "  Amount msats        {}",
-        invoice_details.amount_msat.unwrap()
+        "  Amount              {:?}",
+        invoice_details.amount.map(amount_to_string)
     );
     println!("  Description         {}", invoice_details.description);
     println!("  Payment hash        {}", invoice_details.payment_hash);
@@ -412,11 +412,10 @@ fn pay_open_invoice(
     let amount_argument = match words.next() {
         Some(amount) => match amount.parse::<u64>() {
             Ok(parsed) => Ok(parsed),
-            Err(_) => return Err("Error: millisat amount must be an integer".to_string()),
+            Err(_) => return Err("Error: sat amount must be an integer".to_string()),
         },
         None => Err(
-            "Open amount invoices require an amount in millisats as an additional argument"
-                .to_string(),
+            "Open amount invoices require an amount in sats as an additional argument".to_string(),
         ),
     }?;
 

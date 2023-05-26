@@ -53,12 +53,12 @@ interface LightningNode {
     Amount calculate_lsp_fee(u64 amount_sat);
 
     // Create an invoice to receive a payment with:
-    //    - amount_msat - the smallest amount of millisats required for the node to accept the incoming payment (sender will have to pay fees on top of that amount)
+    //    - amount_sat - the smallest amount of sats required for the node to accept the incoming payment (sender will have to pay fees on top of that amount)
     //    - description - a description to be embedded into the created invoice
     //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
     //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
     [Throws=LnError]
-    InvoiceDetails create_invoice(u64 amount_msat, string description, string metadata);
+    InvoiceDetails create_invoice(u64 amount_sat, string description, string metadata);
 
     // Decodes an invoice returning detailed information
     //    - invoice - a BOLT-11 invoice (Mainnet invoices start with "lnbc")
@@ -83,9 +83,9 @@ interface LightningNode {
     // and allows the caller of the method to specify an amount instead.
     //
     // Additional Parameters:
-    //    - amount_msat - amount in millisats to be paid
+    //    - amount_sat - amount in sats to be paid
     [Throws=LnError]
-    void pay_open_invoice(string invoice, u64 amount_msat, string metadata);
+    void pay_open_invoice(string invoice, u64 amount_sat, string metadata);
 
     // Get a list of the latest payments
     //    - number_of_payments - the maximum number of payments that will be returned
@@ -253,7 +253,7 @@ interface LiquidityLimit {
 // Information embedded in an invoice
 dictionary InvoiceDetails {
     string invoice; // The BOLT11 invoice.
-    u64? amount_msat; // Payment amount in msats, if specified. If not available, invoice is an open-amount invoice
+    Amount? amount; // Payment amount, if specified. If not available, invoice is an open-amount invoice
         // and the user should be promted for how much they want to pay.
     string description;
     string payment_hash;

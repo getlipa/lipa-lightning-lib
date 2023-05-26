@@ -1,5 +1,5 @@
 use crate::interfaces::ExchangeRate;
-use crate::InvoiceDetails;
+use lightning_invoice::Invoice;
 
 use num_enum::TryFromPrimitive;
 use std::time::SystemTime;
@@ -58,7 +58,7 @@ pub struct Payment {
     pub payment_state: PaymentState,
     pub hash: String,
     pub amount_msat: u64,
-    pub invoice_details: InvoiceDetails,
+    pub invoice: Invoice,
     pub created_at: TzTime,
     pub latest_state_change_at: TzTime,
     pub description: String,
@@ -71,7 +71,7 @@ pub struct Payment {
 
 impl Payment {
     pub(crate) fn has_expired(&self) -> bool {
-        if self.invoice_details.expiry_timestamp < SystemTime::now() {
+        if self.invoice.is_expired() {
             return match self.payment_type {
                 PaymentType::Receiving => self.payment_state == PaymentState::Created,
                 PaymentType::Sending => self.payment_state == PaymentState::Failed,

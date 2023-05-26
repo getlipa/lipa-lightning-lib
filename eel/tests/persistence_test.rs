@@ -171,11 +171,11 @@ mod persistence_test {
     ) {
         let initial_balance = node.get_node_info().channels_info.local_balance_msat;
 
-        let invoice_details = node
+        let invoice = node
             .create_invoice(payment_amount, "test".to_string(), String::new())
             .unwrap();
 
-        nigiri::pay_invoice(paying_node, &invoice_details.invoice).unwrap();
+        nigiri::pay_invoice(paying_node, &invoice.to_string()).unwrap();
 
         assert_payment_received(node, initial_balance + payment_amount - lsp_fee);
     }
