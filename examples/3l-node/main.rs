@@ -8,7 +8,7 @@ use crate::print_events_handler::PrintEventsHandler;
 use uniffi_lipalightninglib::LightningNode;
 use uniffi_lipalightninglib::{Config, EnvironmentCode, TzConfig};
 
-use eel::keys_manager::{generate_secret, mnemonic_to_secret};
+use eel::secret::{generate_secret, mnemonic_to_secret};
 use log::info;
 use std::thread::sleep;
 use std::time::Duration;
@@ -88,6 +88,8 @@ fn init_logger(path: &String) {
         .add_filter_ignore_str("tracing")
         .add_filter_ignore_str("ureq")
         .add_filter_ignore_str("want")
+        .add_filter_ignore_str("sled")
+        .add_filter_ignore_str("bdk::blockchain::script_sync")
         .build();
 
     simplelog::CombinedLogger::init(vec![

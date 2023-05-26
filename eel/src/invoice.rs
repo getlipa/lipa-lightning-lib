@@ -1,7 +1,7 @@
 use crate::errors::*;
 use crate::lsp::{LspClient, PaymentRequest};
 use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info};
-use crate::types::ChannelManager;
+use crate::types::{ChannelManager, KeysManager};
 use bitcoin::bech32::ToBase32;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
@@ -12,7 +12,7 @@ use crate::payment::FiatValues;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::Network;
-use lightning::chain::keysinterface::{KeysManager, NodeSigner, Recipient};
+use lightning::chain::keysinterface::{NodeSigner, Recipient};
 use lightning::ln::channelmanager::ChannelDetails;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};

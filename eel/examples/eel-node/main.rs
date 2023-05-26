@@ -10,7 +10,7 @@ use crate::print_events_handler::PrintEventsHandler;
 use bitcoin::Network;
 use eel::config::{Config, TzConfig};
 use eel::interfaces::{ExchangeRate, ExchangeRateProvider, RemoteStorage};
-use eel::keys_manager::mnemonic_to_secret;
+use eel::secret::mnemonic_to_secret;
 use eel::LightningNode;
 use log::info;
 use std::fs;

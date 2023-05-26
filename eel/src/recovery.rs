@@ -1,12 +1,13 @@
 use crate::errors::Result;
 use crate::interfaces::RemoteStorage;
 use crate::key_derivation;
-use crate::keys_manager::init_keys_manager;
 use crate::storage_persister::{has_local_install, StoragePersister};
+use lightning::chain::keysinterface::KeysManager;
 use log::info;
 use perro::{invalid_input, MapToError};
 use std::fs;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 pub fn recover_lightning_node(
     seed: [u8; 64],
@@ -46,6 +47,13 @@ pub fn recover_lightning_node(
     );
 
     storage.persist_channel_monitors_local(remote_channel_monitors)
+}
+
+fn init_keys_manager(seed: &[u8; 32]) -> Result<KeysManager> {
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_to_permanent_failure("System time before Unix epoch")?;
+    Ok(KeysManager::new(seed, now.as_secs(), now.subsec_nanos()))
 }
 
 #[cfg(test)]

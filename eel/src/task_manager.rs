@@ -1,4 +1,5 @@
 use crate::async_runtime::{Handle, RepeatingTaskHandle};
+use crate::data_store::DataStore;
 use crate::errors::Result;
 use crate::fee_estimator::FeeEstimator;
 use crate::interfaces::{ExchangeRate, ExchangeRateProvider};
@@ -6,10 +7,10 @@ use crate::lsp::{LspClient, LspInfo};
 use crate::p2p_networking::{connect_peer, LnPeer};
 use crate::rapid_sync_client::RapidSyncClient;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager, TxSync};
+use crate::wallet::Wallet;
 
-use crate::data_store::DataStore;
 use lightning::chain::Confirm;
-use log::{debug, error};
+use log::{debug, error, info};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tokio::time::Duration;
@@ -23,6 +24,7 @@ pub(crate) struct TaskPeriods {
     pub update_fees: Option<Duration>,
     pub update_graph: Option<RestartIfFailedPeriod>,
     pub update_exchange_rates: Option<Duration>,
+    pub sync_onchain_wallet: Option<Duration>,
 }
 
 pub(crate) struct TaskManager {
@@ -43,6 +45,8 @@ pub(crate) struct TaskManager {
     exchange_rates: Arc<Mutex<Vec<ExchangeRate>>>,
     data_store: Arc<Mutex<DataStore>>,
 
+    wallet: Arc<Wallet>,
+
     task_handles: Vec<RepeatingTaskHandle>,
 }
 
@@ -59,6 +63,7 @@ impl TaskManager {
         tx_sync: Arc<TxSync>,
         exchange_rate_provider: Box<dyn ExchangeRateProvider>,
         data_store: Arc<Mutex<DataStore>>,
+        wallet: Arc<Wallet>,
     ) -> Result<Self> {
         let exchange_rates = data_store.lock().unwrap().get_all_exchange_rates()?;
 
@@ -75,6 +80,7 @@ impl TaskManager {
             exchange_rate_provider: Arc::from(exchange_rate_provider),
             exchange_rates: Arc::new(Mutex::new(exchange_rates)),
             data_store,
+            wallet,
             task_handles: Vec::new(),
         })
     }
@@ -126,6 +132,12 @@ impl TaskManager {
         if let Some(period) = periods.update_exchange_rates {
             self.task_handles
                 .push(self.start_exchange_rate_update(period));
+        }
+
+        // Sync onchain wallet
+        if let Some(period) = periods.sync_onchain_wallet {
+            self.task_handles
+                .push(self.start_onchain_wallet_sync(period))
         }
     }
 
@@ -264,6 +276,27 @@ impl TaskManager {
                     }
                     Err(e) => {
                         error!("Update exchange rates task panicked: {e}");
+                    }
+                }
+            }
+        })
+    }
+
+    fn start_onchain_wallet_sync(&self, period: Duration) -> RepeatingTaskHandle {
+        let wallet = Arc::clone(&self.wallet);
+
+        self.runtime_handle.spawn_repeating_task(period, move || {
+            let wallet = Arc::clone(&wallet);
+            async move {
+                match tokio::task::spawn_blocking(move || wallet.sync()).await {
+                    Ok(Ok(_)) => {
+                        info!("Onchain wallet synced successfully!")
+                    }
+                    Ok(Err(e)) => {
+                        error!("Failed to sync onchain wallet: {e}");
+                    }
+                    Err(e) => {
+                        error!("Sync onchain wallet task panicked: {e}");
                     }
                 }
             }

@@ -3,11 +3,18 @@ use crate::errors::Result;
 use crate::interfaces;
 use crate::payment::PaymentState;
 use crate::task_manager::TaskManager;
-use crate::types::ChannelManager;
+use crate::types::{ChannelManager, KeysManager};
 
+use crate::fee_estimator::FeeEstimator;
+use crate::tx_broadcaster::TxBroadcaster;
+use crate::wallet::Wallet;
 use bitcoin::hashes::hex::ToHex;
+use lightning::chain::chaininterface::{
+    BroadcasterInterface, ConfirmationTarget, FeeEstimator as LdkFeeEstimator,
+};
 use lightning::events::{Event, EventHandler, PaymentPurpose};
 use log::{error, info, trace};
+use secp256k1::Secp256k1;
 use std::sync::{Arc, Mutex};
 
 pub(crate) struct LipaEventHandler {
@@ -15,20 +22,33 @@ pub(crate) struct LipaEventHandler {
     task_manager: Arc<Mutex<TaskManager>>,
     user_event_handler: Box<dyn interfaces::EventHandler>,
     data_store: Arc<Mutex<DataStore>>,
+    wallet: Arc<Wallet>,
+    keys_manager: Arc<KeysManager>,
+    fee_estimator: Arc<FeeEstimator>,
+    tx_broadcaster: Arc<TxBroadcaster>,
 }
 
 impl LipaEventHandler {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         channel_manager: Arc<ChannelManager>,
         task_manager: Arc<Mutex<TaskManager>>,
         user_event_handler: Box<dyn interfaces::EventHandler>,
         data_store: Arc<Mutex<DataStore>>,
+        wallet: Arc<Wallet>,
+        keys_manager: Arc<KeysManager>,
+        fee_estimator: Arc<FeeEstimator>,
+        tx_broadcaster: Arc<TxBroadcaster>,
     ) -> Result<Self> {
         Ok(Self {
             channel_manager,
             task_manager,
             user_event_handler,
             data_store,
+            wallet,
+            keys_manager,
+            fee_estimator,
+            tx_broadcaster,
         })
     }
 }
@@ -233,7 +253,32 @@ impl EventHandler for LipaEventHandler {
 
                 self.channel_manager.process_pending_htlc_forwards();
             }
-            Event::SpendableOutputs { .. } => {}
+            Event::SpendableOutputs { outputs } => {
+                let destination_address = match self.wallet.get_new_address() {
+                    Ok(a) => a,
+                    Err(e) => {
+                        error!("Failed to get an address to spend outputs: {e}");
+                        return;
+                    }
+                };
+                let output_descriptors = &outputs.iter().collect::<Vec<_>>();
+                let tx_feerate = self
+                    .fee_estimator
+                    .get_est_sat_per_1000_weight(ConfirmationTarget::Normal);
+                let res = self.keys_manager.spend_spendable_outputs(
+                    output_descriptors,
+                    Vec::new(),
+                    destination_address.script_pubkey(),
+                    tx_feerate,
+                    &Secp256k1::new(),
+                );
+                match res {
+                    Ok(spending_tx) => self.tx_broadcaster.broadcast_transaction(&spending_tx),
+                    Err(err) => {
+                        error!("Failed to spend outputs: {:?}", err);
+                    }
+                }
+            }
             Event::PaymentForwarded { .. } => {}
             Event::ChannelClosed {
                 channel_id,

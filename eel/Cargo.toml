@@ -34,6 +34,8 @@ secp256k1 = { version = "0.24.3", features = ["global-context"] }
 thiserror = "1.0.40"
 tokio = { version = "1.28.1", features = ["rt-multi-thread", "time", "sync"] }
 tonic = "0.9.2"
+bdk = { version = "0.28.0", default-features = false, features = ["std", "keys-bip39", "key-value-db", "use-esplora-blocking"]}
+sled = "0.34.7"
 
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.1" }
 

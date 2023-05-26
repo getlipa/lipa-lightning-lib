@@ -2,7 +2,7 @@ use crate::encryption_symmetric::{decrypt, encrypt};
 use crate::errors::*;
 use crate::interfaces::RemoteStorage;
 use crate::types::{
-    ChainMonitor, ChannelManager, ChannelManagerReadArgs, NetworkGraph, Router, Scorer,
+    ChainMonitor, ChannelManager, ChannelManagerReadArgs, KeysManager, NetworkGraph, Router, Scorer,
 };
 use crate::LightningLogger;
 use std::cmp::Ordering;
@@ -15,12 +15,11 @@ use lightning::chain::chaininterface::{BroadcasterInterface, FeeEstimator};
 use lightning::chain::chainmonitor::{MonitorUpdateId, Persist};
 use lightning::chain::channelmonitor::{ChannelMonitor, ChannelMonitorUpdate};
 use lightning::chain::keysinterface::{
-    EntropySource, InMemorySigner, KeysManager, NodeSigner, SignerProvider,
-    WriteableEcdsaChannelSigner,
+    EntropySource, InMemorySigner, NodeSigner, SignerProvider, WriteableEcdsaChannelSigner,
 };
 use lightning::chain::transaction::OutPoint;
 use lightning::chain::{ChannelMonitorUpdateStatus, Watch};
-use lightning::ln::channelmanager::{ChainParameters, SimpleArcChannelManager};
+use lightning::ln::channelmanager::ChainParameters;
 use lightning::routing::router;
 use lightning::routing::scoring::{ProbabilisticScoringParameters, WriteableScore};
 use lightning::util::config::UserConfig;
@@ -275,7 +274,7 @@ impl StoragePersister {
 
         match local_channel_manager {
             None => {
-                let channel_manager = SimpleArcChannelManager::new(
+                let channel_manager = ChannelManager::new(
                     fee_estimator,
                     chain_monitor,
                     broadcaster,

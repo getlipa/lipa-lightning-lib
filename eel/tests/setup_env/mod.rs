@@ -27,6 +27,8 @@ fn init_logger() {
             .add_filter_ignore_str("tracing")
             .add_filter_ignore_str("ureq")
             .add_filter_ignore_str("want")
+            .add_filter_ignore_str("sled")
+            .add_filter_ignore_str("bdk::blockchain::script_sync")
             .build();
         SimpleLogger::init(LevelFilter::Trace, config).unwrap();
     });

@@ -1,6 +1,6 @@
 use bitcoin::Network;
 use eel::config::{Config, TzConfig};
-use eel::keys_manager::generate_secret;
+use eel::secret::generate_secret;
 
 pub const LOCAL_PERSISTENCE_PATH: &str = ".3l_local_test";
 
