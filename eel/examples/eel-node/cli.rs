@@ -127,16 +127,14 @@ fn lsp_fee(node: &LightningNode) {
 fn payment_amount_limits(node: &LightningNode) {
     let limits = node.get_payment_amount_limits().unwrap();
 
-    println!(" Beta maximum receive: {} sats", limits.max_receive_sat);
+    println!(" Beta maximum receive: {} msats", limits.max_receive_msat);
 
     match limits.liquidity_limit {
-        LiquidityLimit::MinReceive { sat_amount } => {
-            println!(" Minimum payment amount: {sat_amount} sats. A setup fee will be charged.");
+        LiquidityLimit::MinReceive { amount_msat } => {
+            println!(" Minimum payment amount: {amount_msat} msats. A setup fee will be charged.");
         }
-        LiquidityLimit::MaxFreeReceive { sat_amount } => {
-            println!(
-                " If you want to receive more than {sat_amount} sats, a setup fee will be charged."
-            );
+        LiquidityLimit::MaxFreeReceive { amount_msat } => {
+            println!(" If you want to receive more than {amount_msat} msats, a setup fee will be charged.");
         }
         LiquidityLimit::None => {}
     }

@@ -29,7 +29,6 @@ use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 pub use eel::interfaces::ExchangeRate;
 use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix};
-use eel::limits::{LiquidityLimit, PaymentAmountLimits};
 pub use eel::payment::FiatValues;
 use eel::payment::{PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
@@ -43,6 +42,17 @@ use std::fs;
 use std::sync::Arc;
 
 const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
+
+pub struct PaymentAmountLimits {
+    pub max_receive: Amount,
+    pub liquidity_limit: LiquidityLimit,
+}
+
+pub enum LiquidityLimit {
+    None,
+    MaxFreeReceive { amount: Amount },
+    MinReceive { amount: Amount },
+}
 
 pub struct LspFee {
     pub channel_minimum_fee: Amount,
@@ -175,7 +185,10 @@ impl LightningNode {
     }
 
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
-        self.core_node.get_payment_amount_limits()
+        let rate = self.get_exchange_rate();
+        self.core_node
+            .get_payment_amount_limits()
+            .map(|limits| to_limits(limits, &rate))
     }
 
     pub fn create_invoice(
@@ -321,6 +334,27 @@ fn to_payment(payment: eel::payment::Payment) -> Payment {
         network_fees: payment.network_fees_msat.map(|fee| fee.to_amount_up(&rate)),
         lsp_fees: payment.lsp_fees_msat.map(|fee| fee.to_amount_up(&rate)),
         metadata: payment.metadata,
+    }
+}
+
+fn to_limits(
+    limits: eel::limits::PaymentAmountLimits,
+    rate: &Option<ExchangeRate>,
+) -> PaymentAmountLimits {
+    let liquidity_limit = match limits.liquidity_limit {
+        eel::limits::LiquidityLimit::None => LiquidityLimit::None,
+        eel::limits::LiquidityLimit::MaxFreeReceive { amount_msat } => {
+            LiquidityLimit::MaxFreeReceive {
+                amount: amount_msat.to_amount_down(rate),
+            }
+        }
+        eel::limits::LiquidityLimit::MinReceive { amount_msat } => LiquidityLimit::MinReceive {
+            amount: amount_msat.to_amount_up(rate),
+        },
+    };
+    PaymentAmountLimits {
+        max_receive: limits.max_receive_msat.to_amount_down(rate),
+        liquidity_limit,
     }
 }
 
