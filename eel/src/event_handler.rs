@@ -5,9 +5,16 @@ use crate::payment::PaymentState;
 use crate::task_manager::TaskManager;
 use crate::types::ChannelManager;
 
+use crate::fee_estimator::FeeEstimator;
+use crate::tx_broadcaster::TxBroadcaster;
 use bitcoin::hashes::hex::ToHex;
+use lightning::chain::chaininterface::{
+    BroadcasterInterface, ConfirmationTarget, FeeEstimator as LdkFeeEstimator,
+};
+use lightning::chain::keysinterface::{KeysManager, SignerProvider, SpendableOutputDescriptor};
 use lightning::events::{Event, EventHandler, PaymentPurpose};
 use log::{error, info, trace};
+use secp256k1::SECP256K1;
 use std::sync::{Arc, Mutex};
 
 pub(crate) struct LipaEventHandler {
@@ -15,6 +22,9 @@ pub(crate) struct LipaEventHandler {
     task_manager: Arc<Mutex<TaskManager>>,
     user_event_handler: Box<dyn interfaces::EventHandler>,
     data_store: Arc<Mutex<DataStore>>,
+    keys_manager: Arc<KeysManager>,
+    fee_estimator: Arc<FeeEstimator>,
+    tx_broadcaster: Arc<TxBroadcaster>,
 }
 
 impl LipaEventHandler {
@@ -23,12 +33,18 @@ impl LipaEventHandler {
         task_manager: Arc<Mutex<TaskManager>>,
         user_event_handler: Box<dyn interfaces::EventHandler>,
         data_store: Arc<Mutex<DataStore>>,
+        keys_manager: Arc<KeysManager>,
+        fee_estimator: Arc<FeeEstimator>,
+        tx_broadcaster: Arc<TxBroadcaster>,
     ) -> Result<Self> {
         Ok(Self {
             channel_manager,
             task_manager,
             user_event_handler,
             data_store,
+            keys_manager,
+            fee_estimator,
+            tx_broadcaster,
         })
     }
 }
@@ -230,7 +246,48 @@ impl EventHandler for LipaEventHandler {
 
                 self.channel_manager.process_pending_htlc_forwards();
             }
-            Event::SpendableOutputs { .. } => {}
+            Event::SpendableOutputs { outputs } => {
+                info!(
+                    "EVENT: SpendableOutputs - {} spendable outputs provided",
+                    outputs.len()
+                );
+
+                let only_non_static_outputs = outputs
+                    .iter()
+                    .filter(|desc| !matches!(desc, SpendableOutputDescriptor::StaticOutput { .. }))
+                    .collect::<Vec<_>>();
+                if only_non_static_outputs.is_empty() {
+                    return;
+                }
+
+                info!(
+                    "Creating spending tx only with non static outputs - {} non static output(s) was/were found",
+                    only_non_static_outputs.len()
+                );
+                let destination_script = self.keys_manager.get_destination_script();
+                let tx_feerate = self
+                    .fee_estimator
+                    .get_est_sat_per_1000_weight(ConfirmationTarget::Normal);
+                let res = self.keys_manager.spend_spendable_outputs(
+                    &only_non_static_outputs,
+                    Vec::new(),
+                    destination_script,
+                    tx_feerate,
+                    SECP256K1,
+                );
+                match res {
+                    Ok(spending_tx) => {
+                        self.tx_broadcaster.broadcast_transaction(&spending_tx);
+                        info!(
+                            "Broadcasted non-static output spending tx with id {}",
+                            spending_tx.txid()
+                        );
+                    }
+                    Err(err) => {
+                        error!("Failed to spend outputs: {err:?}");
+                    }
+                }
+            }
             Event::PaymentForwarded { .. } => {}
             Event::ChannelClosed {
                 channel_id,

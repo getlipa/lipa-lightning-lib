@@ -314,6 +314,9 @@ impl LightningNode {
             Arc::clone(&task_manager),
             user_event_handler,
             Arc::clone(&data_store),
+            Arc::clone(&keys_manager),
+            Arc::clone(&fee_estimator),
+            Arc::clone(&tx_broadcaster),
         )?);
 
         // Step 23. Start Background Processing

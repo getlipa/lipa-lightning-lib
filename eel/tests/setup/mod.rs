@@ -92,9 +92,10 @@ impl<S: RemoteStorage + Clone + 'static, X: ExchangeRateProvider + Clone> NodeHa
 }
 
 #[allow(dead_code)]
-pub fn setup_outbound_capacity(node: &LightningNode) {
+pub fn setup_outbound_capacity(node: &LightningNode) -> String {
     wait_for_eq!(node.get_node_info().num_peers, 1);
-    nigiri::initiate_channel_from_remote(node.get_node_info().node_pubkey, LspdLnd);
+    let funding_txid =
+        nigiri::initiate_channel_from_remote(node.get_node_info().node_pubkey, LspdLnd);
 
     assert!(node.get_node_info().channels_info.num_channels > 0);
     assert!(node.get_node_info().channels_info.num_usable_channels > 0);
@@ -117,6 +118,8 @@ pub fn setup_outbound_capacity(node: &LightningNode) {
         node.get_node_info().channels_info.inbound_capacity_msat
             < CHANNEL_SIZE_MSAT - REBALANCE_AMOUNT
     ); // smaller instead of equal because of channel reserves
+
+    funding_txid
 }
 
 #[allow(dead_code)]
