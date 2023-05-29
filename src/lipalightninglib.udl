@@ -253,8 +253,12 @@ interface LiquidityLimit {
 // Information embedded in an invoice
 dictionary InvoiceDetails {
     string invoice; // The BOLT11 invoice.
-    Amount? amount; // Payment amount, if specified. If not available, invoice is an open-amount invoice
-        // and the user should be promted for how much they want to pay.
+    // Payment amount, if specified. If not available, invoice is an open-amount invoice
+    // and the user should be promted for how much they want to pay.
+    // The fiat value is calculated base on the "natural" exchange rate:
+    //  - for a new invoice current exchange rate is used
+    //  - for old invoices historic values are used
+    Amount? amount;
     string description;
     string payment_hash;
     string payee_pub_key; // The pubkey (aka node id) of the invoice issuer. Please keep in mind that this doesn't necessarily

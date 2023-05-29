@@ -200,9 +200,10 @@ mod sending_payments_test {
             InvoiceDescription::Direct(&Description::new(description.to_string()).unwrap())
         );
         assert_eq!(invoice.expiry_time(), expiry_time);
-        assert_eq!(
-            invoice.payee_pub_key().map(|key| key.to_string()),
-            Some(payee_pub_key.to_string())
-        );
+        let pub_key = match invoice.payee_pub_key() {
+            None => invoice.recover_payee_pub_key().to_string(),
+            Some(p) => p.to_string(),
+        };
+        assert_eq!(pub_key, payee_pub_key.to_string());
     }
 }

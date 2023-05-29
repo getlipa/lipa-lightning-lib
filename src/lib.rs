@@ -188,13 +188,13 @@ impl LightningNode {
         let invoice = self
             .core_node
             .create_invoice(amount_sat * 1000, description, metadata)?;
-        Ok(InvoiceDetails::from_our_invoice(invoice, &rate))
+        Ok(InvoiceDetails::from_local_invoice(invoice, &rate))
     }
 
     pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
         let invoice = self.core_node.decode_invoice(invoice)?;
         let rate = self.get_exchange_rate();
-        Ok(InvoiceDetails::from_foreign_invoice(invoice, &rate))
+        Ok(InvoiceDetails::from_remote_invoice(invoice, &rate))
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
@@ -305,8 +305,8 @@ fn to_payment(payment: eel::payment::Payment) -> Payment {
         PaymentType::Sending => payment.amount_msat.to_amount_up(&rate),
     };
     let invoice_details = match payment.payment_type {
-        PaymentType::Receiving => InvoiceDetails::from_our_invoice(payment.invoice, &rate),
-        PaymentType::Sending => InvoiceDetails::from_foreign_invoice(payment.invoice, &rate),
+        PaymentType::Receiving => InvoiceDetails::from_local_invoice(payment.invoice, &rate),
+        PaymentType::Sending => InvoiceDetails::from_remote_invoice(payment.invoice, &rate),
     };
     Payment {
         payment_type: payment.payment_type,

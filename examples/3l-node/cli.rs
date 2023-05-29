@@ -138,7 +138,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("nodeinfo", "nodeinfo"));
     hints.insert(CommandHint::new("lspfee", "lspfee"));
     hints.insert(CommandHint::new(
-        "calculatelspfee <amount in sat>",
+        "calculatelspfee <amount in SAT>",
         "calculatelspfee ",
     ));
     hints.insert(CommandHint::new("exchangerates", "exchangerates"));
@@ -153,7 +153,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
 
     hints.insert(CommandHint::new(
-        "invoice <amount in sats> [description]",
+        "invoice <amount in SAT> [description]",
         "invoice ",
     ));
     hints.insert(CommandHint::new(
@@ -162,7 +162,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
     hints.insert(CommandHint::new("payinvoice <invoice>", "payinvoice "));
     hints.insert(CommandHint::new(
-        "payopeninvoice <invoice> <amount in sat>",
+        "payopeninvoice <invoice> <amount in SAT>",
         "payopeninvoice ",
     ));
 
@@ -182,17 +182,17 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
 fn help() {
     println!("  nodeinfo");
     println!("  lspfee");
-    println!("  calculatelspfee <amount in sat>");
+    println!("  calculatelspfee <amount in SAT>");
     println!("  paymentamountlimits");
     println!("  exchangerates");
     println!("  listcurrencies");
     println!("  changecurrency <currency code>");
     println!("  changetimezone [timezone offset in mins] [timezone id]");
     println!();
-    println!("  invoice <amount in sats> [description]");
+    println!("  invoice <amount in SAT> [description]");
     println!("  decodeinvoice <invoice>");
     println!("  payinvoice <invoice>");
-    println!("  payopeninvoice <invoice> <amount in sats>");
+    println!("  payopeninvoice <invoice> <amount in SAT>");
     println!();
     println!("  listpayments");
     println!();
@@ -220,27 +220,27 @@ fn calculate_lsp_fee(
 ) -> Result<(), String> {
     let amount = words
         .next()
-        .ok_or_else(|| "Error: amount in sats is required".to_string())?;
+        .ok_or_else(|| "Error: amount in SAT is required".to_string())?;
     let amount: u64 = amount
         .parse()
         .map_err(|_| "Error: amount should be an integer number".to_string())?;
     let fee = node.calculate_lsp_fee(amount).unwrap();
-    println!(" LSP fee: {} sats", amount_to_string(fee));
+    println!(" LSP fee: {} SAT", amount_to_string(fee));
     Ok(())
 }
 
 fn payment_amount_limits(node: &LightningNode) {
     let limits = node.get_payment_amount_limits().unwrap();
 
-    println!(" Beta maximum receive: {} sats", limits.max_receive_sat);
+    println!(" Beta maximum receive: {} SAT", limits.max_receive_sat);
 
     match limits.liquidity_limit {
         LiquidityLimit::MinReceive { sat_amount } => {
-            println!(" Minimum payment amount: {sat_amount} sats. A setup fee will be charged.");
+            println!(" Minimum payment amount: {sat_amount} SAT. A setup fee will be charged.");
         }
         LiquidityLimit::MaxFreeReceive { sat_amount } => {
             println!(
-                " If you want to receive more than {sat_amount} sats, a setup fee will be charged."
+                " If you want to receive more than {sat_amount} SAT, a setup fee will be charged."
             );
         }
         LiquidityLimit::None => {}
@@ -285,7 +285,7 @@ fn get_exchange_rate(node: &LightningNode) -> Result<(), String> {
         Some(r) => {
             let dt: DateTime<Utc> = r.updated_at.into();
             println!(
-                "{}: {} sats - updated at {} UTC",
+                "{}: {} SAT - updated at {} UTC",
                 r.currency_code,
                 r.rate,
                 dt.format("%d/%m/%Y %T")
@@ -339,7 +339,7 @@ fn create_invoice(
 ) -> Result<(), String> {
     let amount = words
         .next()
-        .ok_or_else(|| "Error: amount in sats is required".to_string())?;
+        .ok_or_else(|| "Error: amount in SAT is required".to_string())?;
     let amount: u64 = amount
         .parse()
         .map_err(|_| "Error: amount should be an integer number".to_string())?;
@@ -412,10 +412,10 @@ fn pay_open_invoice(
     let amount_argument = match words.next() {
         Some(amount) => match amount.parse::<u64>() {
             Ok(parsed) => Ok(parsed),
-            Err(_) => return Err("Error: sat amount must be an integer".to_string()),
+            Err(_) => return Err("Error: SAT amount must be an integer".to_string()),
         },
         None => Err(
-            "Open amount invoices require an amount in sats as an additional argument".to_string(),
+            "Open amount invoices require an amount in SAT as an additional argument".to_string(),
         ),
     }?;
 
@@ -486,5 +486,5 @@ fn amount_to_string(amount: Amount) -> String {
         }
         None => "exchange rate uknown".to_string(),
     };
-    format!("{} sats ({fiat})", amount.sats)
+    format!("{} SAT ({fiat})", amount.sats)
 }

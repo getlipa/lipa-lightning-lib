@@ -16,14 +16,14 @@ pub struct InvoiceDetails {
 }
 
 impl InvoiceDetails {
-    pub(crate) fn from_our_invoice(invoice: Invoice, rate: &Option<ExchangeRate>) -> Self {
+    pub(crate) fn from_local_invoice(invoice: Invoice, rate: &Option<ExchangeRate>) -> Self {
         let amount = invoice
             .amount_milli_satoshis()
             .map(|a| a.to_amount_down(rate));
         to_invoice_details(invoice, amount)
     }
 
-    pub(crate) fn from_foreign_invoice(invoice: Invoice, rate: &Option<ExchangeRate>) -> Self {
+    pub(crate) fn from_remote_invoice(invoice: Invoice, rate: &Option<ExchangeRate>) -> Self {
         let amount = invoice
             .amount_milli_satoshis()
             .map(|a| a.to_amount_up(rate));
@@ -89,7 +89,7 @@ mod tests {
     fn test_invoice_parsing() {
         // Test valid hardcoded regtest invoice
         let invoice = parse_invoice(REGTEST_INVOICE);
-        let invoice_details = InvoiceDetails::from_foreign_invoice(invoice, &None);
+        let invoice_details = InvoiceDetails::from_remote_invoice(invoice, &None);
         assert_eq!(invoice_details.payment_hash, REGTEST_INVOICE_HASH);
         assert_eq!(
             invoice_details
@@ -120,7 +120,7 @@ mod tests {
             rate: 1234,
             updated_at: now,
         });
-        let invoice_details = InvoiceDetails::from_foreign_invoice(invoice.clone(), &rate);
+        let invoice_details = InvoiceDetails::from_remote_invoice(invoice.clone(), &rate);
         assert_eq!(invoice_details.payment_hash, MAINNET_INVOICE_HASH);
         assert_eq!(
             invoice_details
@@ -153,7 +153,7 @@ mod tests {
             MAINNET_INVOICE_HASH,
         );
 
-        let invoice_details = InvoiceDetails::from_our_invoice(invoice, &rate);
+        let invoice_details = InvoiceDetails::from_local_invoice(invoice, &rate);
         assert_eq!(
             invoice_details
                 .amount
