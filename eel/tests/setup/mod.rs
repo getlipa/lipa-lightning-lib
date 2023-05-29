@@ -100,12 +100,12 @@ pub fn setup_outbound_capacity(node: &LightningNode) {
     assert!(node.get_node_info().channels_info.num_usable_channels > 0);
     assert!(node.get_node_info().channels_info.inbound_capacity_msat > REBALANCE_AMOUNT);
 
-    let invoice_details = node
+    let invoice = node
         .create_invoice(REBALANCE_AMOUNT, "test".to_string(), String::new())
         .unwrap();
-    assert!(invoice_details.invoice.starts_with("lnbc"));
+    assert!(invoice.to_string().starts_with("lnbc"));
 
-    nigiri::pay_invoice(LspdLnd, &invoice_details.invoice).unwrap();
+    nigiri::pay_invoice(LspdLnd, &invoice.to_string()).unwrap();
 
     assert_eq!(
         node.get_node_info().channels_info.local_balance_msat,
@@ -120,12 +120,11 @@ pub fn setup_outbound_capacity(node: &LightningNode) {
 
 #[allow(dead_code)]
 pub fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
-    let invoice_details = node
+    let invoice = node
         .create_invoice(payment_amount, "test".to_string(), String::new())
         .unwrap();
-    assert!(invoice_details.invoice.starts_with("lnbc"));
-
-    invoice_details.invoice
+    assert!(invoice.to_string().starts_with("lnbc"));
+    invoice.to_string()
 }
 
 #[allow(dead_code)]

@@ -70,7 +70,8 @@ use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::util::config::UserConfig;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_invoice::payment::{pay_invoice, pay_zero_value_invoice, PaymentError};
-use lightning_invoice::{Currency, Invoice, InvoiceDescription};
+use lightning_invoice::Currency;
+pub use lightning_invoice::{Invoice, InvoiceDescription};
 use log::error;
 pub use log::Level as LogLevel;
 use log::{info, warn};
@@ -385,7 +386,7 @@ impl LightningNode {
         amount_msat: u64,
         description: String,
         metadata: String,
-    ) -> Result<InvoiceDetails> {
+    ) -> Result<Invoice> {
         let currency = match self.config.lock().unwrap().network {
             Network::Bitcoin => Currency::Bitcoin,
             Network::Testnet => Currency::BitcoinTestnet,
@@ -409,13 +410,11 @@ impl LightningNode {
             &mut self.data_store.lock().unwrap(),
             fiat_values,
         ))?;
-        let invoice_str = signed_invoice.to_string();
-        self.decode_invoice(invoice_str)
+        Invoice::from_signed(signed_invoice).map_to_permanent_failure("Failed to construct invoice")
     }
 
-    pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
-        let invoice = invoice::parse_invoice(&invoice)?;
-        invoice::get_invoice_details(&invoice)
+    pub fn decode_invoice(&self, invoice: String) -> Result<Invoice> {
+        invoice::parse_invoice(&invoice)
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {

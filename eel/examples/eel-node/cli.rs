@@ -201,10 +201,10 @@ fn create_invoice<'a>(
         .parse()
         .map_err(|_| "Error: amount should be an integer number".to_string())?;
     let description = words.collect::<Vec<_>>().join(" ");
-    let invoice_details = node
+    let invoice = node
         .create_invoice(amount, description, String::new())
         .map_err(|e| e.to_string())?;
-    println!("{}", invoice_details.invoice);
+    println!("{invoice}");
     Ok(())
 }
 
@@ -216,28 +216,11 @@ fn decode_invoice<'a>(
         .next()
         .ok_or_else(|| "Error: invoice is required".to_string())?;
 
-    let invoice_details = match node.decode_invoice(invoice.to_string()) {
+    let invoice = match node.decode_invoice(invoice.to_string()) {
         Ok(id) => id,
         Err(e) => return Err(e.to_string()),
     };
-
-    println!("Invoice details:");
-    println!(
-        "  Amount msats        {}",
-        invoice_details.amount_msat.unwrap()
-    );
-    println!("  Description         {}", invoice_details.description);
-    println!("  Payment hash        {}", invoice_details.payment_hash);
-    println!("  Payee public key    {}", invoice_details.payee_pub_key);
-    println!(
-        "  Invoice timestamp   {:?}",
-        invoice_details.creation_timestamp
-    );
-    println!(
-        "  Expiry interval     {:?}",
-        invoice_details.expiry_interval
-    );
-
+    println!("{:?}", invoice);
     Ok(())
 }
 
@@ -309,10 +292,7 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
         println!("      Hash:               {}", payment.hash);
         println!("      Preimage:           {:?}", payment.preimage);
         println!("      Description:        {}", payment.description);
-        println!(
-            "      Invoice:            {}",
-            payment.invoice_details.invoice
-        );
+        println!("      Invoice:            {}", payment.invoice);
         println!();
     }
 

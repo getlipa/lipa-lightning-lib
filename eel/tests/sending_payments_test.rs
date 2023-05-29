@@ -3,12 +3,13 @@ mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod sending_payments_test {
-    use crate::setup::{mocked_storage_node, setup_outbound_capacity};
-    use eel::{InvoiceDetails, LightningNode};
+    use eel::LightningNode;
+    use lightning_invoice::{Description, Invoice, InvoiceDescription};
     use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::Duration;
 
+    use crate::setup::{mocked_storage_node, setup_outbound_capacity};
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance::{LspdLnd, NigiriCln, NigiriLnd};
     use crate::wait_for_eq;
@@ -122,10 +123,10 @@ mod sending_payments_test {
         )
         .unwrap();
 
-        let invoice_details = node.decode_invoice(invoice).unwrap();
+        let invoice = node.decode_invoice(invoice).unwrap();
 
         assert_invoice_details(
-            invoice_details,
+            invoice,
             Some(THOUSAND_SATS),
             DESCRIPTION_SAMPLE,
             Duration::from_secs(SECONDS_IN_AN_HOUR),
@@ -141,10 +142,10 @@ mod sending_payments_test {
         )
         .unwrap();
 
-        let invoice_details = node.decode_invoice(invoice).unwrap();
+        let invoice = node.decode_invoice(invoice).unwrap();
 
         assert_invoice_details(
-            invoice_details,
+            invoice,
             Some(THOUSAND_SATS),
             DESCRIPTION_SAMPLE,
             Duration::from_secs(SECONDS_IN_AN_HOUR),
@@ -160,10 +161,10 @@ mod sending_payments_test {
         )
         .unwrap();
 
-        let invoice_details = node.decode_invoice(invoice).unwrap();
+        let invoice = node.decode_invoice(invoice).unwrap();
 
         assert_invoice_details(
-            invoice_details,
+            invoice,
             Some(THOUSAND_SATS),
             DESCRIPTION_SAMPLE,
             Duration::from_secs(SECONDS_IN_AN_HOUR),
@@ -175,10 +176,10 @@ mod sending_payments_test {
             nigiri::lnd_issue_invoice(LspdLnd, DESCRIPTION_SAMPLE, None, SECONDS_IN_AN_HOUR)
                 .unwrap();
 
-        let invoice_details = node.decode_invoice(invoice).unwrap();
+        let invoice = node.decode_invoice(invoice).unwrap();
 
         assert_invoice_details(
-            invoice_details,
+            invoice,
             None,
             DESCRIPTION_SAMPLE,
             Duration::from_secs(SECONDS_IN_AN_HOUR),
@@ -187,15 +188,22 @@ mod sending_payments_test {
     }
 
     fn assert_invoice_details(
-        invoice_details: InvoiceDetails,
+        invoice: Invoice,
         amount_msat: Option<u64>,
         description: &str,
         expiry_time: Duration,
         payee_pub_key: &str,
     ) {
-        assert_eq!(invoice_details.amount_msat, amount_msat);
-        assert_eq!(invoice_details.description, description);
-        assert_eq!(invoice_details.expiry_interval, expiry_time);
-        assert_eq!(invoice_details.payee_pub_key, payee_pub_key);
+        assert_eq!(invoice.amount_milli_satoshis(), amount_msat);
+        assert_eq!(
+            invoice.description(),
+            InvoiceDescription::Direct(&Description::new(description.to_string()).unwrap())
+        );
+        assert_eq!(invoice.expiry_time(), expiry_time);
+        let pub_key = match invoice.payee_pub_key() {
+            None => invoice.recover_payee_pub_key().to_string(),
+            Some(p) => p.to_string(),
+        };
+        assert_eq!(pub_key, payee_pub_key.to_string());
     }
 }

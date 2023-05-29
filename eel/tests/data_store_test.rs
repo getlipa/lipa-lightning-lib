@@ -4,9 +4,10 @@ mod setup_env;
 #[cfg(feature = "nigiri")]
 mod data_store_test {
     use eel::payment::{Payment, PaymentState, PaymentType, TzTime};
-    use eel::InvoiceDetails;
+    use eel::Invoice;
     use log::info;
     use serial_test::file_serial;
+    use std::str::FromStr;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
 
@@ -107,10 +108,10 @@ mod data_store_test {
         wait_for_eq!(nigiri::get_number_of_txs_in_mempool(), Ok::<u64, String>(1));
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
 
-        let invoice_details = node
+        let invoice = node
             .create_invoice(TWENTY_K_SATS, "test".to_string(), String::new())
             .unwrap();
-        assert!(invoice_details.invoice.starts_with("lnbc"));
+        assert!(invoice.to_string().starts_with("lnbc"));
 
         let dummy_timestamp = TzTime {
             time: SystemTime::now(),
@@ -123,7 +124,7 @@ mod data_store_test {
             payment_state: PaymentState::Succeeded,
             hash: "<unknown>".to_string(),
             amount_msat: TWENTY_K_SATS,
-            invoice_details: invoice_details.clone(),
+            invoice: invoice.clone(),
             created_at: dummy_timestamp.clone(),
             latest_state_change_at: dummy_timestamp,
             description: "test".to_string(),
@@ -134,7 +135,7 @@ mod data_store_test {
             metadata: "".to_string(),
         };
 
-        wait_for_ok!(nigiri::pay_invoice(NigiriLnd, &invoice_details.invoice));
+        wait_for_ok!(nigiri::pay_invoice(NigiriLnd, &invoice.to_string()));
         assert_payments_are_partially_equal(
             node.get_latest_payments(10).unwrap().first().unwrap(),
             &payment_dummy,
@@ -164,16 +165,7 @@ mod data_store_test {
             payment_state: PaymentState::Created,
             hash: "<unknown>".to_string(),
             amount_msat: TWO_K_SATS,
-            invoice_details: InvoiceDetails {
-                invoice: invoice.clone(),
-                amount_msat: Some(TWO_K_SATS),
-                description: "Fixed amount".to_string(),
-                payment_hash: "<unknown>".to_string(),
-                payee_pub_key: nigiri::query_node_info(LspdLnd).unwrap().pub_key,
-                creation_timestamp: SystemTime::now(),
-                expiry_interval: Duration::from_secs(3600),
-                expiry_timestamp: SystemTime::now(),
-            },
+            invoice: Invoice::from_str(&invoice).unwrap(),
             created_at: dummy_timestamp.clone(),
             latest_state_change_at: dummy_timestamp,
             description: "Fixed amount".to_string(),
@@ -218,9 +210,7 @@ mod data_store_test {
             payment_dummy.network_fees_msat = None;
             payment_dummy.fiat_values = node.get_fiat_values(ONE_SAT, String::from("EUR"));
             payment_dummy.metadata = "Some metadata".to_string();
-            payment_dummy.invoice_details.invoice = invoice.clone();
-            payment_dummy.invoice_details.description = "Open amount".to_string();
-            payment_dummy.invoice_details.amount_msat = None;
+            payment_dummy.invoice = Invoice::from_str(&invoice).unwrap();
 
             node.pay_open_invoice(invoice, ONE_SAT, "Some metadata".to_string())
                 .unwrap();
@@ -290,15 +280,7 @@ mod data_store_test {
         assert_eq!(left.payment_type, right.payment_type);
         assert_eq!(left.payment_state, right.payment_state);
         assert_eq!(left.amount_msat, right.amount_msat);
-        assert_eq!(left.invoice_details.invoice, right.invoice_details.invoice);
-        assert_eq!(
-            left.invoice_details.amount_msat,
-            right.invoice_details.amount_msat
-        );
-        assert_eq!(
-            left.invoice_details.description,
-            right.invoice_details.description
-        );
+        assert_eq!(left.invoice.to_string(), right.invoice.to_string());
         assert_eq!(left.description, right.description);
         assert_eq!(left.network_fees_msat, right.network_fees_msat);
         assert_eq!(left.lsp_fees_msat, right.lsp_fees_msat);
