@@ -109,14 +109,13 @@ pub(crate) struct EventsImpl {
 }
 
 impl EventHandler for EventsImpl {
-    fn payment_received(&self, payment_hash: String, amount_msat: u64) {
-        self.events_callback
-            .payment_received(payment_hash, amount_msat);
+    fn payment_received(&self, payment_hash: String) {
+        self.events_callback.payment_received(payment_hash);
     }
 
-    fn payment_sent(&self, payment_hash: String, payment_preimage: String, fee_paid_msat: u64) {
+    fn payment_sent(&self, payment_hash: String, payment_preimage: String) {
         self.events_callback
-            .payment_sent(payment_hash, payment_preimage, fee_paid_msat);
+            .payment_sent(payment_hash, payment_preimage);
     }
 
     fn payment_failed(&self, payment_hash: String) {

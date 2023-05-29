@@ -140,7 +140,7 @@ impl EventHandler for LipaEventHandler {
                             error!("Failed to persist in the payment db that the receiving payment with hash {} has succeeded", payment_hash.0.to_hex());
                         }
                         self.user_event_handler
-                            .payment_received(payment_hash.0.to_hex(), amount_msat);
+                            .payment_received(payment_hash.0.to_hex());
                     }
                     PaymentPurpose::SpontaneousPayment(_) => {
                         info!(
@@ -178,11 +178,8 @@ impl EventHandler for LipaEventHandler {
                 {
                     error!("Failed to persist in the payment db that sending payment with hash {} has succeeded", payment_hash.0.to_hex());
                 }
-                self.user_event_handler.payment_sent(
-                    payment_hash.0.to_hex(),
-                    payment_preimage.0.to_hex(),
-                    fee_paid_msat,
-                );
+                self.user_event_handler
+                    .payment_sent(payment_hash.0.to_hex(), payment_preimage.0.to_hex());
             }
             Event::PaymentFailed {
                 payment_id: _,

@@ -176,17 +176,14 @@ callback interface EventsCallback {
     //
     // Parameters:
     // * payment_hash - can be used cross-reference this claimed payment with a previously issued invoice.
-    // * amount_msat - will be at least as high as the value requested in the invoice but it's possible
-    //      for it to be higher.
-    void payment_received(string payment_hash, u64 amount_msat);
+    void payment_received(string payment_hash);
 
     // This callback will be called when a payment has been successfully sent (the payee received the funds)
     //
     // Parameters:
     // * payment_hash - the hash of the payment can be used to cross-reference this event to the payment that has succeeded
     // * payment_preimage - the preimage of the payment can be used as proof of payment
-    // * fee_paid_msat - the amount that was paid in routing fees
-    void payment_sent(string payment_hash, string payment_preimage, u64 fee_paid_msat);
+    void payment_sent(string payment_hash, string payment_preimage);
 
     // This callback will be called when a payment has failed and no further attempts will be pursued.
     //
