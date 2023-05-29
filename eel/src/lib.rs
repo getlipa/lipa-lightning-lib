@@ -96,7 +96,7 @@ const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_fees: Some(Duration::from_secs(5 * 60)),
     update_graph: Some(RestartIfFailedPeriod::from_secs(2 * 60)),
     update_exchange_rates: Some(Duration::from_secs(10 * 60)),
-    sync_onchain_wallet: Some(Duration::from_secs(60)),
+    sync_onchain_wallet: Some(Duration::from_secs(5 * 60)),
 };
 
 const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
