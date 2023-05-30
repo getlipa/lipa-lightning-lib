@@ -177,17 +177,18 @@ mod receiving_payments_test {
             assert_high_inbound_capacity(&node);
 
             // test receiving MPP
-            let inbound_capacity = node.get_node_info().channels_info.inbound_capacity_msat;
-            let payment_amount = inbound_capacity - TWO_HUNDRED_K_SATS; // todo use full inbound capacity as soon as the number is accurate
-            assert!(payment_amount > ONE_M_SATS); // Biggest channel is 1M sats; This payment involves transferring through more than 1 channel
-            let invoice = issue_invoice(
-                &node,
-                payment_amount,
-            );
+            let channels_info = node.get_node_info().channels_info;
+            let initial_balance = channels_info.local_balance_msat;
+            let payment_amount = channels_info.inbound_capacity_msat - TWO_HUNDRED_K_SATS; // todo use full inbound capacity as soon as the number is accurate
 
+            assert!(payment_amount > ONE_M_SATS); // Biggest channel is 1M sats; This payment involves transferring through more than 1 channel
+            let invoice = issue_invoice(&node, payment_amount);
             wait_for!(nigiri::lnd_pay_invoice(NodeInstance::LspdLnd, &invoice).is_ok());
 
-            assert!(node.get_node_info().channels_info.local_balance_msat > TWO_M_SATS);
+            assert_eq!(
+                node.get_node_info().channels_info.local_balance_msat,
+                initial_balance + payment_amount
+            );
         }
     }
 

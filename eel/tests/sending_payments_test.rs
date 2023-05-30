@@ -153,11 +153,15 @@ mod sending_payments_test {
         );
 
         // Node has 2 channels of 1M SAT each. Paying 1.5M SAT requires sending through both of them
+        let initial_balance = nigiri::query_node_balance(LspdLnd).unwrap();
         let invoice = nigiri::issue_invoice(LspdLnd, "MPP", MORE_THAN_ONE_M_SATS, 3600).unwrap();
 
         node.pay_invoice(invoice, String::new()).unwrap();
 
-        wait_for!(nigiri::query_node_balance(LspdLnd).unwrap() > MORE_THAN_ONE_M_SATS);
+        wait_for_eq!(
+            nigiri::query_node_balance(LspdLnd).unwrap(),
+            initial_balance + MORE_THAN_ONE_M_SATS
+        );
     }
 
     fn invoice_decode_test(node: &LightningNode) {
