@@ -152,7 +152,7 @@ mod sending_payments_test {
             NINE_HUNDRED_K_SATS + NINE_HUNDRED_K_SATS + FOURTY_K_SATS
         );
 
-        // Node has 2 channels of 2M SAT each. Paying 1.5M SAT requires sending through both of them
+        // Node has 2 channels of 1M SAT each. Paying 1.5M SAT requires sending through both of them
         let invoice = nigiri::issue_invoice(LspdLnd, "MPP", MORE_THAN_ONE_M_SATS, 3600).unwrap();
 
         node.pay_invoice(invoice, String::new()).unwrap();
