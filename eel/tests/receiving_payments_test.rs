@@ -167,7 +167,7 @@ mod receiving_payments_test {
 
             // Add 2M sats of inbound capacity - More than the max allowed receive amount
             let node_id = node.get_node_info().node_pubkey.to_hex();
-            assert_eq!(nigiri::get_number_of_txs_in_mempool(), Ok::<u64, String>(2)); // 2 times jit channel open flow
+            assert_eq!(nigiri::get_number_of_txs_in_mempool(), Ok::<u64, String>(2)); // 2 times jit channel open flow (zero-conf)
             let _ = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap(); // 1M sats
             let _ = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap(); // 1M sats
             wait_for_eq!(nigiri::get_number_of_txs_in_mempool(), Ok::<u64, String>(4));
