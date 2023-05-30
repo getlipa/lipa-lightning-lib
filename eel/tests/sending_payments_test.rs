@@ -120,12 +120,13 @@ mod sending_payments_test {
         assert_eq!(channels_info.local_balance_msat, FOURTY_K_SATS);
         assert_eq!(channels_info.total_channel_capacities_msat, ONE_M_SATS);
 
-        let invoice_details = node
+        let invoice = node
             .create_invoice(NINE_HUNDRED_K_SATS, "test".to_string(), String::new())
-            .unwrap();
-        assert!(invoice_details.invoice.starts_with("lnbc"));
+            .unwrap()
+            .to_string();
+        assert!(invoice.starts_with("lnbc"));
 
-        nigiri::pay_invoice(LspdLnd, &invoice_details.invoice).unwrap();
+        nigiri::pay_invoice(LspdLnd, &invoice).unwrap();
         assert_eq!(
             node.get_node_info().channels_info.local_balance_msat,
             NINE_HUNDRED_K_SATS + FOURTY_K_SATS
@@ -141,12 +142,13 @@ mod sending_payments_test {
             ONE_M_SATS * 2
         );
 
-        let invoice_details = node
+        let invoice = node
             .create_invoice(NINE_HUNDRED_K_SATS, "test".to_string(), String::new())
-            .unwrap();
-        assert!(invoice_details.invoice.starts_with("lnbc"));
+            .unwrap()
+            .to_string();
+        assert!(invoice.starts_with("lnbc"));
 
-        wait_for!(nigiri::pay_invoice(LspdLnd, &invoice_details.invoice).is_ok());
+        wait_for!(nigiri::pay_invoice(LspdLnd, &invoice).is_ok());
         assert_eq!(
             node.get_node_info().channels_info.local_balance_msat,
             NINE_HUNDRED_K_SATS + NINE_HUNDRED_K_SATS + FOURTY_K_SATS
