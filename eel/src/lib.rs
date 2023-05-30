@@ -53,7 +53,7 @@ use crate::payment::{FiatValues, Payment, PaymentState, PaymentType};
 use crate::random::generate_random_bytes;
 use crate::rapid_sync_client::RapidSyncClient;
 use crate::storage_persister::StoragePersister;
-use crate::task_manager::{RestartIfFailedPeriod, TaskManager, TaskPeriods};
+use crate::task_manager::{PeriodConfig, RestartIfFailedPeriod, TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router, TxSync};
 use std::fs;
@@ -87,7 +87,10 @@ use tokio::time::Duration;
 
 const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     sync_blockchain: Duration::from_secs(5 * 60),
-    update_lsp_info: Some(Duration::from_secs(10 * 60)),
+    update_lsp_info: Some(PeriodConfig {
+        success_period: Duration::from_secs(10 * 60),
+        failure_period: Duration::from_secs(5),
+    }),
     reconnect_to_lsp: Duration::from_secs(10),
     update_fees: Some(Duration::from_secs(5 * 60)),
     update_graph: Some(RestartIfFailedPeriod::from_secs(2 * 60)),
@@ -732,7 +735,10 @@ fn get_foreground_periods() -> TaskPeriods {
             let period = Duration::from_secs(period);
             TaskPeriods {
                 sync_blockchain: period,
-                update_lsp_info: Some(period),
+                update_lsp_info: Some(PeriodConfig {
+                    success_period: period,
+                    failure_period: period,
+                }),
                 reconnect_to_lsp: period,
                 update_fees: Some(period),
                 update_graph: Some(period),

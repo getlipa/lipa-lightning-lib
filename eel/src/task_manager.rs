@@ -16,9 +16,14 @@ use tokio::time::Duration;
 
 pub(crate) type RestartIfFailedPeriod = Duration;
 
+pub(crate) struct PeriodConfig {
+    pub failure_period: Duration,
+    pub success_period: Duration,
+}
+
 pub(crate) struct TaskPeriods {
     pub sync_blockchain: Duration,
-    pub update_lsp_info: Option<Duration>,
+    pub update_lsp_info: Option<PeriodConfig>,
     pub reconnect_to_lsp: Duration,
     pub update_fees: Option<Duration>,
     pub update_graph: Option<RestartIfFailedPeriod>,
@@ -101,8 +106,8 @@ impl TaskManager {
             .push(self.start_blockchain_sync(periods.sync_blockchain));
 
         // LSP info update.
-        if let Some(period) = periods.update_lsp_info {
-            self.task_handles.push(self.start_lsp_info_update(period));
+        if let Some(config) = periods.update_lsp_info {
+            self.task_handles.push(self.start_lsp_info_update(config));
         }
 
         // Reconnect to LSP LN node.
@@ -155,11 +160,11 @@ impl TaskManager {
         })
     }
 
-    fn start_lsp_info_update(&self, period: Duration) -> RepeatingTaskHandle {
+    fn start_lsp_info_update(&self, config: PeriodConfig) -> RepeatingTaskHandle {
         let peer_manager = Arc::clone(&self.peer_manager);
         let lsp_client = Arc::clone(&self.lsp_client);
         let lsp_info = Arc::clone(&self.lsp_info);
-        self.runtime_handle.spawn_repeating_task(period, move || {
+        self.runtime_handle.spawn_self_restarting_task(move || {
             let peer_manager = Arc::clone(&peer_manager);
             let lsp_client = Arc::clone(&lsp_client);
             let lsp_info = Arc::clone(&lsp_info);
@@ -179,8 +184,12 @@ impl TaskManager {
                                 error!("Connecting to peer {} failed: {}", peer, e);
                             }
                         }
+                        Some(config.success_period)
                     }
-                    Err(e) => error!("Failed to query LSP: {}", e),
+                    Err(e) => {
+                        error!("Failed to query LSP, retrying in 10 seconds: {}", e);
+                        Some(config.failure_period)
+                    }
                 }
             }
         })
