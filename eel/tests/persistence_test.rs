@@ -173,9 +173,10 @@ mod persistence_test {
 
         let invoice = node
             .create_invoice(payment_amount, "test".to_string(), String::new())
-            .unwrap();
+            .unwrap()
+            .to_string();
 
-        nigiri::pay_invoice(paying_node, &invoice.to_string()).unwrap();
+        nigiri::pay_invoice(paying_node, &invoice).unwrap();
 
         assert_payment_received(node, initial_balance + payment_amount - lsp_fee);
     }

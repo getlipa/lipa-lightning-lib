@@ -754,7 +754,12 @@ pub mod nigiri {
     }
 
     pub fn initiate_channel_from_remote(node_pubkey: PublicKey, remote_node: NodeInstance) {
+        let txs_before = get_number_of_txs_in_mempool().unwrap();
         lnd_node_open_channel(remote_node, &node_pubkey.to_hex(), false).unwrap();
+        wait_for_eq!(
+            nigiri::get_number_of_txs_in_mempool(),
+            Ok::<u64, String>(txs_before + 1)
+        );
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
 
         wait_for!(is_channel_confirmed(remote_node, &node_pubkey.to_hex()));

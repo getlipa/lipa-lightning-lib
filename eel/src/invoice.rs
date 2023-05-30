@@ -153,7 +153,8 @@ pub(crate) async fn create_invoice(
         .amount_milli_satoshis(amount_msat)
         .current_timestamp()
         .expiry_time(Duration::from_secs(10 * 60))
-        .min_final_cltv_expiry_delta(144);
+        .min_final_cltv_expiry_delta(144)
+        .basic_mpp();
     for private_route in private_routes {
         builder = builder.private_route(private_route);
     }

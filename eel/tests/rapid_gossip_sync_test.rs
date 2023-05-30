@@ -77,10 +77,11 @@ mod rapid_gossip_sync_test {
             // Pay from NigiriCln to 3L to create outbound liquidity
             let invoice_cln = node
                 .create_invoice(HUNDRED_K_SATS, "test".to_string(), String::new())
-                .unwrap();
-            assert!(invoice_cln.to_string().starts_with("lnbc"));
+                .unwrap()
+                .to_string();
+            assert!(invoice_cln.starts_with("lnbc"));
 
-            nigiri::cln_pay_invoice(NodeInstance::NigiriCln, &invoice_cln.to_string()).unwrap();
+            nigiri::cln_pay_invoice(NodeInstance::NigiriCln, &invoice_cln).unwrap();
 
             assert_eq!(
                 node.get_node_info().channels_info.local_balance_msat,
@@ -133,10 +134,11 @@ mod rapid_gossip_sync_test {
             // Pay from NigiriLnd to 3L to create outbound liquidity (LspdLnd -> NigiriLnd)
             let invoice_lnd = node
                 .create_invoice(HUNDRED_K_SATS, "test".to_string(), String::new())
-                .unwrap();
-            assert!(invoice_lnd.to_string().starts_with("lnbc"));
+                .unwrap()
+                .to_string();
+            assert!(invoice_lnd.starts_with("lnbc"));
 
-            nigiri::lnd_pay_invoice(NodeInstance::NigiriLnd, &invoice_lnd.to_string()).unwrap();
+            nigiri::lnd_pay_invoice(NodeInstance::NigiriLnd, &invoice_lnd).unwrap();
 
             // wait for the RGS server to learn about the new channels (100 seconds isn't enough)
             sleep(Duration::from_secs(150));
