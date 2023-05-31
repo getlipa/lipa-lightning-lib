@@ -7,6 +7,8 @@ mod setup_env;
 #[cfg(feature = "nigiri")]
 mod p2p_connection_test {
     use bitcoin::hashes::hex::ToHex;
+    use eel::errors::RuntimeErrorCode;
+    use perro::runtime_error;
     use serial_test::file_parallel;
     use serial_test::file_serial;
     use std::thread::sleep;
@@ -14,7 +16,7 @@ mod p2p_connection_test {
     use crate::setup::mocked_storage_node;
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
-    use crate::wait_for_eq;
+    use crate::{wait_for_eq, wait_for_ok};
 
     #[test]
     #[file_parallel(key, "/tmp/3l-int-tests-lock")]
@@ -30,24 +32,26 @@ mod p2p_connection_test {
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_p2p_connection_with_unreliable_lsp() {
-        nigiri::ensure_environment_running();
+        // Start the node when lspd isn't available
+        nigiri::pause_lspd();
         let node = mocked_storage_node().start_or_panic();
 
-        // Test disconnect when LSP is down.
-        {
-            // Let's shutdown LSPD LND.
-            nigiri::pause_lspd();
-            wait_for_eq!(node.get_node_info().num_peers, 0);
-        }
+        assert_eq!(
+            node.query_lsp_fee(),
+            Err(runtime_error(
+                RuntimeErrorCode::LspServiceUnavailable,
+                "Failed to get LSP info"
+            ))
+        );
+        assert_eq!(node.get_node_info().num_peers, 0);
 
         // Test reconnect when LSP is back.
-        {
-            // Now let's start LSPD LND again.
-            nigiri::start_lspd();
-            nigiri::wait_for_healthy_lspd();
-            wait_for_eq!(node.get_node_info().num_peers, 1);
-            let peers = nigiri::list_peers(NodeInstance::LspdLnd).unwrap();
-            assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
-        }
+        nigiri::start_lspd();
+        nigiri::ensure_environment_running();
+        nigiri::wait_for_healthy_lspd();
+        wait_for_eq!(node.get_node_info().num_peers, 1);
+        let peers = nigiri::list_peers(NodeInstance::LspdLnd).unwrap();
+        assert!(peers.contains(&node.get_node_info().node_pubkey.to_hex()));
+        wait_for_ok!(node.query_lsp_fee());
     }
 }
