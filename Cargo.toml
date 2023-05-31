@@ -29,7 +29,7 @@ perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.1" }
 
 [dev-dependencies]
 bitcoin = "0.29.2"
-chrono = { version = "0.4.25", default-features = false }
+chrono = { version = "0.4.26", default-features = false }
 colored = "2.0.0"
 ctor = "0.2.0"
 esplora-client = { version = "0.5.0", default-features = false, features = ["blocking"] }
