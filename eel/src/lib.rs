@@ -55,7 +55,6 @@ use crate::storage_persister::StoragePersister;
 use crate::task_manager::{RestartIfFailedPeriod, TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router, TxSync};
-use std::fs;
 
 use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
@@ -272,14 +271,7 @@ impl LightningNode {
         )?);
 
         // Step 20: Initialize the DataStore
-        let payment_store_path = Path::new(&config.local_persistence_path).join("payment_db.db3");
         let data_store_path = Path::new(&config.local_persistence_path).join("db.db3");
-        if !data_store_path.exists() && payment_store_path.exists() {
-            fs::copy(&payment_store_path, &data_store_path)
-                .map_to_permanent_failure("Failed to migrate db location")?;
-            fs::remove_file(payment_store_path)
-                .map_to_permanent_failure("Failed to migrate db location")?;
-        }
         let data_store_path = data_store_path
             .to_str()
             .ok_or_invalid_input("Invalid local persistence path")?;
