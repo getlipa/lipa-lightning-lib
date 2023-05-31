@@ -246,7 +246,7 @@ fn payment_amount_limits(node: &LightningNode) {
         }
         LiquidityLimit::MaxFreeReceive { amount } => {
             println!(
-                " If you want to receive more than {} SAT, a setup fee will be charged.",
+                " If you want to receive more than {}, a setup fee will be charged.",
                 amount_to_string(amount)
             );
         }
