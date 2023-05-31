@@ -32,7 +32,6 @@ mod task_manager;
 mod test_utils;
 mod tx_broadcaster;
 mod types;
-pub mod utils;
 
 use crate::async_runtime::AsyncRuntime;
 use crate::config::{Config, TzConfig};
@@ -58,7 +57,6 @@ use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router, TxSync};
 use std::fs;
 
-use crate::utils::{round_down_to_sat, round_up_to_sat};
 use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
 use cipher::consts::U32;
@@ -628,13 +626,12 @@ impl LightningNode {
     }
 
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
-        let lsp_min_fee = round_up_to_sat(self.query_lsp_fee()?.channel_minimum_fee_msat);
-        let inbound_capacity =
-            round_down_to_sat(self.get_node_info().channels_info.inbound_capacity_msat);
+        let lsp_min_fee_msat = self.query_lsp_fee()?.channel_minimum_fee_msat;
+        let inbound_capacity_msat = self.get_node_info().channels_info.inbound_capacity_msat;
 
         Ok(PaymentAmountLimits::calculate(
-            inbound_capacity,
-            lsp_min_fee,
+            inbound_capacity_msat,
+            lsp_min_fee_msat,
         ))
     }
 

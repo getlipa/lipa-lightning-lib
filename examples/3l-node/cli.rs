@@ -6,13 +6,13 @@ use bitcoin::secp256k1::PublicKey;
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
-use eel::limits::LiquidityLimit;
 use rustyline::config::{Builder, CompletionType};
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use rustyline::Editor;
 use std::collections::HashSet;
 use std::path::Path;
+use uniffi_lipalightninglib::LiquidityLimit;
 
 use crate::LightningNode;
 
@@ -232,15 +232,22 @@ fn calculate_lsp_fee(
 fn payment_amount_limits(node: &LightningNode) {
     let limits = node.get_payment_amount_limits().unwrap();
 
-    println!(" Beta maximum receive: {} SAT", limits.max_receive_sat);
+    println!(
+        " Beta maximum receive: {}",
+        amount_to_string(limits.max_receive)
+    );
 
     match limits.liquidity_limit {
-        LiquidityLimit::MinReceive { sat_amount } => {
-            println!(" Minimum payment amount: {sat_amount} SAT. A setup fee will be charged.");
-        }
-        LiquidityLimit::MaxFreeReceive { sat_amount } => {
+        LiquidityLimit::MinReceive { amount } => {
             println!(
-                " If you want to receive more than {sat_amount} SAT, a setup fee will be charged."
+                " Minimum payment amount: {}. A setup fee will be charged.",
+                amount_to_string(amount)
+            );
+        }
+        LiquidityLimit::MaxFreeReceive { amount } => {
+            println!(
+                " If you want to receive more than {}, a setup fee will be charged.",
+                amount_to_string(amount)
             );
         }
         LiquidityLimit::None => {}

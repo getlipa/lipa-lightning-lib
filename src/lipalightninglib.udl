@@ -40,7 +40,7 @@ interface LightningNode {
     [Throws=LnError]
     LspFee query_lsp_fee();
 
-    // Get the current limits for the amount (in SAT) that can be transferred in a single payment. Currently there are only limits for receiving payments.
+    // Get the current limits for the amount that can be transferred in a single payment. Currently there are only limits for receiving payments.
     // The limits (partly) depend on the channel situation of the node, so it should be called again every time the user is about to receive a payment.
     // The limits stay the same regardless of what amount wants to receive (= no changes while he's typing the amount)
     [Throws=LnError]
@@ -235,15 +235,15 @@ dictionary LspFee {
 };
 
 dictionary PaymentAmountLimits {
-    u64 max_receive_sat; // Hard limit: The maximum sat amount a user is allowed to receive per payment
+    Amount max_receive; // Hard limit: The maximum amount a user is allowed to receive per payment
     LiquidityLimit liquidity_limit;
 };
 
 [Enum]
 interface LiquidityLimit {
-    None(); // inbound capacity >= max_receive_sat
-    MaxFreeReceive(u64 sat_amount); // Soft limit: The maximum sat amount a user can receive without being charged a setup fee
-    MinReceive(u64 sat_amount); // Hard limit: The minimum sat amount a user must receive with the next payment
+    None(); // inbound capacity >= max_receive
+    MaxFreeReceive(Amount amount); // Soft limit: The maximum amount a user can receive without being charged a setup fee
+    MinReceive(Amount amount); // Hard limit: The minimum amount a user must receive with the next payment
         // If this limit is provided, that means a setup fee will be charged for the incoming payment
 };
 
@@ -278,10 +278,10 @@ dictionary Payment {
         // it is possible that a hex hash of the description is provided instead, but that is uncommon.
     string? preimage; // Hex representation of the preimage. Will only be present on successful payments.
     Amount? network_fees; // Routing fees paid in an `Sending` payment. Will only be present if payment was successful.
-        // The cost of sending a payment is `amount_msat` + `network_fees_msat`
+        // The cost of sending a payment is `amount` + `network_fees`
     Amount? lsp_fees; // LSP fees paid in a `Receiving` payment. Will never be present for `Sending` payments but might be 0 for `Receiving` payments.
         // The amount is only paid if successful.
-        // The value that is received in practice is given by `amount_msat` - `lsp_fees_msat`
+        // The value that is received in practice is given by `amount` - `lsp_fees`
     string metadata;
 };
 

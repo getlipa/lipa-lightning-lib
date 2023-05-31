@@ -5,7 +5,6 @@ mod setup_env;
 mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
     use eel::limits::LiquidityLimit;
-    use eel::utils::round_down_to_sat;
     use eel::LightningNode;
     use log::info;
     use serial_test::file_serial;
@@ -296,22 +295,23 @@ mod receiving_payments_test {
     fn assert_low_inbound_capacity(node: &LightningNode) {
         let limits = node.get_payment_amount_limits().unwrap();
 
-        assert_eq!(limits.max_receive_sat, 1_000_000);
+        assert_eq!(limits.max_receive_msat, 1_000_000_000);
         assert_eq!(
             limits.liquidity_limit,
-            LiquidityLimit::MinReceive { sat_amount: 4_000 },
+            LiquidityLimit::MinReceive {
+                amount_msat: 4_000_000
+            },
         );
     }
 
     fn assert_moderate_inbound_capacity(node: &LightningNode, inbound_capacity_msat: u64) {
         let limits = node.get_payment_amount_limits().unwrap();
-        let inbound_capacity = round_down_to_sat(inbound_capacity_msat);
 
-        assert_eq!(limits.max_receive_sat, 1_000_000);
+        assert_eq!(limits.max_receive_msat, 1_000_000_000);
         assert_eq!(
             limits.liquidity_limit,
             LiquidityLimit::MaxFreeReceive {
-                sat_amount: inbound_capacity
+                amount_msat: inbound_capacity_msat
             },
         );
     }
@@ -319,7 +319,7 @@ mod receiving_payments_test {
     fn assert_high_inbound_capacity(node: &LightningNode) {
         let limits = node.get_payment_amount_limits().unwrap();
 
-        assert_eq!(limits.max_receive_sat, 1_000_000);
+        assert_eq!(limits.max_receive_msat, 1_000_000_000);
         assert_eq!(limits.liquidity_limit, LiquidityLimit::None);
     }
 }
