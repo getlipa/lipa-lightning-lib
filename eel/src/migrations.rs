@@ -5,7 +5,11 @@ use perro::MapToError;
 use rusqlite::Connection;
 
 pub(crate) fn get_migrations() -> Vec<Migration> {
-    vec![migration_01_init, migration_02_store_exchange_rates]
+    vec![
+        migration_01_init,
+        migration_02_store_exchange_rates,
+        migration_03_store_spendable_outputs,
+    ]
 }
 
 fn migration_01_init(connection: &Connection) -> Result<()> {
@@ -56,7 +60,7 @@ fn migration_01_init(connection: &Connection) -> Result<()> {
             ) AS max_ids ON max_event_id=events.event_id;
         ",
         )
-        .map_to_permanent_failure("Failed to set up local payment database")
+        .map_to_permanent_failure("Failed to set up local database")
 }
 
 fn migration_02_store_exchange_rates(connection: &Connection) -> Result<()> {
@@ -70,5 +74,19 @@ fn migration_02_store_exchange_rates(connection: &Connection) -> Result<()> {
             );
         ",
         )
-        .map_to_permanent_failure("Failed to set up local payment database")
+        .map_to_permanent_failure("Failed to set up local database")
+}
+
+fn migration_03_store_spendable_outputs(connection: &Connection) -> Result<()> {
+    connection
+        .execute_batch(
+            "\
+            CREATE TABLE spendable_outputs (
+                id INTEGER NOT NULL PRIMARY KEY,
+                spendable_output BLOB NOT NULL,
+                inserted_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        ",
+        )
+        .map_to_permanent_failure("Failed to set up local database")
 }

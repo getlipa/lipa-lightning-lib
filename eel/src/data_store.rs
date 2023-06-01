@@ -1,11 +1,14 @@
 use crate::config::TzConfig;
-use crate::errors::Result;
+use crate::errors::{Error, Result};
 use crate::invoice;
 use crate::migrations::get_migrations;
 use crate::schema_migration::migrate_schema;
+use std::io::Cursor;
 
 use crate::interfaces::ExchangeRate;
 use chrono::{DateTime, Utc};
+use lightning::chain::keysinterface::SpendableOutputDescriptor;
+use lightning::util::ser::{Readable, Writeable};
 use perro::{MapToError, OptionToError};
 use rusqlite::types::Type;
 use rusqlite::{Connection, Row};
@@ -342,6 +345,46 @@ impl DataStore {
         }
         Ok(rates)
     }
+
+    pub fn persist_spendable_output(
+        &self,
+        spendable_output: &SpendableOutputDescriptor,
+    ) -> Result<()> {
+        self.db_conn
+            .execute(
+                "\
+                INSERT INTO spendable_outputs (spendable_output) \
+                VALUES (?1)
+                ",
+                [spendable_output.encode()],
+            )
+            .map_to_invalid_input("Failed to persist spendable output in db")?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn get_all_spendable_outputs(&self) -> Result<Vec<SpendableOutputDescriptor>> {
+        let mut statement = self
+            .db_conn
+            .prepare(
+                " \
+            SELECT spendable_output \
+            FROM spendable_outputs \
+            ORDER BY id ASC \
+            ",
+            )
+            .map_to_permanent_failure("Failed to prepare SQL query")?;
+
+        let output_iter = statement
+            .query_map([], spendable_output_from_row)
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
+
+        let mut spendable_outputs = Vec::new();
+        for output in output_iter {
+            spendable_outputs.push(output.map_to_permanent_failure("Corrupted db")?);
+        }
+        Ok(spendable_outputs)
+    }
 }
 
 fn fiat_values_option_to_option_tuple(
@@ -425,6 +468,22 @@ fn exchange_rate_from_row(row: &Row) -> rusqlite::Result<ExchangeRate> {
     })
 }
 
+#[allow(dead_code)]
+fn spendable_output_from_row(row: &Row) -> rusqlite::Result<SpendableOutputDescriptor> {
+    let ser_spendable_output: Vec<u8> = row.get(0)?;
+    let mut buffer = Cursor::new(&ser_spendable_output);
+
+    <SpendableOutputDescriptor>::read(&mut buffer).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(
+            1,
+            Type::Blob,
+            Box::new(Error::PermanentFailure {
+                msg: format!("Corrupted spendable output in db: {}", e),
+            }),
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use crate::config::TzConfig;
@@ -432,11 +491,14 @@ mod tests {
     use crate::interfaces::ExchangeRate;
     use crate::payment::{FiatValues, PaymentState, PaymentType};
 
+    use lightning::chain::keysinterface::SpendableOutputDescriptor;
     use lightning::ln::PaymentSecret;
+    use lightning::util::ser::Readable;
     use lightning_invoice::{Currency, InvoiceBuilder};
     use secp256k1::hashes::{sha256, Hash};
     use secp256k1::{Secp256k1, SecretKey};
     use std::fs;
+    use std::io::Cursor;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
 
@@ -968,6 +1030,69 @@ mod tests {
         assert_eq!(
             eur_rate.updated_at,
             SystemTime::UNIX_EPOCH + Duration::from_secs(20)
+        );
+    }
+
+    #[test]
+    fn test_spendable_output_storage() {
+        let db_name = String::from("spendable_outputs.db3");
+        reset_db(&db_name);
+        let tz_config = TzConfig {
+            timezone_id: String::from(TEST_TZ_ID),
+            timezone_utc_offset_secs: TEST_TZ_OFFSET,
+        };
+        let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}"), tz_config).unwrap();
+
+        assert!(data_store.get_all_spendable_outputs().unwrap().is_empty());
+
+        let force_close_output =
+            fs::read("tests/resources/spendable_outputs/spendable_output_force_close_from_peer")
+                .unwrap();
+        let force_close_output =
+            <SpendableOutputDescriptor>::read(&mut Cursor::new(&force_close_output)).unwrap();
+        assert!(matches!(
+            force_close_output,
+            SpendableOutputDescriptor::StaticPaymentOutput(..)
+        ));
+
+        data_store
+            .persist_spendable_output(&force_close_output)
+            .unwrap();
+
+        assert_eq!(data_store.get_all_spendable_outputs().unwrap().len(), 1);
+        assert_eq!(
+            data_store
+                .get_all_spendable_outputs()
+                .unwrap()
+                .get(0)
+                .unwrap()
+                .clone(),
+            force_close_output
+        );
+
+        let coop_close_output =
+            fs::read("tests/resources/spendable_outputs/spendable_output_coop_close_from_peer")
+                .unwrap();
+        let coop_close_output =
+            <SpendableOutputDescriptor>::read(&mut Cursor::new(&coop_close_output)).unwrap();
+        assert!(matches!(
+            coop_close_output,
+            SpendableOutputDescriptor::StaticOutput { .. }
+        ));
+
+        data_store
+            .persist_spendable_output(&coop_close_output)
+            .unwrap();
+
+        assert_eq!(data_store.get_all_spendable_outputs().unwrap().len(), 2);
+        assert_eq!(
+            data_store
+                .get_all_spendable_outputs()
+                .unwrap()
+                .get(1)
+                .unwrap()
+                .clone(),
+            coop_close_output
         );
     }
 }

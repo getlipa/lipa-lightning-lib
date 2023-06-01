@@ -230,7 +230,18 @@ impl EventHandler for LipaEventHandler {
 
                 self.channel_manager.process_pending_htlc_forwards();
             }
-            Event::SpendableOutputs { .. } => {}
+            Event::SpendableOutputs { outputs } => {
+                info!(
+                    "EVENT: SpendableOutputs - {} outputs provided",
+                    outputs.len()
+                );
+                let data_store = self.data_store.lock().unwrap();
+                for output in outputs {
+                    if let Err(e) = data_store.persist_spendable_output(&output) {
+                        error!("Failed to persist spendable output in local db - {}", e);
+                    }
+                }
+            }
             Event::PaymentForwarded { .. } => {}
             Event::ChannelClosed {
                 channel_id,
