@@ -9,9 +9,7 @@ mod p2p_connection_test {
     use bitcoin::hashes::hex::ToHex;
     use eel::errors::RuntimeErrorCode;
     use perro::runtime_error;
-    use serial_test::file_parallel;
-    use serial_test::file_serial;
-    use std::thread::sleep;
+    use serial_test::{file_parallel, file_serial};
 
     use crate::setup::mocked_storage_node;
     use crate::setup_env::nigiri;

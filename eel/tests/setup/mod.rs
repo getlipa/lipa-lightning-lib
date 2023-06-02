@@ -18,7 +18,6 @@ use perro::runtime_error;
 use print_events_handler::PrintEventsHandler;
 use std::fs;
 use std::sync::Arc;
-use std::thread::sleep;
 use std::time::{Instant, SystemTime};
 use storage_mock::Storage;
 

@@ -8,7 +8,6 @@ use crate::wait_for_eq;
 use eel::config::TzConfig;
 use eel::errors::RuntimeErrorCode;
 use std::fs;
-use std::thread::sleep;
 
 type Result<T> = std::result::Result<T, perro::Error<RuntimeErrorCode>>;
 
