@@ -666,6 +666,23 @@ pub mod nigiri {
         Ok(())
     }
 
+    pub fn lnd_node_coop_close_channel(
+        node: NodeInstance,
+        funding_txid: String,
+    ) -> Result<(), String> {
+        let sub_cmd = &["closechannel", &funding_txid];
+        let cmd = [get_node_prefix(node), sub_cmd].concat();
+
+        let output = exec(cmd.as_slice());
+        if !output.status.success() {
+            return Err(produce_cmd_err_msg(cmd.as_slice(), output));
+        }
+        let _json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).map_err(|_| "Invalid json")?;
+
+        Ok(())
+    }
+
     pub fn node_stop(node: NodeInstance) -> Result<(), String> {
         match node {
             NodeInstance::LspdLnd => {
@@ -753,9 +770,13 @@ pub mod nigiri {
         }};
     }
 
-    pub fn initiate_channel_from_remote(node_pubkey: PublicKey, remote_node: NodeInstance) {
+    pub fn initiate_channel_from_remote(
+        node_pubkey: PublicKey,
+        remote_node: NodeInstance,
+    ) -> String {
         let txs_before = get_number_of_txs_in_mempool().unwrap();
-        lnd_node_open_channel(remote_node, &node_pubkey.to_hex(), false).unwrap();
+        let funding_txid =
+            lnd_node_open_channel(remote_node, &node_pubkey.to_hex(), false).unwrap();
         wait_for_eq!(
             nigiri::get_number_of_txs_in_mempool(),
             Ok::<u64, String>(txs_before + 1)
@@ -763,6 +784,7 @@ pub mod nigiri {
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
 
         wait_for!(is_channel_confirmed(remote_node, &node_pubkey.to_hex()));
+        funding_txid
     }
 
     pub fn is_channel_confirmed(node: NodeInstance, target_node_id: &str) -> bool {

@@ -60,7 +60,9 @@ use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
 use cipher::consts::U32;
 use lightning::chain::channelmonitor::ChannelMonitor;
-use lightning::chain::keysinterface::{EntropySource, InMemorySigner, KeysManager};
+use lightning::chain::keysinterface::{
+    EntropySource, InMemorySigner, KeysManager, SpendableOutputDescriptor,
+};
 use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Confirm, Watch};
 use lightning::ln::channelmanager::{ChainParameters, Retry, RetryableSendFailure};
 use lightning::ln::peer_handler::IgnoringMessageHandler;
@@ -628,6 +630,39 @@ impl LightningNode {
             inbound_capacity_msat,
             lsp_min_fee_msat,
         ))
+    }
+
+    // This implementation assumes that we don't ever spend the outputs provided by LDK
+    // For now this is a reasonable assumption because we don't implement a way to spend them
+    // TODO: as soon as it's possible to spend outputs persisted in the data store, update this
+    //      implementation such that spent outputs are not contemplated
+    pub fn get_onchain_balance(&self) -> Result<u64> {
+        let mut balance = 0;
+
+        let outputs = self
+            .data_store
+            .lock()
+            .unwrap()
+            .get_all_spendable_outputs()?;
+
+        for output_descriptor in outputs {
+            match output_descriptor {
+                SpendableOutputDescriptor::StaticOutput {
+                    outpoint: _,
+                    output,
+                } => {
+                    balance += output.value;
+                }
+                SpendableOutputDescriptor::DelayedPaymentOutput(output_descriptor) => {
+                    balance += output_descriptor.output.value;
+                }
+                SpendableOutputDescriptor::StaticPaymentOutput(output_descriptor) => {
+                    balance += output_descriptor.output.value;
+                }
+            }
+        }
+
+        Ok(balance)
     }
 
     pub fn panic_directly(&self) {
