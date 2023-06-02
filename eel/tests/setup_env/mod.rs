@@ -65,7 +65,7 @@ macro_rules! wait_for_condition {
                     return;
                 }
 
-                sleep(sleep_duration);
+                std::thread::sleep(sleep_duration);
             }
 
             let total_duration = sleep_duration * attempts;
@@ -85,7 +85,7 @@ macro_rules! wait_for_ok {
                     return;
                 }
 
-                sleep(sleep_duration);
+                std::thread::sleep(sleep_duration);
             }
 
             $result_generating_expr.unwrap();
