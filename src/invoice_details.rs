@@ -1,7 +1,8 @@
 use crate::amount::{Amount, ToAmount};
 
 use eel::interfaces::ExchangeRate;
-use eel::{Invoice, InvoiceDescription};
+use eel::invoice::network_from_currency;
+use eel::{Invoice, InvoiceDescription, Network};
 use std::time::{Duration, SystemTime};
 
 pub struct InvoiceDetails {
@@ -13,6 +14,7 @@ pub struct InvoiceDetails {
     pub creation_timestamp: SystemTime,
     pub expiry_interval: Duration,
     pub expiry_timestamp: SystemTime,
+    pub network: Network,
 }
 
 impl InvoiceDetails {
@@ -42,6 +44,8 @@ fn to_invoice_details(invoice: Invoice, amount: Option<Amount>) -> InvoiceDetail
         Some(p) => p.to_string(),
     };
 
+    let network = network_from_currency(invoice.currency());
+
     InvoiceDetails {
         invoice: invoice.to_string(),
         amount,
@@ -51,6 +55,7 @@ fn to_invoice_details(invoice: Invoice, amount: Option<Amount>) -> InvoiceDetail
         creation_timestamp: invoice.timestamp(),
         expiry_interval: invoice.expiry_time(),
         expiry_timestamp: invoice.timestamp() + invoice.expiry_time(),
+        network,
     }
 }
 

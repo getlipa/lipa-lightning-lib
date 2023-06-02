@@ -263,6 +263,14 @@ dictionary InvoiceDetails {
     timestamp creation_timestamp; // The moment an invoice was created (UTC)
     duration expiry_interval; // The interval after which the invoice expires (creation_timestamp + expiry_interval = expiry_timestamp)
     timestamp expiry_timestamp; // The moment an invoice expires (UTC)
+    Network network; // The bitcoin network the invoice belongs to
+};
+
+enum Network {
+    "Bitcoin",
+    "Testnet",
+    "Signet",
+    "Regtest",
 };
 
 // Information about an incoming or outgoing payment

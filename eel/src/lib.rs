@@ -3,30 +3,30 @@
 extern crate core;
 
 pub mod config;
-mod data_store;
 pub mod errors;
 pub mod interfaces;
+pub mod invoice;
 pub mod key_derivation;
 pub mod keys_manager;
 pub mod limits;
 pub mod lsp;
-mod migrations;
 pub mod node_info;
 pub mod p2p_networking;
 pub mod payment;
 pub mod recovery;
-mod schema_migration;
 pub mod secret;
 
 mod async_runtime;
+mod data_store;
 mod encryption_symmetric;
 mod esplora_client;
 mod event_handler;
 mod fee_estimator;
-mod invoice;
 mod logger;
+mod migrations;
 mod random;
 mod rapid_sync_client;
+mod schema_migration;
 mod storage_persister;
 mod task_manager;
 mod test_utils;

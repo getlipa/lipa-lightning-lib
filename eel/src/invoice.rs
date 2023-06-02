@@ -60,7 +60,7 @@ pub(crate) fn validate_invoice(network: Network, invoice: &Invoice) -> Result<()
     Ok(())
 }
 
-fn network_from_currency(currency: Currency) -> Network {
+pub fn network_from_currency(currency: Currency) -> Network {
     match currency {
         Currency::Bitcoin => Network::Bitcoin,
         Currency::BitcoinTestnet => Network::Testnet,
