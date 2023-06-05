@@ -38,8 +38,8 @@ use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel};
 use native_logger::init_native_logger_once;
 use perro::{MapToError, ResultTrait};
-use std::fs;
 use std::sync::Arc;
+use std::{env, fs};
 
 const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 
@@ -96,6 +96,7 @@ pub struct LightningNode {
 
 impl LightningNode {
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
+        enable_backtrace();
         fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
             "Failed to create directory: {}",
             config.local_persistence_path,
@@ -272,6 +273,7 @@ impl LightningNode {
 }
 
 pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) -> Result<()> {
+    enable_backtrace();
     let environment = Environment::load(environment);
     let seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = build_auth(&seed, environment.backend_url)?;
@@ -342,6 +344,10 @@ fn to_limits(
         max_receive: limits.max_receive_msat.to_amount_down(rate),
         liquidity_limit,
     }
+}
+
+pub(crate) fn enable_backtrace() {
+    env::set_var("RUST_BACKTRACE", "1");
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));

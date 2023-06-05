@@ -1,6 +1,6 @@
 use crate::eel_interface_impl::RemoteStorageGraphql;
 use crate::environment::Environment;
-use crate::{build_auth, sanitize_input, EnvironmentCode};
+use crate::{build_auth, enable_backtrace, sanitize_input, EnvironmentCode};
 use eel::errors::Result;
 use perro::MapToError;
 use std::fs;
@@ -11,6 +11,7 @@ pub fn recover_lightning_node(
     seed: Vec<u8>,
     local_persistence_path: String,
 ) -> Result<()> {
+    enable_backtrace();
     fs::create_dir_all(&local_persistence_path).map_to_permanent_failure(format!(
         "Failed to create directory: {}",
         local_persistence_path,
