@@ -3,7 +3,6 @@ mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod onchain_test {
-    use rustyline::KeyCode::Tab;
     use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::Duration;

@@ -298,21 +298,7 @@ fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
 }
 
 fn to_payment(payment: eel::payment::Payment) -> Payment {
-    // TODO: Store and get the rate from the payment.
-    let rate = match payment.fiat_values {
-        Some(fiat_values) => {
-            if fiat_values.amount > 0 {
-                Some(ExchangeRate {
-                    currency_code: fiat_values.fiat,
-                    rate: (payment.amount_msat / fiat_values.amount) as u32,
-                    updated_at: payment.created_at.time,
-                })
-            } else {
-                None
-            }
-        }
-        None => None,
-    };
+    let rate = payment.exchange_rate;
     let amount = match payment.payment_type {
         PaymentType::Receiving => payment.amount_msat.to_amount_down(&rate),
         PaymentType::Sending => payment.amount_msat.to_amount_up(&rate),
