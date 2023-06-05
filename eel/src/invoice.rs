@@ -1,4 +1,5 @@
 use crate::errors::*;
+use crate::interfaces::ExchangeRate;
 use crate::lsp::{LspClient, PaymentRequest};
 use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info};
 use crate::types::ChannelManager;
@@ -8,7 +9,6 @@ use std::time::{Duration, SystemTime};
 
 use crate::data_store::DataStore;
 use crate::lsp;
-use crate::payment::FiatValues;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::Network;
@@ -80,7 +80,8 @@ pub(crate) async fn create_invoice(
     lsp_client: &LspClient,
     keys_manager: &KeysManager,
     data_store: &mut DataStore,
-    fiat_values: Option<FiatValues>,
+    fiat_currency: &str,
+    exchange_rates: Vec<ExchangeRate>,
 ) -> Result<SignedRawInvoice> {
     let amount_msat = params.amount_msat;
 
@@ -182,7 +183,8 @@ pub(crate) async fn create_invoice(
             &params.description,
             &invoice.to_string(),
             &params.metadata,
-            fiat_values,
+            fiat_currency,
+            exchange_rates,
         )
         .map_to_permanent_failure("Failed to store new payment in payment db")?;
 

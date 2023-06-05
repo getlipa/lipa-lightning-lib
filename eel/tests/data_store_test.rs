@@ -131,7 +131,7 @@ mod data_store_test {
             preimage: None,
             network_fees_msat: None,
             lsp_fees_msat: Some(node.calculate_lsp_fee(TWENTY_K_SATS).unwrap()),
-            fiat_values: node.get_fiat_values(TWENTY_K_SATS, String::from("EUR")),
+            exchange_rate: node.get_exchange_rate(),
             metadata: "".to_string(),
         };
 
@@ -172,7 +172,7 @@ mod data_store_test {
             preimage: None,
             network_fees_msat: None,
             lsp_fees_msat: None,
-            fiat_values: node.get_fiat_values(TWO_K_SATS, String::from("EUR")),
+            exchange_rate: node.get_exchange_rate(),
             metadata: "".to_string(),
         };
 
@@ -208,7 +208,7 @@ mod data_store_test {
             payment_dummy.amount_msat = ONE_SAT;
             payment_dummy.description = "Open amount".to_string();
             payment_dummy.network_fees_msat = None;
-            payment_dummy.fiat_values = node.get_fiat_values(ONE_SAT, String::from("EUR"));
+            payment_dummy.exchange_rate = node.get_exchange_rate();
             payment_dummy.metadata = "Some metadata".to_string();
             payment_dummy.invoice = Invoice::from_str(&invoice).unwrap();
 
@@ -284,7 +284,7 @@ mod data_store_test {
         assert_eq!(left.description, right.description);
         assert_eq!(left.network_fees_msat, right.network_fees_msat);
         assert_eq!(left.lsp_fees_msat, right.lsp_fees_msat);
-        assert_eq!(left.fiat_values, right.fiat_values);
+        assert_eq!(left.exchange_rate, right.exchange_rate);
         assert_eq!(left.metadata, right.metadata);
     }
 }

@@ -65,7 +65,7 @@ pub struct Payment {
     pub preimage: Option<String>,
     pub network_fees_msat: Option<u64>,
     pub lsp_fees_msat: Option<u64>,
-    pub fiat_values: Option<FiatValues>,
+    pub exchange_rate: Option<ExchangeRate>,
     pub metadata: String,
 }
 

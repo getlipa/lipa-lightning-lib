@@ -23,7 +23,7 @@ pub trait EventHandler: Send + Sync {
     fn channel_closed(&self, channel_id: String, reason: String);
 }
 
-#[derive(Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct ExchangeRate {
     pub currency_code: String,
     pub rate: u32,

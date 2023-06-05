@@ -14,7 +14,7 @@ use rusqlite::types::Type;
 use rusqlite::{Connection, Row};
 use std::time::SystemTime;
 
-use crate::payment::{FiatValues, Payment, PaymentState, PaymentType, TzTime};
+use crate::payment::{Payment, PaymentState, PaymentType, TzTime};
 
 pub(crate) struct DataStore {
     db_conn: Connection,
@@ -46,18 +46,20 @@ impl DataStore {
         description: &str,
         invoice: &str,
         metadata: &str,
-        fiat_values: Option<FiatValues>,
+        fiat_currency: &str,
+        exchange_rates: Vec<ExchangeRate>,
     ) -> Result<()> {
-        let (fiat_currency, amount_fiat, amount_usd) =
-            fiat_values_option_to_option_tuple(fiat_values);
         let tx = self
             .db_conn
             .transaction()
             .map_to_permanent_failure("Failed to begin SQL transaction")?;
+
+        let snapshot_id = insert_snapshot(&tx, exchange_rates)?;
+
         tx.execute(
             "\
-            INSERT INTO payments (type, hash, amount_msat, lsp_fees_msat, description, invoice, metadata, amount_usd, amount_fiat, fiat_currency) \
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)\
+            INSERT INTO payments (type, hash, amount_msat, lsp_fees_msat, description, invoice, metadata, fiat_currency, exchange_rates_history_snaphot_id) \
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)\
             ",
             (
                 PaymentType::Receiving as u8,
@@ -67,9 +69,8 @@ impl DataStore {
                 description,
                 invoice,
                 metadata,
-                amount_usd,
-                amount_fiat,
                 fiat_currency,
+                snapshot_id,
             ),
         )
         .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
@@ -90,6 +91,7 @@ impl DataStore {
             .map_to_permanent_failure("Failed to commit new incoming payment transaction")
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_outgoing_payment(
         &mut self,
         hash: &str,
@@ -97,18 +99,18 @@ impl DataStore {
         description: &str,
         invoice: &str,
         metadata: &str,
-        fiat_values: Option<FiatValues>,
+        fiat_currency: &str,
+        exchange_rates: Vec<ExchangeRate>,
     ) -> Result<()> {
-        let (fiat_currency, amount_fiat, amount_usd) =
-            fiat_values_option_to_option_tuple(fiat_values);
         let tx = self
             .db_conn
             .transaction()
             .map_to_permanent_failure("Failed to begin SQL transaction")?;
+        let snapshot_id = insert_snapshot(&tx, exchange_rates)?;
         tx.execute(
             "\
-            INSERT INTO payments (type, hash, amount_msat, description, invoice, metadata, amount_usd, amount_fiat, fiat_currency) \
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)\
+            INSERT INTO payments (type, hash, amount_msat, description, invoice, metadata, fiat_currency, exchange_rates_history_snaphot_id) \
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)\
             ",
             (
                 PaymentType::Sending as u8,
@@ -117,9 +119,8 @@ impl DataStore {
                 description,
                 invoice,
                 metadata,
-                amount_usd,
-                amount_fiat,
                 fiat_currency,
+                snapshot_id,
             ),
         )
         .map_to_invalid_input("Failed to add new outgoing payment to payments db")?;
@@ -215,10 +216,12 @@ impl DataStore {
             lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
             recent_events.timezone_id, recent_events.timezone_utc_offset_secs, description, \
             creation_events.inserted_at, creation_events.timezone_id, creation_events.timezone_utc_offset_secs, \
-            amount_usd, amount_fiat, fiat_currency \
+            h.fiat_currency, h.rate, h.updated_at \
             FROM payments \
             JOIN recent_events ON payments.payment_id=recent_events.payment_id \
             JOIN creation_events ON payments.payment_id=creation_events.payment_id \
+            LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snaphot_id=h.snapshot_id \
+                AND payments.fiat_currency=h.fiat_currency \
             ORDER BY payments.payment_id DESC \
             LIMIT ? \
             ")
@@ -245,10 +248,12 @@ impl DataStore {
             lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
             recent_events.timezone_id, recent_events.timezone_utc_offset_secs, description, \
             creation_events.inserted_at, creation_events.timezone_id, creation_events.timezone_utc_offset_secs, \
-            amount_usd, amount_fiat, fiat_currency \
+            h.fiat_currency, h.rate, h.updated_at \
             FROM payments \
             JOIN recent_events ON payments.payment_id=recent_events.payment_id \
             JOIN creation_events ON payments.payment_id=creation_events.payment_id \
+            LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snaphot_id=h.snapshot_id \
+                AND payments.fiat_currency=h.fiat_currency \
             WHERE payments.hash=? \
             ")
             .map_to_permanent_failure("Failed to prepare SQL query")?;
@@ -273,10 +278,12 @@ impl DataStore {
             lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
             recent_events.timezone_id, recent_events.timezone_utc_offset_secs, description, \
             creation_events.inserted_at, creation_events.timezone_id, creation_events.timezone_utc_offset_secs, \
-            amount_usd, amount_fiat, fiat_currency \
+            h.fiat_currency, h.rate, h.updated_at \
             FROM payments \
             JOIN recent_events ON payments.payment_id=recent_events.payment_id \
             JOIN creation_events ON payments.payment_id=creation_events.payment_id \
+            LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snaphot_id=h.snapshot_id \
+                AND payments.fiat_currency=h.fiat_currency \
             WHERE state NOT IN (?1, ?2) \
             ")
             .map_to_permanent_failure("Failed to prepare SQL query")?;
@@ -387,12 +394,37 @@ impl DataStore {
     }
 }
 
-fn fiat_values_option_to_option_tuple(
-    fiat_values: Option<FiatValues>,
-) -> (Option<String>, Option<u64>, Option<u64>) {
-    fiat_values
-        .map(|f| (Some(f.fiat), Some(f.amount), Some(f.amount_usd)))
-        .unwrap_or((None, None, None))
+// Store all provided exchange rates.
+// For every row it takes ~13 bytes (4 + 3 + 2 + 4), if we have 100 fiat currencies it adds 1300 bytes.
+// For 1000 payments it will add ~1 MB.
+fn insert_snapshot(
+    connection: &Connection,
+    exchange_rates: Vec<ExchangeRate>,
+) -> Result<Option<u64>> {
+    if exchange_rates.is_empty() {
+        return Ok(None);
+    }
+    let snapshot_id = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_to_permanent_failure("TODO")?
+        .as_secs();
+    for exchange_rate in exchange_rates {
+        let updated_at: DateTime<Utc> = exchange_rate.updated_at.into();
+        connection
+            .execute(
+                "\
+                INSERT INTO exchange_rates_history (snapshot_id, fiat_currency, rate, updated_at) \
+                VALUES (?1, ?2, ?3, ?4)",
+                (
+                    snapshot_id,
+                    exchange_rate.currency_code,
+                    exchange_rate.rate,
+                    updated_at,
+                ),
+            )
+            .map_to_invalid_input("Failed to insert exchange rate history in db")?;
+    }
+    Ok(Some(snapshot_id))
 }
 
 fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
@@ -428,18 +460,21 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
         timezone_id: created_at_timezone_id,
         timezone_utc_offset_secs: created_at_timezone_utc_offset_secs,
     };
-    let amount_usd: Option<u64> = row.get(17)?;
-    let amount_fiat: Option<u64> = row.get(18)?;
-    let fiat_currency: Option<String> = row.get(19)?;
-    let fiat_value =
-        amount_usd
-            .zip(amount_fiat)
-            .zip(fiat_currency)
-            .map(|((amount_usd, amount), fiat)| FiatValues {
-                fiat,
-                amount,
-                amount_usd,
-            });
+    let fiat_currency: Option<String> = row.get(17)?;
+    let rate: Option<u32> = row.get(18)?;
+    let updated_at: Option<chrono::DateTime<chrono::Utc>> = row.get(19)?;
+    let exchange_rate = if let (Some(fiat_currency), Some(rate), Some(updated_at)) =
+        (fiat_currency, rate, updated_at)
+    {
+        let updated_at = SystemTime::from(updated_at);
+        Some(ExchangeRate {
+            currency_code: fiat_currency,
+            rate,
+            updated_at,
+        })
+    } else {
+        None
+    };
     Ok(Payment {
         payment_type,
         payment_state,
@@ -452,7 +487,7 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
         preimage,
         network_fees_msat,
         lsp_fees_msat,
-        fiat_values: fiat_value,
+        exchange_rate,
         metadata,
     })
 }
@@ -524,7 +559,6 @@ mod tests {
         let description = String::from("Test description 1");
         let invoice = String::from("lnbcrt1m1p37fe7udqqpp5e2mktq6ykgp0e9uljdrakvcy06wcwtswgwe7yl6jmfry4dke2t2ssp5s3uja8xn7tpeuctc62xqua6slpj40jrwlkuwmluv48g86r888g7s9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqwp6qac7ttkrd6rgwfte70sjtwxfxmpjk6z2h8vgwdnc88clvac7kqqqqyqqqqqqqqqqqqlgqqqqqqgqjqwhtk6ldnue43vtseuajgyypkv20py670vmcea9qrrdcqjrpp0qvr0sqgcldapjmgfeuvj54q6jt2h36a0m9xme3rywacscd3a5ey3fgpgdr8eq");
         let metadata = String::from("Test metadata 1");
-        let fiat_value = None;
 
         assert!(data_store.get_payment(hash).is_err());
 
@@ -536,7 +570,8 @@ mod tests {
                 &description,
                 &invoice,
                 &metadata,
-                fiat_value,
+                "EUR",
+                Vec::new(),
             )
             .unwrap();
 
@@ -565,11 +600,11 @@ mod tests {
         let description = String::from("Test description 1");
         let invoice = build_invoice(amount_msat, 100);
         let metadata = String::from("Test metadata 1");
-        let fiat_value = Some(FiatValues {
-            fiat: String::from("EUR"),
-            amount: 4013,
-            amount_usd: 3913,
-        });
+        let exchange_rate = ExchangeRate {
+            currency_code: String::from("RUB"),
+            rate: 4013,
+            updated_at: SystemTime::now(),
+        };
 
         data_store
             .new_incoming_payment(
@@ -579,7 +614,8 @@ mod tests {
                 &description,
                 &invoice,
                 &metadata,
-                fiat_value.clone(),
+                "EUR",
+                vec![exchange_rate.clone()],
             )
             .unwrap();
 
@@ -596,7 +632,7 @@ mod tests {
         assert_eq!(payment.network_fees_msat, None);
         assert_eq!(payment.lsp_fees_msat, Some(lsp_fees_msat));
         assert_eq!(payment.metadata, metadata);
-        assert_eq!(payment.fiat_values, fiat_value);
+        assert_eq!(payment.exchange_rate, None);
 
         assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
@@ -638,11 +674,6 @@ mod tests {
         let description = String::from("Test description 2");
         let invoice = build_invoice(amount_msat, 100);
         let metadata = String::from("Test metadata 2");
-        let fiat_value = Some(FiatValues {
-            fiat: String::from("CHF"),
-            amount: 4253,
-            amount_usd: 4103,
-        });
 
         data_store
             .new_outgoing_payment(
@@ -651,7 +682,8 @@ mod tests {
                 &description,
                 &invoice,
                 &metadata,
-                fiat_value.clone(),
+                "CHF",
+                Vec::new(),
             )
             .unwrap();
 
@@ -668,7 +700,7 @@ mod tests {
         assert_eq!(payment.network_fees_msat, None);
         assert_eq!(payment.lsp_fees_msat, None);
         assert_eq!(payment.metadata, metadata);
-        assert_eq!(payment.fiat_values, fiat_value);
+        assert_eq!(payment.exchange_rate, None);
 
         assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
@@ -722,11 +754,11 @@ mod tests {
         let description = String::from("Test description 3");
         let invoice = build_invoice(amount_msat, 100);
         let metadata = String::from("Test metadata 3");
-        let fiat_value = Some(FiatValues {
-            fiat: String::from("USD"),
-            amount: 3845,
-            amount_usd: 3592,
-        });
+        let exchange_rate = ExchangeRate {
+            currency_code: String::from("USD"),
+            rate: 3845,
+            updated_at: SystemTime::now(),
+        };
 
         data_store
             .new_outgoing_payment(
@@ -735,7 +767,8 @@ mod tests {
                 &description,
                 &invoice,
                 &metadata,
-                fiat_value.clone(),
+                "USD",
+                vec![exchange_rate.clone()],
             )
             .unwrap();
 
@@ -752,7 +785,7 @@ mod tests {
         assert_eq!(payment.network_fees_msat, None);
         assert_eq!(payment.lsp_fees_msat, None);
         assert_eq!(payment.metadata, metadata);
-        assert_eq!(payment.fiat_values, fiat_value);
+        assert_eq!(payment.exchange_rate, Some(exchange_rate));
 
         assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
@@ -841,11 +874,11 @@ mod tests {
         let description = String::from("Test description 2");
         let invoice = String::from("lnbcrt50u1p37590hdqqpp5wkf8saa4g3ejjhyh89uf5svhlus0ajrz0f9dm6tqnwxtupq3lyeqsp528valrymd092ev6s0srcwcnc3eufhnv453fzj7m5nscj2ejzvx7q9qrsgqnp4qfalfq06c807p3mlt4ggtufckg3nq79wnh96zjz748zmhl5vys3dgcqzysrzjqfky0rtekx6249z2dgvs4wc474q7yg3sx2u7hlvpua5ep5zla3akzqqqqyqqqqqqqqqqqqlgqqqqqqgqjq7n9ukth32d98unkxe692hgd7ke2vskmfz8d2s0part2ycd4vqneq3qgrj2jkvkq2vraa29xsll9lajgdq33yn76ny4h3wacsfxrdudcp575kp6");
         let metadata = String::from("Test metadata 2");
-        let fiat_value = Some(FiatValues {
-            fiat: String::from("CHF"),
-            amount: 4253,
-            amount_usd: 4103,
-        });
+        let exchange_rate = ExchangeRate {
+            currency_code: String::from("CHF"),
+            rate: 4253,
+            updated_at: SystemTime::now(),
+        };
 
         // Create a payment for each possible state payments can be in
         //      * Receiving payments can only have state "Created", "Succeeded" or "InvoiceExpired"
@@ -858,7 +891,8 @@ mod tests {
                     &description,
                     &invoice,
                     &metadata,
-                    fiat_value.clone(),
+                    "CHF",
+                    vec![exchange_rate.clone()],
                 )
                 .unwrap();
         }
@@ -871,7 +905,8 @@ mod tests {
                     &description,
                     &invoice,
                     &metadata,
-                    fiat_value.clone(),
+                    "CHF",
+                    vec![exchange_rate.clone()],
                 )
                 .unwrap();
         }

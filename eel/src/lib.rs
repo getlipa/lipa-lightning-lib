@@ -48,7 +48,7 @@ use crate::limits::PaymentAmountLimits;
 use crate::logger::LightningLogger;
 use crate::lsp::{calculate_fee, LspClient, LspFee};
 use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info, NodeInfo};
-use crate::payment::{FiatValues, Payment, PaymentState, PaymentType};
+use crate::payment::{Payment, PaymentState, PaymentType};
 use crate::random::generate_random_bytes;
 use crate::rapid_sync_client::RapidSyncClient;
 use crate::storage_persister::StoragePersister;
@@ -382,16 +382,18 @@ impl LightningNode {
         description: String,
         metadata: String,
     ) -> Result<Invoice> {
-        let currency = match self.config.lock().unwrap().network {
-            Network::Bitcoin => Currency::Bitcoin,
-            Network::Testnet => Currency::BitcoinTestnet,
-            Network::Regtest => Currency::Regtest,
-            Network::Signet => Currency::Signet,
+        let (currency, fiat_currency) = {
+            let config = self.config.lock().unwrap();
+            let currency = match config.network {
+                Network::Bitcoin => Currency::Bitcoin,
+                Network::Testnet => Currency::BitcoinTestnet,
+                Network::Regtest => Currency::Regtest,
+                Network::Signet => Currency::Signet,
+            };
+            (currency, config.fiat_currency.clone())
         };
-        let fiat_values = self.get_fiat_values(
-            amount_msat,
-            self.config.lock().unwrap().fiat_currency.clone(),
-        );
+        let exchage_rates = self.task_manager.lock().unwrap().get_exchange_rates();
+
         let signed_invoice = self.rt.handle().block_on(create_invoice(
             CreateInvoiceParams {
                 amount_msat,
@@ -403,7 +405,8 @@ impl LightningNode {
             &self.lsp_client,
             &self.keys_manager,
             &mut self.data_store.lock().unwrap(),
-            fiat_values,
+            &fiat_currency,
+            exchage_rates,
         ))?;
         Invoice::from_signed(signed_invoice).map_to_permanent_failure("Failed to construct invoice")
     }
@@ -520,15 +523,6 @@ impl LightningNode {
     ) -> Result<()> {
         validate_invoice(self.config.lock().unwrap().network, invoice)?;
 
-        let description = match invoice.description() {
-            InvoiceDescription::Direct(d) => d.clone().into_inner(),
-            InvoiceDescription::Hash(h) => h.0.to_hex(),
-        };
-        let fiat_values = self.get_fiat_values(
-            amount_msat,
-            self.config.lock().unwrap().fiat_currency.clone(),
-        );
-
         let mut data_store = self.data_store.lock().unwrap();
         if let Ok(payment) = data_store.get_payment(&invoice.payment_hash().to_string()) {
             match payment.payment_type {
@@ -550,13 +544,20 @@ impl LightningNode {
                 }
             }
         } else {
+            let description = match invoice.description() {
+                InvoiceDescription::Direct(d) => d.clone().into_inner(),
+                InvoiceDescription::Hash(h) => h.0.to_hex(),
+            };
+            let fiat_currency = self.config.lock().unwrap().fiat_currency.clone();
+            let exchange_rates = self.task_manager.lock().unwrap().get_exchange_rates();
             data_store.new_outgoing_payment(
                 &invoice.payment_hash().to_string(),
                 amount_msat,
                 &description,
                 &invoice.to_string(),
                 metadata,
-                fiat_values,
+                &fiat_currency,
+                exchange_rates,
             )?;
         }
         Ok(())
@@ -611,15 +612,6 @@ impl LightningNode {
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
         let mut data_store = self.data_store.lock().unwrap();
         data_store.update_timezone_config(timezone_config);
-    }
-
-    pub fn get_fiat_values(&self, amount_msat: u64, currency_code: String) -> Option<FiatValues> {
-        let rates = self.task_manager.lock().unwrap().get_exchange_rates();
-        let usd_rate = rates.iter().find(|r| r.currency_code == "USD")?;
-        rates
-            .iter()
-            .find(|r| r.currency_code == currency_code)
-            .map(|r| FiatValues::from_amount_msat(amount_msat, r, usd_rate))
     }
 
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
