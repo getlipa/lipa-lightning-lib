@@ -3,6 +3,7 @@ mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod sending_payments_test {
+    use eel::errors::RuntimeErrorCode;
     use eel::LightningNode;
     use lightning_invoice::{Description, Invoice, InvoiceDescription};
     use serial_test::file_serial;
@@ -166,6 +167,8 @@ mod sending_payments_test {
         );
     }
 
+    const MAINNET_INVOICE: &str = "lnbc1m1pj8m78dpp5zumxkd5hhc54rrjhhg8whcp67shph50gkln8hlwnar77rrljq0aqdqvtfz5y32yg4zscqzzsxqzjcsp5tn4l5acc5fwtdq5kz966uyhyqsf9vlj8quekfuf2wrz2u9k762js9qyyssqp5rjsuewp6lrldclvjqpt8gx7a0mk76qhypug40vpzg5cr72cdghcpcxh3t8pyfr7t6l9n4u97d8zupcnwte9vys660wcjcevktxm0cpstydgt";
+
     fn invoice_decode_test(node: &LightningNode) {
         // Test invoice from CLN
         let invoice = nigiri::issue_invoice(
@@ -238,6 +241,16 @@ mod sending_payments_test {
             Duration::from_secs(SECONDS_IN_AN_HOUR),
             &nigiri::query_node_info(LspdLnd).unwrap().pub_key,
         );
+
+        // Test invoice from different network (mainnet)
+        let decode_result = node.decode_invoice(String::from(MAINNET_INVOICE));
+        assert!(matches!(
+            decode_result,
+            Err(perro::Error::RuntimeError {
+                code: RuntimeErrorCode::InvoiceNetworkMismatch,
+                ..
+            })
+        ));
     }
 
     fn assert_invoice_details(

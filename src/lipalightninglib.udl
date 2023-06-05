@@ -412,6 +412,7 @@ enum RuntimeErrorCode {
     "NonExistingWallet", // A recovery process couldn't be completed because no recovery data could be found. Most likely the recovery phrase wasn't created by the lipa wallet.
 
     // PAYMENT SENDING ERRORS
+    "InvoiceNetworkMismatch", // The invoice belongs to different network. Please use a different one.
     "AlreadyUsedInvoice", // An already recognized invoice tried to be paid. Either a payment attempt is in progress or the invoice has already been paid.
     "PayingToSelf", // A locally issued invoice tried to be paid. Self-payments are not supported.
     "NoRouteFound", // Many things can cause this. Do we have enough funds?

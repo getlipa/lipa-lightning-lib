@@ -412,7 +412,17 @@ impl LightningNode {
     }
 
     pub fn decode_invoice(&self, invoice: String) -> Result<Invoice> {
-        invoice::parse_invoice(&invoice)
+        let invoice = invoice::parse_invoice(&invoice)?;
+        if self.config.lock().unwrap().network != invoice.network() {
+            return Err(runtime_error(
+                RuntimeErrorCode::InvoiceNetworkMismatch,
+                format!(
+                    "Invoice belongs to a different network: {}",
+                    invoice.network()
+                ),
+            ));
+        }
+        Ok(invoice)
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {

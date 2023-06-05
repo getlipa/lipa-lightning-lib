@@ -15,6 +15,7 @@ pub enum RuntimeErrorCode {
     NonExistingWallet,
 
     AlreadyUsedInvoice,
+    InvoiceNetworkMismatch,
     PayingToSelf,
     NoRouteFound,
     SendFailure,
