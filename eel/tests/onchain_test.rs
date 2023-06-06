@@ -4,7 +4,6 @@ mod setup_env;
 #[cfg(feature = "nigiri")]
 mod onchain_test {
     use serial_test::file_serial;
-    use std::thread::sleep;
     use std::time::Duration;
 
     use crate::setup::{mocked_storage_node, setup_outbound_capacity};

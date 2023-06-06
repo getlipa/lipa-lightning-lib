@@ -14,7 +14,6 @@ mod remote_persistence_test {
     use bitcoin::hashes::hex::ToHex;
     use serial_test::file_serial;
     use std::process::{Command, Output};
-    use std::thread::sleep;
     use std::time::Duration;
 
     const HALF_SEC: Duration = Duration::from_millis(500);
