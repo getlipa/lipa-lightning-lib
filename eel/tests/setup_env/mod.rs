@@ -93,6 +93,25 @@ macro_rules! wait_for_ok {
     };
 }
 
+#[macro_export]
+macro_rules! wait_for_unwrap {
+    ($result_generating_expr:expr) => {
+        (|| {
+            let attempts = 100;
+            let sleep_duration = std::time::Duration::from_millis(100);
+            for _ in 0..attempts {
+                if let Ok(inner) = $result_generating_expr {
+                    return inner;
+                }
+
+                std::thread::sleep(sleep_duration);
+            }
+
+            return $result_generating_expr.unwrap();
+        })()
+    };
+}
+
 #[cfg(feature = "nigiri")]
 fn node_connect_to_rgs_cln(node: NodeInstance) {
     nigiri::node_connect(node, RGS_CLN_ID, RGS_CLN_HOST, RGS_CLN_PORT).unwrap();

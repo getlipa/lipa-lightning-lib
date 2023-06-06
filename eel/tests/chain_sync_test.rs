@@ -12,7 +12,7 @@ mod chain_sync_test {
     use crate::setup::{mocked_storage_node, NodeHandle};
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::{is_channel_confirmed, NodeInstance};
-    use crate::{try_cmd_repeatedly, wait_for, wait_for_eq};
+    use crate::{try_cmd_repeatedly, wait_for, wait_for_eq, wait_for_unwrap};
 
     const HALF_SEC: Duration = Duration::from_millis(500);
     const N_RETRIES: u8 = 10;
@@ -25,7 +25,11 @@ mod chain_sync_test {
         let node = mocked_storage_node().start_or_panic();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
-        let tx_id = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap();
+        let tx_id = wait_for_unwrap!(nigiri::lnd_node_open_channel(
+            NodeInstance::LspdLnd,
+            &node_id,
+            false
+        ));
 
         assert_eq!(node.get_node_info().channels_info.num_channels, 1);
         assert_eq!(node.get_node_info().channels_info.num_usable_channels, 0);
@@ -144,7 +148,11 @@ mod chain_sync_test {
         let node = node_handle.start_or_panic();
         let node_id = node.get_node_info().node_pubkey.to_hex();
 
-        let tx_id = nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap();
+        let tx_id = wait_for_unwrap!(nigiri::lnd_node_open_channel(
+            NodeInstance::LspdLnd,
+            &node_id,
+            false
+        ));
 
         assert_eq!(node.get_node_info().channels_info.num_channels, 1);
         assert_eq!(node.get_node_info().channels_info.num_usable_channels, 0);
