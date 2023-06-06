@@ -784,7 +784,7 @@ pub mod nigiri {
                 if retry_times == 0 {
                     panic!("Failed to execute {} after {} tries: {}", stringify!($func), $retry_times, e);
                 }
-                sleep($interval);
+                std::thread::sleep($interval);
             }
         }};
     }

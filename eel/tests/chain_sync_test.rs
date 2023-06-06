@@ -36,10 +36,8 @@ mod chain_sync_test {
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 5);
 
-        sleep(Duration::from_secs(10));
-
-        assert_eq!(node.get_node_info().channels_info.num_channels, 1);
-        assert_eq!(node.get_node_info().channels_info.num_usable_channels, 0);
+        wait_for_eq!(node.get_node_info().channels_info.num_channels, 1);
+        wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 0);
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
 
