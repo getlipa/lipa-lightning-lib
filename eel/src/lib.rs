@@ -439,7 +439,7 @@ impl LightningNode {
 
         let payment_result = pay_invoice(
             &invoice,
-            Retry::Timeout(Duration::from_secs(10)),
+            Retry::Timeout(Duration::from_secs(15)),
             &self.channel_manager,
         );
 
