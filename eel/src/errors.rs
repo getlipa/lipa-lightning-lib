@@ -10,8 +10,6 @@ pub enum RuntimeErrorCode {
     RgsServiceUnavailable,
     RgsUpdateError,
 
-    ObjectNotFound,
-
     NonExistingWallet,
 
     AlreadyUsedInvoice,
@@ -21,6 +19,7 @@ pub enum RuntimeErrorCode {
     NoRouteFound,
 
     GenericError,
+    ObjectNotFound,
 }
 
 impl Display for RuntimeErrorCode {
