@@ -35,7 +35,7 @@ impl LipaEventHandler {
 
 impl EventHandler for LipaEventHandler {
     fn handle_event(&self, event: Event) {
-        trace!("Event occured: {:?}", event);
+        trace!("Event occured: {event:?}");
 
         match event {
             Event::FundingGenerationReady { .. } => {}
@@ -48,21 +48,19 @@ impl EventHandler for LipaEventHandler {
             } => {
                 // Note: LDK will not stop an inbound payment from being paid multiple times,
                 //       so multiple PaymentReceived events may be generated for the same payment.
-                info!(
-                    "EVENT: PaymentClaimable - hash: {} - amount msat: {}",
-                    payment_hash.0.to_hex(),
-                    amount_msat,
-                );
+                let payment_hash_hex = payment_hash.0.to_hex();
+                info!("EVENT: PaymentClaimable - hash: {payment_hash_hex}, amount msat: {amount_msat}");
 
                 let data_store = self.data_store.lock().unwrap();
-
-                if let Ok(payment) = data_store.get_payment(&payment_hash.0.to_hex()) {
+                if let Ok(payment) = data_store.get_payment(&payment_hash_hex) {
                     if payment.payment_state == PaymentState::Succeeded {
-                        info!("Registered incoming payment for {} msat with hash {}. Rejecting because we've already claimed a payment with the same hash", amount_msat, payment_hash.0.to_hex());
+                        info!("Rejecting incoming payment for {amount_msat} msat with hash {payment_hash_hex}, \
+ 							   because we've already claimed a payment with the same hash");
                         self.channel_manager.fail_htlc_backwards(&payment_hash);
                         return;
                     } else if payment.payment_state == PaymentState::InvoiceExpired {
-                        info!("Registered incoming payment for {} msat with hash {}. Rejecting because the corresponding invoice expired", amount_msat, payment_hash.0.to_hex());
+                        info!("Rejecting incoming payment for {amount_msat} msat with hash {payment_hash_hex}, \
+							   because the corresponding invoice has expired");
                         self.channel_manager.fail_htlc_backwards(&payment_hash);
                         return;
                     }
@@ -73,22 +71,12 @@ impl EventHandler for LipaEventHandler {
                         payment_preimage: Some(payment_preimage),
                         ..
                     } => {
-                        info!(
-                            "Registered incoming invoice payment for {} msat with hash {}",
-                            amount_msat,
-                            payment_hash.0.to_hex()
-                        );
+                        info!("Claiming incoming invoice payment for {amount_msat} msat with hash {payment_hash_hex}");
                         if data_store
-                            .fill_preimage(
-                                &payment_hash.0.as_slice().to_hex(),
-                                &payment_preimage.0.as_slice().to_hex(),
-                            )
+                            .fill_preimage(&payment_hash_hex, &payment_preimage.0.to_hex())
                             .is_err()
                         {
-                            error!(
-                                "Failed to fill preimage in the payment db for payment hash {}",
-                                payment_hash.0.to_hex()
-                            );
+                            error!("Failed to fill preimage in the payment db for payment hash {payment_hash_hex}");
                         }
                         self.channel_manager.claim_funds(payment_preimage);
                     }
@@ -96,18 +84,12 @@ impl EventHandler for LipaEventHandler {
                         payment_preimage: None,
                         ..
                     } => {
-                        error!(
-                            "Registered incoming invoice payment for {} msat with hash {}, but no preimage was found",
-                            amount_msat, payment_hash.0.to_hex()
-                        );
+                        error!("Rejecting incoming invoice payment for {amount_msat} msat with hash {payment_hash_hex}, \
+								because no preimage was found");
                         self.channel_manager.fail_htlc_backwards(&payment_hash);
                     }
                     PaymentPurpose::SpontaneousPayment(payment_preimage) => {
-                        info!(
-                            "Registered incoming spontaneous payment for {} msat with hash {}",
-                            amount_msat,
-                            payment_hash.0.to_hex()
-                        );
+                        info!("Claiming incoming spontaneous payment for {amount_msat} msat with hash {payment_hash_hex}");
                         self.channel_manager.claim_funds(payment_preimage);
                     }
                 }
@@ -118,36 +100,24 @@ impl EventHandler for LipaEventHandler {
                 amount_msat,
                 purpose,
             } => {
-                info!(
-                    "EVENT: PaymentClaimed - hash: {} - amount msat: {}",
-                    payment_hash.0.to_hex(),
-                    amount_msat,
-                );
+                let payment_hash = payment_hash.0.to_hex();
+                info!("EVENT: PaymentClaimed - hash: {payment_hash} - amount msat: {amount_msat}");
                 match purpose {
                     PaymentPurpose::InvoicePayment { .. } => {
-                        info!(
-                            "Registered incoming invoice payment for {} msat with hash {}",
-                            amount_msat,
-                            payment_hash.0.to_hex()
-                        );
+                        info!("Registered incoming invoice payment for {amount_msat} msat with hash {payment_hash}");
                         if self
                             .data_store
                             .lock()
                             .unwrap()
-                            .incoming_payment_succeeded(&payment_hash.0.as_slice().to_hex())
+                            .incoming_payment_succeeded(&payment_hash)
                             .is_err()
                         {
-                            error!("Failed to persist in the payment db that the receiving payment with hash {} has succeeded", payment_hash.0.to_hex());
+                            error!("Failed to persist in the payment db that the receiving payment with hash {payment_hash} has succeeded");
                         }
-                        self.user_event_handler
-                            .payment_received(payment_hash.0.to_hex());
+                        self.user_event_handler.payment_received(payment_hash);
                     }
                     PaymentPurpose::SpontaneousPayment(_) => {
-                        info!(
-                            "Claimed incoming spontaneous payment for {} msat with hash {}",
-                            amount_msat,
-                            payment_hash.0.to_hex()
-                        );
+                        info!("Claimed incoming spontaneous payment for {amount_msat} msat with hash {payment_hash}");
                         // TODO: inform consumer of this library about a claimed spontaneous payment
                     }
                 }
@@ -158,49 +128,39 @@ impl EventHandler for LipaEventHandler {
                 payment_hash,
                 fee_paid_msat,
             } => {
+                let payment_preimage = payment_preimage.0.to_hex();
+                let payment_hash = payment_hash.0.to_hex();
                 let fee_paid_msat = fee_paid_msat.unwrap_or(0);
-                info!(
-                    "EVENT: PaymentSent - preimage: {} - hash: {} - fee: {}",
-                    payment_preimage.0.to_hex(),
-                    payment_hash.0.to_hex(),
-                    fee_paid_msat,
-                );
+                info!("EVENT: PaymentSent - preimage: {payment_preimage}, hash: {payment_hash}, fee: {fee_paid_msat}");
                 if self
                     .data_store
                     .lock()
                     .unwrap()
-                    .outgoing_payment_succeeded(
-                        &payment_hash.0.as_slice().to_hex(),
-                        &payment_preimage.0.as_slice().to_hex(),
-                        fee_paid_msat,
-                    )
+                    .outgoing_payment_succeeded(&payment_hash, &payment_preimage, fee_paid_msat)
                     .is_err()
                 {
-                    error!("Failed to persist in the payment db that sending payment with hash {} has succeeded", payment_hash.0.to_hex());
+                    error!("Failed to persist in the payment db that sending payment with hash {payment_hash} has succeeded");
                 }
                 self.user_event_handler
-                    .payment_sent(payment_hash.0.to_hex(), payment_preimage.0.to_hex());
+                    .payment_sent(payment_hash, payment_preimage);
             }
             Event::PaymentFailed {
                 payment_id: _,
                 payment_hash,
                 reason,
             } => {
-                info!(
-                    "EVENT: PaymentFailed - hash: {}, {reason:?}",
-                    payment_hash.0.to_hex()
-                );
+                let payment_hash = payment_hash.0.to_hex();
+                info!("EVENT: PaymentFailed - hash: {payment_hash}, {reason:?}");
                 if self
                     .data_store
                     .lock()
                     .unwrap()
-                    .new_payment_state(&payment_hash.0.as_slice().to_hex(), PaymentState::Failed)
+                    .new_payment_state(&payment_hash, PaymentState::Failed)
                     .is_err()
                 {
-                    error!("Failed to persist in the payment db that sending payment with hash {} has failed", payment_hash.0.to_hex());
+                    error!("Failed to persist in the payment db that sending payment with hash {payment_hash} has failed");
                 }
-                self.user_event_handler
-                    .payment_failed(payment_hash.0.to_hex());
+                self.user_event_handler.payment_failed(payment_hash);
             }
             Event::PaymentPathSuccessful { .. } => {}
             Event::PaymentPathFailed { .. } => {}
@@ -238,7 +198,7 @@ impl EventHandler for LipaEventHandler {
                 let data_store = self.data_store.lock().unwrap();
                 for output in outputs {
                     if let Err(e) = data_store.persist_spendable_output(&output) {
-                        error!("Failed to persist spendable output in local db - {}", e);
+                        error!("Failed to persist spendable output in local db - {e}");
                     }
                 }
             }
@@ -248,13 +208,10 @@ impl EventHandler for LipaEventHandler {
                 user_channel_id: _,
                 reason,
             } => {
-                info!(
-                    "EVENT: ChannelClosed - channel {} closed due to {}",
-                    channel_id.to_hex(),
-                    reason
-                );
+                let channel_id = channel_id.to_hex();
+                info!("EVENT: ChannelClosed - channel {channel_id} closed due to {reason}");
                 self.user_event_handler
-                    .channel_closed(channel_id.to_hex(), reason.to_string());
+                    .channel_closed(channel_id, reason.to_string());
             }
             Event::DiscardFunding { .. } => {}
             Event::OpenChannelRequest {
@@ -315,18 +272,15 @@ impl EventHandler for LipaEventHandler {
                     )
                 };
                 if let Err(e) = result {
-                    error!("Error on handling new OpenChannelRequest: {:?}", e);
+                    error!("Error on handling new OpenChannelRequest: {e:?}");
                 }
             }
             Event::HTLCHandlingFailed {
                 prev_channel_id,
                 failed_next_destination,
             } => {
-                info!(
-                    "EVENT: HTLCHandlingFailed - prev_channel_id: {} - failed_next_destination: {:?}",
-                    prev_channel_id.to_hex(),
-                    failed_next_destination
-                );
+                let prev_channel_id = prev_channel_id.to_hex();
+                info!("EVENT: HTLCHandlingFailed - prev_channel_id: {prev_channel_id} - failed_next_destination: {failed_next_destination:?}");
             }
             Event::HTLCIntercepted { .. } => {
                 info!("EVENT: HTLCIntercepted");
