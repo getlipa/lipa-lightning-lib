@@ -19,7 +19,7 @@ use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::SignedRawInvoice;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder};
 use log::info;
-use perro::{invalid_input, MapToError, MapToErrorForUnitType, ResultTrait};
+use perro::{invalid_input, MapToError, MapToErrorForUnitType};
 use secp256k1::ecdsa::RecoverableSignature;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -41,12 +41,12 @@ pub(crate) struct CreateInvoiceParams {
     pub metadata: String,
 }
 
-pub(crate) fn parse_invoice(invoice: &str) -> Result<Invoice> {
+pub(crate) fn parse_invoice(invoice: &str) -> PayResult<Invoice> {
     Invoice::from_str(chomp_prefix(invoice.trim()))
         .map_to_invalid_input("Invalid invoice - parse failure")
 }
 
-pub(crate) fn validate_invoice(network: Network, invoice: &Invoice) -> Result<()> {
+pub(crate) fn validate_invoice(network: Network, invoice: &Invoice) -> PayResult<()> {
     let invoice_network = network_from_currency(invoice.currency());
 
     if network != invoice_network {
@@ -96,8 +96,7 @@ pub(crate) async fn create_invoice(
         let lsp_info = lsp_client
             .query_info()
             .await
-            .lift_invalid_input()
-            .prefix_error("Failed to query LSPD")?;
+            .map_err(|e| invalid_input(format!("Failed to query LSPD: {}", e)))?;
 
         let lsp_fee = lsp::calculate_fee(amount_msat, &lsp_info.fee);
         if lsp_fee >= amount_msat {
@@ -123,8 +122,7 @@ pub(crate) async fn create_invoice(
         let hint_hop = lsp_client
             .register_payment(&payment_request, &lsp_info)
             .await
-            .lift_invalid_input()
-            .prefix_error("Failed to register payment")?;
+            .map_err(|e| invalid_input(format!("Failed to query LSPD: {}", e)))?;
         (
             payment_hash,
             payment_secret,

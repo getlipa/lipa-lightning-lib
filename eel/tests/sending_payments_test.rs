@@ -3,7 +3,7 @@ mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod sending_payments_test {
-    use eel::errors::RuntimeErrorCode;
+    use eel::errors::PayErrorCode;
     use eel::LightningNode;
     use lightning_invoice::{Description, Invoice, InvoiceDescription};
     use serial_test::file_serial;
@@ -247,7 +247,7 @@ mod sending_payments_test {
         assert!(matches!(
             decode_result,
             Err(perro::Error::RuntimeError {
-                code: RuntimeErrorCode::InvoiceNetworkMismatch,
+                code: PayErrorCode::InvoiceNetworkMismatch,
                 ..
             })
         ));

@@ -410,11 +410,11 @@ impl LightningNode {
         Invoice::from_signed(signed_invoice).map_to_permanent_failure("Failed to construct invoice")
     }
 
-    pub fn decode_invoice(&self, invoice: String) -> Result<Invoice> {
+    pub fn decode_invoice(&self, invoice: String) -> PayResult<Invoice> {
         let invoice = invoice::parse_invoice(&invoice)?;
         if self.config.lock().unwrap().network != invoice.network() {
             return Err(runtime_error(
-                RuntimeErrorCode::InvoiceNetworkMismatch,
+                PayErrorCode::InvoiceNetworkMismatch,
                 format!(
                     "Invoice belongs to a different network: {}",
                     invoice.network()
@@ -424,7 +424,7 @@ impl LightningNode {
         Ok(invoice)
     }
 
-    pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
+    pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {
         let invoice = invoice::parse_invoice(&invoice)?;
         let amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
 
@@ -456,7 +456,7 @@ impl LightningNode {
         invoice: String,
         amount_msat: u64,
         metadata: String,
-    ) -> Result<()> {
+    ) -> PayResult<()> {
         let invoice = invoice::parse_invoice(&invoice)?;
         let invoice_amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
 
@@ -492,20 +492,21 @@ impl LightningNode {
         &self,
         error: PaymentError,
         payment_hash: &str,
-    ) -> Result<()> {
+    ) -> PayResult<()> {
         self.data_store
             .lock()
             .unwrap()
-            .new_payment_state(payment_hash, PaymentState::Failed)?;
+            .new_payment_state(payment_hash, PaymentState::Failed)
+            .map_err(invalid_input)?;
         match error {
             PaymentError::Invoice(e) => Err(invalid_input(format!("Invalid invoice - {e}"))),
             PaymentError::Sending(e) => match e {
                 RetryableSendFailure::PaymentExpired => Err(runtime_error(
-                    RuntimeErrorCode::InvoiceExpired,
+                    PayErrorCode::InvoiceExpired,
                     "Invoice has expired",
                 )),
                 RetryableSendFailure::RouteNotFound => Err(runtime_error(
-                    RuntimeErrorCode::NoRouteFound,
+                    PayErrorCode::NoRouteFound,
                     "Failed to find any route",
                 )),
                 RetryableSendFailure::DuplicatePayment => {
@@ -520,27 +521,29 @@ impl LightningNode {
         invoice: &Invoice,
         amount_msat: u64,
         metadata: &str,
-    ) -> Result<()> {
+    ) -> PayResult<()> {
         validate_invoice(self.config.lock().unwrap().network, invoice)?;
 
         let mut data_store = self.data_store.lock().unwrap();
         if let Ok(payment) = data_store.get_payment(&invoice.payment_hash().to_string()) {
             match payment.payment_type {
                 PaymentType::Receiving => return Err(runtime_error(
-                    RuntimeErrorCode::PayingToSelf,
+                    PayErrorCode::PayingToSelf,
                     "This invoice was issued by the local node. Paying yourself is not supported.",
                 )),
                 PaymentType::Sending => {
                     if payment.payment_state != PaymentState::Failed {
                         return Err(runtime_error(
-                            RuntimeErrorCode::AlreadyUsedInvoice,
+                            PayErrorCode::AlreadyUsedInvoice,
                             "This invoice has already been paid or is in the process of being paid. Please use a different one or wait until the current payment attempt fails before retrying.",
                         ));
                     }
-                    data_store.new_payment_state(
-                        &invoice.payment_hash().to_string(),
-                        PaymentState::Retried,
-                    )?;
+                    data_store
+                        .new_payment_state(
+                            &invoice.payment_hash().to_string(),
+                            PaymentState::Retried,
+                        )
+                        .map_err(invalid_input)?;
                 }
             }
         } else {

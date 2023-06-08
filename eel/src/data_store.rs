@@ -1,5 +1,5 @@
 use crate::config::TzConfig;
-use crate::errors::{Error, Result};
+use crate::errors::{Error, PayResult, Result};
 use crate::invoice;
 use crate::migrations::get_migrations;
 use crate::schema_migration::migrate_schema;
@@ -48,7 +48,7 @@ impl DataStore {
         metadata: &str,
         fiat_currency: &str,
         exchange_rates: Vec<ExchangeRate>,
-    ) -> Result<()> {
+    ) -> PayResult<()> {
         let tx = self
             .db_conn
             .transaction()
@@ -101,7 +101,7 @@ impl DataStore {
         metadata: &str,
         fiat_currency: &str,
         exchange_rates: Vec<ExchangeRate>,
-    ) -> Result<()> {
+    ) -> PayResult<()> {
         let tx = self
             .db_conn
             .transaction()
@@ -400,7 +400,7 @@ impl DataStore {
 fn insert_snapshot(
     connection: &Connection,
     exchange_rates: Vec<ExchangeRate>,
-) -> Result<Option<u64>> {
+) -> PayResult<Option<u64>> {
     if exchange_rates.is_empty() {
         return Ok(None);
     }
