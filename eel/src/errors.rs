@@ -10,14 +10,17 @@ pub enum RuntimeErrorCode {
 
     NonExistingWallet,
 
+    GenericError,
+    ObjectNotFound,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum PayErrorCode {
     AlreadyUsedInvoice,
     InvoiceNetworkMismatch,
     PayingToSelf,
     NoRouteFound,
     SendFailure,
-
-    GenericError,
-    ObjectNotFound,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -32,6 +35,12 @@ impl Display for RuntimeErrorCode {
     }
 }
 
+impl Display for PayErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 impl Display for InternalErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
@@ -39,7 +48,9 @@ impl Display for InternalErrorCode {
 }
 
 pub type Error = perro::Error<RuntimeErrorCode>;
+pub type PayError = perro::Error<PayErrorCode>;
 pub type InternalError = perro::Error<InternalErrorCode>;
 
 pub type Result<T> = std::result::Result<T, perro::Error<RuntimeErrorCode>>;
+pub type PayResult<T> = std::result::Result<T, perro::Error<PayErrorCode>>;
 pub type InternalResult<T> = std::result::Result<T, perro::Error<InternalErrorCode>>;

@@ -57,12 +57,12 @@ interface LightningNode {
     //    - description - a description to be embedded into the created invoice
     //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
     //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
-    [Throws=LnError]
+    [Throws=PayError]
     InvoiceDetails create_invoice(u64 amount_sat, string description, string metadata);
 
     // Decodes an invoice returning detailed information
     //    - invoice - a BOLT-11 invoice (Mainnet invoices start with "lnbc")
-    [Throws=LnError]
+    [Throws=PayError]
     InvoiceDetails decode_invoice(string invoice);
 
     // Start an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.
@@ -76,7 +76,7 @@ interface LightningNode {
     //          * have not expired
     //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
     //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
-    [Throws=LnError]
+    [Throws=PayError]
     void pay_invoice(string invoice, string metadata);
 
     // Differs from pay_invoice(string invoice, string metadata) in that the passed in invoice does not have any payment amount specified,
@@ -84,17 +84,17 @@ interface LightningNode {
     //
     // Additional Parameters:
     //    - amount_sat - amount in sats to be paid
-    [Throws=LnError]
+    [Throws=PayError]
     void pay_open_invoice(string invoice, u64 amount_sat, string metadata);
 
     // Get a list of the latest payments
     //    - number_of_payments - the maximum number of payments that will be returned
-    [Throws=LnError]
+    [Throws=PayError]
     sequence<Payment> get_latest_payments(u32 number_of_payments);
 
     // Get a payment given its payment hash
     //    - hash - hex representation of payment hash
-    [Throws=LnError]
+    [Throws=PayError]
     Payment get_payment(string hash);
 
     // Call the method when the app goes to foreground, such that the user can interact with it.
@@ -409,14 +409,24 @@ enum RuntimeErrorCode {
     // RECOVERY ERRORS
     "NonExistingWallet", // A recovery process couldn't be completed because no recovery data could be found. Most likely the recovery phrase wasn't created by the lipa wallet.
 
-    // PAYMENT SENDING ERRORS
+    // OTHER ERRORS
+    "GenericError", // A generic error for unexpected/unknown runtime errors
+    "ObjectNotFound", // An object could not be read from storage because it was not found
+};
+
+[Error]
+// As documented for LnError
+interface PayError {
+    InvalidInput(string msg);
+    RuntimeError(PayErrorCode code, string msg);
+    PermanentFailure(string msg);
+};
+
+// A code that specifies the PayError that occurred
+enum PayErrorCode {
     "InvoiceNetworkMismatch", // The invoice belongs to different network. Please use a different one.
     "AlreadyUsedInvoice", // An already recognized invoice tried to be paid. Either a payment attempt is in progress or the invoice has already been paid.
     "PayingToSelf", // A locally issued invoice tried to be paid. Self-payments are not supported.
     "NoRouteFound", // Many things can cause this. Do we have enough funds?
     "SendFailure", // A path was found but sending failed. Many things can cause this
-
-    // OTHER ERRORS
-    "GenericError", // A generic error for unexpected/unknown runtime errors
-    "ObjectNotFound", // An object could not be read from storage because it was not found
 };

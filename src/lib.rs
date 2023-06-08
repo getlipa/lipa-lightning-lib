@@ -25,7 +25,7 @@ pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
 
 pub use eel::config::TzConfig;
-use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
+use eel::errors::{Error as LnError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode};
 pub use eel::interfaces::ExchangeRate;
 use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix};
@@ -197,7 +197,7 @@ impl LightningNode {
         amount_sat: u64,
         description: String,
         metadata: String,
-    ) -> Result<InvoiceDetails> {
+    ) -> PayResult<InvoiceDetails> {
         let rate = self.get_exchange_rate();
         let invoice = self
             .core_node
@@ -205,13 +205,13 @@ impl LightningNode {
         Ok(InvoiceDetails::from_local_invoice(invoice, &rate))
     }
 
-    pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
+    pub fn decode_invoice(&self, invoice: String) -> PayResult<InvoiceDetails> {
         let invoice = self.core_node.decode_invoice(invoice)?;
         let rate = self.get_exchange_rate();
         Ok(InvoiceDetails::from_remote_invoice(invoice, &rate))
     }
 
-    pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
+    pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {
         self.core_node.pay_invoice(invoice, metadata)
     }
 
@@ -220,18 +220,18 @@ impl LightningNode {
         invoice: String,
         amount_sat: u64,
         metadata: String,
-    ) -> Result<()> {
+    ) -> PayResult<()> {
         self.core_node
             .pay_open_invoice(invoice, amount_sat * 1000, metadata)
     }
 
-    pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
+    pub fn get_latest_payments(&self, number_of_payments: u32) -> PayResult<Vec<Payment>> {
         self.core_node
             .get_latest_payments(number_of_payments)
             .map(|ps| ps.into_iter().map(to_payment).collect())
     }
 
-    pub fn get_payment(&self, hash: String) -> Result<Payment> {
+    pub fn get_payment(&self, hash: String) -> PayResult<Payment> {
         self.core_node.get_payment(&hash).map(to_payment)
     }
 

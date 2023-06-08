@@ -1,5 +1,5 @@
 use crate::config::TzConfig;
-use crate::errors::{Error, Result};
+use crate::errors::{Error, PayResult, Result};
 use crate::invoice;
 use crate::migrations::get_migrations;
 use crate::schema_migration::migrate_schema;
@@ -48,7 +48,7 @@ impl DataStore {
         metadata: &str,
         fiat_currency: &str,
         exchange_rates: Vec<ExchangeRate>,
-    ) -> Result<()> {
+    ) -> PayResult<()> {
         let tx = self
             .db_conn
             .transaction()
@@ -101,7 +101,7 @@ impl DataStore {
         metadata: &str,
         fiat_currency: &str,
         exchange_rates: Vec<ExchangeRate>,
-    ) -> Result<()> {
+    ) -> PayResult<()> {
         let tx = self
             .db_conn
             .transaction()
@@ -141,7 +141,7 @@ impl DataStore {
             .map_to_permanent_failure("Failed to commit new outgoing payment transaction")
     }
 
-    pub fn incoming_payment_succeeded(&self, hash: &str) -> Result<()> {
+    pub fn incoming_payment_succeeded(&self, hash: &str) -> PayResult<()> {
         self.new_payment_state(hash, PaymentState::Succeeded)
     }
 
@@ -150,13 +150,13 @@ impl DataStore {
         hash: &str,
         preimage: &str,
         network_fees_msat: u64,
-    ) -> Result<()> {
+    ) -> PayResult<()> {
         self.new_payment_state(hash, PaymentState::Succeeded)?;
         self.fill_preimage(hash, preimage)?;
         self.fill_network_fees(hash, network_fees_msat)
     }
 
-    pub fn new_payment_state(&self, hash: &str, state: PaymentState) -> Result<()> {
+    pub fn new_payment_state(&self, hash: &str, state: PaymentState) -> PayResult<()> {
         self.db_conn
             .execute(
                 "\
@@ -176,7 +176,7 @@ impl DataStore {
         Ok(())
     }
 
-    pub fn fill_preimage(&self, hash: &str, preimage: &str) -> Result<()> {
+    pub fn fill_preimage(&self, hash: &str, preimage: &str) -> PayResult<()> {
         self.db_conn
             .execute(
                 "\
@@ -191,7 +191,7 @@ impl DataStore {
         Ok(())
     }
 
-    fn fill_network_fees(&self, hash: &str, network_fees_msat: u64) -> Result<()> {
+    fn fill_network_fees(&self, hash: &str, network_fees_msat: u64) -> PayResult<()> {
         self.db_conn
             .execute(
                 "\
@@ -206,7 +206,7 @@ impl DataStore {
         Ok(())
     }
 
-    pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
+    pub fn get_latest_payments(&self, number_of_payments: u32) -> PayResult<Vec<Payment>> {
         self.process_expired_payments()?;
 
         let mut statement = self
@@ -238,7 +238,7 @@ impl DataStore {
         Ok(payments)
     }
 
-    pub fn get_payment(&self, hash: &str) -> Result<Payment> {
+    pub fn get_payment(&self, hash: &str) -> PayResult<Payment> {
         self.process_expired_payments()?;
 
         let mut statement = self
@@ -270,7 +270,7 @@ impl DataStore {
         Ok(payment)
     }
 
-    fn process_expired_payments(&self) -> Result<()> {
+    fn process_expired_payments(&self) -> PayResult<()> {
         let mut statement = self
             .db_conn
             .prepare("\
@@ -400,7 +400,7 @@ impl DataStore {
 fn insert_snapshot(
     connection: &Connection,
     exchange_rates: Vec<ExchangeRate>,
-) -> Result<Option<u64>> {
+) -> PayResult<Option<u64>> {
     if exchange_rates.is_empty() {
         return Ok(None);
     }
