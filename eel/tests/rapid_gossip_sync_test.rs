@@ -113,8 +113,7 @@ mod rapid_gossip_sync_test {
             let node = node_handle.start_or_panic();
 
             // Wait for p2p connection to be reestablished and channels marked active
-            sleep(Duration::from_secs(5));
-            assert_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
+            wait_for_eq!(node.get_node_info().channels_info.num_usable_channels, 1);
 
             send_payment_flow(&node, NodeInstance::NigiriCln, ONE_K_SATS);
 
