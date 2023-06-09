@@ -16,9 +16,9 @@ pub enum RuntimeErrorCode {
 
     AlreadyUsedInvoice,
     InvoiceNetworkMismatch,
+    InvoiceExpired,
     PayingToSelf,
     NoRouteFound,
-    SendFailure,
 
     GenericError,
 }
