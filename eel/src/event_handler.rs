@@ -104,7 +104,7 @@ impl EventHandler for LipaEventHandler {
                 info!("EVENT: PaymentClaimed - hash: {payment_hash} - amount msat: {amount_msat}");
                 match purpose {
                     PaymentPurpose::InvoicePayment { .. } => {
-                        info!("Registered incoming invoice payment for {amount_msat} msat with hash {payment_hash}");
+                        info!("Claimed incoming invoice payment for {amount_msat} msat with hash {payment_hash}");
                         if self
                             .data_store
                             .lock()
