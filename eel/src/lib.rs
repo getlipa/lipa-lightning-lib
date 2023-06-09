@@ -142,8 +142,7 @@ impl LightningNode {
         let tx_broadcaster = Arc::new(TxBroadcaster::new(Arc::clone(&esplora_client)));
 
         // Step 4. Initialize Persist
-        let encryption_key =
-            key_derivation::derive_persistence_encryption_key(&config.seed).unwrap();
+        let encryption_key = key_derivation::derive_persistence_encryption_key(&config.seed)?;
         let persister = Arc::new(StoragePersister::new(
             remote_storage,
             config.local_persistence_path.clone(),
@@ -494,34 +493,25 @@ impl LightningNode {
         error: PaymentError,
         payment_hash: &str,
     ) -> Result<()> {
+        self.data_store
+            .lock()
+            .unwrap()
+            .new_payment_state(payment_hash, PaymentState::Failed)?;
         match error {
-            PaymentError::Invoice(e) => {
-                self.data_store
-                    .lock()
-                    .unwrap()
-                    .new_payment_state(payment_hash, PaymentState::Failed)?;
-                Err(invalid_input(format!("Invalid invoice - {e}")))
-            }
-            PaymentError::Sending(e) => {
-                self.data_store
-                    .lock()
-                    .unwrap()
-                    .new_payment_state(payment_hash, PaymentState::Failed)?;
-                match e {
-                    RetryableSendFailure::PaymentExpired => Err(runtime_error(
-                        RuntimeErrorCode::SendFailure,
-                        format!("Failed to send payment - {e:?}"),
-                    )),
-                    RetryableSendFailure::RouteNotFound => Err(runtime_error(
-                        RuntimeErrorCode::NoRouteFound,
-                        "Failed to find a route",
-                    )),
-                    RetryableSendFailure::DuplicatePayment => Err(runtime_error(
-                        RuntimeErrorCode::SendFailure,
-                        format!("Failed to send payment - {e:?}"),
-                    )),
+            PaymentError::Invoice(e) => Err(invalid_input(format!("Invalid invoice - {e}"))),
+            PaymentError::Sending(e) => match e {
+                RetryableSendFailure::PaymentExpired => Err(runtime_error(
+                    RuntimeErrorCode::InvoiceExpired,
+                    "Invoice has expired",
+                )),
+                RetryableSendFailure::RouteNotFound => Err(runtime_error(
+                    RuntimeErrorCode::NoRouteFound,
+                    "Failed to find any route",
+                )),
+                RetryableSendFailure::DuplicatePayment => {
+                    Err(permanent_failure("Duplicate payment"))
                 }
-            }
+            },
         }
     }
 
