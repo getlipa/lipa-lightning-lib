@@ -413,13 +413,10 @@ impl LightningNode {
     pub fn decode_invoice(&self, invoice: String) -> PayResult<Invoice> {
         let invoice = invoice::parse_invoice(&invoice)?;
         if self.config.lock().unwrap().network != invoice.network() {
-            return Err(runtime_error(
-                PayErrorCode::InvoiceNetworkMismatch,
-                format!(
-                    "Invoice belongs to a different network: {}",
-                    invoice.network()
-                ),
-            ));
+            return Err(invalid_input(format!(
+                "Invoice belongs to a different network: {}",
+                invoice.network()
+            )));
         }
         Ok(invoice)
     }
@@ -501,10 +498,7 @@ impl LightningNode {
         match error {
             PaymentError::Invoice(e) => Err(invalid_input(format!("Invalid invoice - {e}"))),
             PaymentError::Sending(e) => match e {
-                RetryableSendFailure::PaymentExpired => Err(runtime_error(
-                    PayErrorCode::InvoiceExpired,
-                    "Invoice has expired",
-                )),
+                RetryableSendFailure::PaymentExpired => Err(invalid_input("Invoice has expired")),
                 RetryableSendFailure::RouteNotFound => Err(runtime_error(
                     PayErrorCode::NoRouteFound,
                     "Failed to find any route",
@@ -527,14 +521,12 @@ impl LightningNode {
         let mut data_store = self.data_store.lock().unwrap();
         if let Ok(payment) = data_store.get_payment(&invoice.payment_hash().to_string()) {
             match payment.payment_type {
-                PaymentType::Receiving => return Err(runtime_error(
-                    PayErrorCode::PayingToSelf,
+                PaymentType::Receiving => return Err(invalid_input(
                     "This invoice was issued by the local node. Paying yourself is not supported.",
                 )),
                 PaymentType::Sending => {
                     if payment.payment_state != PaymentState::Failed {
-                        return Err(runtime_error(
-                            PayErrorCode::AlreadyUsedInvoice,
+                        return Err(invalid_input(
                             "This invoice has already been paid or is in the process of being paid. Please use a different one or wait until the current payment attempt fails before retrying.",
                         ));
                     }

@@ -424,10 +424,6 @@ interface PayError {
 
 // A code that specifies the PayError that occurred
 enum PayErrorCode {
-    "InvoiceNetworkMismatch", // The invoice belongs to different network. Please use a different one.
-    "InvoiceExpired", // The invoice has already expired.
-    "AlreadyUsedInvoice", // An already recognized invoice tried to be paid. Either a payment attempt is in progress or the invoice has already been paid.
-    "PayingToSelf", // A locally issued invoice tried to be paid. Self-payments are not supported.
     "NoRouteFound", // Many things can cause this. Do we have enough funds?
     "SendFailure", // A path was found but sending failed. Many things can cause this
 };

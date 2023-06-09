@@ -16,10 +16,6 @@ pub enum RuntimeErrorCode {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PayErrorCode {
-    AlreadyUsedInvoice,
-    InvoiceNetworkMismatch,
-    InvoiceExpired,
-    PayingToSelf,
     NoRouteFound,
     SendFailure,
 }
