@@ -23,7 +23,7 @@ lightning-net-tokio = "0.0.115"
 lightning-persister = "0.0.115"
 lightning-rapid-gossip-sync = "0.0.115"
 lightning-transaction-sync = { version = "0.0.115", features = ["esplora-async"] }
-log = "0.4.18"
+log = "0.4.19"
 num_enum = "0.6.1"
 prost = "0.11.9"
 rand = "0.8.5"
