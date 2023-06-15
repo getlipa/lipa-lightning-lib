@@ -88,6 +88,7 @@ fn init_logger(path: &String) {
         .add_filter_ignore_str("tracing")
         .add_filter_ignore_str("ureq")
         .add_filter_ignore_str("want")
+        .set_time_format_rfc3339()
         .build();
 
     simplelog::CombinedLogger::init(vec![
