@@ -35,7 +35,7 @@ pub enum DecodeInvoiceError {
     ParseError { msg: String },
     #[error("Semantic error: {msg}")]
     SemanticError { msg: String },
-    #[error("Netwrok mismatch (expected {expected}, found {found})")]
+    #[error("Network mismatch (expected {expected}, found {found})")]
     NetworkMismatch { expected: Network, found: Network },
 }
 
