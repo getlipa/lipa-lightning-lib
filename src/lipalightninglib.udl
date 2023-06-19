@@ -62,7 +62,7 @@ interface LightningNode {
 
     // Decodes an invoice returning detailed information
     //    - invoice - a BOLT-11 invoice (Mainnet invoices start with "lnbc")
-    [Throws=LnError]
+    [Throws=DecodeInvoiceError]
     InvoiceDetails decode_invoice(string invoice);
 
     // Start an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.
@@ -160,6 +160,13 @@ enum EnvironmentCode {
     "Dev",
     "Stage",
     "Prod",
+};
+
+enum Network {
+    "Bitcoin",
+    "Testnet",
+    "Signet",
+    "Regtest",
 };
 
 // An object that holds timezone configuration values necessary for 3L to do timestamp annotation. These values get tied
@@ -383,6 +390,13 @@ dictionary Secret {
 //
 
 [Error]
+interface DecodeInvoiceError {
+    ParseError(string msg);
+    SemanticError(string msg);
+    NetworkMismatch(Network expected, Network found);
+};
+
+[Error]
 interface LnError {
     // Invalid input.
     // Consider fixing the input and retrying the request.
@@ -413,7 +427,6 @@ enum RuntimeErrorCode {
 
     // PAYMENT SENDING ERRORS
     "AlreadyUsedInvoice", // An already recognized invoice tried to be paid. Either a payment attempt is in progress or the invoice has already been paid.
-    "InvoiceNetworkMismatch", // The invoice belongs to different network. Please use a different one.
     "InvoiceExpired", // The invoice has already expired.
     "PayingToSelf", // A locally issued invoice tried to be paid. Self-payments are not supported.
     "NoRouteFound", // Many things can cause this. Do we have enough funds?

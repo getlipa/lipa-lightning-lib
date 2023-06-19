@@ -1,20 +1,20 @@
 use crate::config::TzConfig;
 use crate::errors::{Error, Result};
-use crate::invoice;
-use crate::migrations::get_migrations;
-use crate::schema_migration::migrate_schema;
-use std::io::Cursor;
-
 use crate::interfaces::ExchangeRate;
+use crate::migrations::get_migrations;
+use crate::payment::{Payment, PaymentState, PaymentType, TzTime};
+use crate::schema_migration::migrate_schema;
+
 use chrono::{DateTime, Utc};
 use lightning::chain::keysinterface::SpendableOutputDescriptor;
 use lightning::util::ser::{Readable, Writeable};
+use lightning_invoice::Invoice;
 use perro::{MapToError, OptionToError};
 use rusqlite::types::Type;
 use rusqlite::{Connection, Row};
+use std::io::Cursor;
+use std::str::FromStr;
 use std::time::SystemTime;
-
-use crate::payment::{Payment, PaymentState, PaymentType, TzTime};
 
 pub(crate) struct DataStore {
     db_conn: Connection,
@@ -437,7 +437,7 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let network_fees_msat = row.get(5)?;
     let lsp_fees_msat = row.get(6)?;
     let invoice: String = row.get(7)?;
-    let invoice = invoice::parse_invoice(&invoice)
+    let invoice = Invoice::from_str(&invoice)
         .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, Type::Text, Box::new(e)))?;
     let metadata = row.get(8)?;
     let payment_state: u8 = row.get(9)?;

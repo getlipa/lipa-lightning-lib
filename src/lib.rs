@@ -27,6 +27,7 @@ pub use crate::recovery::recover_lightning_node;
 pub use eel::config::TzConfig;
 use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
 pub use eel::interfaces::ExchangeRate;
+pub use eel::invoice::DecodeInvoiceError;
 use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix};
 pub use eel::payment::FiatValues;
@@ -205,7 +206,10 @@ impl LightningNode {
         Ok(InvoiceDetails::from_local_invoice(invoice, &rate))
     }
 
-    pub fn decode_invoice(&self, invoice: String) -> Result<InvoiceDetails> {
+    pub fn decode_invoice(
+        &self,
+        invoice: String,
+    ) -> std::result::Result<InvoiceDetails, DecodeInvoiceError> {
         let invoice = self.core_node.decode_invoice(invoice)?;
         let rate = self.get_exchange_rate();
         Ok(InvoiceDetails::from_remote_invoice(invoice, &rate))

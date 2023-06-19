@@ -5,7 +5,7 @@ use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info};
 use crate::types::ChannelManager;
 use bitcoin::bech32::ToBase32;
 use std::str::FromStr;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use crate::data_store::DataStore;
 use crate::lsp;
@@ -16,23 +16,11 @@ use lightning::chain::keysinterface::{KeysManager, NodeSigner, Recipient};
 use lightning::ln::channelmanager::ChannelDetails;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
-use lightning_invoice::SignedRawInvoice;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder};
+use lightning_invoice::{ParseOrSemanticError, SignedRawInvoice};
 use log::info;
 use perro::{invalid_input, MapToError, MapToErrorForUnitType, ResultTrait};
 use secp256k1::ecdsa::RecoverableSignature;
-
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct InvoiceDetails {
-    pub invoice: String,
-    pub amount_msat: Option<u64>,
-    pub description: String,
-    pub payment_hash: String,
-    pub payee_pub_key: String,
-    pub creation_timestamp: SystemTime,
-    pub expiry_interval: Duration,
-    pub expiry_timestamp: SystemTime,
-}
 
 pub(crate) struct CreateInvoiceParams {
     pub amount_msat: u64,
@@ -41,23 +29,39 @@ pub(crate) struct CreateInvoiceParams {
     pub metadata: String,
 }
 
-pub(crate) fn parse_invoice(invoice: &str) -> Result<Invoice> {
-    Invoice::from_str(chomp_prefix(invoice.trim()))
-        .map_to_invalid_input("Invalid invoice - parse failure")
+#[derive(Debug, thiserror::Error)]
+pub enum DecodeInvoiceError {
+    #[error("Parse error: {msg}")]
+    ParseError { msg: String },
+    #[error("Semantic error: {msg}")]
+    SemanticError { msg: String },
+    #[error("Network mismatch (expected {expected}, found {found})")]
+    NetworkMismatch { expected: Network, found: Network },
 }
 
-pub(crate) fn validate_invoice(network: Network, invoice: &Invoice) -> Result<()> {
-    let invoice_network = network_from_currency(invoice.currency());
-
-    if network != invoice_network {
-        return Err(invalid_input("Invalid invoice: network mismatch"));
+pub(crate) fn decode_invoice(
+    invoice: &str,
+    expected: Network,
+) -> std::result::Result<Invoice, DecodeInvoiceError> {
+    let invoice = match Invoice::from_str(chomp_prefix(invoice.trim())) {
+        Ok(invoice) => match invoice.amount_milli_satoshis() {
+            Some(0) => Err(DecodeInvoiceError::SemanticError {
+                msg: "Invoice amount contains leading zeros".to_string(),
+            }),
+            _ => Ok(invoice),
+        },
+        Err(ParseOrSemanticError::ParseError(err)) => Err(DecodeInvoiceError::ParseError {
+            msg: err.to_string(),
+        }),
+        Err(ParseOrSemanticError::SemanticError(err)) => Err(DecodeInvoiceError::SemanticError {
+            msg: err.to_string(),
+        }),
+    }?;
+    let found = network_from_currency(invoice.currency());
+    if expected != found {
+        return Err(DecodeInvoiceError::NetworkMismatch { expected, found });
     }
-
-    if invoice.timestamp() + invoice.expiry_time() < SystemTime::now() {
-        return Err(invalid_input("Invalid invoice: expired"));
-    }
-
-    Ok(())
+    Ok(invoice)
 }
 
 fn network_from_currency(currency: Currency) -> Network {
@@ -223,6 +227,13 @@ fn construct_private_routes(channels: &Vec<ChannelDetails>) -> Vec<RouteHint> {
 mod tests {
     use super::*;
     use crate::test_utils::channels::channel;
+
+    #[test]
+    fn test_parse_invoice() {
+        let invoice_with_leading_0_amount = "lntb0m1pjgws2fdqqpp5l8a6n6q0eyu8y4ae7num7v52nf8kr0tjzfk9tgy4fjwtkpq7twnqsp5k9c2zqtrfen7q7g84upgluw9p35dgjfn6g04hrjn6klewlqrrwvq9qyysgqnp4qvwrr7m20cc4c5dx2l78ujjeu78wau5dq7df8xvx0d3sgytqsqqkyxqzjccqzysrzjq0ucfsctzrrr7xrnyatdgtrwp4e4qamrl66psz6m67za9hz2xhdhtapyqqqqqqqq95qqqqqqqqqqqqqqjqrzjq0ucfsctzrrr7xrnyatdgtrwp4e4qamrl66psz6m67za9hz2xhdhtapyqqqqqqqqxcqqqqqqqqqqqqqq2qhad02pjcq8jrlp4m4t6prrt36wyrg2d7xupn9dnv4dzmh4adewkps6uarrjgwgff75puac3d73y9ar9z7ahhaantk99jurm34l5px0qpjhtahr";
+        let err = decode_invoice(invoice_with_leading_0_amount, Network::Testnet).unwrap_err();
+        assert!(matches!(err, DecodeInvoiceError::SemanticError { .. }));
+    }
 
     #[test]
     fn test_construct_private_routes() {

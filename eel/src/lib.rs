@@ -23,7 +23,7 @@ mod encryption_symmetric;
 mod esplora_client;
 mod event_handler;
 mod fee_estimator;
-mod invoice;
+pub mod invoice;
 mod logger;
 mod random;
 mod rapid_sync_client;
@@ -41,8 +41,7 @@ use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
 use crate::interfaces::{EventHandler, ExchangeRate, ExchangeRateProvider, RemoteStorage};
-pub use crate::invoice::InvoiceDetails;
-use crate::invoice::{create_invoice, validate_invoice, CreateInvoiceParams};
+use crate::invoice::{create_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
 use crate::limits::PaymentAmountLimits;
 use crate::logger::LightningLogger;
@@ -59,6 +58,7 @@ use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, R
 use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
 use cipher::consts::U32;
+use invoice::DecodeInvoiceError;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::keysinterface::{
     EntropySource, InMemorySigner, KeysManager, SpendableOutputDescriptor,
@@ -410,24 +410,20 @@ impl LightningNode {
         Invoice::from_signed(signed_invoice).map_to_permanent_failure("Failed to construct invoice")
     }
 
-    pub fn decode_invoice(&self, invoice: String) -> Result<Invoice> {
-        let invoice = invoice::parse_invoice(&invoice)?;
-        if self.config.lock().unwrap().network != invoice.network() {
-            return Err(runtime_error(
-                RuntimeErrorCode::InvoiceNetworkMismatch,
-                format!(
-                    "Invoice belongs to a different network: {}",
-                    invoice.network()
-                ),
-            ));
-        }
-        Ok(invoice)
+    pub fn decode_invoice(
+        &self,
+        invoice: String,
+    ) -> std::result::Result<Invoice, DecodeInvoiceError> {
+        let network = self.config.lock().unwrap().network;
+        invoice::decode_invoice(&invoice, network)
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
-        let invoice = invoice::parse_invoice(&invoice)?;
-        let amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
+        let network = self.config.lock().unwrap().network;
+        let invoice =
+            invoice::decode_invoice(&invoice, network).map_to_invalid_input("Invalid invoice")?;
 
+        let amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
         if amount_msat == 0 {
             return Err(invalid_input(
                 "Expected invoice with a specified amount, but an open invoice was provided",
@@ -457,14 +453,17 @@ impl LightningNode {
         amount_msat: u64,
         metadata: String,
     ) -> Result<()> {
-        let invoice = invoice::parse_invoice(&invoice)?;
-        let invoice_amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
+        let network = self.config.lock().unwrap().network;
+        let invoice =
+            invoice::decode_invoice(&invoice, network).map_to_invalid_input("Invalid invoice")?;
 
+        let invoice_amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
         if invoice_amount_msat != 0 {
             return Err(invalid_input(
                 "Expected open invoice, but an invoice with a specified amount was provided",
             ));
-        } else if amount_msat == 0 {
+        }
+        if amount_msat == 0 {
             return Err(invalid_input(
                 "Invoice does not specify an amount and no amount was specified manually",
             ));
@@ -521,8 +520,6 @@ impl LightningNode {
         amount_msat: u64,
         metadata: &str,
     ) -> Result<()> {
-        validate_invoice(self.config.lock().unwrap().network, invoice)?;
-
         let mut data_store = self.data_store.lock().unwrap();
         if let Ok(payment) = data_store.get_payment(&invoice.payment_hash().to_string()) {
             match payment.payment_type {
