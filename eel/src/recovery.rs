@@ -13,7 +13,7 @@ pub fn recover_lightning_node(
     local_persistence_path: String,
     remote_storage: Box<dyn RemoteStorage>,
 ) -> Result<()> {
-    let encryption_key = key_derivation::derive_persistence_encryption_key(&seed).unwrap();
+    let encryption_key = key_derivation::derive_persistence_encryption_key(&seed)?;
     let storage = Arc::new(StoragePersister::new(
         remote_storage,
         local_persistence_path.clone(),

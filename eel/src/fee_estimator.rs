@@ -1,9 +1,10 @@
-use crate::errors::Result;
+use crate::errors::{Result, RuntimeErrorCode};
 use crate::esplora_client::EsploraClient;
+
 use bitcoin::Network;
 use lightning::chain::chaininterface::{ConfirmationTarget, FeeEstimator as LdkFeeEstimator};
 use log::debug;
-use perro::permanent_failure;
+use perro::OptionToError;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
@@ -18,27 +19,25 @@ const BACKGROUND_DEFAULT: u32 = MIN_FEERATE; // 1 sats per byte
 const NORMAL_DEFAULT: u32 = 2000; // 8 sats per byte
 const HIGH_PRIORITY_DEFAULT: u32 = 5000; // 20 sats per byte
 
+struct Fees {
+    background: AtomicU32,
+    normal: AtomicU32,
+    high_prioriy: AtomicU32,
+}
+
 pub(crate) struct FeeEstimator {
     esplora_client: Arc<EsploraClient>,
-    fees: Arc<HashMap<ConfirmationTarget, AtomicU32>>,
+    fees: Fees,
     network: Network,
 }
 
 impl FeeEstimator {
     pub fn new(esplora_client: Arc<EsploraClient>, network: Network) -> Self {
-        // Init fees
-        let mut fees: HashMap<ConfirmationTarget, AtomicU32> = HashMap::new();
-        fees.insert(
-            ConfirmationTarget::Background,
-            AtomicU32::new(BACKGROUND_DEFAULT),
-        );
-        fees.insert(ConfirmationTarget::Normal, AtomicU32::new(NORMAL_DEFAULT));
-        fees.insert(
-            ConfirmationTarget::HighPriority,
-            AtomicU32::new(HIGH_PRIORITY_DEFAULT),
-        );
-        let fees = Arc::new(fees);
-
+        let fees = Fees {
+            background: AtomicU32::new(BACKGROUND_DEFAULT),
+            normal: AtomicU32::new(NORMAL_DEFAULT),
+            high_prioriy: AtomicU32::new(HIGH_PRIORITY_DEFAULT),
+        };
         Self {
             esplora_client,
             fees,
@@ -65,16 +64,11 @@ impl FeeEstimator {
         debug!("FeeEstimator fetched new estimates from esplora:\n    Background: {}\n    Normal: {}\n    HighPriority: {}", background_estimate, normal_estimate, high_priority_estimate);
 
         self.fees
-            .get(&ConfirmationTarget::Background)
-            .unwrap()
+            .background
             .store(background_estimate, Ordering::Release);
+        self.fees.normal.store(normal_estimate, Ordering::Release);
         self.fees
-            .get(&ConfirmationTarget::Normal)
-            .unwrap()
-            .store(normal_estimate, Ordering::Release);
-        self.fees
-            .get(&ConfirmationTarget::HighPriority)
-            .unwrap()
+            .high_prioriy
             .store(high_priority_estimate, Ordering::Release);
 
         Ok(())
@@ -85,12 +79,10 @@ fn get_ldk_estimate_from_esplora_estimates(
     esplora_estimates: &HashMap<String, f64>,
     confirm_in_blocks: &str,
 ) -> Result<u32> {
-    let background_estimate = match esplora_estimates.get(confirm_in_blocks) {
-        None => {
-            return Err(permanent_failure(format!("Failed to get fee estimates: Esplora didn't provide an estimate for confirmation in {confirm_in_blocks} blocks")));
-        }
-        Some(e) => e,
-    };
+    let background_estimate = esplora_estimates.get(confirm_in_blocks)
+        .ok_or_runtime_error(
+			RuntimeErrorCode::EsploraServiceUnavailable,
+			format!("Failed to get fee estimates: Esplora didn't provide an estimate for confirmation in {confirm_in_blocks} blocks"))?;
     Ok(std::cmp::max(
         (background_estimate * 250.0).round() as u32,
         MIN_FEERATE,
@@ -99,10 +91,11 @@ fn get_ldk_estimate_from_esplora_estimates(
 
 impl LdkFeeEstimator for FeeEstimator {
     fn get_est_sat_per_1000_weight(&self, confirmation_target: ConfirmationTarget) -> u32 {
-        self.fees
-            .get(&confirmation_target)
-            .unwrap()
-            .load(Ordering::Acquire)
+        match confirmation_target {
+            ConfirmationTarget::Background => self.fees.background.load(Ordering::Acquire),
+            ConfirmationTarget::Normal => self.fees.normal.load(Ordering::Acquire),
+            ConfirmationTarget::HighPriority => self.fees.high_prioriy.load(Ordering::Acquire),
+        }
     }
 }
 

@@ -729,13 +729,13 @@ fn init_peer_manager(
 ) -> Result<PeerManager> {
     let ephemeral_bytes = generate_random_bytes::<U32>()
         .map_to_permanent_failure("Failed to generate random bytes")?;
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_to_permanent_failure("Failed to get duration from Unix epoch")?;
     Ok(PeerManager::new_channel_only(
         channel_manager,
         IgnoringMessageHandler {},
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as u32,
+        timestamp.as_secs() as u32,
         ephemeral_bytes.as_ref(),
         logger,
         keys_manager,
