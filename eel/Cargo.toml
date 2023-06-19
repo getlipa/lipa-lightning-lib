@@ -7,7 +7,7 @@ edition = "2021"
 nigiri = []
 
 [dependencies]
-aes = "0.8.1"
+aes = "0.8.3"
 aes-gcm = "0.10.2"
 bip39 = "2"
 bitcoin = "0.29.2"
