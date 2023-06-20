@@ -136,8 +136,13 @@ pub(crate) async fn create_invoice(
             lsp_fee,
         )
     } else {
+        let amount_msat = if amount_msat > 0 {
+            Some(amount_msat)
+        } else {
+            None
+        };
         let (payment_hash, payment_secret) = channel_manager
-            .create_inbound_payment(Some(amount_msat), 1000, None)
+            .create_inbound_payment(amount_msat, 1000, None)
             .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
 
         (
@@ -155,11 +160,13 @@ pub(crate) async fn create_invoice(
         .payment_hash(payment_hash)
         .payment_secret(payment_secret)
         .payee_pub_key(payee_pubkey)
-        .amount_milli_satoshis(amount_msat)
         .current_timestamp()
         .expiry_time(Duration::from_secs(10 * 60))
         .min_final_cltv_expiry_delta(144)
         .basic_mpp();
+    if amount_msat > 0 {
+        builder = builder.amount_milli_satoshis(amount_msat);
+    }
     for private_route in private_routes {
         builder = builder.private_route(private_route);
     }
