@@ -76,7 +76,7 @@ interface LightningNode {
     //          * have not expired
     //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
     //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
-    [Throws=LnError]
+    [Throws=PayError]
     void pay_invoice(string invoice, string metadata);
 
     // Differs from pay_invoice(string invoice, string metadata) in that the passed in invoice does not have any payment amount specified,
@@ -84,7 +84,7 @@ interface LightningNode {
     //
     // Additional Parameters:
     //    - amount_sat - amount in sats to be paid
-    [Throws=LnError]
+    [Throws=PayError]
     void pay_open_invoice(string invoice, u64 amount_sat, string metadata);
 
     // Get a list of the latest payments
@@ -425,13 +425,30 @@ enum RuntimeErrorCode {
     // RECOVERY ERRORS
     "NonExistingWallet", // A recovery process couldn't be completed because no recovery data could be found. Most likely the recovery phrase wasn't created by the lipa wallet.
 
-    // PAYMENT SENDING ERRORS
-    "AlreadyUsedInvoice", // An already recognized invoice tried to be paid. Either a payment attempt is in progress or the invoice has already been paid.
-    "InvoiceExpired", // The invoice has already expired.
-    "PayingToSelf", // A locally issued invoice tried to be paid. Self-payments are not supported.
-    "NoRouteFound", // Many things can cause this. Do we have enough funds?
-
     // OTHER ERRORS
     "GenericError", // A generic error for unexpected/unknown runtime errors
     "ObjectNotFound", // An object could not be read from storage because it was not found
+};
+
+[Error]
+// As documented for LnError
+interface PayError {
+    InvalidInput(string msg);
+    RuntimeError(PayErrorCode code, string msg);
+    PermanentFailure(string msg);
+};
+
+// A code that specifies the PayError that occurred.
+enum PayErrorCode {
+    "InvoiceExpired", // The invoice has already expired.
+
+    // NO ROUTING ATTEMPT WAS MADE
+    "AlreadyUsedInvoice", // An already recognized invoice tried to be paid. Either a payment attempt is in progress or the invoice has already been paid.
+    "PayingToSelf", // A locally issued invoice tried to be paid. Self-payments are not supported.
+    "NoRouteFound", // Not a single route was found.
+
+    // A ROUTING ATTEMPT WAS MADE. It might make sense to retry the payment.
+    "RecipientRejected", // The recipient has rejected the payment.
+    "RetriesExhausted", // Retry attempts or timeout was reached.
+    "NoMoreRoutes", // All possible routes failed.
 };

@@ -25,7 +25,7 @@ pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
 
 pub use eel::config::TzConfig;
-use eel::errors::{Error as LnError, Result, RuntimeErrorCode};
+use eel::errors::{Error as LnError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode};
 pub use eel::interfaces::ExchangeRate;
 pub use eel::invoice::DecodeInvoiceError;
 use eel::key_derivation::derive_key_pair_hex;
@@ -215,7 +215,7 @@ impl LightningNode {
         Ok(InvoiceDetails::from_remote_invoice(invoice, &rate))
     }
 
-    pub fn pay_invoice(&self, invoice: String, metadata: String) -> Result<()> {
+    pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {
         self.core_node.pay_invoice(invoice, metadata)
     }
 
@@ -224,7 +224,7 @@ impl LightningNode {
         invoice: String,
         amount_sat: u64,
         metadata: String,
-    ) -> Result<()> {
+    ) -> PayResult<()> {
         self.core_node
             .pay_open_invoice(invoice, amount_sat * 1000, metadata)
     }
