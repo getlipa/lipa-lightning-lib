@@ -93,7 +93,7 @@ mod rapid_gossip_sync_test {
             assert!(matches!(
                 node.pay_invoice(invoice_test_payment_retry.clone(), String::new()),
                 Err(perro::Error::RuntimeError {
-                    code: eel::errors::RuntimeErrorCode::NoRouteFound,
+                    code: eel::errors::PayErrorCode::NoRouteFound,
                     ..
                 })
             ));
