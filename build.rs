@@ -1,5 +1,6 @@
 use camino::Utf8Path;
 use std::env;
+use uniffi_bindgen::bindings::TargetLanguage;
 
 fn main() {
     let udl_file = Utf8Path::new("src/lipalightninglib.udl");
@@ -7,7 +8,6 @@ fn main() {
 
     uniffi_bindgen::generate_component_scaffolding(
         udl_file,
-        None,
         Some(Utf8Path::new(&env::var("OUT_DIR").unwrap())),
         false,
     )
@@ -16,7 +16,7 @@ fn main() {
     uniffi_bindgen::generate_bindings(
         udl_file,
         None,
-        Vec::from(["swift"]),
+        Vec::from([TargetLanguage::Swift]),
         Some(Utf8Path::new("bindings/swift")),
         None,
         false,
@@ -26,7 +26,7 @@ fn main() {
     uniffi_bindgen::generate_bindings(
         udl_file,
         None,
-        Vec::from(["kotlin"]),
+        Vec::from([TargetLanguage::Kotlin]),
         Some(Utf8Path::new("bindings/kotlin")),
         None,
         false,
