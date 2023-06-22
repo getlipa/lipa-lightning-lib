@@ -96,6 +96,7 @@ const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_graph: Some(RestartIfFailedPeriod::from_secs(2 * 60)),
     update_exchange_rates: Some(Duration::from_secs(10 * 60)),
     sync_onchain_wallet: Some(Duration::from_secs(5 * 60)),
+    process_spendable_outputs: Some(Duration::from_secs(60)),
 };
 
 const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
@@ -106,6 +107,7 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_graph: None,
     update_exchange_rates: None,
     sync_onchain_wallet: None,
+    process_spendable_outputs: None,
 };
 
 #[allow(dead_code)]
@@ -301,6 +303,15 @@ impl LightningNode {
         )?));
 
         // Step 22: Initialize the TaskManager
+        let esplora_client = Arc::new(
+            bdk::esplora_client::Builder::new(&config.esplora_api_url)
+                .timeout(20)
+                .build_blocking()
+                .map_to_runtime_error(
+                    RuntimeErrorCode::EsploraServiceUnavailable,
+                    "Failed to build Esplora client",
+                )?,
+        );
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),
             Arc::clone(&lsp_client),
@@ -312,6 +323,9 @@ impl LightningNode {
             Arc::clone(&tx_sync),
             exchange_rate_provider,
             Arc::clone(&data_store),
+            esplora_client,
+            Arc::clone(&keys_manager),
+            Arc::clone(&tx_broadcaster),
             Arc::clone(&wallet),
         )?));
         task_manager
@@ -752,6 +766,7 @@ fn get_foreground_periods() -> TaskPeriods {
                 update_graph: Some(period),
                 update_exchange_rates: Some(period),
                 sync_onchain_wallet: Some(period),
+                process_spendable_outputs: Some(period),
             }
         }
         Err(_) => FOREGROUND_PERIODS,

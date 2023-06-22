@@ -6,11 +6,19 @@ use crate::interfaces::{ExchangeRate, ExchangeRateProvider};
 use crate::lsp::{LspClient, LspInfo};
 use crate::p2p_networking::{connect_peer, LnPeer};
 use crate::rapid_sync_client::RapidSyncClient;
-use crate::types::{ChainMonitor, ChannelManager, PeerManager, TxSync};
+use crate::types::{ChainMonitor, ChannelManager, KeysManager, PeerManager, TxSync};
 use crate::wallet::Wallet;
 
+use crate::tx_broadcaster::TxBroadcaster;
+use bdk::esplora_client::BlockingClient;
+use bitcoin::Txid;
+use lightning::chain::chaininterface::{
+    BroadcasterInterface, ConfirmationTarget, FeeEstimator as LdkFeeEstimator,
+};
+use lightning::chain::keysinterface::SpendableOutputDescriptor;
 use lightning::chain::Confirm;
 use log::{debug, error, info};
+use secp256k1::SECP256K1;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tokio::time::Duration;
@@ -30,6 +38,7 @@ pub(crate) struct TaskPeriods {
     pub update_graph: Option<RestartIfFailedPeriod>,
     pub update_exchange_rates: Option<Duration>,
     pub sync_onchain_wallet: Option<Duration>,
+    pub process_spendable_outputs: Option<Duration>,
 }
 
 pub(crate) struct TaskManager {
@@ -52,6 +61,10 @@ pub(crate) struct TaskManager {
 
     wallet: Arc<Wallet>,
 
+    esplora_client: Arc<BlockingClient>,
+    keys_manager: Arc<KeysManager>,
+    tx_broadcaster: Arc<TxBroadcaster>,
+
     task_handles: Vec<RepeatingTaskHandle>,
 }
 
@@ -68,6 +81,9 @@ impl TaskManager {
         tx_sync: Arc<TxSync>,
         exchange_rate_provider: Box<dyn ExchangeRateProvider>,
         data_store: Arc<Mutex<DataStore>>,
+        esplora_client: Arc<BlockingClient>,
+        keys_manager: Arc<KeysManager>,
+        tx_broadcaster: Arc<TxBroadcaster>,
         wallet: Arc<Wallet>,
     ) -> Result<Self> {
         let exchange_rates = data_store.lock().unwrap().get_all_exchange_rates()?;
@@ -86,6 +102,9 @@ impl TaskManager {
             exchange_rates: Arc::new(Mutex::new(exchange_rates)),
             data_store,
             wallet,
+            esplora_client,
+            keys_manager,
+            tx_broadcaster,
             task_handles: Vec::new(),
         })
     }
@@ -143,6 +162,11 @@ impl TaskManager {
         if let Some(period) = periods.sync_onchain_wallet {
             self.task_handles
                 .push(self.start_onchain_wallet_sync(period))
+        }
+
+        if let Some(period) = periods.process_spendable_outputs {
+            self.task_handles
+                .push(self.start_spendable_output_processing(period))
         }
     }
 
@@ -310,6 +334,109 @@ impl TaskManager {
                 }
             }
         })
+    }
+
+    fn start_spendable_output_processing(&self, period: Duration) -> RepeatingTaskHandle {
+        let wallet = Arc::clone(&self.wallet);
+        let data_store = Arc::clone(&self.data_store);
+        let esplora_client = Arc::clone(&self.esplora_client);
+        let keys_manager = Arc::clone(&self.keys_manager);
+        let fee_estimator = Arc::clone(&self.fee_estimator);
+        let tx_broadcaster = Arc::clone(&self.tx_broadcaster);
+
+        self.runtime_handle.spawn_repeating_task(period, move || {
+            let wallet = Arc::clone(&wallet);
+            let data_store = Arc::clone(&data_store);
+            let esplora_client = Arc::clone(&esplora_client);
+            let keys_manager = Arc::clone(&keys_manager);
+            let fee_estimator = Arc::clone(&fee_estimator);
+            let tx_broadcaster = Arc::clone(&tx_broadcaster);
+
+            async move {
+                // get non spent spendable outputs
+                let pending_outputs = data_store
+                    .lock()
+                    .unwrap()
+                    .get_pending_spendable_outputs()
+                    .unwrap();
+
+                let to_spend_outputs = pending_outputs
+                    .iter()
+                    .filter(|output| is_unspent(output, &esplora_client))
+                    .collect::<Vec<_>>();
+                if !to_spend_outputs.is_empty() {
+                    let destination_address = wallet.get_new_address().unwrap();
+                    let tx_feerate =
+                        fee_estimator.get_est_sat_per_1000_weight(ConfirmationTarget::Normal);
+                    let res = keys_manager.spend_spendable_outputs(
+                        &to_spend_outputs,
+                        Vec::new(),
+                        destination_address.script_pubkey(),
+                        tx_feerate,
+                        SECP256K1,
+                    );
+                    match res {
+                        Ok(spending_tx) => tx_broadcaster.broadcast_transaction(&spending_tx),
+                        Err(err) => {
+                            error!("Error spending outputs: {:?}", err);
+                        }
+                    }
+                    info!(
+                        "Successfully broadcasted a tx spending {} non-static spendable outputs!",
+                        to_spend_outputs.len()
+                    );
+                }
+
+                let data_store = data_store.lock().unwrap();
+                pending_outputs
+                    .iter()
+                    .filter(|output| is_confirmed(output, &esplora_client))
+                    .for_each(|output| {
+                        data_store.confirm_pending_spendable_output(output).unwrap()
+                    });
+            }
+        })
+    }
+}
+
+fn is_unspent(
+    spendable_output: &SpendableOutputDescriptor,
+    _esplora_client: &Arc<BlockingClient>,
+) -> bool {
+    let (_txid, _index) = get_spendable_output_outpoint(spendable_output);
+
+    // TODO: Return true if a tx that spends this outputs is unknown by the esplora server
+    /*
+    match esplora_client
+        .get_output_status(&txid, index as u64)
+        .unwrap()
+    {
+        None => true,
+        Some(status) => status.status.is_none(),
+    }
+    */
+    true
+}
+
+fn is_confirmed(
+    spendable_output: &SpendableOutputDescriptor,
+    _esplora_client: &Arc<BlockingClient>,
+) -> bool {
+    let (_txid, _index) = get_spendable_output_outpoint(spendable_output);
+
+    // TODO: return true if a there's tx that spends this output that has a min of 6 confs
+    true
+}
+
+fn get_spendable_output_outpoint(spendable_output: &SpendableOutputDescriptor) -> (Txid, u16) {
+    match spendable_output {
+        SpendableOutputDescriptor::StaticOutput { outpoint, .. } => (outpoint.txid, outpoint.index),
+        SpendableOutputDescriptor::DelayedPaymentOutput(out) => {
+            (out.outpoint.txid, out.outpoint.index)
+        }
+        SpendableOutputDescriptor::StaticPaymentOutput(out) => {
+            (out.outpoint.txid, out.outpoint.index)
+        }
     }
 }
 
