@@ -9,7 +9,7 @@ mod onchain_test {
     use crate::setup::{mocked_storage_node, setup_outbound_capacity};
     use crate::setup_env::nigiri;
     use crate::setup_env::nigiri::NodeInstance;
-    use crate::{try_cmd_repeatedly, wait_for_eq};
+    use crate::{try_cmd_repeatedly, wait_for, wait_for_eq};
 
     const HALF_SEC: Duration = Duration::from_millis(500);
     const N_RETRIES: u8 = 10;
@@ -31,14 +31,15 @@ mod onchain_test {
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 6);
 
         wait_for_eq!(node.get_node_info().channels_info.num_channels, 0);
-        wait_for_eq!(node.get_onchain_balance().unwrap().confirmed, 50_000);
+        wait_for_eq!(nigiri::get_number_of_txs_in_mempool(), Ok::<u64, String>(1));
+        try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 1);
+        wait_for!(node.get_onchain_balance().unwrap().confirmed > 0);
 
         // TEST COOP CLOSE
+        let initial_balance = node.get_onchain_balance().unwrap().confirmed;
 
         // Set up a channel and receive 50k sats
         let funding_txid = setup_outbound_capacity(&node);
-
-        assert_eq!(node.get_onchain_balance().unwrap().confirmed, 50_000);
 
         nigiri::lnd_node_coop_close_channel(NodeInstance::LspdLnd, funding_txid).unwrap();
 
@@ -47,6 +48,9 @@ mod onchain_test {
 
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 6);
 
-        wait_for_eq!(node.get_onchain_balance().unwrap().confirmed, 100_000);
+        wait_for_eq!(
+            node.get_onchain_balance().unwrap().confirmed,
+            initial_balance + 50_000
+        );
     }
 }
