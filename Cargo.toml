@@ -20,7 +20,7 @@ eel = { path = "eel" }
 
 log = "0.4.19"
 thiserror = "1.0.40"
-uniffi = "0.23.0"
+uniffi = "0.24.0"
 
 chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.1.1" }
 honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.1.1" }
@@ -51,7 +51,7 @@ pre-build = ["apt update --no-show-upgraded && apt install --yes protobuf-compil
 
 [build-dependencies]
 camino = "1.1.1"
-uniffi_bindgen = "0.23.0"
+uniffi_bindgen = "0.24.0"
 
 # Enable debug symbols for our and LDK crates, but not others.
 [profile.release]
