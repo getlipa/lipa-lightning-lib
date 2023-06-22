@@ -15,7 +15,6 @@ use lightning::chain::keysinterface::{
 };
 use lightning::ln::msgs::{DecodeError, UnsignedGossipMessage};
 use lightning::ln::script::ShutdownScript;
-use log::info;
 use perro::MapToError;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
@@ -81,7 +80,6 @@ impl WalletKeysManager {
         Self { inner, wallet }
     }
 
-    #[allow(dead_code)]
     pub fn spend_spendable_outputs<C: Signing>(
         &self,
         descriptors: &[&SpendableOutputDescriptor],
@@ -90,17 +88,8 @@ impl WalletKeysManager {
         feerate_sat_per_1000_weight: u32,
         secp_ctx: &Secp256k1<C>,
     ) -> std::result::Result<Transaction, ()> {
-        let only_non_static = &descriptors
-            .iter()
-            .filter(|desc| !matches!(desc, SpendableOutputDescriptor::StaticOutput { .. }))
-            .copied()
-            .collect::<Vec<_>>();
-        info!(
-            "Creating spending tx only with non static outputs - {} non static output(s) was/were found",
-            only_non_static.len()
-        );
         self.inner.spend_spendable_outputs(
-            only_non_static,
+            descriptors,
             outputs,
             change_destination_script,
             feerate_sat_per_1000_weight,
