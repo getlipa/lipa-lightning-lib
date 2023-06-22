@@ -1,7 +1,6 @@
 use eel::errors::{Result, RuntimeErrorCode};
 use eel::interfaces::{EventHandler, RemoteStorage};
-use eel::MapToError;
-
+use eel::{permanent_failure, MapToError};
 use honey_badger::Auth;
 use mole::ChannelStatePersistenceClient;
 use perro::runtime_error;
@@ -37,7 +36,8 @@ impl RemoteStorage for RemoteStorageGraphql {
             MONITORS_BUCKET => self.remote_csp_client.get_channel_monitor_ids().map_to_runtime_error(
                 RuntimeErrorCode::RemoteStorageError,
                 "Failed to read list of channel monitors from remote storage....."),
-            OBJECTS_BUCKET => unimplemented!("List objects does not have any purpose for the manager for now, as there is only one manager and we want to fetch that one."),
+            OBJECTS_BUCKET => Err(permanent_failure(
+				"List objects does not have any purpose for the manager for now, as there is only one manager and we want to fetch that one.")),
             _ => Err(runtime_error(
                 RuntimeErrorCode::RemoteStorageError,
                 format!("Retrieving data of type {bucket} from remote storage is not supported."),
@@ -61,9 +61,9 @@ impl RemoteStorage for RemoteStorageGraphql {
                     RuntimeErrorCode::RemoteStorageError,
                     "Failed to read channel manager from remote storage.",
                 ),
-            _ => unimplemented!(
+            _ => Err(permanent_failure(format!(
                 "Retrieving data of type {bucket} from remote storage is not supported."
-            ),
+            ))),
         }
     }
 
@@ -90,17 +90,19 @@ impl RemoteStorage for RemoteStorageGraphql {
                             "Failed to write channel manager to remote storage.",
                         )
                 } else {
-                    unimplemented!("Storing arbitrary {OBJECTS_BUCKET} is not yet supported!");
+                    Err(permanent_failure(format!(
+                        "Storing arbitrary {OBJECTS_BUCKET} is not yet supported!"
+                    )))
                 }
             }
-            _ => {
-                unimplemented!("Storing data of type {bucket} to remote storage is not supported.")
-            }
+            _ => Err(permanent_failure(format!(
+                "Storing data of type {bucket} to remote storage is not supported."
+            ))),
         }
     }
 
     fn delete_object(&self, _bucket: String, _key: String) -> Result<()> {
-        unimplemented!("Deleting objects is not yet supported!");
+        Err(permanent_failure("Deleting objects is not yet supported!"))
     }
 }
 
