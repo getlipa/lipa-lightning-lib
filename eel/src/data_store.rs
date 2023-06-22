@@ -370,13 +370,14 @@ impl DataStore {
     }
 
     #[allow(dead_code)]
-    pub fn get_all_spendable_outputs(&self) -> Result<Vec<SpendableOutputDescriptor>> {
+    pub fn get_pending_spendable_outputs(&self) -> Result<Vec<SpendableOutputDescriptor>> {
         let mut statement = self
             .db_conn
             .prepare(
                 " \
             SELECT spendable_output \
             FROM spendable_outputs \
+            WHERE status=0 \
             ORDER BY id ASC \
             ",
             )
@@ -391,6 +392,25 @@ impl DataStore {
             spendable_outputs.push(output.map_to_permanent_failure("Corrupted db")?);
         }
         Ok(spendable_outputs)
+    }
+
+    #[allow(dead_code)]
+    pub fn confirm_pending_spendable_output(
+        &self,
+        spendable_output: &SpendableOutputDescriptor,
+    ) -> Result<()> {
+        self.db_conn
+            .execute(
+                "\
+            UPDATE spendable_outputs \
+            SET status=1 \
+            WHERE spendable_output=?1 \
+            ",
+                [spendable_output.encode()],
+            )
+            .map_to_invalid_input("Failed to mark spendable output as spent")?;
+
+        Ok(())
     }
 }
 
@@ -1078,7 +1098,10 @@ mod tests {
         };
         let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}"), tz_config).unwrap();
 
-        assert!(data_store.get_all_spendable_outputs().unwrap().is_empty());
+        assert!(data_store
+            .get_pending_spendable_outputs()
+            .unwrap()
+            .is_empty());
 
         let force_close_output =
             fs::read("tests/resources/spendable_outputs/spendable_output_force_close_from_peer")
@@ -1094,10 +1117,10 @@ mod tests {
             .persist_spendable_output(&force_close_output)
             .unwrap();
 
-        assert_eq!(data_store.get_all_spendable_outputs().unwrap().len(), 1);
+        assert_eq!(data_store.get_pending_spendable_outputs().unwrap().len(), 1);
         assert_eq!(
             data_store
-                .get_all_spendable_outputs()
+                .get_pending_spendable_outputs()
                 .unwrap()
                 .get(0)
                 .unwrap()
@@ -1119,12 +1142,27 @@ mod tests {
             .persist_spendable_output(&coop_close_output)
             .unwrap();
 
-        assert_eq!(data_store.get_all_spendable_outputs().unwrap().len(), 2);
+        assert_eq!(data_store.get_pending_spendable_outputs().unwrap().len(), 2);
         assert_eq!(
             data_store
-                .get_all_spendable_outputs()
+                .get_pending_spendable_outputs()
                 .unwrap()
                 .get(1)
+                .unwrap()
+                .clone(),
+            coop_close_output
+        );
+
+        data_store
+            .confirm_pending_spendable_output(&force_close_output)
+            .unwrap();
+
+        assert_eq!(data_store.get_pending_spendable_outputs().unwrap().len(), 1);
+        assert_eq!(
+            data_store
+                .get_pending_spendable_outputs()
+                .unwrap()
+                .get(0)
                 .unwrap()
                 .clone(),
             coop_close_output

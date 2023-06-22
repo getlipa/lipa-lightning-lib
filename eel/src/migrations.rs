@@ -10,6 +10,7 @@ pub(crate) fn get_migrations() -> Vec<Migration> {
         migration_02_store_exchange_rates,
         migration_03_store_spendable_outputs,
         migration_04_store_exchange_rates_history,
+        migration_05_add_spendable_output_status,
     ]
 }
 
@@ -112,6 +113,16 @@ fn migration_04_store_exchange_rates_history(connection: &Connection) -> Result<
             ALTER TABLE payments ADD COLUMN exchange_rates_history_snaphot_id INTEGER NULL;
             ALTER TABLE payments DROP COLUMN amount_usd;
             ALTER TABLE payments DROP COLUMN amount_fiat;
+        ",
+        )
+        .map_to_permanent_failure("Failed to set up local database")
+}
+
+fn migration_05_add_spendable_output_status(connection: &Connection) -> Result<()> {
+    connection
+        .execute_batch(
+            "\
+            ALTER TABLE spendable_outputs ADD COLUMN status INTEGER DEFAULT 0 NOT NULL;
         ",
         )
         .map_to_permanent_failure("Failed to set up local database")
