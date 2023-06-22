@@ -89,7 +89,7 @@ fn init_logger(path: &String) {
         .add_filter_ignore_str("ureq")
         .add_filter_ignore_str("want")
         .add_filter_ignore_str("sled")
-        .add_filter_ignore_str("bdk::blockchain::script_sync")
+        .add_filter_ignore_str("bdk")
         .set_time_format_rfc3339()
         .build();
 
