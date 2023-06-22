@@ -313,7 +313,7 @@ dictionary TzTime {
 };
 
 dictionary FiatValue {
-    u64 minor_units;
+    u64 minor_units; // Fiat amount denominated in the currencies' minor units. For most fiat currencies, the minor unit is the cent.
     string currency_code;
     timestamp converted_at;
 };
