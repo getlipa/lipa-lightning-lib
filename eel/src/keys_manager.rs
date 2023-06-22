@@ -24,10 +24,39 @@ pub fn generate_secret(passphrase: String) -> Result<Secret> {
     Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
 }
 
-pub fn mnemonic_to_secret(mnemonic_string: Vec<String>, passphrase: String) -> Result<Secret> {
-    let mnemonic =
-        Mnemonic::from_str(&mnemonic_string.join(" ")).map_to_invalid_input("Invalid mnemonic")?;
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum MnemonicError {
+    #[error("BadWordCount with count: {count}")]
+    BadWordCount { count: u64 },
+    #[error("UnknownWord at index: {index}")]
+    UnknownWord { index: u64 },
+    #[error("BadEntropyBitCount")]
+    BadEntropyBitCount,
+    #[error("InvalidChecksum")]
+    InvalidChecksum,
+    #[error("AmbiguousLanguages")]
+    AmbiguousLanguages,
+}
 
+fn to_mnemonic_error(e: bip39::Error) -> MnemonicError {
+    match e {
+        bip39::Error::BadWordCount(count) => MnemonicError::BadWordCount {
+            count: count as u64,
+        },
+        bip39::Error::UnknownWord(index) => MnemonicError::UnknownWord {
+            index: index as u64,
+        },
+        bip39::Error::BadEntropyBitCount(_) => MnemonicError::BadEntropyBitCount,
+        bip39::Error::InvalidChecksum => MnemonicError::InvalidChecksum,
+        bip39::Error::AmbiguousLanguages(_) => MnemonicError::AmbiguousLanguages,
+    }
+}
+
+pub fn mnemonic_to_secret(
+    mnemonic_string: Vec<String>,
+    passphrase: String,
+) -> std::result::Result<Secret, MnemonicError> {
+    let mnemonic = Mnemonic::from_str(&mnemonic_string.join(" ")).map_err(to_mnemonic_error)?;
     Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
 }
 
