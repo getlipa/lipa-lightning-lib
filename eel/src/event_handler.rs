@@ -6,6 +6,7 @@ use crate::task_manager::TaskManager;
 use crate::types::ChannelManager;
 
 use bitcoin::hashes::hex::ToHex;
+use lightning::chain::keysinterface::SpendableOutputDescriptor;
 use lightning::events::{Event, EventHandler, PaymentPurpose};
 use log::{error, info, trace};
 use std::sync::{Arc, Mutex};
@@ -195,10 +196,14 @@ impl EventHandler for LipaEventHandler {
                     "EVENT: SpendableOutputs - {} outputs provided",
                     outputs.len()
                 );
+                let only_non_static = outputs
+                    .iter()
+                    .filter(|desc| !matches!(desc, SpendableOutputDescriptor::StaticOutput { .. }))
+                    .collect::<Vec<_>>();
                 let data_store = self.data_store.lock().unwrap();
-                for output in outputs {
-                    if let Err(e) = data_store.persist_spendable_output(&output) {
-                        error!("Failed to persist spendable output in local db - {e}");
+                for output in only_non_static {
+                    if let Err(e) = data_store.persist_spendable_output(output) {
+                        error!("Failed to persist non-static spendable output in local db - {e}");
                     }
                 }
             }
