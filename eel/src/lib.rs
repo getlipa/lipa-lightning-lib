@@ -21,7 +21,6 @@ mod esplora_client;
 mod event_handler;
 mod fee_estimator;
 pub mod invoice;
-pub mod keys_manager;
 mod logger;
 mod migrations;
 mod random;

@@ -18,7 +18,6 @@ pub(crate) struct LipaEventHandler {
 }
 
 impl LipaEventHandler {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         channel_manager: Arc<ChannelManager>,
         task_manager: Arc<Mutex<TaskManager>>,
