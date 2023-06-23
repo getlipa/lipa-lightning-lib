@@ -241,7 +241,7 @@ impl LightningNode {
 
     pub fn list_currency_codes(&self) -> Vec<String> {
         self.core_node
-            .list_exchange_rate()
+            .list_exchange_rates()
             .into_iter()
             .map(|r| r.currency_code)
             .collect()

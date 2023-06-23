@@ -596,7 +596,7 @@ impl LightningNode {
             .restart(BACKGROUND_PERIODS);
     }
 
-    pub fn list_exchange_rate(&self) -> Vec<ExchangeRate> {
+    pub fn list_exchange_rates(&self) -> Vec<ExchangeRate> {
         self.task_manager.lock().unwrap().get_exchange_rates()
     }
 

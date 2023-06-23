@@ -113,7 +113,7 @@ interface LightningNode {
     // The fetched list will be persisted across restarts to alleviate the consequences of a
     // slow or unresponsive exchange rate service.
     // The method will return an empty list if there is nothing persisted yet and
-    // the values are not yer fetched from the service.
+    // the values are not yet fetched from the service.
     sequence<string> list_currency_codes();
 
     // Get exchange rate on the BTC/<default currency> pair
