@@ -1,7 +1,6 @@
 use crate::errors::*;
 use crate::types::RapidGossipSync;
 
-use lightning_rapid_gossip_sync::GraphSyncError;
 use log::info;
 use perro::{runtime_error, MapToError};
 use reqwest::blocking::Client;
@@ -54,22 +53,16 @@ impl RapidSyncClient {
             )?
             .to_vec();
 
-        match self.rapid_sync.update_network_graph(&snapshot_contents) {
-            Ok(new_timestamp) => info!(
-		"Successfully updated the network graph from timestamp {} to timestamp {}",
-		last_sync_timestamp, new_timestamp
-            ),
-            Err(e) => return match e {
-		GraphSyncError::DecodeError(e) => {
-                    Err(e).map_to_runtime_error(RuntimeErrorCode::RgsUpdateError, "Failed to decode a network graph update")
-		}
-		GraphSyncError::LightningError(e) => {
-                    Err(runtime_error(RuntimeErrorCode::RgsUpdateError,
-				      format!("Failed to apply a network graph update to the local graph: {} - Recommended action: {:?}", e.err, e.action),
-                    ))
-		}
-            },
-	};
+        let new_timestamp = self
+            .rapid_sync
+            .update_network_graph(&snapshot_contents)
+            .map_err(|e| {
+                runtime_error(
+                    RuntimeErrorCode::RgsServiceUnavailable,
+                    format!("Failed to apply network graph update: {e:?}"),
+                )
+            })?;
+        info!("Successfully updated the network graph from timestamp {last_sync_timestamp} to timestamp {new_timestamp}");
         Ok(())
     }
 }

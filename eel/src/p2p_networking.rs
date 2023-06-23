@@ -1,8 +1,6 @@
-use crate::errors::{Result, RuntimeErrorCode};
 use crate::PeerManager;
 use bitcoin::secp256k1::PublicKey;
 use log::{debug, trace};
-use perro::{runtime_error, OptionToError};
 use std::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -10,7 +8,10 @@ use std::task::Poll;
 use std::time::Duration;
 use tokio::time::sleep;
 
-pub(crate) async fn connect_peer(peer: &LnPeer, peer_manager: Arc<PeerManager>) -> Result<()> {
+pub(crate) async fn connect_peer(
+    peer: &LnPeer,
+    peer_manager: Arc<PeerManager>,
+) -> Result<(), &str> {
     if is_connected(peer, &peer_manager) {
         trace!("Peer {} is already connected", peer.pub_key);
         return Ok(());
@@ -20,20 +21,14 @@ pub(crate) async fn connect_peer(peer: &LnPeer, peer_manager: Arc<PeerManager>) 
     let connection_closed_future =
         lightning_net_tokio::connect_outbound(Arc::clone(&peer_manager), peer.pub_key, peer.host)
             .await
-            .ok_or_runtime_error(
-                RuntimeErrorCode::GenericError,
-                "Failed to establish TCP connection",
-            )?;
+            .ok_or("Failed to establish TCP connection")?;
     let mut connection_closed_future = Box::pin(connection_closed_future);
     debug!("TCP connection to peer {} established", peer.pub_key);
 
     // Wait for LN handshake to complete.
     while !is_connected(peer, &peer_manager) {
         if let Poll::Ready(()) = futures::poll!(&mut connection_closed_future) {
-            return Err(runtime_error(
-                RuntimeErrorCode::GenericError,
-                "Peer disconnected before LN handshake completed",
-            ));
+            return Err("Peer disconnected before LN handshake completed");
         }
 
         debug!("LN handshake to peer {} still pending ...", peer.pub_key);

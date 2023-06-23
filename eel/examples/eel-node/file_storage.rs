@@ -1,7 +1,7 @@
 use eel::errors::{Result, RuntimeErrorCode};
 use eel::interfaces::RemoteStorage;
 use log::debug;
-use perro::{runtime_error, MapToError};
+use perro::{invalid_input, MapToError};
 use std::fmt::Debug;
 use std::fs;
 use std::io;
@@ -28,10 +28,7 @@ impl RemoteStorage for FileStorage {
         path_buf.push(key);
 
         if !path_buf.exists() {
-            return Err(runtime_error(
-                RuntimeErrorCode::ObjectNotFound,
-                format!("Could not read file: {:?}", path_buf),
-            ));
+            return Err(invalid_input(format!("Not found: {path_buf:?}")));
         }
 
         Ok(fs::read(path_buf).unwrap())
@@ -71,7 +68,9 @@ impl RemoteStorage for FileStorage {
         let mut path_buf = self.base_path_buf.clone();
         path_buf.push(bucket);
         path_buf.push(key);
-        fs::remove_file(path_buf)
-            .map_to_runtime_error(RuntimeErrorCode::GenericError, "Failed to delete object")
+        fs::remove_file(path_buf).map_to_runtime_error(
+            RuntimeErrorCode::RemoteStorageError,
+            "Failed to delete object",
+        )
     }
 }

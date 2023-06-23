@@ -154,7 +154,7 @@ impl TaskManager {
                         "Sync to blockchain finished in {}ms",
                         now.elapsed().as_millis()
                     ),
-                    Err(e) => error!("Sync to blockchain failed: {:?}", e),
+                    Err(e) => error!("Sync to blockchain failed: {e:?}"),
                 }
             }
         })
@@ -172,7 +172,7 @@ impl TaskManager {
                 match lsp_client.query_info().await {
                     Ok(new_lsp_info) => {
                         if Some(new_lsp_info.clone()) != *lsp_info.lock().unwrap() {
-                            debug!("New LSP info received: {:?}", new_lsp_info);
+                            debug!("New LSP info received: {new_lsp_info:?}");
                             *lsp_info.lock().unwrap() = Some(new_lsp_info.clone());
 
                             // Kick in reconnecting to LSP when we get new info.
@@ -181,13 +181,16 @@ impl TaskManager {
                                 host: new_lsp_info.node_info.address,
                             };
                             if let Err(e) = connect_peer(&peer, peer_manager).await {
-                                error!("Connecting to peer {} failed: {}", peer, e);
+                                error!("Connecting to peer {peer} failed: {e}");
                             }
                         }
                         Some(config.success_period)
                     }
                     Err(e) => {
-                        error!("Failed to query LSP, retrying in 10 seconds: {}", e);
+                        error!(
+                            "Failed to query LSP, retrying in {} seconds: {e}",
+                            config.failure_period.as_secs()
+                        );
                         Some(config.failure_period)
                     }
                 }
@@ -209,7 +212,7 @@ impl TaskManager {
                         host: lsp_info.node_info.address,
                     };
                     if let Err(e) = connect_peer(&peer, peer_manager).await {
-                        error!("Connecting to peer {} failed: {}", peer, e);
+                        error!("Connecting to peer {peer} failed: {e}");
                     }
                 }
             }
@@ -223,8 +226,8 @@ impl TaskManager {
             async move {
                 match tokio::task::spawn_blocking(move || fee_estimator.poll_updates()).await {
                     Ok(Ok(())) => (),
-                    Ok(Err(e)) => error!("Failed to get fee estimates: {}", e),
-                    Err(e) => error!("Update fees task panicked: {}", e),
+                    Ok(Err(e)) => error!("Failed to get fee estimates: {e}"),
+                    Err(e) => error!("Update fees task panicked: {e}"),
                 }
             }
         })
@@ -238,11 +241,11 @@ impl TaskManager {
                 match tokio::task::spawn_blocking(move || rapid_sync_client.sync()).await {
                     Ok(Ok(())) => None,
                     Ok(Err(e)) => {
-                        error!("Failed to update network graph: {}", e);
+                        error!("Failed to update network graph: {e}");
                         Some(period)
                     }
                     Err(e) => {
-                        error!("Update graph task panicked: {}", e);
+                        error!("Update graph task panicked: {e}");
                         Some(period)
                     }
                 }
@@ -286,7 +289,7 @@ fn persist_exchange_rates(data_store: &Arc<Mutex<DataStore>>, rates: &[ExchangeR
         match data_store.update_exchange_rate(&rate.currency_code, rate.rate, rate.updated_at) {
             Ok(_) => {}
             Err(e) => {
-                error!("Failed to update exchange rate in db: {}", e)
+                error!("Failed to update exchange rate in db: {e}")
             }
         }
     }
