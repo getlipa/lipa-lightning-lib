@@ -9,7 +9,6 @@ use crate::setup_env::nigiri::NodeInstance::LspdLnd;
 use crate::setup_env::{nigiri, CHANNEL_SIZE_MSAT};
 use crate::wait_for_eq;
 use eel::config::Config;
-use eel::errors::RuntimeErrorCode;
 use eel::interfaces::{ExchangeRate, ExchangeRateProvider, RemoteStorage};
 use eel::recovery::recover_lightning_node;
 use eel::LightningNode;
@@ -173,7 +172,7 @@ impl ExchangeRateProviderMock {
 }
 
 impl ExchangeRateProvider for ExchangeRateProviderMock {
-    fn query_all_exchange_rates(&self) -> eel::errors::Result<Vec<ExchangeRate>> {
+    fn query_all_exchange_rates(&self) -> eel::interfaces::Result<Vec<ExchangeRate>> {
         match self.available {
             true => Ok(vec![
                 ExchangeRate {
@@ -188,7 +187,7 @@ impl ExchangeRateProvider for ExchangeRateProviderMock {
                 },
             ]),
             false => Err(runtime_error(
-                RuntimeErrorCode::ExchangeRateProviderUnavailable,
+                eel::interfaces::RuntimeErrorCode::Error,
                 "Mocked exchange rate provider set to unavailable",
             )),
         }

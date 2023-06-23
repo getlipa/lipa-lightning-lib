@@ -107,7 +107,13 @@ interface LightningNode {
     void background();
 
     // List codes of supported fiat currencies.
-    [Throws=LnError]
+    // Please keep in mind that this method doesn't make any network calls. It simply retrieves
+    // previously fetched values that are frequently updated by a background task.
+    //
+    // The fetched list will be persisted across restarts to alleviate the consequences of a
+    // slow or unresponsive exchange rate service.
+    // The method will return an empty list if there is nothing persisted yet and
+    // the values are not yer fetched from the service.
     sequence<string> list_currency_codes();
 
     // Get exchange rate on the BTC/<default currency> pair
@@ -430,7 +436,6 @@ enum RuntimeErrorCode {
     // CONNECTIVITY ERRORS
     "AuthServiceUnvailable", // The backed auth service is unavailable.
     "EsploraServiceUnavailable", // The esplora service is unavailable. Could there be a loss of internet connection?
-    "ExchangeRateProviderUnavailable", // The exchange rate service is unavailable. Could there be a loss of internet connection?
     "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
     "RemoteStorageError", // Any error related to the remote storage. Could be a network error or a data error.
     "RgsServiceUnavailable", // The rapid gossip sync service is unavailable. Could there be a loss of internet connection?

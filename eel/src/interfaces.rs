@@ -1,16 +1,30 @@
-use crate::errors::Result;
+use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RuntimeErrorCode {
+    Error,
+}
+
+impl Display for RuntimeErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+pub type Error = perro::Error<RuntimeErrorCode>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 pub trait RemoteStorage: Send + Sync {
     fn check_health(&self) -> bool;
 
-    fn list_objects(&self, bucket: String) -> Result<Vec<String>>;
+    fn list_objects(&self, bucket: String) -> crate::errors::Result<Vec<String>>;
 
-    fn get_object(&self, bucket: String, key: String) -> Result<Vec<u8>>;
+    fn get_object(&self, bucket: String, key: String) -> crate::errors::Result<Vec<u8>>;
 
-    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> Result<()>;
+    fn put_object(&self, bucket: String, key: String, value: Vec<u8>) -> crate::errors::Result<()>;
 
-    fn delete_object(&self, bucket: String, key: String) -> Result<()>;
+    fn delete_object(&self, bucket: String, key: String) -> crate::errors::Result<()>;
 }
 
 pub trait EventHandler: Send + Sync {

@@ -596,11 +596,16 @@ impl LightningNode {
             .restart(BACKGROUND_PERIODS);
     }
 
+    pub fn list_exchange_rate(&self) -> Vec<ExchangeRate> {
+        self.task_manager.lock().unwrap().get_exchange_rates()
+    }
+
     pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
         let rates = self.task_manager.lock().unwrap().get_exchange_rates();
+        let currency_code = self.config.lock().unwrap().fiat_currency.clone();
         rates
             .iter()
-            .find(|r| r.currency_code == self.config.lock().unwrap().fiat_currency)
+            .find(|r| r.currency_code == currency_code)
             .cloned()
     }
 

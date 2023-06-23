@@ -4,7 +4,6 @@ use std::fmt::{Display, Formatter};
 pub enum RuntimeErrorCode {
     AuthServiceUnvailable,
     EsploraServiceUnavailable,
-    ExchangeRateProviderUnavailable,
     LspServiceUnavailable,
     RemoteStorageError,
     RgsServiceUnavailable,
