@@ -62,9 +62,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     }
                 }
                 "listcurrencies" => {
-                    if let Err(message) = list_currency_codes(node) {
-                        println!("{}", message.red());
-                    }
+                    list_currency_codes(node);
                 }
                 "changecurrency" => {
                     match words
@@ -305,10 +303,9 @@ fn get_exchange_rate(node: &LightningNode) -> Result<(), String> {
     Ok(())
 }
 
-fn list_currency_codes(node: &LightningNode) -> Result<(), String> {
-    let codes = node.list_currency_codes().map_err(|e| e.to_string())?;
+fn list_currency_codes(node: &LightningNode) {
+    let codes = node.list_currency_codes();
     println!("Supported currencies: {codes:?}");
-    Ok(())
 }
 
 fn change_currency(node: &LightningNode, fiat_currency: &str) {

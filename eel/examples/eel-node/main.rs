@@ -130,7 +130,7 @@ fn generate_seed(storage: &FileStorage, seed_file_name: &str) -> Vec<u8> {
 
 struct ExchangeRateProviderMock;
 impl ExchangeRateProvider for ExchangeRateProviderMock {
-    fn query_all_exchange_rates(&self) -> eel::errors::Result<Vec<ExchangeRate>> {
+    fn query_all_exchange_rates(&self) -> eel::interfaces::Result<Vec<ExchangeRate>> {
         Ok(vec![
             ExchangeRate {
                 currency_code: "USD".to_string(),

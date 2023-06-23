@@ -1,5 +1,4 @@
-use eel::errors::{Result, RuntimeErrorCode};
-use eel::interfaces::{ExchangeRate, ExchangeRateProvider};
+use eel::interfaces::{ExchangeRate, ExchangeRateProvider, Result, RuntimeErrorCode};
 use honey_badger::Auth;
 use perro::ResultTrait;
 use std::sync::Arc;
@@ -13,12 +12,6 @@ impl ExchangeRateProviderImpl {
         let provider = chameleon::ExchangeRateProvider::new(graphql_url, auth);
         Self { provider }
     }
-
-    pub fn list_currency_codes(&self) -> Result<Vec<String>> {
-        self.provider
-            .list_currency_codes()
-            .map_runtime_error_to(RuntimeErrorCode::ExchangeRateProviderUnavailable)
-    }
 }
 
 impl ExchangeRateProvider for ExchangeRateProviderImpl {
@@ -26,10 +19,10 @@ impl ExchangeRateProvider for ExchangeRateProviderImpl {
         Ok(self
             .provider
             .query_all_exchange_rates()
-            .map_runtime_error_to(RuntimeErrorCode::ExchangeRateProviderUnavailable)?
-            .iter()
+            .map_runtime_error_to(RuntimeErrorCode::Error)?
+            .into_iter()
             .map(|r| ExchangeRate {
-                currency_code: r.currency_code.clone(),
+                currency_code: r.currency_code,
                 rate: r.sats_per_unit,
                 updated_at: r.updated_at,
             })

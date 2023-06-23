@@ -91,7 +91,6 @@ pub struct Payment {
 }
 
 pub struct LightningNode {
-    exchange_rate_provider: ExchangeRateProviderImpl,
     core_node: eel::LightningNode,
 }
 
@@ -129,10 +128,8 @@ impl LightningNode {
 
         let user_event_handler = Box::new(EventsImpl { events_callback });
 
-        let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
-            environment.backend_url.clone(),
-            Arc::clone(&auth),
-        ));
+        let exchange_rate_provider =
+            Box::new(ExchangeRateProviderImpl::new(environment.backend_url, auth));
 
         let core_node = eel::LightningNode::new(
             eel_config,
@@ -141,12 +138,7 @@ impl LightningNode {
             exchange_rate_provider,
         )?;
 
-        let exchange_rate_provider = ExchangeRateProviderImpl::new(environment.backend_url, auth);
-
-        Ok(LightningNode {
-            exchange_rate_provider,
-            core_node,
-        })
+        Ok(LightningNode { core_node })
     }
 
     pub fn get_node_info(&self) -> NodeInfo {
@@ -247,8 +239,12 @@ impl LightningNode {
         self.core_node.background()
     }
 
-    pub fn list_currency_codes(&self) -> Result<Vec<String>> {
-        self.exchange_rate_provider.list_currency_codes()
+    pub fn list_currency_codes(&self) -> Vec<String> {
+        self.core_node
+            .list_exchange_rates()
+            .into_iter()
+            .map(|r| r.currency_code)
+            .collect()
     }
 
     pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
