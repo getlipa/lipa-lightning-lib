@@ -297,10 +297,7 @@ fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
         auth_keys,
         generate_keypair(),
     )
-    .map_to_runtime_error(
-        RuntimeErrorCode::GenericError,
-        "Failed to build auth client",
-    )
+    .map_to_permanent_failure("Failed to build auth client")
 }
 
 fn to_payment(payment: eel::payment::Payment) -> Payment {

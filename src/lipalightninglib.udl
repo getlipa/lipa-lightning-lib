@@ -434,14 +434,9 @@ enum RuntimeErrorCode {
     "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
     "RemoteStorageError", // Any error related to the remote storage. Could be a network error or a data error.
     "RgsServiceUnavailable", // The rapid gossip sync service is unavailable. Could there be a loss of internet connection?
-    "RgsUpdateError", // Failed to apply update. Maybe retry?
 
     // RECOVERY ERRORS
     "NonExistingWallet", // A recovery process couldn't be completed because no recovery data could be found. Most likely the recovery phrase wasn't created by the lipa wallet.
-
-    // OTHER ERRORS
-    "GenericError", // A generic error for unexpected/unknown runtime errors
-    "ObjectNotFound", // An object could not be read from storage because it was not found
 };
 
 [Error]

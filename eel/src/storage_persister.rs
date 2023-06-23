@@ -30,7 +30,7 @@ use lightning::util::ser::{ReadableArgs, Writeable};
 use lightning_persister::FilesystemPersister;
 use log::{debug, error, warn};
 use perro::Error::RuntimeError;
-use perro::{invalid_input, permanent_failure, runtime_error, MapToError};
+use perro::{invalid_input, permanent_failure, MapToError, ResultTrait};
 use std::fs;
 use std::io::{BufReader, Cursor};
 use std::ops::Deref;
@@ -318,22 +318,10 @@ impl StoragePersister {
     }
 
     pub fn fetch_remote_channel_manager_serialized(&self) -> Result<Vec<u8>> {
-        let encrypted_data = match self
+        let encrypted_data = self
             .storage
             .get_object(OBJECTS_BUCKET.to_string(), MANAGER_KEY.to_string())
-        {
-            Ok(data) => data,
-            Err(RuntimeError {
-                code: RuntimeErrorCode::ObjectNotFound,
-                ..
-            }) => {
-                return Err(runtime_error(
-                    RuntimeErrorCode::NonExistingWallet,
-                    "Failed to find remote ChannelManager",
-                ))
-            }
-            Err(e) => return Err(e),
-        };
+            .lift_invalid_input()?;
         decrypt(&encrypted_data, &self.encryption_key)
     }
 

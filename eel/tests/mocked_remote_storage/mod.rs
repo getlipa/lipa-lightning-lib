@@ -97,7 +97,7 @@ impl RemoteStorage for MockedRemoteStorage {
         match self.storage.get_object(bucket, key) {
             Some(value) => Ok(value),
             None => Err(runtime_error(
-                RuntimeErrorCode::ObjectNotFound,
+                RuntimeErrorCode::RemoteStorageError,
                 "Could not read object '{key}' from bucket '{bucket}'",
             )),
         }
@@ -127,7 +127,7 @@ fn emulate_reliability(reliability_percent: u8) -> Result<()> {
 
 fn get_emulated_error() -> Error {
     runtime_error(
-        RuntimeErrorCode::GenericError,
+        RuntimeErrorCode::RemoteStorageError,
         "This is an emulated error, please try again",
     )
 }
