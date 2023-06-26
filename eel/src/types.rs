@@ -31,7 +31,7 @@ pub(crate) type ChannelManager = lightning::ln::channelmanager::ChannelManager<
     Arc<KeysManager>,
     Arc<KeysManager>,
     Arc<FeeEstimator>,
-    Arc<FeeCappedRouter<SimpleMaxRoutingFeeProvider>>,
+    Arc<FeeCappedRouter<Arc<SimpleMaxRoutingFeeProvider>>>,
     Arc<LightningLogger>,
 >;
 
@@ -43,7 +43,7 @@ pub(crate) type ChannelManagerReadArgs<'a> = lightning::ln::channelmanager::Chan
     Arc<KeysManager>,
     Arc<KeysManager>,
     Arc<FeeEstimator>,
-    Arc<FeeCappedRouter<SimpleMaxRoutingFeeProvider>>,
+    Arc<FeeCappedRouter<Arc<SimpleMaxRoutingFeeProvider>>>,
     Arc<LightningLogger>,
 >;
 

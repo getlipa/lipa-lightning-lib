@@ -5,10 +5,16 @@ use lightning::ln::msgs::{ErrorAction, LightningError};
 use lightning::ln::PaymentHash;
 use lightning::routing::router::{InFlightHtlcs, Route, RouteParameters};
 use secp256k1::PublicKey;
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 pub(crate) trait MaxRoutingFeeProvider {
     fn compute_max_fee_msat(&self, payment_amount_msat: u64) -> u64;
+}
+
+pub enum MaxFeeStrategy {
+    Relative { max_fee_permyriad: u16 },
+    Absolute { max_fee_msat: u64 },
 }
 
 pub(crate) struct SimpleMaxRoutingFeeProvider {
@@ -23,26 +29,45 @@ impl SimpleMaxRoutingFeeProvider {
             max_relative_fee_permyriad,
         }
     }
-}
 
-impl MaxRoutingFeeProvider for SimpleMaxRoutingFeeProvider {
-    fn compute_max_fee_msat(&self, payment_amount_msat: u64) -> u64 {
+    pub fn get_max_fee_strategy(&self, payment_amount_msat: u64) -> MaxFeeStrategy {
         let threshold = self.min_max_fee_msat * 10_000 / self.max_relative_fee_permyriad as u64;
 
         if payment_amount_msat > threshold {
-            payment_amount_msat * self.max_relative_fee_permyriad as u64 / 10000
+            MaxFeeStrategy::Relative {
+                max_fee_permyriad: self.max_relative_fee_permyriad,
+            }
         } else {
-            self.min_max_fee_msat
+            MaxFeeStrategy::Absolute {
+                max_fee_msat: self.min_max_fee_msat,
+            }
         }
     }
 }
 
-pub(crate) struct FeeCappedRouter<MFP: MaxRoutingFeeProvider> {
+impl MaxRoutingFeeProvider for SimpleMaxRoutingFeeProvider {
+    fn compute_max_fee_msat(&self, payment_amount_msat: u64) -> u64 {
+        match self.get_max_fee_strategy(payment_amount_msat) {
+            MaxFeeStrategy::Relative { max_fee_permyriad } => {
+                payment_amount_msat * max_fee_permyriad as u64 / 10000
+            }
+            MaxFeeStrategy::Absolute { max_fee_msat } => max_fee_msat,
+        }
+    }
+}
+
+pub(crate) struct FeeCappedRouter<MFP: Deref>
+where
+    MFP::Target: MaxRoutingFeeProvider,
+{
     inner: Router,
     max_fee_provider: MFP,
 }
 
-impl<MFP: MaxRoutingFeeProvider> FeeCappedRouter<MFP> {
+impl<MFP: Deref> FeeCappedRouter<MFP>
+where
+    MFP::Target: MaxRoutingFeeProvider,
+{
     pub fn new(
         network_graph: Arc<NetworkGraph>,
         logger: Arc<LightningLogger>,
@@ -63,7 +88,10 @@ impl<MFP: MaxRoutingFeeProvider> FeeCappedRouter<MFP> {
     }
 }
 
-impl<MFP: MaxRoutingFeeProvider> lightning::routing::router::Router for FeeCappedRouter<MFP> {
+impl<MFP: Deref> lightning::routing::router::Router for FeeCappedRouter<MFP>
+where
+    MFP::Target: MaxRoutingFeeProvider,
+{
     fn find_route(
         &self,
         payer: &PublicKey,

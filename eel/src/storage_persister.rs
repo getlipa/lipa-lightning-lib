@@ -252,7 +252,7 @@ impl StoragePersister {
         keys_manager: Arc<KeysManager>,
         fee_estimator: Arc<crate::FeeEstimator>,
         logger: Arc<LightningLogger>,
-        router: Arc<FeeCappedRouter<SimpleMaxRoutingFeeProvider>>,
+        router: Arc<FeeCappedRouter<Arc<SimpleMaxRoutingFeeProvider>>>,
         channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>>,
         user_config: UserConfig,
         chain_params: ChainParameters,

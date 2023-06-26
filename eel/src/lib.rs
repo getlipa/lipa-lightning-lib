@@ -56,6 +56,7 @@ use crate::task_manager::{PeriodConfig, RestartIfFailedPeriod, TaskManager, Task
 use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, TxSync};
 
+pub use crate::router::MaxFeeStrategy;
 use crate::router::{FeeCappedRouter, SimpleMaxRoutingFeeProvider};
 use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
@@ -118,6 +119,7 @@ pub struct LightningNode {
     peer_manager: Arc<PeerManager>,
     task_manager: Arc<Mutex<TaskManager>>,
     data_store: Arc<Mutex<DataStore>>,
+    max_routing_fee_provider: Arc<SimpleMaxRoutingFeeProvider>,
 }
 
 impl LightningNode {
@@ -198,12 +200,13 @@ impl LightningNode {
         ));
 
         // Step 13: Initialize the Router
+        let max_routing_fee_provider = Arc::new(SimpleMaxRoutingFeeProvider::new(21_000, 50));
         let router = Arc::new(FeeCappedRouter::new(
             Arc::clone(&graph),
             Arc::clone(&logger),
             keys_manager.get_secure_random_bytes(),
             Arc::clone(&scorer),
-            SimpleMaxRoutingFeeProvider::new(21, 50),
+            Arc::clone(&max_routing_fee_provider),
         ));
 
         // (needed when using Electrum or BIP 157/158)
@@ -342,6 +345,7 @@ impl LightningNode {
             peer_manager,
             task_manager,
             data_store,
+            max_routing_fee_provider,
         })
     }
 
@@ -419,6 +423,11 @@ impl LightningNode {
     ) -> std::result::Result<Invoice, DecodeInvoiceError> {
         let network = self.config.lock().unwrap().network;
         invoice::decode_invoice(&invoice, network)
+    }
+
+    pub fn get_payment_max_fee_strategy(&self, amount_msat: u64) -> MaxFeeStrategy {
+        self.max_routing_fee_provider
+            .get_max_fee_strategy(amount_msat)
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {
