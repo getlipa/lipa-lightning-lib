@@ -396,6 +396,20 @@ dictionary Secret {
 //
 
 [Error]
+interface MnemonicError {
+    // Mnemonic has a word count that is not a multiple of 6.
+    BadWordCount(u64 count);
+    // Mnemonic contains an unknown word at the pointed index.
+    UnknownWord(u64 index);
+    // Entropy was not a multiple of 32 bits or between 128-256n bits in length.
+    BadEntropyBitCount();
+    // The mnemonic has an invalid checksum.
+    InvalidChecksum();
+    // The mnemonic can be interpreted as multiple languages.
+    AmbiguousLanguages();
+};
+
+[Error]
 interface DecodeInvoiceError {
     ParseError(string msg);
     SemanticError(string msg);
@@ -415,20 +429,6 @@ interface LnError {
     // Unrecoverable problem (e.g. internal invariant broken).
     // Consider suggesting the user to report the issue to the developers.
     PermanentFailure(string msg);
-};
-
-[Error]
-interface MnemonicError {
-    // Mnemonic has a word count that is not a multiple of 6.
-    BadWordCount(u64 count);
-    // Mnemonic contains an unknown word at the pointed index.
-    UnknownWord(u64 index);
-    // Entropy was not a multiple of 32 bits or between 128-256n bits in length.
-    BadEntropyBitCount();
-    // The mnemonic has an invalid checksum.
-    InvalidChecksum();
-    // The mnemonic can be interpreted as multiple languages.
-    AmbiguousLanguages();
 };
 
 // A code that specifies the RuntimeError that occurred

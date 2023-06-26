@@ -124,7 +124,7 @@ impl LightningNode {
             environment.backend_url.clone(),
             environment.backend_health_url.clone(),
             Arc::clone(&auth),
-        )?);
+        ));
 
         let user_event_handler = Box::new(EventsImpl { events_callback });
 

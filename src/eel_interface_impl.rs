@@ -15,14 +15,14 @@ pub(crate) struct RemoteStorageGraphql {
 }
 
 impl RemoteStorageGraphql {
-    pub fn new(backend_url: String, backend_health_url: String, auth: Arc<Auth>) -> Result<Self> {
-        Ok(Self {
+    pub fn new(backend_url: String, backend_health_url: String, auth: Arc<Auth>) -> Self {
+        Self {
             remote_csp_client: ChannelStatePersistenceClient::new(
                 backend_url,
                 backend_health_url,
                 auth,
             ),
-        })
+        }
     }
 }
 
