@@ -189,7 +189,7 @@ impl ExchangeRateProvider for ExchangeRateProviderMock {
                 },
             ]),
             false => Err(runtime_error(
-                InternalRuntimeErrorCode::RgsServiceUnavailable,
+                InternalRuntimeErrorCode::ExchangeRateProviderUnavailable,
                 "Mocked exchange rate provider set to unavailable",
             )),
         }
