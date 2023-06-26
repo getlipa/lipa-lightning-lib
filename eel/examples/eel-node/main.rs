@@ -3,15 +3,15 @@ mod file_storage;
 #[path = "../../tests/print_events_handler/mod.rs"]
 mod print_events_handler;
 
-use file_storage::FileStorage;
-
 use crate::print_events_handler::PrintEventsHandler;
 
 use bitcoin::Network;
 use eel::config::{Config, TzConfig};
+use eel::errors::InternalResult;
 use eel::interfaces::{ExchangeRate, ExchangeRateProvider, RemoteStorage};
 use eel::keys_manager::mnemonic_to_secret;
 use eel::LightningNode;
+use file_storage::FileStorage;
 use log::info;
 use std::fs;
 use std::thread::sleep;
@@ -130,7 +130,7 @@ fn generate_seed(storage: &FileStorage, seed_file_name: &str) -> Vec<u8> {
 
 struct ExchangeRateProviderMock;
 impl ExchangeRateProvider for ExchangeRateProviderMock {
-    fn query_all_exchange_rates(&self) -> eel::interfaces::Result<Vec<ExchangeRate>> {
+    fn query_all_exchange_rates(&self) -> InternalResult<Vec<ExchangeRate>> {
         Ok(vec![
             ExchangeRate {
                 currency_code: "USD".to_string(),

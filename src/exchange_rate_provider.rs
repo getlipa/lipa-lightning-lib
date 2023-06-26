@@ -1,4 +1,5 @@
-use eel::interfaces::{ExchangeRate, ExchangeRateProvider, Result, RuntimeErrorCode};
+use eel::errors::{InternalResult, InternalRuntimeErrorCode};
+use eel::interfaces::{ExchangeRate, ExchangeRateProvider};
 use honey_badger::Auth;
 use perro::ResultTrait;
 use std::sync::Arc;
@@ -15,11 +16,11 @@ impl ExchangeRateProviderImpl {
 }
 
 impl ExchangeRateProvider for ExchangeRateProviderImpl {
-    fn query_all_exchange_rates(&self) -> Result<Vec<ExchangeRate>> {
+    fn query_all_exchange_rates(&self) -> InternalResult<Vec<ExchangeRate>> {
         Ok(self
             .provider
             .query_all_exchange_rates()
-            .map_runtime_error_to(RuntimeErrorCode::Error)?
+            .map_runtime_error_to(InternalRuntimeErrorCode::ExchangeRateProviderUnavailable)?
             .into_iter()
             .map(|r| ExchangeRate {
                 currency_code: r.currency_code,

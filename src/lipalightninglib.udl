@@ -438,7 +438,6 @@ enum RuntimeErrorCode {
     "EsploraServiceUnavailable", // The esplora service is unavailable. Could there be a loss of internet connection?
     "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
     "RemoteStorageError", // Any error related to the remote storage. Could be a network error or a data error.
-    "RgsServiceUnavailable", // The rapid gossip sync service is unavailable. Could there be a loss of internet connection?
 
     // RECOVERY ERRORS
     "NonExistingWallet", // A recovery process couldn't be completed because no recovery data could be found. Most likely the recovery phrase wasn't created by the lipa wallet.
