@@ -3,9 +3,9 @@ use crate::logger::LightningLogger;
 use crate::storage_persister::StoragePersister;
 use crate::tx_broadcaster::TxBroadcaster;
 
+use crate::router::{FeeCappedRouter, SimpleMaxRoutingFeeProvider};
 use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
 use lightning::chain::keysinterface::{InMemorySigner, KeysManager};
-use lightning::ln::channelmanager::SimpleArcChannelManager;
 use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::routing::router::DefaultRouter;
 use lightning::routing::scoring::ProbabilisticScorer;
@@ -24,8 +24,16 @@ pub(crate) type ChainMonitor = LdkChainMonitor<
     Arc<StoragePersister>,
 >;
 
-pub(crate) type ChannelManager =
-    SimpleArcChannelManager<ChainMonitor, TxBroadcaster, FeeEstimator, LightningLogger>;
+pub(crate) type ChannelManager = lightning::ln::channelmanager::ChannelManager<
+    Arc<ChainMonitor>,
+    Arc<TxBroadcaster>,
+    Arc<KeysManager>,
+    Arc<KeysManager>,
+    Arc<KeysManager>,
+    Arc<FeeEstimator>,
+    Arc<FeeCappedRouter<SimpleMaxRoutingFeeProvider>>,
+    Arc<LightningLogger>,
+>;
 
 pub(crate) type ChannelManagerReadArgs<'a> = lightning::ln::channelmanager::ChannelManagerReadArgs<
     'a,
@@ -35,7 +43,7 @@ pub(crate) type ChannelManagerReadArgs<'a> = lightning::ln::channelmanager::Chan
     Arc<KeysManager>,
     Arc<KeysManager>,
     Arc<FeeEstimator>,
-    Arc<Router>,
+    Arc<FeeCappedRouter<SimpleMaxRoutingFeeProvider>>,
     Arc<LightningLogger>,
 >;
 

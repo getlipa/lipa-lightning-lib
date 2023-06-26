@@ -27,6 +27,7 @@ pub mod invoice;
 mod logger;
 mod random;
 mod rapid_sync_client;
+mod router;
 mod storage_persister;
 mod task_manager;
 mod test_utils;
@@ -53,8 +54,9 @@ use crate::rapid_sync_client::RapidSyncClient;
 use crate::storage_persister::StoragePersister;
 use crate::task_manager::{PeriodConfig, RestartIfFailedPeriod, TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
-use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router, TxSync};
+use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, TxSync};
 
+use crate::router::{FeeCappedRouter, SimpleMaxRoutingFeeProvider};
 use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
 use cipher::consts::U32;
@@ -196,11 +198,12 @@ impl LightningNode {
         ));
 
         // Step 13: Initialize the Router
-        let router = Arc::new(Router::new(
+        let router = Arc::new(FeeCappedRouter::new(
             Arc::clone(&graph),
             Arc::clone(&logger),
             keys_manager.get_secure_random_bytes(),
             Arc::clone(&scorer),
+            SimpleMaxRoutingFeeProvider::new(21, 50),
         ));
 
         // (needed when using Electrum or BIP 157/158)
