@@ -27,7 +27,7 @@ pub fn recover_lightning_node(
         environment.backend_url,
         environment.backend_health_url,
         auth,
-    )?);
+    ));
 
     eel::recovery::recover_lightning_node(seed, local_persistence_path, remote_storage)
 }
