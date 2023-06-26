@@ -6,7 +6,6 @@ pub enum RuntimeErrorCode {
     EsploraServiceUnavailable,
     LspServiceUnavailable,
     RemoteStorageError,
-    RgsServiceUnavailable,
     NonExistingWallet,
 }
 
@@ -38,3 +37,19 @@ impl Display for PayErrorCode {
 
 pub type PayError = perro::Error<PayErrorCode>;
 pub type PayResult<T> = std::result::Result<T, PayError>;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum InternalRuntimeErrorCode {
+    ExchangeRateProviderUnavailable,
+    RgsUpdateError,
+    RgsServiceUnavailable,
+}
+
+impl Display for InternalRuntimeErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+type InternalError = perro::Error<InternalRuntimeErrorCode>;
+pub type InternalResult<T> = std::result::Result<T, InternalError>;

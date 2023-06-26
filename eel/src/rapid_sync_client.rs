@@ -26,7 +26,7 @@ impl RapidSyncClient {
         })
     }
 
-    pub fn sync(&self) -> Result<()> {
+    pub fn sync(&self) -> InternalResult<()> {
         let last_sync_timestamp = self
             .rapid_sync
             .network_graph()
@@ -38,17 +38,17 @@ impl RapidSyncClient {
             .get(format!("{}{}", self.rgs_url, last_sync_timestamp))
             .send()
             .map_to_runtime_error(
-                RuntimeErrorCode::RgsServiceUnavailable,
+                InternalRuntimeErrorCode::RgsServiceUnavailable,
                 "Failed to get response from RGS server",
             )?
             .error_for_status()
             .map_to_runtime_error(
-                RuntimeErrorCode::RgsServiceUnavailable,
+                InternalRuntimeErrorCode::RgsServiceUnavailable,
                 "The RGS server returned an error",
             )?
             .bytes()
             .map_to_runtime_error(
-                RuntimeErrorCode::RgsServiceUnavailable,
+                InternalRuntimeErrorCode::RgsServiceUnavailable,
                 "Failed to get the RGS server response as bytes",
             )?
             .to_vec();
@@ -58,7 +58,7 @@ impl RapidSyncClient {
             .update_network_graph(&snapshot_contents)
             .map_err(|e| {
                 runtime_error(
-                    RuntimeErrorCode::RgsServiceUnavailable,
+                    InternalRuntimeErrorCode::RgsUpdateError,
                     format!("Failed to apply network graph update: {e:?}"),
                 )
             })?;
