@@ -1,7 +1,7 @@
 use eel::errors::{Result, RuntimeErrorCode};
 use eel::interfaces::{EventHandler, RemoteStorage};
 use eel::{permanent_failure, MapToError};
-use honey_badger::Auth;
+use honey_badger::{Auth, GraphQlRuntimeErrorCode};
 use mole::ChannelStatePersistenceClient;
 use perro::runtime_error;
 use std::sync::Arc;
@@ -54,13 +54,20 @@ impl RemoteStorage for RemoteStorageGraphql {
                     RuntimeErrorCode::RemoteStorageError,
                     "Failed read channel monitor from remote storage.",
                 ),
-            OBJECTS_BUCKET => self
-                .remote_csp_client
-                .read_channel_manager()
-                .map_to_runtime_error(
+            OBJECTS_BUCKET => match self.remote_csp_client.read_channel_manager() {
+                Ok(c) => Ok(c),
+                Err(perro::Error::RuntimeError {
+                    code: GraphQlRuntimeErrorCode::ObjectNotFound,
+                    ..
+                }) => Err(runtime_error(
+                    RuntimeErrorCode::NonExistingWallet,
+                    "No remote channel manager was found.",
+                )),
+                Err(_) => Err(runtime_error(
                     RuntimeErrorCode::RemoteStorageError,
                     "Failed to read channel manager from remote storage.",
-                ),
+                )),
+            },
             _ => Err(permanent_failure(format!(
                 "Retrieving data of type {bucket} from remote storage is not supported."
             ))),
