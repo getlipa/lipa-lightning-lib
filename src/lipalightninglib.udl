@@ -281,10 +281,10 @@ dictionary InvoiceDetails {
     timestamp expiry_timestamp; // The moment an invoice expires (UTC)
 };
 
-// Indicates the max fee that can potentially be paid
+// Indicates the max fee strategy used to make a payment of a given size
 [Enum]
 interface MaxFeeStrategy {
-    Relative(u16 max_fee_permyriad); // the relative max fee is represented in permyriad (units per 10_000)
+    Relative(u16 max_fee_permyriad); // `max_fee_permyriad` Parts per myriad (aka basis points) -> 100 is 1%
     Absolute(Amount max_fee_amount);
 };
 
