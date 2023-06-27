@@ -1,15 +1,12 @@
-use crate::errors::Result;
-
 use cipher::generic_array::{ArrayLength, GenericArray};
-use perro::MapToError;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
-pub(crate) fn generate_random_bytes<N: ArrayLength<u8>>() -> Result<GenericArray<u8, N>> {
+pub(crate) fn generate_random_bytes<N: ArrayLength<u8>>() -> Result<GenericArray<u8, N>, String> {
     let mut bytes = GenericArray::<u8, N>::default();
     OsRng
         .try_fill_bytes(&mut bytes)
-        .map_to_permanent_failure("Failed to generate random bytes")?;
+        .map_err(|e| e.to_string())?;
     Ok(bytes)
 }
 

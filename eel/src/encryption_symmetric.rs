@@ -11,7 +11,8 @@ type NonceLength = U12;
 type Nonce = AesNonce<NonceLength>;
 
 pub(crate) fn encrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
-    let nonce = random::generate_random_bytes::<NonceLength>()?;
+    let nonce = random::generate_random_bytes::<NonceLength>()
+        .map_to_permanent_failure("Failed to generate random bytes")?;
 
     let mut ciphertext = encrypt_vanilla(data, key, &nonce)?;
     ciphertext.extend_from_slice(nonce.as_ref());

@@ -29,7 +29,7 @@ use eel::errors::{Error as LnError, PayError, PayErrorCode, PayResult, Result, R
 pub use eel::interfaces::ExchangeRate;
 pub use eel::invoice::DecodeInvoiceError;
 use eel::key_derivation::derive_key_pair_hex;
-use eel::keys_manager::{generate_secret, mnemonic_to_secret, words_by_prefix, MnemonicError};
+use eel::keys_manager::{mnemonic_to_secret, words_by_prefix, MnemonicError};
 pub use eel::payment::FiatValues;
 use eel::payment::{PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
@@ -43,6 +43,12 @@ use std::sync::Arc;
 use std::{env, fs};
 
 const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
+
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum SimpleError {
+    #[error("SimpleError: {msg}")]
+    SimpleError { msg: String },
+}
 
 pub struct PaymentAmountLimits {
     pub max_receive: Amount,
@@ -279,6 +285,10 @@ pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) 
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions()
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)
+}
+
+pub fn generate_secret(passphrase: String) -> std::result::Result<Secret, SimpleError> {
+    eel::keys_manager::generate_secret(passphrase).map_err(|msg| SimpleError::SimpleError { msg })
 }
 
 fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
