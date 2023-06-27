@@ -1,6 +1,6 @@
 use crate::hinter::{CommandHint, CommandHinter};
 
-use uniffi_lipalightninglib::{Amount, MaxFeeStrategy, TzConfig};
+use uniffi_lipalightninglib::{Amount, MaxRoutingFeeMode, TzConfig};
 
 use bitcoin::secp256k1::PublicKey;
 use chrono::offset::FixedOffset;
@@ -92,8 +92,8 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", message.red());
                     }
                 }
-                "getmaxfeestrategy" => {
-                    if let Err(message) = get_max_fee_strategy(node, &mut words) {
+                "getmaxroutingfeemode" => {
+                    if let Err(message) = get_max_routing_fee_mode(node, &mut words) {
                         println!("{}", message.red());
                     }
                 }
@@ -164,8 +164,8 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "decodeinvoice ",
     ));
     hints.insert(CommandHint::new(
-        "getmaxfeestrategy <payment amount in SAT>",
-        "getmaxfeestrategy ",
+        "getmaxroutingfeemode <payment amount in SAT>",
+        "getmaxroutingfeemode ",
     ));
     hints.insert(CommandHint::new("payinvoice <invoice>", "payinvoice "));
     hints.insert(CommandHint::new(
@@ -198,7 +198,7 @@ fn help() {
     println!();
     println!("  invoice <amount in SAT> [description]");
     println!("  decodeinvoice <invoice>");
-    println!("  getmaxfeestrategy <payment amount in SAT>");
+    println!("  getmaxroutingfeemode <payment amount in SAT>");
     println!("  payinvoice <invoice>");
     println!("  payopeninvoice <invoice> <amount in SAT>");
     println!();
@@ -398,7 +398,7 @@ fn decode_invoice(
     Ok(())
 }
 
-fn get_max_fee_strategy(
+fn get_max_routing_fee_mode(
     node: &LightningNode,
     words: &mut dyn Iterator<Item = &str>,
 ) -> Result<(), String> {
@@ -410,16 +410,16 @@ fn get_max_fee_strategy(
         None => Err("The payment amount in SAT is required".to_string()),
     }?;
 
-    let max_fee_strategy = node.get_payment_max_fee_strategy(amount_argument);
+    let max_fee_strategy = node.get_payment_max_routing_fee_mode(amount_argument);
 
     match max_fee_strategy {
-        MaxFeeStrategy::Relative { max_fee_permyriad } => {
+        MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
             println!(
                 "Max fee strategy: Relative (<= {} %)",
                 max_fee_permyriad as f64 / 100.0
             );
         }
-        MaxFeeStrategy::Absolute { max_fee_amount } => {
+        MaxRoutingFeeMode::Absolute { max_fee_amount } => {
             println!(
                 "Max fee strategy: Absolute (<= {})",
                 amount_to_string(max_fee_amount)

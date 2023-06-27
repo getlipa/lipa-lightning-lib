@@ -5,7 +5,7 @@ use crate::types::{ChainMonitor, ChannelManager, ChannelManagerReadArgs, Network
 use crate::LightningLogger;
 use std::cmp::Ordering;
 
-use crate::router::{FeeCappedRouter, SimpleMaxRoutingFeeProvider};
+use crate::router::FeeLimitingRouter;
 use crate::tx_broadcaster::TxBroadcaster;
 use bitcoin::hash_types::BlockHash;
 use bitcoin::hashes::hex::ToHex;
@@ -252,7 +252,7 @@ impl StoragePersister {
         keys_manager: Arc<KeysManager>,
         fee_estimator: Arc<crate::FeeEstimator>,
         logger: Arc<LightningLogger>,
-        router: Arc<FeeCappedRouter<Arc<SimpleMaxRoutingFeeProvider>>>,
+        router: Arc<FeeLimitingRouter>,
         channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>>,
         user_config: UserConfig,
         chain_params: ChainParameters,

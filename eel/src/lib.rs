@@ -54,10 +54,10 @@ use crate::rapid_sync_client::RapidSyncClient;
 use crate::storage_persister::StoragePersister;
 use crate::task_manager::{PeriodConfig, RestartIfFailedPeriod, TaskManager, TaskPeriods};
 use crate::tx_broadcaster::TxBroadcaster;
-use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, TxSync};
+use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router, TxSync};
 
-pub use crate::router::MaxFeeStrategy;
-use crate::router::{FeeCappedRouter, SimpleMaxRoutingFeeProvider};
+pub use crate::router::MaxRoutingFeeMode;
+use crate::router::{FeeLimitingRouter, SimpleMaxRoutingFeeStrategy};
 use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
 use cipher::consts::U32;
@@ -119,7 +119,7 @@ pub struct LightningNode {
     peer_manager: Arc<PeerManager>,
     task_manager: Arc<Mutex<TaskManager>>,
     data_store: Arc<Mutex<DataStore>>,
-    max_routing_fee_provider: Arc<SimpleMaxRoutingFeeProvider>,
+    max_routing_fee_strategy: Arc<SimpleMaxRoutingFeeStrategy>,
 }
 
 impl LightningNode {
@@ -200,13 +200,15 @@ impl LightningNode {
         ));
 
         // Step 13: Initialize the Router
-        let max_routing_fee_provider = Arc::new(SimpleMaxRoutingFeeProvider::new(21_000, 50));
-        let router = Arc::new(FeeCappedRouter::new(
-            Arc::clone(&graph),
-            Arc::clone(&logger),
-            keys_manager.get_secure_random_bytes(),
-            Arc::clone(&scorer),
-            Arc::clone(&max_routing_fee_provider),
+        let max_routing_fee_strategy = Arc::new(SimpleMaxRoutingFeeStrategy::new(21_000, 50));
+        let router = Arc::new(FeeLimitingRouter::new(
+            Router::new(
+                Arc::clone(&graph),
+                Arc::clone(&logger),
+                keys_manager.get_secure_random_bytes(),
+                Arc::clone(&scorer),
+            ),
+            Arc::clone(&max_routing_fee_strategy),
         ));
 
         // (needed when using Electrum or BIP 157/158)
@@ -345,7 +347,7 @@ impl LightningNode {
             peer_manager,
             task_manager,
             data_store,
-            max_routing_fee_provider,
+            max_routing_fee_strategy,
         })
     }
 
@@ -425,9 +427,9 @@ impl LightningNode {
         invoice::decode_invoice(&invoice, network)
     }
 
-    pub fn get_payment_max_fee_strategy(&self, amount_msat: u64) -> MaxFeeStrategy {
-        self.max_routing_fee_provider
-            .get_max_fee_strategy(amount_msat)
+    pub fn get_payment_max_routing_fee_mode(&self, amount_msat: u64) -> MaxRoutingFeeMode {
+        self.max_routing_fee_strategy
+            .get_payment_max_fee_mode(amount_msat)
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {

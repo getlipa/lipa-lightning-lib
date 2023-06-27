@@ -65,8 +65,8 @@ interface LightningNode {
     [Throws=DecodeInvoiceError]
     InvoiceDetails decode_invoice(string invoice);
 
-    // Get the max fee strategy that will be employed for paying a given amount in sats
-    MaxFeeStrategy get_payment_max_fee_strategy(u64 amount_sat);
+    // Get the max routing fee mode that will be employed to restrict the fees for paying a given amount in sats
+    MaxRoutingFeeMode get_payment_max_routing_fee_mode(u64 amount_sat);
 
     // Start an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.
     // If successful, it doesn't mean that the payment itself was successful (funds received by the payee).
@@ -281,9 +281,9 @@ dictionary InvoiceDetails {
     timestamp expiry_timestamp; // The moment an invoice expires (UTC)
 };
 
-// Indicates the max fee strategy used to make a payment of a given size
+// Indicates the max routing fee mode used to restrict fees of a payment of a given size
 [Enum]
-interface MaxFeeStrategy {
+interface MaxRoutingFeeMode {
     Relative(u16 max_fee_permyriad); // `max_fee_permyriad` Parts per myriad (aka basis points) -> 100 is 1%
     Absolute(Amount max_fee_amount);
 };

@@ -94,7 +94,7 @@ pub struct LightningNode {
     core_node: eel::LightningNode,
 }
 
-pub enum MaxFeeStrategy {
+pub enum MaxRoutingFeeMode {
     Relative { max_fee_permyriad: u16 },
     Absolute { max_fee_amount: Amount },
 }
@@ -212,15 +212,15 @@ impl LightningNode {
         Ok(InvoiceDetails::from_remote_invoice(invoice, &rate))
     }
 
-    pub fn get_payment_max_fee_strategy(&self, amount_sat: u64) -> MaxFeeStrategy {
+    pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
         match self
             .core_node
-            .get_payment_max_fee_strategy(amount_sat * 1000)
+            .get_payment_max_routing_fee_mode(amount_sat * 1000)
         {
-            eel::MaxFeeStrategy::Relative { max_fee_permyriad } => {
-                MaxFeeStrategy::Relative { max_fee_permyriad }
+            eel::MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
+                MaxRoutingFeeMode::Relative { max_fee_permyriad }
             }
-            eel::MaxFeeStrategy::Absolute { max_fee_msat } => MaxFeeStrategy::Absolute {
+            eel::MaxRoutingFeeMode::Absolute { max_fee_msat } => MaxRoutingFeeMode::Absolute {
                 max_fee_amount: max_fee_msat.to_amount_up(&self.get_exchange_rate()),
             },
         }
