@@ -218,7 +218,7 @@ callback interface EventsCallback {
 
 // Information about the Lightning node running in the background
 dictionary NodeInfo {
-    sequence<u8> node_pubkey; // Lightning network public key of the node (also known as node id)
+    bytes node_pubkey; // Lightning network public key of the node (also known as node id)
     u16 num_peers; // Number of peers the node is connected to
     ChannelsInfo channels_info; // Information about the channels of the node
 };
@@ -357,13 +357,13 @@ namespace lipalightninglib {
     sequence<string> words_by_prefix(string prefix);
 
     [Throws=LnError]
-    void accept_terms_and_conditions(EnvironmentCode environment, sequence<u8> seed);
+    void accept_terms_and_conditions(EnvironmentCode environment, bytes seed);
 
     // Performs a recovery procedure by fetching necessary data from remote storage.
     // It should and can only be called on a fresh install of the app, if the user wants to recover a previously created wallet.
     // If no existing wallet is found, returns an error.
     [Throws=LnError]
-    void recover_lightning_node(EnvironmentCode environment, sequence<u8> seed, string local_persistence_path);
+    void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path);
 };
 
 enum LogLevel {
@@ -388,7 +388,7 @@ dictionary Secret {
     // Optional passphrase. If not provided, it is an empty string.
     string passphrase;
     // The seed derived from the mnemonic and the passphrase
-    sequence<u8> seed;
+    bytes seed;
 };
 
 //
