@@ -16,10 +16,11 @@ pub(crate) fn init_keys_manager(seed: &[u8; 32]) -> Result<KeysManager> {
     Ok(KeysManager::new(seed, now.as_secs(), now.subsec_nanos()))
 }
 
-pub fn generate_secret(passphrase: String) -> Result<Secret> {
-    let entropy = random::generate_random_bytes::<U32>()?;
-    let mnemonic =
-        Mnemonic::from_entropy(&entropy).map_to_permanent_failure("Failed to mnemonic")?;
+pub fn generate_secret(passphrase: String) -> std::result::Result<Secret, String> {
+    let entropy = random::generate_random_bytes::<U32>()
+        .map_err(|e| format!("Failed to generate random bytes: {e}"))?;
+    let mnemonic = Mnemonic::from_entropy(&entropy)
+        .map_err(|e| format!("Failed to generate mnemonic: {e}"))?;
 
     Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
 }
