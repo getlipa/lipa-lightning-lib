@@ -1,12 +1,11 @@
 use crate::encryption_symmetric::{decrypt, encrypt};
 use crate::errors::*;
 use crate::interfaces::RemoteStorage;
-use crate::types::{
-    ChainMonitor, ChannelManager, ChannelManagerReadArgs, NetworkGraph, Router, Scorer,
-};
+use crate::types::{ChainMonitor, ChannelManager, ChannelManagerReadArgs, NetworkGraph, Scorer};
 use crate::LightningLogger;
 use std::cmp::Ordering;
 
+use crate::router::FeeLimitingRouter;
 use crate::tx_broadcaster::TxBroadcaster;
 use bitcoin::hash_types::BlockHash;
 use bitcoin::hashes::hex::ToHex;
@@ -20,7 +19,7 @@ use lightning::chain::keysinterface::{
 };
 use lightning::chain::transaction::OutPoint;
 use lightning::chain::{ChannelMonitorUpdateStatus, Watch};
-use lightning::ln::channelmanager::{ChainParameters, SimpleArcChannelManager};
+use lightning::ln::channelmanager::ChainParameters;
 use lightning::routing::router;
 use lightning::routing::scoring::{ProbabilisticScoringParameters, WriteableScore};
 use lightning::util::config::UserConfig;
@@ -253,7 +252,7 @@ impl StoragePersister {
         keys_manager: Arc<KeysManager>,
         fee_estimator: Arc<crate::FeeEstimator>,
         logger: Arc<LightningLogger>,
-        router: Arc<Router>,
+        router: Arc<FeeLimitingRouter>,
         channel_monitors: Vec<&mut ChannelMonitor<InMemorySigner>>,
         user_config: UserConfig,
         chain_params: ChainParameters,
@@ -275,7 +274,7 @@ impl StoragePersister {
 
         match local_channel_manager {
             None => {
-                let channel_manager = SimpleArcChannelManager::new(
+                let channel_manager = ChannelManager::new(
                     fee_estimator,
                     chain_monitor,
                     broadcaster,

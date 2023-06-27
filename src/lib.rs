@@ -100,6 +100,11 @@ pub struct LightningNode {
     core_node: eel::LightningNode,
 }
 
+pub enum MaxRoutingFeeMode {
+    Relative { max_fee_permyriad: u16 },
+    Absolute { max_fee_amount: Amount },
+}
+
 impl LightningNode {
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         enable_backtrace();
@@ -211,6 +216,20 @@ impl LightningNode {
         let invoice = self.core_node.decode_invoice(invoice)?;
         let rate = self.get_exchange_rate();
         Ok(InvoiceDetails::from_remote_invoice(invoice, &rate))
+    }
+
+    pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
+        match self
+            .core_node
+            .get_payment_max_routing_fee_mode(amount_sat * 1000)
+        {
+            eel::MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
+                MaxRoutingFeeMode::Relative { max_fee_permyriad }
+            }
+            eel::MaxRoutingFeeMode::Absolute { max_fee_msat } => MaxRoutingFeeMode::Absolute {
+                max_fee_amount: max_fee_msat.to_amount_up(&self.get_exchange_rate()),
+            },
+        }
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {

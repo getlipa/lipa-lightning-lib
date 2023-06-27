@@ -27,6 +27,7 @@ pub mod invoice;
 mod logger;
 mod random;
 mod rapid_sync_client;
+mod router;
 mod storage_persister;
 mod task_manager;
 mod test_utils;
@@ -55,6 +56,8 @@ use crate::task_manager::{PeriodConfig, RestartIfFailedPeriod, TaskManager, Task
 use crate::tx_broadcaster::TxBroadcaster;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, Router, TxSync};
 
+pub use crate::router::MaxRoutingFeeMode;
+use crate::router::{FeeLimitingRouter, SimpleMaxRoutingFeeStrategy};
 use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
 use cipher::consts::U32;
@@ -116,6 +119,7 @@ pub struct LightningNode {
     peer_manager: Arc<PeerManager>,
     task_manager: Arc<Mutex<TaskManager>>,
     data_store: Arc<Mutex<DataStore>>,
+    max_routing_fee_strategy: Arc<SimpleMaxRoutingFeeStrategy>,
 }
 
 impl LightningNode {
@@ -196,11 +200,15 @@ impl LightningNode {
         ));
 
         // Step 13: Initialize the Router
-        let router = Arc::new(Router::new(
-            Arc::clone(&graph),
-            Arc::clone(&logger),
-            keys_manager.get_secure_random_bytes(),
-            Arc::clone(&scorer),
+        let max_routing_fee_strategy = Arc::new(SimpleMaxRoutingFeeStrategy::new(21_000, 50));
+        let router = Arc::new(FeeLimitingRouter::new(
+            Router::new(
+                Arc::clone(&graph),
+                Arc::clone(&logger),
+                keys_manager.get_secure_random_bytes(),
+                Arc::clone(&scorer),
+            ),
+            Arc::clone(&max_routing_fee_strategy),
         ));
 
         // (needed when using Electrum or BIP 157/158)
@@ -339,6 +347,7 @@ impl LightningNode {
             peer_manager,
             task_manager,
             data_store,
+            max_routing_fee_strategy,
         })
     }
 
@@ -416,6 +425,11 @@ impl LightningNode {
     ) -> std::result::Result<Invoice, DecodeInvoiceError> {
         let network = self.config.lock().unwrap().network;
         invoice::decode_invoice(&invoice, network)
+    }
+
+    pub fn get_payment_max_routing_fee_mode(&self, amount_msat: u64) -> MaxRoutingFeeMode {
+        self.max_routing_fee_strategy
+            .get_payment_max_fee_mode(amount_msat)
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {

@@ -1,6 +1,6 @@
 use crate::hinter::{CommandHint, CommandHinter};
 
-use uniffi_lipalightninglib::{Amount, TzConfig};
+use uniffi_lipalightninglib::{Amount, MaxRoutingFeeMode, TzConfig};
 
 use bitcoin::secp256k1::PublicKey;
 use chrono::offset::FixedOffset;
@@ -92,6 +92,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", message.red());
                     }
                 }
+                "getmaxroutingfeemode" => {
+                    if let Err(message) = get_max_routing_fee_mode(node, &mut words) {
+                        println!("{}", message.red());
+                    }
+                }
                 "payinvoice" => {
                     if let Err(message) = pay_invoice(node, &mut words) {
                         println!("{}", message.red());
@@ -158,6 +163,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "decodeinvoice <invoice>",
         "decodeinvoice ",
     ));
+    hints.insert(CommandHint::new(
+        "getmaxroutingfeemode <payment amount in SAT>",
+        "getmaxroutingfeemode ",
+    ));
     hints.insert(CommandHint::new("payinvoice <invoice>", "payinvoice "));
     hints.insert(CommandHint::new(
         "payopeninvoice <invoice> <amount in SAT>",
@@ -189,6 +198,7 @@ fn help() {
     println!();
     println!("  invoice <amount in SAT> [description]");
     println!("  decodeinvoice <invoice>");
+    println!("  getmaxroutingfeemode <payment amount in SAT>");
     println!("  payinvoice <invoice>");
     println!("  payopeninvoice <invoice> <amount in SAT>");
     println!();
@@ -384,6 +394,38 @@ fn decode_invoice(
         "  Expiry interval     {:?}",
         invoice_details.expiry_interval
     );
+
+    Ok(())
+}
+
+fn get_max_routing_fee_mode(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<(), String> {
+    let amount_argument = match words.next() {
+        Some(amount) => match amount.parse::<u64>() {
+            Ok(parsed) => Ok(parsed),
+            Err(_) => return Err("Error: SAT amount must be an integer".to_string()),
+        },
+        None => Err("The payment amount in SAT is required".to_string()),
+    }?;
+
+    let max_fee_strategy = node.get_payment_max_routing_fee_mode(amount_argument);
+
+    match max_fee_strategy {
+        MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
+            println!(
+                "Max fee strategy: Relative (<= {} %)",
+                max_fee_permyriad as f64 / 100.0
+            );
+        }
+        MaxRoutingFeeMode::Absolute { max_fee_amount } => {
+            println!(
+                "Max fee strategy: Absolute (<= {})",
+                amount_to_string(max_fee_amount)
+            );
+        }
+    }
 
     Ok(())
 }
