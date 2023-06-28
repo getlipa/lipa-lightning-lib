@@ -1,5 +1,5 @@
 use crate::data_store::DataStore;
-use crate::errors::Result;
+use crate::errors::{PayErrorCode, Result};
 use crate::interfaces;
 use crate::payment::PaymentState;
 use crate::task_manager::TaskManager;
@@ -155,7 +155,14 @@ impl EventHandler for LipaEventHandler {
                     .data_store
                     .lock()
                     .unwrap()
-                    .new_payment_state(&payment_hash, PaymentState::Failed)
+                    .outgoing_payment_failed(
+                        &payment_hash,
+                        PayErrorCode::from_failure_reason(
+                            reason.unwrap_or(
+                                lightning::events::PaymentFailureReason::UnexpectedError,
+                            ),
+                        ), // `reason` could only be None if we deserialize events from old LDK versions
+                    )
                     .is_err()
                 {
                     error!("Failed to persist in the payment db that sending payment with hash {payment_hash} has failed");

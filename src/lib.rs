@@ -84,6 +84,7 @@ pub struct ChannelsInfo {
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,
+    pub fail_reason: Option<PayErrorCode>,
     pub hash: String,
     pub amount: Amount,
     pub invoice_details: InvoiceDetails,
@@ -338,6 +339,7 @@ fn to_payment(payment: eel::payment::Payment) -> Payment {
     Payment {
         payment_type: payment.payment_type,
         payment_state: payment.payment_state,
+        fail_reason: payment.fail_reason,
         hash: payment.hash,
         amount,
         invoice_details,

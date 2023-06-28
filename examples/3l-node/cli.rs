@@ -6,6 +6,7 @@ use bitcoin::secp256k1::PublicKey;
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
+use eel::payment::PaymentState;
 use rustyline::config::{Builder, CompletionType};
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -500,6 +501,9 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
             payment.latest_state_change_at.timezone_id
         );
         println!("      State:        {:?}", payment.payment_state);
+        if payment.payment_state == PaymentState::Failed {
+            println!("      Fail reason:  {:?}", payment.fail_reason);
+        }
         println!("      Amount:       {}", amount_to_string(payment.amount));
         println!(
             "      Network fees: {:?}",
