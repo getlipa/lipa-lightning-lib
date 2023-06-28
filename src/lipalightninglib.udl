@@ -292,6 +292,7 @@ interface MaxRoutingFeeMode {
 dictionary Payment {
     PaymentType payment_type;
     PaymentState payment_state;
+    PayErrorCode? fail_reason;
     string hash; // Hex representation of payment hash
     Amount amount; // Nominal amount specified in the invoice
     InvoiceDetails invoice_details;
@@ -479,4 +480,6 @@ enum PayErrorCode {
     "RecipientRejected", // The recipient has rejected the payment.
     "RetriesExhausted", // Retry attempts or timeout was reached.
     "NoMoreRoutes", // All possible routes failed.
+
+    "UnexpectedError", // An unexpected error occurred. This likely is a result of a bug within 3L/LDK and should be reported to lipa.
 };

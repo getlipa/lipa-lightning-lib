@@ -506,27 +506,38 @@ impl LightningNode {
         error: PaymentError,
         payment_hash: &str,
     ) -> PayResult<()> {
+        let (error, error_code) = match error {
+            PaymentError::Invoice(e) => (
+                Err(invalid_input(format!("Invalid invoice - {e}"))),
+                PayErrorCode::UnexpectedError,
+            ),
+            PaymentError::Sending(e) => match e {
+                RetryableSendFailure::PaymentExpired => (
+                    Err(runtime_error(
+                        PayErrorCode::InvoiceExpired,
+                        "Invoice has expired",
+                    )),
+                    PayErrorCode::InvoiceExpired,
+                ),
+                RetryableSendFailure::RouteNotFound => (
+                    Err(runtime_error(
+                        PayErrorCode::NoRouteFound,
+                        "Failed to find any route",
+                    )),
+                    PayErrorCode::NoRouteFound,
+                ),
+                RetryableSendFailure::DuplicatePayment => (
+                    Err(permanent_failure("Duplicate payment")),
+                    PayErrorCode::UnexpectedError,
+                ),
+            },
+        };
         self.data_store
             .lock()
             .unwrap()
-            .new_payment_state(payment_hash, PaymentState::Failed)
+            .outgoing_payment_failed(payment_hash, error_code)
             .map_to_permanent_failure("Failed to persist payment result")?;
-        match error {
-            PaymentError::Invoice(e) => Err(invalid_input(format!("Invalid invoice - {e}"))),
-            PaymentError::Sending(e) => match e {
-                RetryableSendFailure::PaymentExpired => Err(runtime_error(
-                    PayErrorCode::InvoiceExpired,
-                    "Invoice has expired",
-                )),
-                RetryableSendFailure::RouteNotFound => Err(runtime_error(
-                    PayErrorCode::NoRouteFound,
-                    "Failed to find any route",
-                )),
-                RetryableSendFailure::DuplicatePayment => {
-                    Err(permanent_failure("Duplicate payment"))
-                }
-            },
-        }
+        error
     }
 
     fn validate_persist_new_outgoing_payment_attempt(

@@ -122,6 +122,7 @@ mod data_store_test {
         let payment_dummy = Payment {
             payment_type: PaymentType::Receiving,
             payment_state: PaymentState::Succeeded,
+            fail_reason: None,
             hash: "<unknown>".to_string(),
             amount_msat: TWENTY_K_SATS,
             invoice: invoice.clone(),
@@ -163,6 +164,7 @@ mod data_store_test {
         let mut payment_dummy = Payment {
             payment_type: PaymentType::Sending,
             payment_state: PaymentState::Created,
+            fail_reason: None,
             hash: "<unknown>".to_string(),
             amount_msat: TWO_K_SATS,
             invoice: Invoice::from_str(&invoice).unwrap(),

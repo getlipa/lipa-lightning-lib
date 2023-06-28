@@ -1,6 +1,7 @@
 use crate::interfaces::ExchangeRate;
 use lightning_invoice::Invoice;
 
+use crate::errors::PayErrorCode;
 use num_enum::TryFromPrimitive;
 use std::time::SystemTime;
 
@@ -56,6 +57,7 @@ impl FiatValues {
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,
+    pub fail_reason: Option<PayErrorCode>,
     pub hash: String,
     pub amount_msat: u64,
     pub invoice: Invoice,

@@ -1,5 +1,5 @@
 use crate::config::TzConfig;
-use crate::errors::{Error, Result};
+use crate::errors::{Error, PayErrorCode, Result};
 use crate::interfaces::ExchangeRate;
 use crate::migrations::get_migrations;
 use crate::payment::{Payment, PaymentState, PaymentType, TzTime};
@@ -156,6 +156,27 @@ impl DataStore {
         self.fill_network_fees(hash, network_fees_msat)
     }
 
+    pub fn outgoing_payment_failed(&self, hash: &str, fail_reason: PayErrorCode) -> Result<()> {
+        self.db_conn
+            .execute(
+                "\
+                INSERT INTO events (payment_id, type, timezone_id, timezone_utc_offset_secs, fail_reason) \
+                VALUES (
+                    (SELECT payment_id FROM payments WHERE hash=?1), ?2, ?3, ?4, ?5)
+                ",
+                (
+                    hash,
+                    PaymentState::Failed as u8,
+                    &self.timezone_config.timezone_id,
+                    self.timezone_config.timezone_utc_offset_secs,
+                    fail_reason as u8,
+                ),
+            )
+            .map_to_invalid_input("Failed to add payment failed event to db")?;
+
+        Ok(())
+    }
+
     pub fn new_payment_state(&self, hash: &str, state: PaymentState) -> Result<()> {
         self.db_conn
             .execute(
@@ -171,7 +192,7 @@ impl DataStore {
                     self.timezone_config.timezone_utc_offset_secs,
                 ),
             )
-            .map_to_invalid_input("Failed to add payment retrying event to payments db")?;
+            .map_to_invalid_input("Failed to add payment event to db")?;
 
         Ok(())
     }
@@ -216,7 +237,7 @@ impl DataStore {
             lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
             recent_events.timezone_id, recent_events.timezone_utc_offset_secs, description, \
             creation_events.inserted_at, creation_events.timezone_id, creation_events.timezone_utc_offset_secs, \
-            h.fiat_currency, h.rate, h.updated_at \
+            h.fiat_currency, h.rate, h.updated_at, recent_events.fail_reason \
             FROM payments \
             JOIN recent_events ON payments.payment_id=recent_events.payment_id \
             JOIN creation_events ON payments.payment_id=creation_events.payment_id \
@@ -248,7 +269,7 @@ impl DataStore {
             lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
             recent_events.timezone_id, recent_events.timezone_utc_offset_secs, description, \
             creation_events.inserted_at, creation_events.timezone_id, creation_events.timezone_utc_offset_secs, \
-            h.fiat_currency, h.rate, h.updated_at \
+            h.fiat_currency, h.rate, h.updated_at, recent_events.fail_reason \
             FROM payments \
             JOIN recent_events ON payments.payment_id=recent_events.payment_id \
             JOIN creation_events ON payments.payment_id=creation_events.payment_id \
@@ -278,7 +299,7 @@ impl DataStore {
             lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
             recent_events.timezone_id, recent_events.timezone_utc_offset_secs, description, \
             creation_events.inserted_at, creation_events.timezone_id, creation_events.timezone_utc_offset_secs, \
-            h.fiat_currency, h.rate, h.updated_at \
+            h.fiat_currency, h.rate, h.updated_at, recent_events.fail_reason \
             FROM payments \
             JOIN recent_events ON payments.payment_id=recent_events.payment_id \
             JOIN creation_events ON payments.payment_id=creation_events.payment_id \
@@ -475,9 +496,17 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     } else {
         None
     };
+    let fail_reason: Option<u8> = row.get(20)?;
+    let fail_reason = match fail_reason {
+        None => None,
+        Some(r) => Some(PayErrorCode::try_from(r).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(1, Type::Integer, Box::new(e))
+        })?),
+    };
     Ok(Payment {
         payment_type,
         payment_state,
+        fail_reason,
         hash,
         amount_msat,
         invoice,
@@ -526,6 +555,7 @@ mod tests {
     use crate::interfaces::ExchangeRate;
     use crate::payment::{FiatValues, PaymentState, PaymentType};
 
+    use crate::errors::PayErrorCode;
     use lightning::chain::keysinterface::SpendableOutputDescriptor;
     use lightning::ln::PaymentSecret;
     use lightning::util::ser::Readable;
@@ -711,12 +741,13 @@ mod tests {
         sleep(Duration::from_secs(1));
 
         data_store
-            .new_payment_state(hash, PaymentState::Failed)
+            .outgoing_payment_failed(hash, PayErrorCode::NoMoreRoutes)
             .unwrap();
         let payments = data_store.get_latest_payments(100).unwrap();
         assert_eq!(payments.len(), 2);
         let payment = payments.get(0).unwrap();
         assert_eq!(payment.payment_state, PaymentState::Failed);
+        assert_eq!(payment.fail_reason, Some(PayErrorCode::NoMoreRoutes));
         assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
         assert_eq!(payment.latest_state_change_at.timezone_id, TEST_TZ_ID);

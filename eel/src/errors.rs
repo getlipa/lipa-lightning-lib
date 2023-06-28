@@ -1,3 +1,5 @@
+use lightning::events::PaymentFailureReason;
+use num_enum::TryFromPrimitive;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -18,7 +20,8 @@ impl Display for RuntimeErrorCode {
 pub type Error = perro::Error<RuntimeErrorCode>;
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
+#[repr(u8)]
 pub enum PayErrorCode {
     InvoiceExpired,
     AlreadyUsedInvoice,
@@ -27,6 +30,20 @@ pub enum PayErrorCode {
     RecipientRejected,
     RetriesExhausted,
     NoMoreRoutes,
+    UnexpectedError,
+}
+
+impl PayErrorCode {
+    pub(crate) fn from_failure_reason(reason: PaymentFailureReason) -> Self {
+        match reason {
+            PaymentFailureReason::RecipientRejected => Self::RecipientRejected,
+            PaymentFailureReason::UserAbandoned => Self::UnexpectedError,
+            PaymentFailureReason::RetriesExhausted => Self::RetriesExhausted,
+            PaymentFailureReason::PaymentExpired => Self::InvoiceExpired,
+            PaymentFailureReason::RouteNotFound => Self::NoMoreRoutes,
+            PaymentFailureReason::UnexpectedError => Self::UnexpectedError,
+        }
+    }
 }
 
 impl Display for PayErrorCode {
