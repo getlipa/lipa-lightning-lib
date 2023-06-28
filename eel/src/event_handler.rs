@@ -157,7 +157,11 @@ impl EventHandler for LipaEventHandler {
                     .unwrap()
                     .outgoing_payment_failed(
                         &payment_hash,
-                        PayErrorCode::from_failure_reason(reason.unwrap()), // `reason` could only be None if we deserialize events from old LDK versions
+                        PayErrorCode::from_failure_reason(
+                            reason.unwrap_or(
+                                lightning::events::PaymentFailureReason::UnexpectedError,
+                            ),
+                        ), // `reason` could only be None if we deserialize events from old LDK versions
                     )
                     .is_err()
                 {
