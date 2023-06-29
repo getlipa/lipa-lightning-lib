@@ -157,7 +157,7 @@ interface LightningNode {
 // * timezone_config - a timezone configuration object
 dictionary Config {
     EnvironmentCode environment;
-    sequence<u8> seed;
+    bytes seed;
     string fiat_currency;
     string local_persistence_path;
     TzConfig timezone_config;
