@@ -6,7 +6,7 @@ use crate::task_manager::TaskManager;
 use crate::types::ChannelManager;
 
 use bitcoin::hashes::hex::ToHex;
-use lightning::events::{Event, EventHandler, PaymentPurpose};
+use lightning::events::{Event, EventHandler, PaymentFailureReason, PaymentPurpose};
 use log::{error, info, trace};
 use std::sync::{Arc, Mutex};
 
@@ -150,19 +150,16 @@ impl EventHandler for LipaEventHandler {
                 reason,
             } => {
                 let payment_hash = payment_hash.0.to_hex();
-                info!("EVENT: PaymentFailed - hash: {payment_hash}, {reason:?}");
+                // `reason` could only be None if we deserialize events from old LDK versions
+                let reason = PayErrorCode::from_failure_reason(
+                    reason.unwrap_or(PaymentFailureReason::PaymentExpired),
+                );
+                info!("EVENT: PaymentFailed - hash: {payment_hash} because {reason}");
                 if self
                     .data_store
                     .lock()
                     .unwrap()
-                    .outgoing_payment_failed(
-                        &payment_hash,
-                        PayErrorCode::from_failure_reason(
-                            reason.unwrap_or(
-                                lightning::events::PaymentFailureReason::UnexpectedError,
-                            ),
-                        ), // `reason` could only be None if we deserialize events from old LDK versions
-                    )
+                    .outgoing_payment_failed(&payment_hash, reason)
                     .is_err()
                 {
                     error!("Failed to persist in the payment db that sending payment with hash {payment_hash} has failed");
