@@ -38,7 +38,7 @@ impl Environment {
                 network: Network::Testnet,
                 backend_url,
                 backend_health_url,
-                lsp_url: env!("LSP_URL_DEV").to_string(),
+                lsp_url: "https://testnet-lsp.voltageapi.com".to_string(),
                 lsp_token: env!("LSP_TOKEN_DEV").to_string(),
                 esplora_url: env!("ESPLORA_URL_DEV").to_string(),
                 rgs_url: env!("RGS_URL_DEV").to_string(),

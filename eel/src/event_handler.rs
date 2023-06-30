@@ -226,9 +226,14 @@ impl EventHandler for LipaEventHandler {
                 channel_type,
             } => {
                 info!("EVENT: OpenChannelRequest");
-                let result = if channel_type.supports_zero_conf() {
+                // TODO: The request does not indicate that it supports zero-conf.
+                let flow_prototype = true;
+                let result = if channel_type.supports_zero_conf() || flow_prototype {
                     if let Some(lsp_info) = self.task_manager.lock().unwrap().get_lsp_info() {
                         if lsp_info.node_info.pubkey == counterparty_node_id {
+                            info!(
+                                "Accepting zero-conf channel from trusted {counterparty_node_id}"
+                            );
                             self.channel_manager
                                 .accept_inbound_channel_from_trusted_peer_0conf(
                                     &temporary_channel_id,
@@ -246,6 +251,7 @@ impl EventHandler for LipaEventHandler {
                                 &counterparty_node_id,
                             )
                         } else {
+                            info!("Accepting channel from untrusted {counterparty_node_id} (supports zero-conf)");
                             self.channel_manager.accept_inbound_channel(
                                 &temporary_channel_id,
                                 &counterparty_node_id,
@@ -262,6 +268,7 @@ impl EventHandler for LipaEventHandler {
                             &counterparty_node_id,
                         )
                     } else {
+                        info!("Accepting channel from {counterparty_node_id}, could not learn if it trusted peer");
                         self.channel_manager.accept_inbound_channel(
                             &temporary_channel_id,
                             &counterparty_node_id,
@@ -269,6 +276,7 @@ impl EventHandler for LipaEventHandler {
                         )
                     }
                 } else {
+                    info!("Accepting channel from {counterparty_node_id} (does not support zero-conf)");
                     self.channel_manager.accept_inbound_channel(
                         &temporary_channel_id,
                         &counterparty_node_id,

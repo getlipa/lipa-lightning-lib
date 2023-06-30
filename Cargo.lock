@@ -745,6 +745,7 @@ dependencies = [
  "rusqlite",
  "rustyline",
  "secp256k1",
+ "serde",
  "serde_json",
  "serial_test",
  "simplelog",

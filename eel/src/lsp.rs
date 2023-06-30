@@ -49,6 +49,7 @@ pub(crate) struct LspInfo {
     pub node_info: NodeInfo,
 }
 
+#[allow(dead_code)]
 pub(crate) struct PaymentRequest {
     pub payment_hash: PaymentHash,
     pub payment_secret: PaymentSecret,
@@ -56,11 +57,13 @@ pub(crate) struct PaymentRequest {
     pub amount_msat: u64,
 }
 
+#[allow(dead_code)]
 pub(crate) struct LspClient {
     endpoint: Endpoint,
     interceptor: AuthInterceptor,
 }
 
+#[allow(dead_code)]
 impl LspClient {
     pub fn new(address: String, auth_token: String) -> Result<Self> {
         let bearer = format!("Bearer {auth_token}")

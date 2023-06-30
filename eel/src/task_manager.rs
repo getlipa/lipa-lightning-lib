@@ -1,13 +1,14 @@
 use crate::async_runtime::{Handle, RepeatingTaskHandle};
+use crate::data_store::DataStore;
 use crate::errors::Result;
 use crate::fee_estimator::FeeEstimator;
+use crate::flow::LspClient;
 use crate::interfaces::{ExchangeRate, ExchangeRateProvider};
-use crate::lsp::{LspClient, LspInfo};
+use crate::lsp::LspInfo;
 use crate::p2p_networking::{connect_peer, LnPeer};
 use crate::rapid_sync_client::RapidSyncClient;
 use crate::types::{ChainMonitor, ChannelManager, PeerManager, TxSync};
 
-use crate::data_store::DataStore;
 use lightning::chain::Confirm;
 use log::{debug, error};
 use std::sync::{Arc, Mutex};

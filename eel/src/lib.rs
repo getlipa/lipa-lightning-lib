@@ -5,6 +5,7 @@ extern crate core;
 pub mod config;
 mod data_store;
 pub mod errors;
+pub mod flow;
 pub mod interfaces;
 pub mod key_derivation;
 pub mod keys_manager;
@@ -41,12 +42,13 @@ use crate::errors::*;
 use crate::esplora_client::EsploraClient;
 use crate::event_handler::LipaEventHandler;
 use crate::fee_estimator::FeeEstimator;
+use crate::flow::{calculate_fee, LspClient};
 use crate::interfaces::{EventHandler, ExchangeRate, ExchangeRateProvider, RemoteStorage};
 use crate::invoice::{create_invoice, CreateInvoiceParams};
 use crate::keys_manager::init_keys_manager;
 use crate::limits::PaymentAmountLimits;
 use crate::logger::LightningLogger;
-use crate::lsp::{calculate_fee, LspClient, LspFee};
+use crate::lsp::LspFee;
 use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info, NodeInfo};
 use crate::payment::{Payment, PaymentState, PaymentType};
 use crate::random::generate_random_bytes;
@@ -277,10 +279,7 @@ impl LightningNode {
         )?);
 
         // Step 19: Initialize the LspClient
-        let lsp_client = Arc::new(LspClient::new(
-            config.lsp_url.clone(),
-            config.lsp_token.clone(),
-        )?);
+        let lsp_client = Arc::new(LspClient::new(config.lsp_url.clone())?);
 
         // Step 20: Initialize the DataStore
         let data_store_path = Path::new(&config.local_persistence_path).join("db.db3");

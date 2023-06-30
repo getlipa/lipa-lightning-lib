@@ -1,6 +1,6 @@
 use crate::errors::*;
+use crate::flow::LspClient;
 use crate::interfaces::ExchangeRate;
-use crate::lsp::{LspClient, PaymentRequest};
 use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info};
 use crate::types::ChannelManager;
 use bitcoin::bech32::ToBase32;
@@ -117,24 +117,54 @@ pub(crate) async fn create_invoice(
         let (payment_hash, payment_secret) = channel_manager
             .create_inbound_payment(Some(incoming_amount_msat), 1000, None)
             .map_to_invalid_input("Amount is greater than total bitcoin supply")?;
+        let payment_hash = sha256::Hash::from_slice(&payment_hash.0)
+            .map_to_permanent_failure("Failed to convert payment hash")?;
 
-        let payment_request = PaymentRequest {
-            payment_hash,
-            payment_secret,
-            payee_pubkey,
-            amount_msat,
-        };
-        let hint_hop = lsp_client
-            .register_payment(&payment_request, &lsp_info)
-            .await
-            .lift_invalid_input()
-            .prefix_error("Failed to register payment")?;
-        (
-            payment_hash,
-            payment_secret,
-            vec![RouteHint(vec![hint_hop])],
-            lsp_fee,
-        )
+        let builder = InvoiceBuilder::new(params.currency)
+            .description(params.description.clone())
+            .payment_hash(payment_hash)
+            .payment_secret(payment_secret)
+            .payee_pub_key(payee_pubkey)
+            .current_timestamp()
+            .expiry_time(Duration::from_secs(10 * 60))
+            .min_final_cltv_expiry_delta(144)
+            .basic_mpp()
+            .amount_milli_satoshis(incoming_amount_msat);
+
+        let raw_invoice = builder
+            .build_raw()
+            .map_to_permanent_failure("Failed to construct invoice")?;
+
+        let signature = keys_manager
+            .sign_invoice(
+                raw_invoice.hrp.to_string().as_bytes(),
+                &raw_invoice.data.to_base32(),
+                Recipient::Node,
+            )
+            .map_to_permanent_failure("Failed to sign invoice")?;
+        let invoice = raw_invoice
+            .sign(|_| Ok::<RecoverableSignature, ()>(signature))
+            .map_to_permanent_failure("Failed to sign invoice")?;
+        let wrapped_invoice = lsp_client.wrap_invoice(invoice.to_string()).await?;
+        let invoice = Invoice::from_str(&wrapped_invoice).map_to_runtime_error(
+            RuntimeErrorCode::LspServiceUnavailable,
+            "Invalid wrapped invoice",
+        )?;
+
+        data_store
+            .new_incoming_payment(
+                &payment_hash.to_hex(),
+                amount_msat,
+                lsp_fee,
+                &params.description,
+                &invoice.to_string(),
+                &params.metadata,
+                fiat_currency,
+                exchange_rates,
+            )
+            .map_to_permanent_failure("Failed to store new payment in payment db")?;
+
+        return Ok(invoice.into_signed_raw());
     } else {
         let amount_msat = if amount_msat > 0 {
             Some(amount_msat)
