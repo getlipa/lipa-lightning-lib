@@ -19,6 +19,7 @@ nigiri = []
 eel = { path = "eel" }
 
 log = "0.4.19"
+simplelog = { version = "0.12.0" }
 thiserror = "1.0.40"
 uniffi = "0.24.1"
 
@@ -37,14 +38,7 @@ rand = "0.8.5"
 rustyline = { version = "12.0.0", features = ["derive"] }
 serde_json = "1.0"
 serial_test = { version =  "2.0.0", features = ["file_locks"] }
-simplelog = { version = "0.12.0", features = ["test"] }
 strip-ansi-escapes = "0.1.1"
-
-[target.'cfg(target_os = "ios")'.dependencies]
-oslog = "0.2.0"
-
-[target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.13.0"
 
 [package.metadata.cross.build]
 pre-build = ["apt update --no-show-upgraded && apt install --yes protobuf-compiler"]
