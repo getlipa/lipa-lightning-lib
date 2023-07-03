@@ -9,7 +9,7 @@ mod eel_interface_impl;
 mod environment;
 mod exchange_rate_provider;
 mod invoice_details;
-mod native_logger;
+mod logger;
 mod recovery;
 mod sanitize_input;
 
@@ -37,7 +37,7 @@ use eel::LogLevel;
 pub use eel::Network;
 use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel};
-use native_logger::init_native_logger_once;
+use logger::init_logger_once;
 use perro::{MapToError, ResultTrait};
 use std::sync::Arc;
 use std::{env, fs};
