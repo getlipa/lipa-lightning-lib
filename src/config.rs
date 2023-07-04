@@ -8,4 +8,5 @@ pub struct Config {
     pub fiat_currency: String,
     pub local_persistence_path: String,
     pub timezone_config: TzConfig,
+    pub enable_file_logging: bool,
 }
