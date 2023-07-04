@@ -33,14 +33,17 @@ use eel::keys_manager::{mnemonic_to_secret, words_by_prefix, MnemonicError};
 pub use eel::payment::FiatValues;
 use eel::payment::{PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
-use eel::LogLevel;
 pub use eel::Network;
 use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel};
 use logger::init_logger_once;
 use perro::{MapToError, ResultTrait};
+use std::path::Path;
 use std::sync::Arc;
 use std::{env, fs};
+
+const LOG_LEVEL: log::Level = log::Level::Trace;
+const LOG_FILENAME: &str = "logs.txt";
 
 const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 
@@ -113,6 +116,12 @@ impl LightningNode {
             "Failed to create directory: {}",
             config.local_persistence_path,
         ))?;
+        if config.enable_file_logging {
+            init_logger_once(
+                LOG_LEVEL,
+                &Path::new(&config.local_persistence_path).join(LOG_FILENAME),
+            );
+        }
 
         let seed = sanitize_input::strong_type_seed(&config.seed)?;
 

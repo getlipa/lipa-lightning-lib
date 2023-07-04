@@ -35,6 +35,7 @@ impl NodeHandle {
                     timezone_id: String::from("int_test_timezone_id"),
                     timezone_utc_offset_secs: 1234,
                 },
+                enable_file_logging: false,
             },
         }
     }
@@ -59,6 +60,7 @@ impl NodeHandle {
             self.config.environment,
             self.config.seed.to_vec(),
             self.config.local_persistence_path.clone(),
+            false,
         )
     }
 }

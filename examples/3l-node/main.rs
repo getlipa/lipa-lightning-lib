@@ -9,7 +9,6 @@ use uniffi_lipalightninglib::LightningNode;
 use uniffi_lipalightninglib::{Config, EnvironmentCode, TzConfig};
 
 use eel::keys_manager::{generate_secret, mnemonic_to_secret};
-use log::info;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, fs};
@@ -25,9 +24,6 @@ fn main() {
     // Create dir for node data persistence.
     fs::create_dir_all(&base_dir).unwrap();
 
-    init_logger(&base_dir);
-    info!("Logger initialized");
-
     let events = Box::new(PrintEventsHandler {});
 
     let seed = read_or_generate_seed(&base_dir);
@@ -41,6 +37,7 @@ fn main() {
             timezone_id: String::from("Africa/Tunis"),
             timezone_utc_offset_secs: 1 * 60 * 60,
         },
+        enable_file_logging: true,
     };
 
     let node = LightningNode::new(config, events).unwrap();
@@ -66,41 +63,6 @@ fn read_or_generate_seed(base_dir: &str) -> Vec<u8> {
             secret.seed
         }
     }
-}
-
-fn init_logger(path: &String) {
-    let log_file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(format!("{}/{}", path, LOG_FILE))
-        .unwrap();
-
-    let config = simplelog::ConfigBuilder::new()
-        .add_filter_ignore_str("h2")
-        .add_filter_ignore_str("hyper")
-        .add_filter_ignore_str("mio")
-        .add_filter_ignore_str("reqwest")
-        .add_filter_ignore_str("rustls")
-        .add_filter_ignore_str("rustyline")
-        .add_filter_ignore_str("tokio_util")
-        .add_filter_ignore_str("tonic")
-        .add_filter_ignore_str("tower")
-        .add_filter_ignore_str("tracing")
-        .add_filter_ignore_str("ureq")
-        .add_filter_ignore_str("want")
-        .set_time_format_rfc3339()
-        .build();
-
-    simplelog::CombinedLogger::init(vec![
-        simplelog::TermLogger::new(
-            log::LevelFilter::Info,
-            simplelog::Config::default(),
-            simplelog::TerminalMode::Mixed,
-            simplelog::ColorChoice::Auto,
-        ),
-        simplelog::WriteLogger::new(log::LevelFilter::Trace, config, log_file),
-    ])
-    .unwrap();
 }
 
 fn map_environment_code(code: &str) -> EnvironmentCode {

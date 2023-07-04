@@ -155,12 +155,14 @@ interface LightningNode {
 //      Only the current instance of the app should have access to the provided directory.
 //      On app uninstall/deletion, the directory should be purged.
 // * timezone_config - a timezone configuration object
+// * enable_file_logging - if set to true, logs will be created in the provided local_persistence_path
 dictionary Config {
     EnvironmentCode environment;
     bytes seed;
     string fiat_currency;
     string local_persistence_path;
     TzConfig timezone_config;
+    boolean enable_file_logging;
 };
 
 // A code of the environment for the node to run.
@@ -352,9 +354,6 @@ dictionary Amount {
 //
 
 namespace lipalightninglib {
-    // Initiate the logger and set the log level
-    void init_logger_once(LogLevel min_level, string path);
-
     // Generate a new mnemonic with an optional passphrase. Provide an empty string to use no passphrase.
     [Throws=SimpleError]
     Secret generate_secret(string passphrase);
@@ -374,15 +373,7 @@ namespace lipalightninglib {
     // It should and can only be called on a fresh install of the app, if the user wants to recover a previously created wallet.
     // If no existing wallet is found, returns an error.
     [Throws=LnError]
-    void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path);
-};
-
-enum LogLevel {
-    "Error",
-    "Warn",
-    "Info",
-    "Debug",
-    "Trace",
+    void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path, boolean enable_file_logging);
 };
 
 // An object that holds necessary secrets. Should be dealt with carefully and never be logged.
