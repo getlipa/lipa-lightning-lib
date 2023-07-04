@@ -5,7 +5,7 @@ pub struct PrintEventsHandler {}
 
 impl EventHandler for PrintEventsHandler {
     fn payment_received(&self, payment_hash: String) {
-        info!("Received a payment for payment hash {payment_hash}");
+        info!("Received a payment with hash {payment_hash}");
     }
 
     fn payment_sent(&self, payment_hash: String, payment_preimage: String) {
@@ -13,7 +13,7 @@ impl EventHandler for PrintEventsHandler {
     }
 
     fn payment_failed(&self, payment_hash: String) {
-        info!("A payment has failed! Its hash is {payment_hash}");
+        info!("An outgoing payment has failed! Its hash is {payment_hash}");
     }
 
     fn channel_closed(&self, channel_id: String, reason: String) {
