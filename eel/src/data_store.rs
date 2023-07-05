@@ -197,6 +197,34 @@ impl DataStore {
         Ok(())
     }
 
+    pub fn update_payment_data(
+        &mut self,
+        hash: &str,
+        amount_msat: u64,
+        metadata: &str,
+        fiat_currency: &str,
+        exchange_rates: Vec<ExchangeRate>,
+    ) -> Result<()> {
+        let tx = self
+            .db_conn
+            .transaction()
+            .map_to_permanent_failure("Failed to begin SQL transaction")?;
+        let snapshot_id = insert_snapshot(&tx, exchange_rates)?;
+
+        tx.execute(
+            "\
+            UPDATE payments \
+            SET amount_msat=?1, metadata=?2, fiat_currency=?3, exchange_rates_history_snaphot_id=?4 \
+            WHERE hash=?5 \
+            ",
+            (amount_msat, metadata, fiat_currency, snapshot_id, hash),
+        )
+        .map_to_invalid_input("Failed to update payment data in db")?;
+
+        tx.commit()
+            .map_to_permanent_failure("Failed to commit payment data update transaction")
+    }
+
     pub fn fill_preimage(&self, hash: &str, preimage: &str) -> Result<()> {
         self.db_conn
             .execute(
@@ -816,7 +844,7 @@ mod tests {
         assert_eq!(payment.network_fees_msat, None);
         assert_eq!(payment.lsp_fees_msat, None);
         assert_eq!(payment.metadata, metadata);
-        assert_eq!(payment.exchange_rate, Some(exchange_rate));
+        assert_eq!(payment.exchange_rate, Some(exchange_rate.clone()));
 
         assert_eq!(payment.created_at.timezone_id, TEST_TZ_ID);
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
@@ -848,6 +876,27 @@ mod tests {
 
         let payment_by_hash = data_store.get_payment(hash).unwrap();
         assert_eq!(payment, &payment_by_hash);
+
+        let exchange_rate_eur = ExchangeRate {
+            currency_code: String::from("EUR"),
+            rate: 3230,
+            updated_at: SystemTime::now(),
+        };
+        data_store
+            .update_payment_data(
+                hash,
+                amount_msat + 5,
+                "Test metadata 3 - updated",
+                "EUR",
+                vec![exchange_rate_eur.clone()],
+            )
+            .unwrap();
+        let payments = data_store.get_latest_payments(100).unwrap();
+        assert_eq!(payments.len(), 3);
+        let payment = payments.get(0).unwrap();
+        assert_eq!(payment.amount_msat, amount_msat + 5);
+        assert_eq!(payment.metadata, String::from("Test metadata 3 - updated"));
+        assert_eq!(payment.exchange_rate.clone().unwrap(), exchange_rate_eur);
     }
 
     fn reset_db(db_name: &str) {

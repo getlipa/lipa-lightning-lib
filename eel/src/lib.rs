@@ -566,6 +566,17 @@ impl LightningNode {
                             PaymentState::Retried,
                         )
                         .map_to_permanent_failure("Failed to persist outgoing payment")?;
+                    let fiat_currency = self.config.lock().unwrap().fiat_currency.clone();
+                    let exchange_rates = self.task_manager.lock().unwrap().get_exchange_rates();
+                    data_store
+                        .update_payment_data(
+                            &invoice.payment_hash().to_string(),
+                            amount_msat,
+                            metadata,
+                            &fiat_currency,
+                            exchange_rates,
+                        )
+                        .map_to_permanent_failure("Failed to persist updated payment data")?;
                 }
             }
         } else {
