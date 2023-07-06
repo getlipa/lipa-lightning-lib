@@ -24,7 +24,7 @@ thiserror = "1.0.41"
 uniffi = "0.24.1"
 
 chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.1.1" }
-honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.1.1" }
+honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.2.0" }
 mole = { git = "https://github.com/getlipa/wild", tag = "v1.1.1" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.1" }
 
