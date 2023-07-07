@@ -399,7 +399,7 @@ dictionary Secret {
 
 [Error]
 interface SimpleError {
-    SimpleError(string msg);
+    Simple(string msg);
 };
 
 [Error]

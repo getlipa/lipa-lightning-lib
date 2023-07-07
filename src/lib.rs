@@ -50,7 +50,7 @@ const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum SimpleError {
     #[error("SimpleError: {msg}")]
-    SimpleError { msg: String },
+    Simple { msg: String },
 }
 
 pub struct PaymentAmountLimits {
@@ -317,7 +317,7 @@ pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) 
 }
 
 pub fn generate_secret(passphrase: String) -> std::result::Result<Secret, SimpleError> {
-    eel::keys_manager::generate_secret(passphrase).map_err(|msg| SimpleError::SimpleError { msg })
+    eel::keys_manager::generate_secret(passphrase).map_err(|msg| SimpleError::Simple { msg })
 }
 
 fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
