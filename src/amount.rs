@@ -4,6 +4,7 @@ use std::time::SystemTime;
 pub struct FiatValue {
     pub minor_units: u64,
     pub currency_code: String,
+    pub rate: u32,
     pub converted_at: SystemTime,
 }
 
@@ -45,6 +46,7 @@ fn msats_to_amount(rounding: Rounding, msats: u64, rate: &Option<ExchangeRate>) 
     let fiat = rate.as_ref().map(|rate| FiatValue {
         minor_units: round(msats * 100 / rate.rate as u64, rounding),
         currency_code: rate.currency_code.clone(),
+        rate: rate.rate,
         converted_at: rate.updated_at,
     });
     Amount { sats, fiat }
