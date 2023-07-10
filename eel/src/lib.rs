@@ -74,8 +74,8 @@ use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_invoice::payment::{pay_invoice, pay_zero_value_invoice, PaymentError};
 use lightning_invoice::Currency;
 pub use lightning_invoice::{Invoice, InvoiceDescription};
-use log::error;
 pub use log::Level as LogLevel;
+use log::{error, trace};
 use log::{info, warn};
 pub use perro::{
     invalid_input, permanent_failure, runtime_error, MapToError, MapToErrorForUnitType,
@@ -446,6 +446,7 @@ impl LightningNode {
 
         self.validate_persist_new_outgoing_payment_attempt(&invoice, amount_msat, &metadata)?;
 
+        self.log_node_state();
         let payment_result = pay_invoice(
             &invoice,
             Retry::Timeout(Duration::from_secs(15)),
@@ -485,6 +486,7 @@ impl LightningNode {
 
         self.validate_persist_new_outgoing_payment_attempt(&invoice, amount_msat, &metadata)?;
 
+        self.log_node_state();
         let payment_result = pay_zero_value_invoice(
             &invoice,
             amount_msat,
@@ -698,6 +700,46 @@ impl LightningNode {
         }
 
         Ok(balance)
+    }
+
+    fn log_node_state(&self) {
+        let node_info = self.get_node_info();
+
+        trace!(
+            "Logging node state...\n\
+            Number of connected peers: {}\n\
+            Number of channels: {}\n\
+            Number of usable channels: {}\n\
+            Local balance msat: {}\n\
+            Inbound capacity msat: {}\n\
+            Outbound capacity msat: {}\n\
+            Capacity of all channels msat: {}",
+            node_info.num_peers,
+            node_info.channels_info.num_channels,
+            node_info.channels_info.num_usable_channels,
+            node_info.channels_info.local_balance_msat,
+            node_info.channels_info.inbound_capacity_msat,
+            node_info.channels_info.outbound_capacity_msat,
+            node_info.channels_info.total_channel_capacities_msat
+        );
+        trace!("Per-channel state:");
+        let channels = self.channel_manager.list_channels();
+        for channel in channels {
+            trace!(
+                "Channel {}:\n\
+                Usable: {}\n\
+                Channel size sat: {}\n\
+                Outbound capacity msat: {}\n\
+                Inbound capacity msat: {}\n\
+                Next outbound htlc limit msat: {}",
+                channel.channel_id.to_hex(),
+                channel.is_usable,
+                channel.channel_value_satoshis,
+                channel.outbound_capacity_msat,
+                channel.inbound_capacity_msat,
+                channel.next_outbound_htlc_limit_msat
+            );
+        }
     }
 
     pub fn panic_directly(&self) {
