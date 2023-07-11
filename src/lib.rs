@@ -35,7 +35,7 @@ use eel::payment::{PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
 pub use eel::Network;
 use honey_badger::secrets::{generate_keypair, KeyPair};
-use honey_badger::{Auth, AuthLevel};
+use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
 use logger::init_logger_once;
 use perro::{MapToError, ResultTrait};
 use std::path::Path;
@@ -102,6 +102,7 @@ pub struct Payment {
 
 pub struct LightningNode {
     core_node: eel::LightningNode,
+    auth: Arc<Auth>,
 }
 
 pub enum MaxRoutingFeeMode {
@@ -149,8 +150,10 @@ impl LightningNode {
 
         let user_event_handler = Box::new(EventsImpl { events_callback });
 
-        let exchange_rate_provider =
-            Box::new(ExchangeRateProviderImpl::new(environment.backend_url, auth));
+        let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
+            environment.backend_url,
+            Arc::clone(&auth),
+        ));
 
         let core_node = eel::LightningNode::new(
             eel_config,
@@ -159,7 +162,7 @@ impl LightningNode {
             exchange_rate_provider,
         )?;
 
-        Ok(LightningNode { core_node })
+        Ok(LightningNode { core_node, auth })
     }
 
     pub fn get_node_info(&self) -> NodeInfo {
@@ -292,6 +295,12 @@ impl LightningNode {
 
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
         self.core_node.change_timezone_config(timezone_config);
+    }
+
+    pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
+        self.auth
+            .accept_custom_terms_and_conditions(CustomTermsAndConditions::Pocket)
+            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)
     }
 
     pub fn panic_directly(&self) {

@@ -138,6 +138,9 @@ interface LightningNode {
     //    - timezone_config - the user's current timezone
     void change_timezone_config(TzConfig timezone_config);
 
+    [Throws=LnError]
+    void accept_pocket_terms_and_conditions();
+
     void panic_directly();
     void panic_in_background_thread();
     void panic_in_tokio();
