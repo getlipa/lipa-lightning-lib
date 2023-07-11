@@ -9,7 +9,7 @@ use crate::types::{ChainMonitor, ChannelManager, PeerManager, TxSync};
 
 use crate::data_store::DataStore;
 use lightning::chain::Confirm;
-use log::{debug, error};
+use log::{debug, error, trace};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tokio::time::Duration;
@@ -169,6 +169,7 @@ impl TaskManager {
             let lsp_client = Arc::clone(&lsp_client);
             let lsp_info = Arc::clone(&lsp_info);
             async move {
+                trace!("Starting LSP info update task");
                 match lsp_client.query_info().await {
                     Ok(new_lsp_info) => {
                         if Some(new_lsp_info.clone()) != *lsp_info.lock().unwrap() {
@@ -205,6 +206,7 @@ impl TaskManager {
             let peer_manager = Arc::clone(&peer_manager);
             let lsp_info = Arc::clone(&lsp_info);
             async move {
+                trace!("Starting reconnect to LSP task");
                 let lsp_info = (*lsp_info.lock().unwrap()).clone();
                 if let Some(lsp_info) = lsp_info {
                     let peer = LnPeer {
@@ -224,6 +226,7 @@ impl TaskManager {
         self.runtime_handle.spawn_repeating_task(period, move || {
             let fee_estimator = Arc::clone(&fee_estimator);
             async move {
+                trace!("Starting on-chain fee estimates update task");
                 match tokio::task::spawn_blocking(move || fee_estimator.poll_updates()).await {
                     Ok(Ok(())) => (),
                     Ok(Err(e)) => error!("Failed to get fee estimates: {e}"),
@@ -238,6 +241,7 @@ impl TaskManager {
         self.runtime_handle.spawn_self_restarting_task(move || {
             let rapid_sync_client = Arc::clone(&rapid_sync_client);
             async move {
+                trace!("Starting RGS network graph update task");
                 match tokio::task::spawn_blocking(move || rapid_sync_client.sync()).await {
                     Ok(Ok(())) => None,
                     Ok(Err(e)) => {
@@ -262,6 +266,7 @@ impl TaskManager {
             let exchange_rates = Arc::clone(&exchange_rates);
             let data_store = Arc::clone(&data_store);
             async move {
+                trace!("Starting exchange rate update task");
                 match tokio::task::spawn_blocking(move || {
                     exchange_rate_provider.query_all_exchange_rates()
                 })

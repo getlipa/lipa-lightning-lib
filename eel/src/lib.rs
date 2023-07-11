@@ -129,6 +129,22 @@ impl LightningNode {
         user_event_handler: Box<dyn EventHandler>,
         exchange_rate_provider: Box<dyn ExchangeRateProvider>,
     ) -> Result<Self> {
+        trace!(
+            "Creating a new LightningNode instance with:\n\
+            network: {}\n\
+            fiat_currency: {}\n\
+            esplora_api_url: {}\n\
+            lsp_url: {}\n\
+            rgs_url: {}\n\
+            local_persistence_path: {}",
+            config.network,
+            config.fiat_currency,
+            config.esplora_api_url,
+            config.lsp_url,
+            config.rgs_url,
+            config.local_persistence_path,
+        );
+
         let rt = AsyncRuntime::new()?;
 
         let esplora_client = Arc::new(EsploraClient::new(&config.esplora_api_url)?);
@@ -390,6 +406,12 @@ impl LightningNode {
         description: String,
         metadata: String,
     ) -> Result<Invoice> {
+        trace!(
+            "create_invoice() - called with:\n   amount_msat: {}\n   description: {}, metadata: {}",
+            amount_msat,
+            description,
+            metadata
+        );
         let (currency, fiat_currency) = {
             let config = self.config.lock().unwrap();
             let currency = match config.network {
@@ -433,6 +455,7 @@ impl LightningNode {
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {
+        trace!("pay_invoice() - called with invoice {}", invoice);
         let network = self.config.lock().unwrap().network;
         let invoice =
             invoice::decode_invoice(&invoice, network).map_to_invalid_input("Invalid invoice")?;
@@ -445,6 +468,7 @@ impl LightningNode {
         }
 
         self.validate_persist_new_outgoing_payment_attempt(&invoice, amount_msat, &metadata)?;
+        trace!("pay_invoice() - persisted new payment attempt in db");
 
         self.log_node_state();
         let payment_result = pay_invoice(
@@ -455,10 +479,13 @@ impl LightningNode {
 
         match payment_result {
             Ok(_payment_id) => {
-                info!("Initiated payment of {amount_msat} msats");
+                info!("pay_invoice() - Successfully initiated payment attempt for {amount_msat} msats");
                 Ok(())
             }
-            Err(e) => self.process_failed_payment_attempts(e, &invoice.payment_hash().to_string()),
+            Err(e) => {
+                error!("pay_invoice() - Failed to start payment attempt - {:?}", e);
+                self.process_failed_payment_attempts(e, &invoice.payment_hash().to_string())
+            }
         }
     }
 
@@ -468,6 +495,7 @@ impl LightningNode {
         amount_msat: u64,
         metadata: String,
     ) -> PayResult<()> {
+        trace!("pay_open_invoice() - called with invoice {}", invoice);
         let network = self.config.lock().unwrap().network;
         let invoice =
             invoice::decode_invoice(&invoice, network).map_to_invalid_input("Invalid invoice")?;
@@ -485,6 +513,7 @@ impl LightningNode {
         }
 
         self.validate_persist_new_outgoing_payment_attempt(&invoice, amount_msat, &metadata)?;
+        trace!("pay_open_invoice() - persisted new payment attempt in db");
 
         self.log_node_state();
         let payment_result = pay_zero_value_invoice(
@@ -496,10 +525,16 @@ impl LightningNode {
 
         match payment_result {
             Ok(_payment_id) => {
-                info!("Initiated payment of {amount_msat} msats (open amount invoice)");
+                info!("pay_open_invoice() - Successfully initiated payment attempt for {amount_msat} msats (open amount invoice)");
                 Ok(())
             }
-            Err(e) => self.process_failed_payment_attempts(e, &invoice.payment_hash().to_string()),
+            Err(e) => {
+                error!(
+                    "pay_open_invoice() - Failed to start payment attempt - {:?}",
+                    e
+                );
+                self.process_failed_payment_attempts(e, &invoice.payment_hash().to_string())
+            }
         }
     }
 
@@ -551,17 +586,22 @@ impl LightningNode {
         let mut data_store = self.data_store.lock().unwrap();
         if let Ok(payment) = data_store.get_payment(&invoice.payment_hash().to_string()) {
             match payment.payment_type {
-                PaymentType::Receiving => return Err(runtime_error(
-                    PayErrorCode::PayingToSelf,
-                    "This invoice was issued by the local node. Paying yourself is not supported.",
-                )),
+                PaymentType::Receiving => {
+                    error!("Attempted to pay an invoice that was issued by the local node");
+                    return Err(runtime_error(
+                        PayErrorCode::PayingToSelf,
+                        "This invoice was issued by the local node. Paying yourself is not supported.",
+                    ));
+                }
                 PaymentType::Sending => {
                     if payment.payment_state != PaymentState::Failed {
+                        error!("Attempted to pay an invoice that either has already been paid or for which a payment attempt is in progress - PaymentState: {:?}", payment.payment_state);
                         return Err(runtime_error(
                             PayErrorCode::AlreadyUsedInvoice,
                             "This invoice has already been paid or is in the process of being paid. Please use a different one or wait until the current payment attempt fails before retrying.",
                         ));
                     }
+                    trace!("Starting a new attempt to pay an invoice which we weren't able to pay in the past");
                     data_store
                         .new_payment_state(
                             &invoice.payment_hash().to_string(),
@@ -582,6 +622,7 @@ impl LightningNode {
                 }
             }
         } else {
+            trace!("Starting our first attempt to pay an invoice");
             let description = match invoice.description() {
                 InvoiceDescription::Direct(d) => d.clone().into_inner(),
                 InvoiceDescription::Hash(h) => h.0.to_hex(),
@@ -605,11 +646,11 @@ impl LightningNode {
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
         if number_of_payments < 1 {
+            error!("get_latest_payments() - called with number_of_payments set to 0");
             return Err(invalid_input(
                 "Number of requested payments must be greater than 0",
             ));
         }
-
         self.data_store
             .lock()
             .unwrap()
@@ -621,6 +662,7 @@ impl LightningNode {
     }
 
     pub fn foreground(&self) {
+        trace!("foreground() - called");
         self.task_manager
             .lock()
             .unwrap()
@@ -628,6 +670,7 @@ impl LightningNode {
     }
 
     pub fn background(&self) {
+        trace!("background() - called");
         self.task_manager
             .lock()
             .unwrap()
@@ -648,6 +691,10 @@ impl LightningNode {
     }
 
     pub fn change_fiat_currency(&self, fiat_currency: String) {
+        trace!(
+            "change_fiat_currency() - called with fiat_currency: {}",
+            fiat_currency
+        );
         let mut task_manager = self.task_manager.lock().unwrap();
         self.config.lock().unwrap().fiat_currency = fiat_currency;
         // if the fiat currency is being changed, we can assume the app is in the foreground
@@ -655,6 +702,10 @@ impl LightningNode {
     }
 
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
+        trace!(
+            "change_timezone_config() - called with timezone_config: {:?}",
+            timezone_config
+        );
         let mut data_store = self.data_store.lock().unwrap();
         data_store.update_timezone_config(timezone_config);
     }
