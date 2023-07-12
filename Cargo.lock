@@ -417,7 +417,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.2.1#343dfa9fea934af5fb985504226586ca940c7d43"
+source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
 dependencies = [
  "chrono",
  "graphql",
@@ -1058,7 +1058,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.2.1#343dfa9fea934af5fb985504226586ca940c7d43"
+source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
 dependencies = [
  "graphql_client",
  "log",
@@ -1241,7 +1241,7 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.2.1#343dfa9fea934af5fb985504226586ca940c7d43"
+source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
 dependencies = [
  "base64 0.21.0",
  "bdk",
@@ -1738,7 +1738,7 @@ dependencies = [
 [[package]]
 name = "mole"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.2.1#343dfa9fea934af5fb985504226586ca940c7d43"
+source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
 dependencies = [
  "graphql",
  "hex",

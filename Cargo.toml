@@ -23,9 +23,9 @@ simplelog = { version = "0.12.0" }
 thiserror = "1.0.43"
 uniffi = "0.24.1"
 
-chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.2.1" }
-honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.2.1" }
-mole = { git = "https://github.com/getlipa/wild", tag = "v1.2.1" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.3.0" }
+honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.3.0" }
+mole = { git = "https://github.com/getlipa/wild", tag = "v1.3.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.1" }
 
 [dev-dependencies]
