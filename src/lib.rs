@@ -8,6 +8,7 @@ mod config;
 mod eel_interface_impl;
 mod environment;
 mod exchange_rate_provider;
+mod fiat_topup;
 mod invoice_details;
 mod logger;
 mod recovery;
@@ -24,6 +25,7 @@ use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
 
+use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 pub use eel::config::TzConfig;
 use eel::errors::{Error as LnError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode};
 pub use eel::interfaces::ExchangeRate;
@@ -101,8 +103,9 @@ pub struct Payment {
 }
 
 pub struct LightningNode {
-    core_node: eel::LightningNode,
+    core_node: Arc<eel::LightningNode>,
     auth: Arc<Auth>,
+    fiat_topup_client: PocketClient,
 }
 
 pub enum MaxRoutingFeeMode {
@@ -155,14 +158,20 @@ impl LightningNode {
             Arc::clone(&auth),
         ));
 
-        let core_node = eel::LightningNode::new(
+        let core_node = Arc::new(eel::LightningNode::new(
             eel_config,
             remote_storage,
             user_event_handler,
             exchange_rate_provider,
-        )?;
+        )?);
 
-        Ok(LightningNode { core_node, auth })
+        let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&core_node))?;
+
+        Ok(LightningNode {
+            core_node,
+            auth,
+            fiat_topup_client,
+        })
     }
 
     pub fn get_node_info(&self) -> NodeInfo {
@@ -301,6 +310,19 @@ impl LightningNode {
         self.auth
             .accept_custom_terms_and_conditions(CustomTermsAndConditions::Pocket)
             .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)
+    }
+
+    pub fn register_fiat_topup(
+        &self,
+        email: String,
+        user_iban: String,
+        user_currency: String,
+    ) -> Result<FiatTopupInfo> {
+        self.auth
+            .register_node(self.core_node.get_node_info().node_pubkey.to_string())
+            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)?; // TODO: fix error code
+        self.fiat_topup_client
+            .register_pocket_fiat_topup(&email, &user_iban, &user_currency)
     }
 
     pub fn panic_directly(&self) {

@@ -417,7 +417,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.0#d0c704b55506b305548e7697d69401487590432c"
 dependencies = [
  "chrono",
  "graphql",
@@ -434,6 +434,7 @@ dependencies = [
  "android-tzdata",
  "iana-time-zone",
  "num-traits",
+ "serde",
  "winapi",
 ]
 
@@ -1059,7 +1060,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.0#d0c704b55506b305548e7697d69401487590432c"
 dependencies = [
  "graphql_client",
  "log",
@@ -1242,7 +1243,7 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.0#d0c704b55506b305548e7697d69401487590432c"
 dependencies = [
  "base64 0.21.0",
  "bdk",
@@ -1636,7 +1637,9 @@ dependencies = [
  "mole",
  "perro",
  "rand",
+ "reqwest",
  "rustyline",
+ "serde",
  "serde_json",
  "serial_test",
  "simplelog",
@@ -1739,7 +1742,7 @@ dependencies = [
 [[package]]
 name = "mole"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.0#d0c704b55506b305548e7697d69401487590432c"
 dependencies = [
  "graphql",
  "hex",

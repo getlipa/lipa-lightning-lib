@@ -141,6 +141,15 @@ interface LightningNode {
     [Throws=LnError]
     void accept_pocket_terms_and_conditions();
 
+    // Register for fiat topups. Returns information that can be used by the user to transfer fiat
+    // to the 3rd party exchange service. Once the 3rd party exchange receives funds, the user will
+    // be able to withdraw sats using LNURL-w.
+    //      - email - this email will be used to send status information about different topups
+    //      - user_iban - the user will send fiat from this iban
+    //      - user_currency - the fiat currency that will sent for exchange (possible values: "eur", "chf" and "gbp")
+    [Throws=LnError]
+    FiatTopupInfo register_fiat_topup(string email, string user_iban, string user_currency);
+
     void panic_directly();
     void panic_in_background_thread();
     void panic_in_tokio();
@@ -351,6 +360,23 @@ dictionary ExchangeRate {
 dictionary Amount {
     u64 sats;
     FiatValue? fiat;
+};
+
+// Information about a fiat top-up registration
+dictionary FiatTopupInfo {
+    string debitor_iban; // The user should transfer fiat from this IBAN
+    string creditor_iban; // The user should transfer fiat to this IBAN
+    string creditor_bank_name;
+    string creditor_bank_street;
+    string creditor_bank_postal_code;
+    string creditor_bank_town;
+    string creditor_bank_country;
+    string creditor_bank_bic;
+    string creditor_name;
+    string creditor_street;
+    string creditor_postal_code;
+    string creditor_town;
+    string creditor_country;
 };
 
 //

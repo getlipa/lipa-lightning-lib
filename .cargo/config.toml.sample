@@ -23,3 +23,8 @@ RGS_URL_LOCAL = "http://localhost:8080/snapshot/"
 RGS_URL_DEV = ""
 RGS_URL_STAGE = ""
 RGS_URL_PROD = ""
+
+POCKET_URL_LOCAL = ""
+POCKET_URL_DEV = ""
+POCKET_URL_STAGE = ""
+POCKET_URL_PROD = ""

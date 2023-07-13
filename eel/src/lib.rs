@@ -70,6 +70,7 @@ use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Confirm, Watch};
 use lightning::ln::channelmanager::{ChainParameters, Retry, RetryableSendFailure};
 use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::util::config::UserConfig;
+use lightning::util::message_signing::sign;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_invoice::payment::{pay_invoice, pay_zero_value_invoice, PaymentError};
 use lightning_invoice::Currency;
@@ -793,6 +794,11 @@ impl LightningNode {
                 channel.next_outbound_htlc_limit_msat
             );
         }
+    }
+
+    pub fn sign_message(&self, message: &str) -> Result<String> {
+        sign(message.as_bytes(), &self.keys_manager.get_node_secret_key())
+            .map_to_permanent_failure("Failed to sign message")
     }
 
     pub fn panic_directly(&self) {
