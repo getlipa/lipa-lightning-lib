@@ -420,8 +420,8 @@ version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
 dependencies = [
  "chrono",
- "graphql",
- "honey-badger",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.3.0)",
+ "honey-badger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.3.0)",
  "log",
 ]
 
@@ -1068,6 +1068,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql"
+version = "0.1.0"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.0#d0c704b55506b305548e7697d69401487590432c"
+dependencies = [
+ "graphql_client",
+ "log",
+ "perro",
+ "reqwest",
+ "serde",
+]
+
+[[package]]
 name = "graphql-introspection-query"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1246,7 +1258,22 @@ dependencies = [
  "base64 0.21.0",
  "bdk",
  "chrono",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.3.0)",
+ "log",
+ "rand",
+ "secp256k1",
+ "serde_json",
+]
+
+[[package]]
+name = "honey-badger"
+version = "1.0.1"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.0#d0c704b55506b305548e7697d69401487590432c"
+dependencies = [
+ "base64 0.21.0",
+ "bdk",
+ "chrono",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.4.0)",
  "log",
  "rand",
  "secp256k1",
@@ -1630,7 +1657,7 @@ dependencies = [
  "ctor",
  "eel",
  "esplora-client 0.5.0",
- "honey-badger",
+ "honey-badger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.3.0)",
  "log",
  "mole",
  "perro",
@@ -1738,11 +1765,11 @@ dependencies = [
 [[package]]
 name = "mole"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.0#d0c704b55506b305548e7697d69401487590432c"
 dependencies = [
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.4.0)",
  "hex",
- "honey-badger",
+ "honey-badger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.4.0)",
  "log",
 ]
 

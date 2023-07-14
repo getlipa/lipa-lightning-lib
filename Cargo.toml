@@ -25,7 +25,7 @@ uniffi = "0.24.1"
 
 chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.3.0" }
 honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.3.0" }
-mole = { git = "https://github.com/getlipa/wild", tag = "v1.3.0" }
+mole = { git = "https://github.com/getlipa/wild", tag = "v1.4.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.1" }
 
 [dev-dependencies]
