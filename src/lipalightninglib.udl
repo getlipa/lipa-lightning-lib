@@ -146,9 +146,9 @@ interface LightningNode {
     // be able to withdraw sats using LNURL-w.
     //      - email - this email will be used to send status information about different topups
     //      - user_iban - the user will send fiat from this iban
-    //      - user_currency - the fiat currency that will sent for exchange (possible values: "eur", "chf" and "gbp")
+    //      - user_currency - the fiat currency that will be sent for exchange (possible values: "eur", "chf" and "gbp")
     [Throws=LnError]
-    FiatTopupInfo register_fiat_topup(string email, string user_iban, string user_currency);
+    FiatTopupInfo register_fiat_topup(string? email, string user_iban, TopupCurrency user_currency);
 
     void panic_directly();
     void panic_in_background_thread();
@@ -360,6 +360,12 @@ dictionary ExchangeRate {
 dictionary Amount {
     u64 sats;
     FiatValue? fiat;
+};
+
+enum TopupCurrency {
+    "EUR",
+    "CHF",
+    "GBP",
 };
 
 // Information about a fiat top-up registration

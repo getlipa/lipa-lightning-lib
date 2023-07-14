@@ -25,6 +25,7 @@ use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
 
+pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 pub use eel::config::TzConfig;
 use eel::errors::{Error as LnError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode};
@@ -38,6 +39,7 @@ use eel::secret::Secret;
 pub use eel::Network;
 use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
+use log::trace;
 use logger::init_logger_once;
 use perro::{MapToError, ResultTrait};
 use std::path::Path;
@@ -314,15 +316,19 @@ impl LightningNode {
 
     pub fn register_fiat_topup(
         &self,
-        email: String,
+        email: Option<String>,
         user_iban: String,
-        user_currency: String,
+        user_currency: TopupCurrency,
     ) -> Result<FiatTopupInfo> {
+        trace!("register_fiat_topup() - called with - email: {email:?} - user_iban: {user_iban} - user_currency: {user_currency:?}");
         self.auth
             .register_node(self.core_node.get_node_info().node_pubkey.to_string())
             .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)?; // TODO: fix error code
+        if email.is_some() {
+            // TODO: validate email and then register it
+        }
         self.fiat_topup_client
-            .register_pocket_fiat_topup(&email, &user_iban, &user_currency)
+            .register_pocket_fiat_topup(&user_iban, user_currency)
     }
 
     pub fn panic_directly(&self) {

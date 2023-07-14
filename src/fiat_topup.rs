@@ -1,4 +1,3 @@
-use chrono::serde::ts_milliseconds_option;
 use chrono::{DateTime, Utc};
 use eel::errors::{Result, RuntimeErrorCode};
 use eel::LightningNode;
@@ -9,6 +8,14 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 
+#[derive(Debug)]
+pub enum TopupCurrency {
+    EUR,
+    CHF,
+    GBP,
+}
+
+#[derive(Debug)]
 pub struct FiatTopupInfo {
     pub debitor_iban: String,
     pub creditor_iban: String,
@@ -51,9 +58,7 @@ impl FiatTopupInfo {
 struct ChallengeResponse {
     id: String,
     token: String,
-    #[serde(with = "ts_milliseconds_option")]
     expires_on: Option<DateTime<Utc>>,
-    #[serde(with = "ts_milliseconds_option")]
     completed_on: Option<DateTime<Utc>>,
 }
 
@@ -73,6 +78,7 @@ struct PayoutMethod {
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateOrderRequest {
     active: bool,
+    fee_rate: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     affiliate_id: Option<String>,
     payment_method: PaymentMethodRequest,
@@ -102,9 +108,8 @@ struct PaymentMethodResponse {
 pub struct CreateOrderResponse {
     id: String,
     active: bool,
-    #[serde(with = "ts_milliseconds_option")]
     created_on: Option<DateTime<Utc>>,
-    affiliate_id: String,
+    affiliate_id: Option<String>,
     fee_rate: f64,
     payment_method: PaymentMethodResponse,
     payout_method: PayoutMethod,
@@ -131,14 +136,13 @@ impl PocketClient {
 
     pub fn register_pocket_fiat_topup(
         &self,
-        email: &str,
         user_iban: &str,
-        user_currency: &str,
+        user_currency: TopupCurrency,
     ) -> Result<FiatTopupInfo> {
         let challenge_response = self.request_challenge()?;
 
         let create_order_response =
-            self.create_order(challenge_response, email, user_iban, user_currency)?;
+            self.create_order(challenge_response, user_iban, user_currency)?;
 
         Ok(FiatTopupInfo::from_pocket_create_order_response(
             create_order_response,
@@ -176,9 +180,8 @@ impl PocketClient {
     fn create_order(
         &self,
         challenge_response: ChallengeResponse,
-        _email: &str,
         user_iban: &str,
-        user_currency: &str,
+        user_currency: TopupCurrency,
     ) -> Result<CreateOrderResponse> {
         let message = format!(
             "I confirm my bitcoin wallet. [{}]",
@@ -187,8 +190,14 @@ impl PocketClient {
         let signature = self.core_node.sign_message(&message)?;
         let node_pubkey = self.core_node.get_node_info().node_pubkey.to_string();
 
+        let user_currency = match user_currency {
+            TopupCurrency::EUR => "eur",
+            TopupCurrency::CHF => "chf",
+            TopupCurrency::GBP => "gbp",
+        };
         let create_order_request = CreateOrderRequest {
             active: true,
+            fee_rate: 0.015,
             affiliate_id: None,
             payment_method: PaymentMethodRequest {
                 currency: user_currency.to_string(),
