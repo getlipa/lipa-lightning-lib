@@ -3,6 +3,7 @@ use lightning::ln::channelmanager::{ChannelDetails, PaymentId};
 use lightning::ln::msgs::{ErrorAction, LightningError};
 use lightning::ln::PaymentHash;
 use lightning::routing::router::{InFlightHtlcs, Route, RouteParameters};
+use log::info;
 use secp256k1::PublicKey;
 use std::sync::Arc;
 
@@ -79,6 +80,8 @@ impl lightning::routing::router::Router for FeeLimitingRouter {
             .find_route(payer, route_params, first_hops, inflight_htlcs)?;
         let route_fees = route.get_total_fees();
         if route_fees > max_fee_msat {
+            info!("Failed to find a route with acceptable fees. Payment amount of {} msat. Max fee of {} msat. Route fee of {} msat", 
+                route_params.final_value_msat, max_fee_msat, route_fees);
             Err(LightningError {
                 err: format!("Route's fees exceed maximum allowed - max allowed: {max_fee_msat} - route's fees {route_fees}"),
                 action: ErrorAction::IgnoreError,
