@@ -351,8 +351,11 @@ impl StoragePersister {
         logger: Arc<LightningLogger>,
     ) -> Result<Scorer> {
         let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(SCORER_KEY));
-
-        let params = ProbabilisticScoringParameters::default();
+        let params = ProbabilisticScoringParameters {
+            base_penalty_amount_multiplier_msat: 8192 * 50,
+            base_penalty_msat: 500 * 50,
+            ..Default::default()
+        };
         #[allow(unreachable_code, unused_variables, clippy::needless_borrow)]
         if let Ok(file) = fs::File::open(&path) {
             // TODO: Remove the code and the attributes above once the bug is fixed.
