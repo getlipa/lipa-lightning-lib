@@ -114,7 +114,12 @@ macro_rules! wait_for_unwrap {
 
 #[cfg(feature = "nigiri")]
 fn node_connect_to_rgs_cln(node: NodeInstance) {
-    nigiri::node_connect(node, RGS_CLN_ID, RGS_CLN_HOST, RGS_CLN_PORT).unwrap();
+    wait_for_unwrap!(nigiri::node_connect(
+        node,
+        RGS_CLN_ID,
+        RGS_CLN_HOST,
+        RGS_CLN_PORT
+    ));
 }
 
 #[cfg(feature = "nigiri")]
