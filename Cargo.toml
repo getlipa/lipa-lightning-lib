@@ -29,7 +29,7 @@ mole = { git = "https://github.com/getlipa/wild", tag = "v1.3.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.1" }
 
 [dev-dependencies]
-bitcoin = "0.29.2"
+bitcoin = "0.30.1"
 chrono = { version = "0.4.26", default-features = false }
 colored = "2.0.4"
 ctor = "0.2.4"
