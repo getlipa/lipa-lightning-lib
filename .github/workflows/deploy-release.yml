@@ -28,7 +28,7 @@ jobs:
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.65.0
           profile: minimal
           override: true
           target: ${{ matrix.target }}
@@ -76,7 +76,7 @@ jobs:
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.65.0
           profile: minimal
           override: true
           target: ${{ matrix.target }}
