@@ -35,7 +35,7 @@ pub fn recover_lightning_node(
 
     let auth = Arc::new(
         build_auth(&seed, environment.backend_url.clone())
-            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)?,
+            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?,
     );
 
     let remote_storage = Box::new(RemoteStorageGraphql::new(

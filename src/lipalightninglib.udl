@@ -477,7 +477,8 @@ interface LnError {
 // A code that specifies the RuntimeError that occurred
 enum RuntimeErrorCode {
     // CONNECTIVITY ERRORS
-    "AuthServiceUnvailable", // The backed auth service is unavailable.
+    "AuthServiceUnavailable", // The backend auth service is unavailable.
+    "TopupServiceUnavailable", // The topup service is unavailable.
     "EsploraServiceUnavailable", // The esplora service is unavailable. Could there be a loss of internet connection?
     "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
     "RemoteStorageError", // Any error related to the remote storage. Could be a network error or a data error.

@@ -155,7 +155,7 @@ impl PocketClient {
             .post(format!("{}/v1/challenges", self.pocket_url))
             .send()
             .map_to_runtime_error(
-                RuntimeErrorCode::AuthServiceUnvailable, // TODO: fix error code
+                RuntimeErrorCode::TopupServiceUnavailable,
                 "Failed to get a response from the Pocket API",
             )?;
 
@@ -164,7 +164,7 @@ impl PocketClient {
                 "Got unexpected response to Pocket challenge request: Pocket API returned status {}", raw_response.status()
             );
             return Err(runtime_error(
-                RuntimeErrorCode::AuthServiceUnvailable, // TODO: fix error code
+                RuntimeErrorCode::TopupServiceUnavailable,
                 format!("Got unexpected response to Pocket challenge request: Pocket API returned status {}", raw_response.status()),
             ));
         }
@@ -172,7 +172,7 @@ impl PocketClient {
         raw_response
             .json::<ChallengeResponse>()
             .map_to_runtime_error(
-                RuntimeErrorCode::AuthServiceUnvailable, // TODO: fix error code
+                RuntimeErrorCode::TopupServiceUnavailable,
                 "Failed to parse ChallengeResponse",
             )
     }
@@ -219,7 +219,7 @@ impl PocketClient {
             .json(&create_order_request)
             .send()
             .map_to_runtime_error(
-                RuntimeErrorCode::AuthServiceUnvailable, // TODO: fix error code
+                RuntimeErrorCode::TopupServiceUnavailable,
                 "Failed to get a response from the Pocket API",
             )?;
 
@@ -228,7 +228,7 @@ impl PocketClient {
                 "Got unexpected response to Pocket order creation request: Pocket API returned status {}", raw_response.status()
             );
             return Err(runtime_error(
-                RuntimeErrorCode::AuthServiceUnvailable, // TODO: fix error code
+                RuntimeErrorCode::TopupServiceUnavailable,
                 format!("Got unexpected response to Pocket order creation request: Pocket API returned status {}", raw_response.status()),
             ));
         }
@@ -236,7 +236,7 @@ impl PocketClient {
         raw_response
             .json::<CreateOrderResponse>()
             .map_to_runtime_error(
-                RuntimeErrorCode::AuthServiceUnvailable, // TODO: fix error code
+                RuntimeErrorCode::TopupServiceUnavailable,
                 "Failed to parse CreateOrderResponse",
             )
     }

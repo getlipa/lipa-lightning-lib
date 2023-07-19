@@ -326,7 +326,7 @@ impl LightningNode {
     pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
         self.auth
             .accept_custom_terms_and_conditions(CustomTermsAndConditions::Pocket)
-            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)
+            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
     }
 
     pub fn register_fiat_topup(
@@ -338,7 +338,7 @@ impl LightningNode {
         trace!("register_fiat_topup() - called with - email: {email:?} - user_iban: {user_iban} - user_currency: {user_currency:?}");
         self.auth
             .register_node(self.core_node.get_node_info().node_pubkey.to_string())
-            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)?; // TODO: fix error code
+            .map_runtime_error_to(RuntimeErrorCode::TopupServiceUnavailable)?;
         if email.is_some() {
             // TODO: validate email and then register it
         }
@@ -363,10 +363,10 @@ pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) 
     enable_backtrace();
     let environment = Environment::load(environment);
     let seed = sanitize_input::strong_type_seed(&seed)
-        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)?;
+        .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions()
-        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)
+        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
 
 pub fn generate_secret(passphrase: String) -> std::result::Result<Secret, SimpleError> {
@@ -376,7 +376,7 @@ pub fn generate_secret(passphrase: String) -> std::result::Result<Secret, Simple
 fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
     let auth_keys = derive_key_pair_hex(seed, BACKEND_AUTH_DERIVATION_PATH)
         .lift_invalid_input()
-        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)?;
+        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
     let auth_keys = KeyPair {
         secret_key: auth_keys.secret_key,
         public_key: auth_keys.public_key,

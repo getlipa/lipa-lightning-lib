@@ -4,7 +4,8 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, PartialEq, Eq)]
 pub enum RuntimeErrorCode {
     // 3L runtime errors
-    AuthServiceUnvailable,
+    AuthServiceUnavailable,
+    TopupServiceUnavailable,
 
     // Eel runtime errors
     EsploraServiceUnavailable,
