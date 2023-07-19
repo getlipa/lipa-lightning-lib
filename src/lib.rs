@@ -7,6 +7,7 @@ mod callbacks;
 mod config;
 mod eel_interface_impl;
 mod environment;
+mod errors;
 mod exchange_rate_provider;
 mod fiat_topup;
 mod invoice_details;
@@ -21,6 +22,7 @@ pub use crate::config::Config;
 use crate::eel_interface_impl::{EventsImpl, RemoteStorageGraphql};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
+pub use crate::errors::{Error as LnError, Result, RuntimeErrorCode};
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
@@ -28,7 +30,7 @@ pub use crate::recovery::recover_lightning_node;
 pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 pub use eel::config::TzConfig;
-use eel::errors::{Error as LnError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode};
+use eel::errors::{PayError, PayErrorCode, PayResult};
 pub use eel::interfaces::ExchangeRate;
 pub use eel::invoice::DecodeInvoiceError;
 use eel::key_derivation::derive_key_pair_hex;
@@ -128,8 +130,8 @@ impl LightningNode {
                 &Path::new(&config.local_persistence_path).join(LOG_FILENAME),
             );
         }
-
-        let seed = sanitize_input::strong_type_seed(&config.seed)?;
+        let seed = sanitize_input::strong_type_seed(&config.seed)
+            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
 
         let environment = Environment::load(config.environment);
 
@@ -160,12 +162,15 @@ impl LightningNode {
             Arc::clone(&auth),
         ));
 
-        let core_node = Arc::new(eel::LightningNode::new(
-            eel_config,
-            remote_storage,
-            user_event_handler,
-            exchange_rate_provider,
-        )?);
+        let core_node = Arc::new(
+            eel::LightningNode::new(
+                eel_config,
+                remote_storage,
+                user_event_handler,
+                exchange_rate_provider,
+            )
+            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?,
+        );
 
         let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&core_node))?;
 
@@ -196,7 +201,10 @@ impl LightningNode {
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        let fee = self.core_node.query_lsp_fee()?;
+        let fee = self
+            .core_node
+            .query_lsp_fee()
+            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
         let channel_minimum_fee = fee
             .channel_minimum_fee_msat
             .to_amount_up(&self.get_exchange_rate());
@@ -211,6 +219,7 @@ impl LightningNode {
         self.core_node
             .calculate_lsp_fee(amount_sat * 1_000)
             .map(|fee| fee.to_amount_up(&rate))
+            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
     }
 
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
@@ -218,6 +227,7 @@ impl LightningNode {
         self.core_node
             .get_payment_amount_limits()
             .map(|limits| to_limits(limits, &rate))
+            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
     }
 
     pub fn create_invoice(
@@ -229,7 +239,8 @@ impl LightningNode {
         let rate = self.get_exchange_rate();
         let invoice = self
             .core_node
-            .create_invoice(amount_sat * 1000, description, metadata)?;
+            .create_invoice(amount_sat * 1000, description, metadata)
+            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
         Ok(InvoiceDetails::from_local_invoice(invoice, &rate))
     }
 
@@ -274,10 +285,14 @@ impl LightningNode {
         self.core_node
             .get_latest_payments(number_of_payments)
             .map(|ps| ps.into_iter().map(to_payment).collect())
+            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
     }
 
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
-        self.core_node.get_payment(&hash).map(to_payment)
+        self.core_node
+            .get_payment(&hash)
+            .map(to_payment)
+            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
     }
 
     pub fn foreground(&self) {
@@ -347,7 +362,8 @@ impl LightningNode {
 pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) -> Result<()> {
     enable_backtrace();
     let environment = Environment::load(environment);
-    let seed = sanitize_input::strong_type_seed(&seed)?;
+    let seed = sanitize_input::strong_type_seed(&seed)
+        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)?;
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions()
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)
@@ -358,7 +374,9 @@ pub fn generate_secret(passphrase: String) -> std::result::Result<Secret, Simple
 }
 
 fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
-    let auth_keys = derive_key_pair_hex(seed, BACKEND_AUTH_DERIVATION_PATH).lift_invalid_input()?;
+    let auth_keys = derive_key_pair_hex(seed, BACKEND_AUTH_DERIVATION_PATH)
+        .lift_invalid_input()
+        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)?;
     let auth_keys = KeyPair {
         secret_key: auth_keys.secret_key,
         public_key: auth_keys.public_key,

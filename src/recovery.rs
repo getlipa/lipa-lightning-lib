@@ -1,11 +1,11 @@
 use crate::eel_interface_impl::RemoteStorageGraphql;
 use crate::environment::Environment;
+use crate::errors::{Result, RuntimeErrorCode};
 use crate::logger::init_logger_once;
 use crate::{
     build_auth, enable_backtrace, sanitize_input, EnvironmentCode, LOG_FILENAME, LOG_LEVEL,
 };
-use eel::errors::Result;
-use perro::MapToError;
+use perro::{MapToError, ResultTrait};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -28,11 +28,15 @@ pub fn recover_lightning_node(
         );
     }
 
-    let seed = sanitize_input::strong_type_seed(&seed)?;
+    let seed = sanitize_input::strong_type_seed(&seed)
+        .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
 
     let environment = Environment::load(environment);
 
-    let auth = Arc::new(build_auth(&seed, environment.backend_url.clone())?);
+    let auth = Arc::new(
+        build_auth(&seed, environment.backend_url.clone())
+            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnvailable)?,
+    );
 
     let remote_storage = Box::new(RemoteStorageGraphql::new(
         environment.backend_url,
@@ -41,4 +45,5 @@ pub fn recover_lightning_node(
     ));
 
     eel::recovery::recover_lightning_node(seed, local_persistence_path, remote_storage)
+        .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
 }

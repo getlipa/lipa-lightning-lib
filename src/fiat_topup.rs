@@ -1,8 +1,8 @@
+use crate::errors::{Result, RuntimeErrorCode};
 use chrono::{DateTime, Utc};
-use eel::errors::{Result, RuntimeErrorCode};
 use eel::LightningNode;
 use log::error;
-use perro::{runtime_error, MapToError};
+use perro::{runtime_error, MapToError, ResultTrait};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -187,7 +187,10 @@ impl PocketClient {
             "I confirm my bitcoin wallet. [{}]",
             challenge_response.token
         );
-        let signature = self.core_node.sign_message(&message)?;
+        let signature = self
+            .core_node
+            .sign_message(&message)
+            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
         let node_pubkey = self.core_node.get_node_info().node_pubkey.to_string();
 
         let user_currency = match user_currency {
