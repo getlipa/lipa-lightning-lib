@@ -150,6 +150,10 @@ interface LightningNode {
     [Throws=LnError]
     FiatTopupInfo register_fiat_topup(string? email, string user_iban, TopupCurrency user_currency);
 
+    // Get a list of currently available fund offers
+    [Throws=LnError]
+    sequence<OfferInfo> query_available_offers();
+
     void panic_directly();
     void panic_in_background_thread();
     void panic_in_tokio();
@@ -384,6 +388,21 @@ dictionary FiatTopupInfo {
     string creditor_town;
     string creditor_country;
 };
+
+// Information on a funds offer that can be claimed using a kind-dependent method (e.g. LNURL-w).
+dictionary OfferInfo {
+    OfferKind offer_kind;
+    Amount amount;
+    string lnurlw;
+    timestamp created_at;
+    timestamp expires_at;
+};
+
+[Enum]
+interface OfferKind {
+    Pocket(FiatValue exchange_fee);
+};
+
 
 //
 // ----------------------------- TOP LEVEL FUNCTIONS + RELATED DEFINITIONS -----------------------------
