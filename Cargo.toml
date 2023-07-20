@@ -22,11 +22,17 @@ log = "0.4.19"
 simplelog = { version = "0.12.0" }
 thiserror = "1.0.43"
 uniffi = "0.24.1"
+reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "rustls-tls"]}
+serde = { version = "1.0", features = ["derive"]}
+serde_json = "1.0"
+chrono = { version = "0.4.26", default-features = false, features = ["serde"] }
+iban_validate = "4.0.1"
+email_address = "0.2.4"
 
-chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.3.0" }
-honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.3.0" }
-mole = { git = "https://github.com/getlipa/wild", tag = "v1.3.0" }
-perro = { git = "https://github.com/getlipa/perro", tag = "v1.0.1" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.4.1" }
+honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.4.1" }
+mole = { git = "https://github.com/getlipa/wild", tag = "v1.4.1" }
+perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
 
 [dev-dependencies]
 bitcoin = "0.29.2"

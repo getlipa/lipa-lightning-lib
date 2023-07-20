@@ -1,12 +1,11 @@
 use crate::print_events_handler::PrintEventsHandler;
 use crate::setup_env::config::{get_testing_config, LOCAL_PERSISTENCE_PATH};
 
-use uniffi_lipalightninglib::LightningNode;
 use uniffi_lipalightninglib::{recover_lightning_node, Config};
+use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
 
 use crate::wait_for_eq;
 use eel::config::TzConfig;
-use eel::errors::RuntimeErrorCode;
 use std::fs;
 
 type Result<T> = std::result::Result<T, perro::Error<RuntimeErrorCode>>;
@@ -55,7 +54,7 @@ impl NodeHandle {
         fs::create_dir(LOCAL_PERSISTENCE_PATH).unwrap();
     }
 
-    pub fn recover(&self) -> eel::errors::Result<()> {
+    pub fn recover(&self) -> Result<()> {
         recover_lightning_node(
             self.config.environment,
             self.config.seed.to_vec(),

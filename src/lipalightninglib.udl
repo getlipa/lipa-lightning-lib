@@ -141,6 +141,15 @@ interface LightningNode {
     [Throws=LnError]
     void accept_pocket_terms_and_conditions();
 
+    // Register for fiat topups. Returns information that can be used by the user to transfer fiat
+    // to the 3rd party exchange service. Once the 3rd party exchange receives funds, the user will
+    // be able to withdraw sats using LNURL-w.
+    //      - email - this email will be used to send status information about different topups
+    //      - user_iban - the user will send fiat from this iban
+    //      - user_currency - the fiat currency that will be sent for exchange
+    [Throws=LnError]
+    FiatTopupInfo register_fiat_topup(string? email, string user_iban, TopupCurrency user_currency);
+
     void panic_directly();
     void panic_in_background_thread();
     void panic_in_tokio();
@@ -353,6 +362,29 @@ dictionary Amount {
     FiatValue? fiat;
 };
 
+enum TopupCurrency {
+    "EUR",
+    "CHF",
+    "GBP",
+};
+
+// Information about a fiat top-up registration
+dictionary FiatTopupInfo {
+    string debitor_iban; // The user should transfer fiat from this IBAN
+    string creditor_iban; // The user should transfer fiat to this IBAN
+    string creditor_bank_name;
+    string creditor_bank_street;
+    string creditor_bank_postal_code;
+    string creditor_bank_town;
+    string creditor_bank_country;
+    string creditor_bank_bic;
+    string creditor_name;
+    string creditor_street;
+    string creditor_postal_code;
+    string creditor_town;
+    string creditor_country;
+};
+
 //
 // ----------------------------- TOP LEVEL FUNCTIONS + RELATED DEFINITIONS -----------------------------
 //
@@ -445,7 +477,8 @@ interface LnError {
 // A code that specifies the RuntimeError that occurred
 enum RuntimeErrorCode {
     // CONNECTIVITY ERRORS
-    "AuthServiceUnvailable", // The backed auth service is unavailable.
+    "AuthServiceUnavailable", // The backend auth service is unavailable.
+    "TopupServiceUnavailable", // The topup service is unavailable.
     "EsploraServiceUnavailable", // The esplora service is unavailable. Could there be a loss of internet connection?
     "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
     "RemoteStorageError", // Any error related to the remote storage. Could be a network error or a data error.

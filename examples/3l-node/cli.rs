@@ -1,6 +1,6 @@
 use crate::hinter::{CommandHint, CommandHinter};
 
-use uniffi_lipalightninglib::{Amount, MaxRoutingFeeMode, TzConfig};
+use uniffi_lipalightninglib::{Amount, MaxRoutingFeeMode, TopupCurrency, TzConfig};
 
 use bitcoin::secp256k1::PublicKey;
 use chrono::offset::FixedOffset;
@@ -108,6 +108,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", message.red());
                     }
                 }
+                "registertopup" => {
+                    if let Err(message) = register_topup(node, &mut words) {
+                        println!("{}", message.red());
+                    }
+                }
                 "listpayments" => {
                     if let Err(message) = list_payments(node) {
                         println!("{}", message.red());
@@ -174,6 +179,11 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "payopeninvoice ",
     ));
 
+    hints.insert(CommandHint::new(
+        "registertopup <IBAN> <currency> [email]",
+        "registertopup ",
+    ));
+
     hints.insert(CommandHint::new("listpayments", "listpayments"));
     hints.insert(CommandHint::new("foreground", "foreground"));
     hints.insert(CommandHint::new("background", "background"));
@@ -202,6 +212,8 @@ fn help() {
     println!("  getmaxroutingfeemode <payment amount in SAT>");
     println!("  payinvoice <invoice>");
     println!("  payopeninvoice <invoice> <amount in SAT>");
+    println!();
+    println!("  registertopup <IBAN> <currency> [email]");
     println!();
     println!("  listpayments");
     println!();
@@ -470,6 +482,36 @@ fn pay_open_invoice(
         Ok(_) => {}
         Err(e) => return Err(e.to_string()),
     };
+
+    Ok(())
+}
+
+fn register_topup(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<(), String> {
+    let iban = words.next().ok_or_else(|| "IBAN is required".to_string())?;
+
+    let currency = words
+        .next()
+        .ok_or_else(|| "currency is required".to_string())?;
+    let currency = match currency {
+        "eur" => TopupCurrency::EUR,
+        "chf" => TopupCurrency::CHF,
+        "gbp" => TopupCurrency::GBP,
+        _ => {
+            return Err("Invalid currency".into());
+        }
+    };
+
+    let email = words.next().map(|e| e.to_string());
+
+    let topup_info = match node.register_fiat_topup(email, iban.to_string(), currency) {
+        Ok(info) => info,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    println!("{topup_info:?}");
 
     Ok(())
 }

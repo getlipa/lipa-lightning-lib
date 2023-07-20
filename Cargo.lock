@@ -97,6 +97,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
+name = "arrayvec"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
+
+[[package]]
 name = "ascii"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -417,7 +423,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.1#cfa2bc1e2043cb889be6ee5ee582d388748f5c0d"
 dependencies = [
  "chrono",
  "graphql",
@@ -434,6 +440,7 @@ dependencies = [
  "android-tzdata",
  "iana-time-zone",
  "num-traits",
+ "serde",
  "winapi",
 ]
 
@@ -741,6 +748,15 @@ dependencies = [
  "webpki",
  "webpki-roots",
  "winapi",
+]
+
+[[package]]
+name = "email_address"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2153bd83ebc09db15bcbdc3e2194d901804952e3dc96967e1cd3b0c5c32d112"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1059,7 +1075,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.1#cfa2bc1e2043cb889be6ee5ee582d388748f5c0d"
 dependencies = [
  "graphql_client",
  "log",
@@ -1242,7 +1258,7 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.1#cfa2bc1e2043cb889be6ee5ee582d388748f5c0d"
 dependencies = [
  "base64 0.21.0",
  "bdk",
@@ -1359,6 +1375,15 @@ checksum = "0703ae284fc167426161c2e3f1da3ea71d94b21bedbcc9494e92b28e334e3dca"
 dependencies = [
  "cxx",
  "cxx-build",
+]
+
+[[package]]
+name = "iban_validate"
+version = "4.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc1d358f7ae89819e8656f1b495c9d760a9ca315998b12d589dc516c9f81ed08"
+dependencies = [
+ "arrayvec 0.7.4",
 ]
 
 [[package]]
@@ -1630,13 +1655,17 @@ dependencies = [
  "colored",
  "ctor",
  "eel",
+ "email_address",
  "esplora-client 0.5.0",
  "honey-badger",
+ "iban_validate",
  "log",
  "mole",
  "perro",
  "rand",
+ "reqwest",
  "rustyline",
+ "serde",
  "serde_json",
  "serial_test",
  "simplelog",
@@ -1739,7 +1768,7 @@ dependencies = [
 [[package]]
 name = "mole"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.1#cfa2bc1e2043cb889be6ee5ee582d388748f5c0d"
 dependencies = [
  "graphql",
  "hex",
@@ -1917,7 +1946,7 @@ checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
 [[package]]
 name = "perro"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/perro?tag=v1.0.1#89076419cf129fa2679e3dca0683e1c140ccf7ce"
+source = "git+https://github.com/getlipa/perro?tag=v1.1.0#82e886983820147721ae5b2480c5310c36d74891"
 dependencies = [
  "thiserror",
 ]
@@ -3199,7 +3228,7 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6cbce692ab4ca2f1f3047fcf732430249c0e971bfdd2b234cf2c47ad93af5983"
 dependencies = [
- "arrayvec",
+ "arrayvec 0.5.2",
  "utf8parse",
  "vte_generate_state_changes",
 ]
