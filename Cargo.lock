@@ -417,11 +417,11 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.1#cfa2bc1e2043cb889be6ee5ee582d388748f5c0d"
 dependencies = [
  "chrono",
- "graphql",
- "honey-badger",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.4.1)",
+ "honey-badger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.4.1)",
  "log",
 ]
 
@@ -701,7 +701,7 @@ dependencies = [
  "lightning-transaction-sync",
  "log",
  "num_enum",
- "perro",
+ "perro 1.0.1 (git+https://github.com/getlipa/perro?tag=v1.0.1)",
  "prost",
  "rand",
  "reqwest",
@@ -1063,7 +1063,19 @@ source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f
 dependencies = [
  "graphql_client",
  "log",
- "perro",
+ "perro 1.0.1 (git+https://github.com/getlipa/perro?tag=v1.0.1)",
+ "reqwest",
+ "serde",
+]
+
+[[package]]
+name = "graphql"
+version = "0.1.0"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.1#cfa2bc1e2043cb889be6ee5ee582d388748f5c0d"
+dependencies = [
+ "graphql_client",
+ "log",
+ "perro 1.0.1 (git+https://github.com/getlipa/perro?tag=v1.1.0)",
  "reqwest",
  "serde",
 ]
@@ -1247,7 +1259,22 @@ dependencies = [
  "base64 0.21.0",
  "bdk",
  "chrono",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.3.0)",
+ "log",
+ "rand",
+ "secp256k1",
+ "serde_json",
+]
+
+[[package]]
+name = "honey-badger"
+version = "1.0.1"
+source = "git+https://github.com/getlipa/wild?tag=v1.4.1#cfa2bc1e2043cb889be6ee5ee582d388748f5c0d"
+dependencies = [
+ "base64 0.21.0",
+ "bdk",
+ "chrono",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.4.1)",
  "log",
  "rand",
  "secp256k1",
@@ -1631,10 +1658,10 @@ dependencies = [
  "ctor",
  "eel",
  "esplora-client 0.5.0",
- "honey-badger",
+ "honey-badger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.3.0)",
  "log",
  "mole",
- "perro",
+ "perro 1.0.1 (git+https://github.com/getlipa/perro?tag=v1.0.1)",
  "rand",
  "rustyline",
  "serde_json",
@@ -1741,9 +1768,9 @@ name = "mole"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f50bc1524a8bf480f8"
 dependencies = [
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.3.0)",
  "hex",
- "honey-badger",
+ "honey-badger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.3.0)",
  "log",
 ]
 
@@ -1918,6 +1945,14 @@ checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
 name = "perro"
 version = "1.0.1"
 source = "git+https://github.com/getlipa/perro?tag=v1.0.1#89076419cf129fa2679e3dca0683e1c140ccf7ce"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
+name = "perro"
+version = "1.0.1"
+source = "git+https://github.com/getlipa/perro?tag=v1.1.0#82e886983820147721ae5b2480c5310c36d74891"
 dependencies = [
  "thiserror",
 ]
