@@ -87,6 +87,8 @@ use std::thread::sleep;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::time::Duration;
 
+const PAYMENT_TIMEOUT: Duration = Duration::from_secs(90);
+
 const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     sync_blockchain: Duration::from_secs(5 * 60),
     update_lsp_info: Some(PeriodConfig {
@@ -473,7 +475,7 @@ impl LightningNode {
         self.log_node_state();
         let payment_result = pay_invoice(
             &invoice,
-            Retry::Timeout(Duration::from_secs(15)),
+            Retry::Timeout(PAYMENT_TIMEOUT),
             &self.channel_manager,
         );
 
@@ -519,7 +521,7 @@ impl LightningNode {
         let payment_result = pay_zero_value_invoice(
             &invoice,
             amount_msat,
-            Retry::Timeout(Duration::from_secs(10)),
+            Retry::Timeout(PAYMENT_TIMEOUT),
             &self.channel_manager,
         );
 
