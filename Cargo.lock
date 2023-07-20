@@ -701,7 +701,7 @@ dependencies = [
  "lightning-transaction-sync",
  "log",
  "num_enum",
- "perro",
+ "perro 1.0.1 (git+https://github.com/getlipa/perro?tag=v1.1.0)",
  "prost",
  "rand",
  "reqwest",
@@ -1063,7 +1063,7 @@ source = "git+https://github.com/getlipa/wild?tag=v1.3.0#c9b36f2a84eb0867a927a5f
 dependencies = [
  "graphql_client",
  "log",
- "perro",
+ "perro 1.0.1 (git+https://github.com/getlipa/perro?tag=v1.0.1)",
  "reqwest",
  "serde",
 ]
@@ -1634,7 +1634,7 @@ dependencies = [
  "honey-badger",
  "log",
  "mole",
- "perro",
+ "perro 1.0.1 (git+https://github.com/getlipa/perro?tag=v1.1.0)",
  "rand",
  "rustyline",
  "serde_json",
@@ -1918,6 +1918,14 @@ checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
 name = "perro"
 version = "1.0.1"
 source = "git+https://github.com/getlipa/perro?tag=v1.0.1#89076419cf129fa2679e3dca0683e1c140ccf7ce"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
+name = "perro"
+version = "1.0.1"
+source = "git+https://github.com/getlipa/perro?tag=v1.1.0#82e886983820147721ae5b2480c5310c36d74891"
 dependencies = [
  "thiserror",
 ]
