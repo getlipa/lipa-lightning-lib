@@ -39,12 +39,15 @@ pub use eel::payment::FiatValues;
 use eel::payment::{PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
 pub use eel::Network;
+use email_address::EmailAddress;
 use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
+use iban::Iban;
 use log::trace;
 use logger::init_logger_once;
-use perro::{MapToError, ResultTrait};
+use perro::{invalid_input, MapToError, ResultTrait};
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::{env, fs};
 
@@ -336,12 +339,21 @@ impl LightningNode {
         user_currency: TopupCurrency,
     ) -> Result<FiatTopupInfo> {
         trace!("register_fiat_topup() - called with - email: {email:?} - user_iban: {user_iban} - user_currency: {user_currency:?}");
+        if let Err(e) = user_iban.parse::<Iban>() {
+            return Err(invalid_input(format!("Invalid user_iban: {}", e)));
+        }
+
+        if let Some(email) = email {
+            if let Err(e) = EmailAddress::from_str(&email) {
+                return Err(invalid_input(format!("Invalid email: {}", e)));
+            }
+            // TODO: register email
+        }
+
         self.auth
             .register_node(self.core_node.get_node_info().node_pubkey.to_string())
             .map_runtime_error_to(RuntimeErrorCode::TopupServiceUnavailable)?;
-        if email.is_some() {
-            // TODO: validate email and then register it
-        }
+
         self.fiat_topup_client
             .register_pocket_fiat_topup(&user_iban, user_currency)
     }

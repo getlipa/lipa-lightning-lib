@@ -54,7 +54,8 @@ impl FiatTopupInfo {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
 struct ChallengeResponse {
     id: String,
     token: String,
@@ -62,7 +63,7 @@ struct ChallengeResponse {
     completed_on: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 struct PaymentMethodRequest {
     currency: String,
     debitor_iban: String,
@@ -75,7 +76,7 @@ struct PayoutMethod {
     signature: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 struct CreateOrderRequest {
     active: bool,
     fee_rate: f64,
@@ -85,7 +86,8 @@ struct CreateOrderRequest {
     payout_method: PayoutMethod,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
 struct PaymentMethodResponse {
     currency: String,
     debitor_iban: String,
@@ -104,7 +106,8 @@ struct PaymentMethodResponse {
     creditor_country: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
 pub struct CreateOrderResponse {
     id: String,
     active: bool,
