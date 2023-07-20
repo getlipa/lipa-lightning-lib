@@ -79,7 +79,6 @@ struct PayoutMethod {
 #[derive(Debug, Serialize)]
 struct CreateOrderRequest {
     active: bool,
-    fee_rate: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     affiliate_id: Option<String>,
     payment_method: PaymentMethodRequest,
@@ -203,7 +202,6 @@ impl PocketClient {
         };
         let create_order_request = CreateOrderRequest {
             active: true,
-            fee_rate: 0.015,
             affiliate_id: None,
             payment_method: PaymentMethodRequest {
                 currency: user_currency.to_string(),
