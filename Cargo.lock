@@ -862,6 +862,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "file-rotate"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddf221ceec4517f3cb764dae3541b2bd87666fc8832e51322fbb97250b468c71"
+dependencies = [
+ "chrono",
+ "flate2",
+]
+
+[[package]]
 name = "fixedbitset"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1657,6 +1667,7 @@ dependencies = [
  "eel",
  "email_address",
  "esplora-client 0.5.0",
+ "file-rotate",
  "honey-badger",
  "iban_validate",
  "log",

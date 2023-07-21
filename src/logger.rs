@@ -1,14 +1,26 @@
+use crate::errors::Result;
+
+use file_rotate::compression::Compression;
+use file_rotate::suffix::AppendCount;
+use file_rotate::{ContentLimit, FileRotate};
 use log::Level;
+use perro::MapToError;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Once;
 
-fn init_logger(min_level: Level, path: &PathBuf) {
-    let log_file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .unwrap();
+fn init_logger(min_level: Level, path: &Path) {
+    let base_log_file = path.join("logs.txt");
+
+    // Main log file ~10MB + 3 compressed older logs ~2MB = Total storage taken of ~12MB
+    // Compressing all log files leads to a ~3MB file and provides latest 200k logged lines
+    let rotated_log = FileRotate::new(
+        base_log_file,
+        AppendCount::new(3),
+        ContentLimit::Lines(50_000),
+        Compression::OnRotate(0),
+        None,
+    );
 
     let config = simplelog::ConfigBuilder::new()
         .add_filter_ignore_str("h2")
@@ -26,13 +38,16 @@ fn init_logger(min_level: Level, path: &PathBuf) {
         .set_time_format_rfc3339()
         .build();
 
-    simplelog::WriteLogger::init(min_level.to_level_filter(), config, log_file).unwrap();
+    simplelog::WriteLogger::init(min_level.to_level_filter(), config, rotated_log).unwrap();
 }
 
 static INIT_LOGGER_ONCE: Once = Once::new();
 
 /// Call the function once before instantiating the library to get logs.
 /// Subsequent calls will have no effect.
-pub(crate) fn init_logger_once(min_level: Level, path: &PathBuf) {
+pub(crate) fn init_logger_once(min_level: Level, path: &PathBuf) -> Result<()> {
+    fs::create_dir_all(path)
+        .map_to_permanent_failure(format!("Failed to create directory: {:?}", path))?;
     INIT_LOGGER_ONCE.call_once(|| init_logger(min_level, path));
+    Ok(())
 }
