@@ -2,9 +2,7 @@ use crate::eel_interface_impl::RemoteStorageGraphql;
 use crate::environment::Environment;
 use crate::errors::{Result, RuntimeErrorCode};
 use crate::logger::init_logger_once;
-use crate::{
-    build_auth, enable_backtrace, sanitize_input, EnvironmentCode, LOG_FILENAME, LOG_LEVEL,
-};
+use crate::{build_auth, enable_backtrace, sanitize_input, EnvironmentCode, LOGS_DIR, LOG_LEVEL};
 use perro::{MapToError, ResultTrait};
 use std::fs;
 use std::path::Path;
@@ -24,8 +22,8 @@ pub fn recover_lightning_node(
     if enable_file_logging {
         init_logger_once(
             LOG_LEVEL,
-            &Path::new(&local_persistence_path).join(LOG_FILENAME),
-        );
+            &Path::new(&local_persistence_path).join(LOGS_DIR),
+        )?;
     }
 
     let seed = sanitize_input::strong_type_seed(&seed)

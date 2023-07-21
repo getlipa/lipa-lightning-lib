@@ -53,7 +53,7 @@ use std::time::SystemTime;
 use std::{env, fs};
 
 const LOG_LEVEL: log::Level = log::Level::Trace;
-const LOG_FILENAME: &str = "logs.txt";
+const LOGS_DIR: &str = "logs";
 
 const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 
@@ -143,8 +143,8 @@ impl LightningNode {
         if config.enable_file_logging {
             init_logger_once(
                 LOG_LEVEL,
-                &Path::new(&config.local_persistence_path).join(LOG_FILENAME),
-            );
+                &Path::new(&config.local_persistence_path).join(LOGS_DIR),
+            )?;
         }
         let seed = sanitize_input::strong_type_seed(&config.seed)
             .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
