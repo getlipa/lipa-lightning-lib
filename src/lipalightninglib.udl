@@ -389,7 +389,7 @@ dictionary FiatTopupInfo {
     string creditor_country;
 };
 
-// Information on a funds offer that can be claimed using a kind-dependent method (e.g. LNURL-w).
+// Information on a funds offer that can be claimed using LNURL-w.
 dictionary OfferInfo {
     OfferKind offer_kind;
     Amount amount;
