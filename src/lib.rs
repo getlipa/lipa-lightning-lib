@@ -124,7 +124,10 @@ pub struct OfferInfo {
 }
 
 pub enum OfferKind {
-    Pocket { exchange_fee: FiatValue },
+    Pocket {
+        exchange_fee: FiatValue,
+        exchange_fee_rate: f64,
+    },
 }
 
 pub struct LightningNode {
@@ -383,6 +386,7 @@ impl LightningNode {
                     rate: 2403,
                     converted_at: SystemTime::now()
                 },
+                exchange_fee_rate: 0.015,
             },
             amount: 50000_u64.to_amount_up(&rate),
             lnurlw: "LNURL1DP68GURN8GHJ7UM9WFMXJCM99E3K7MF0V9CXJ0M385EKVCENXC6R2C35XVUKXEFCV5MKVV34X5EKZD3EV56NYD3HXQURZEPEXEJXXEPNXSCRVWFNV9NXZCN9XQ6XYEFHVGCXXCMYXYMNSERXFQ5FNS".to_string(),

@@ -389,7 +389,7 @@ dictionary FiatTopupInfo {
     string creditor_country;
 };
 
-// Information on a funds offer that can be claimed using a kind-dependent method (e.g. LNURL-w).
+// Information on a funds offer that can be claimed using LNURL-w.
 dictionary OfferInfo {
     OfferKind offer_kind;
     Amount amount;
@@ -400,7 +400,10 @@ dictionary OfferInfo {
 
 [Enum]
 interface OfferKind {
-    Pocket(FiatValue exchange_fee);
+    Pocket(
+        FiatValue exchange_fee, // The fee paid to perform the exchange from fiat to sats
+        f64 exchange_fee_rate // The rate of the fee (e.g. 1.5% is represented as 0.015)
+    );
 };
 
 
