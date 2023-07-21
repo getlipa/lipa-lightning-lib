@@ -49,6 +49,7 @@ use perro::{invalid_input, MapToError, ResultTrait};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::SystemTime;
 use std::{env, fs};
 
 const LOG_LEVEL: log::Level = log::Level::Trace;
@@ -109,15 +110,27 @@ pub struct Payment {
     pub metadata: String,
 }
 
+pub enum MaxRoutingFeeMode {
+    Relative { max_fee_permyriad: u16 },
+    Absolute { max_fee_amount: Amount },
+}
+
+pub struct OfferInfo {
+    pub offer_kind: OfferKind,
+    pub amount: Amount,
+    pub lnurlw: String,
+    pub created_at: SystemTime,
+    pub expires_at: SystemTime,
+}
+
+pub enum OfferKind {
+    Pocket { exchange_fee: FiatValue },
+}
+
 pub struct LightningNode {
     core_node: Arc<eel::LightningNode>,
     auth: Arc<Auth>,
     fiat_topup_client: PocketClient,
-}
-
-pub enum MaxRoutingFeeMode {
-    Relative { max_fee_permyriad: u16 },
-    Absolute { max_fee_amount: Amount },
 }
 
 impl LightningNode {
@@ -356,6 +369,26 @@ impl LightningNode {
 
         self.fiat_topup_client
             .register_pocket_fiat_topup(&user_iban, user_currency)
+    }
+
+    pub fn query_available_offers(&self) -> Result<Vec<OfferInfo>> {
+        // TODO: implement
+        // Mocked return follows...
+        let rate = self.get_exchange_rate();
+        Ok(vec![OfferInfo {
+            offer_kind: OfferKind::Pocket {
+                exchange_fee: FiatValue{
+                    minor_units: 150,
+                    currency_code: "EUR".to_string(),
+                    rate: 2403,
+                    converted_at: SystemTime::now()
+                },
+            },
+            amount: 50000_u64.to_amount_up(&rate),
+            lnurlw: "LNURL1DP68GURN8GHJ7UM9WFMXJCM99E3K7MF0V9CXJ0M385EKVCENXC6R2C35XVUKXEFCV5MKVV34X5EKZD3EV56NYD3HXQURZEPEXEJXXEPNXSCRVWFNV9NXZCN9XQ6XYEFHVGCXXCMYXYMNSERXFQ5FNS".to_string(),
+            created_at: SystemTime::now(),
+            expires_at: SystemTime::now(),
+        }])
     }
 
     pub fn panic_directly(&self) {
