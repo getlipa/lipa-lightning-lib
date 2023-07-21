@@ -40,12 +40,14 @@ use eel::payment::{PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
 pub use eel::Network;
 use email_address::EmailAddress;
+use honey_badger::graphql::schema::{register_email, RegisterEmail};
+use honey_badger::graphql::{build_client, post_blocking};
 use honey_badger::secrets::{generate_keypair, KeyPair};
-use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
+use honey_badger::{graphql, Auth, AuthLevel, CustomTermsAndConditions};
 use iban::Iban;
 use log::trace;
 use logger::init_logger_once;
-use perro::{invalid_input, MapToError, ResultTrait};
+use perro::{invalid_input, permanent_failure, MapToError, ResultTrait};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -134,6 +136,7 @@ pub struct LightningNode {
     core_node: Arc<eel::LightningNode>,
     auth: Arc<Auth>,
     fiat_topup_client: PocketClient,
+    backend_url: String,
 }
 
 impl LightningNode {
@@ -177,7 +180,7 @@ impl LightningNode {
         let user_event_handler = Box::new(EventsImpl { events_callback });
 
         let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
-            environment.backend_url,
+            environment.backend_url.clone(),
             Arc::clone(&auth),
         ));
 
@@ -197,6 +200,7 @@ impl LightningNode {
             core_node,
             auth,
             fiat_topup_client,
+            backend_url: environment.backend_url,
         })
     }
 
@@ -363,7 +367,8 @@ impl LightningNode {
             if let Err(e) = EmailAddress::from_str(&email) {
                 return Err(invalid_input(format!("Invalid email: {}", e)));
             }
-            // TODO: register email
+            self.register_email(email)
+                .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
         }
 
         self.auth
@@ -405,6 +410,20 @@ impl LightningNode {
 
     pub fn panic_in_tokio(&self) {
         self.core_node.panic_in_tokio()
+    }
+
+    fn register_email(&self, email: String) -> graphql::Result<()> {
+        let variables = register_email::Variables { email };
+        let access_token = self.auth.query_token()?;
+        let client = build_client(Some(&access_token))?;
+        let data = post_blocking::<RegisterEmail>(&client, &self.backend_url, variables)?;
+        if !matches!(
+            data.register_email,
+            Some(register_email::RegisterEmailRegisterEmail { .. })
+        ) {
+            return Err(permanent_failure("Backend rejected email registration"));
+        }
+        Ok(())
     }
 }
 
