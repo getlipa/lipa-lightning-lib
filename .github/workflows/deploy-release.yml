@@ -105,7 +105,7 @@ jobs:
 
   lipo-ios:
     name: lipo-ios
-    needs: [ cross-compile-ios, cross-compile-android ]
+    needs: [ cross-compile-ios ]
     runs-on: macos-latest
     steps:
       - name: Download x86 bin
