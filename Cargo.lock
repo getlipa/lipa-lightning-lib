@@ -429,7 +429,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.7.0#5f2e80b278ba099bfdfd36e01f472fa9e64707ab"
+source = "git+https://github.com/getlipa/wild?tag=v1.7.1#c18bc6c1a9146571fb6b5e66f28efa6e62ec73bf"
 dependencies = [
  "chrono",
  "graphql",
@@ -670,9 +670,9 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.8.1"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
+checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 
 [[package]]
 name = "electrum-client"
@@ -1030,7 +1030,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.7.0#5f2e80b278ba099bfdfd36e01f472fa9e64707ab"
+source = "git+https://github.com/getlipa/wild?tag=v1.7.1#c18bc6c1a9146571fb6b5e66f28efa6e62ec73bf"
 dependencies = [
  "graphql_client",
  "log",
@@ -1190,7 +1190,7 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.7.0#5f2e80b278ba099bfdfd36e01f472fa9e64707ab"
+source = "git+https://github.com/getlipa/wild?tag=v1.7.1#c18bc6c1a9146571fb6b5e66f28efa6e62ec73bf"
 dependencies = [
  "base64 0.21.2",
  "bdk",
@@ -1686,7 +1686,7 @@ dependencies = [
 [[package]]
 name = "mole"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.7.0#5f2e80b278ba099bfdfd36e01f472fa9e64707ab"
+source = "git+https://github.com/getlipa/wild?tag=v1.7.1#c18bc6c1a9146571fb6b5e66f28efa6e62ec73bf"
 dependencies = [
  "graphql",
  "hex",
@@ -2026,9 +2026,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.31"
+version = "1.0.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fe8a65d69dd0808184ebb5f836ab526bb259db23c657efa38711b1072ee47f0"
+checksum = "50f3b39ccfb720540debaa0164757101c08ecb8d326b15358ce76a62c7e85965"
 dependencies = [
  "proc-macro2",
 ]
@@ -2229,7 +2229,7 @@ checksum = "79ea77c539259495ce8ca47f53e66ae0330a8819f67e23ac96ca02f50e7b7d36"
 dependencies = [
  "log",
  "ring",
- "rustls-webpki 0.101.1",
+ "rustls-webpki 0.101.2",
  "sct",
 ]
 
@@ -2254,9 +2254,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.101.1"
+version = "0.101.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15f36a6828982f422756984e47912a7a51dcbc2a197aa791158f8ca61cd8204e"
+checksum = "513722fd73ad80a71f72b61009ea1b584bcfa1483ca93949c8f290298837fa59"
 dependencies = [
  "ring",
  "untrusted",
@@ -3412,9 +3412,9 @@ checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
 
 [[package]]
 name = "winnow"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81fac9742fd1ad1bd9643b991319f72dd031016d44b77039a26977eb667141e7"
+checksum = "25b5872fa2e10bd067ae946f927e726d7d603eaeb6e02fa6a350e0722d2b8c11"
 dependencies = [
  "memchr",
 ]

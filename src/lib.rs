@@ -3,6 +3,7 @@
 extern crate core;
 
 mod amount;
+mod backend_client;
 mod callbacks;
 mod config;
 mod eel_interface_impl;
@@ -27,6 +28,7 @@ use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
 
+use crate::backend_client::BackendClient;
 pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 pub use eel::config::TzConfig;
@@ -40,14 +42,12 @@ use eel::payment::{PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
 pub use eel::Network;
 use email_address::EmailAddress;
-use honey_badger::graphql::schema::{register_email, RegisterEmail};
-use honey_badger::graphql::{build_client, post_blocking};
 use honey_badger::secrets::{generate_keypair, KeyPair};
-use honey_badger::{graphql, Auth, AuthLevel, CustomTermsAndConditions};
+use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
 use iban::Iban;
 use log::trace;
 use logger::init_logger_once;
-use perro::{invalid_input, permanent_failure, MapToError, ResultTrait};
+use perro::{invalid_input, MapToError, ResultTrait};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -128,7 +128,7 @@ pub struct OfferInfo {
 pub enum OfferKind {
     Pocket {
         exchange_fee: FiatValue,
-        exchange_fee_rate: f64,
+        exchange_fee_rate_permyriad: u16,
     },
 }
 
@@ -136,7 +136,7 @@ pub struct LightningNode {
     core_node: Arc<eel::LightningNode>,
     auth: Arc<Auth>,
     fiat_topup_client: PocketClient,
-    backend_url: String,
+    backend_client: BackendClient,
 }
 
 impl LightningNode {
@@ -195,12 +195,13 @@ impl LightningNode {
         );
 
         let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&core_node))?;
+        let backend_client = BackendClient::new(environment.backend_url, Arc::clone(&auth))?;
 
         Ok(LightningNode {
             core_node,
             auth,
             fiat_topup_client,
-            backend_url: environment.backend_url,
+            backend_client,
         })
     }
 
@@ -367,7 +368,8 @@ impl LightningNode {
             if let Err(e) = EmailAddress::from_str(&email) {
                 return Err(invalid_input(format!("Invalid email: {}", e)));
             }
-            self.register_email(email)
+            self.backend_client
+                .register_email(email)
                 .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
         }
 
@@ -380,38 +382,9 @@ impl LightningNode {
     }
 
     pub fn query_available_offers(&self) -> Result<Vec<OfferInfo>> {
-        // TODO: implement
-        // Mocked return follows...
-        let rate = self.get_exchange_rate();
-        Ok(vec![OfferInfo {
-            offer_kind: OfferKind::Pocket {
-                exchange_fee: FiatValue{
-                    minor_units: 150,
-                    currency_code: "EUR".to_string(),
-                    rate: 2403,
-                    converted_at: SystemTime::now()
-                },
-                exchange_fee_rate: 0.015,
-            },
-            amount: 50000_u64.to_amount_up(&rate),
-            lnurlw: "LNURL1DP68GURN8GHJ7UM9WFMXJCM99E3K7MF0V9CXJ0M385EKVCENXC6R2C35XVUKXEFCV5MKVV34X5EKZD3EV56NYD3HXQURZEPEXEJXXEPNXSCRVWFNV9NXZCN9XQ6XYEFHVGCXXCMYXYMNSERXFQ5FNS".to_string(),
-            created_at: SystemTime::now(),
-            expires_at: SystemTime::now(),
-        }])
-    }
-
-    fn register_email(&self, email: String) -> graphql::Result<()> {
-        let variables = register_email::Variables { email };
-        let access_token = self.auth.query_token()?;
-        let client = build_client(Some(&access_token))?;
-        let data = post_blocking::<RegisterEmail>(&client, &self.backend_url, variables)?;
-        if !matches!(
-            data.register_email,
-            Some(register_email::RegisterEmailRegisterEmail { .. })
-        ) {
-            return Err(permanent_failure("Backend rejected email registration"));
-        }
-        Ok(())
+        self.backend_client
+            .query_available_topups()
+            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
     }
 }
 
