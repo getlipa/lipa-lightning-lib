@@ -84,8 +84,7 @@ pub use perro::{
 };
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::thread::sleep;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::Duration;
 
 const PAYMENT_TIMEOUT: Duration = Duration::from_secs(90);
@@ -800,27 +799,6 @@ impl LightningNode {
         sign(message.as_bytes(), &self.keys_manager.get_node_secret_key())
             .map_to_permanent_failure("Failed to sign message")
     }
-
-    pub fn panic_directly(&self) {
-        panic_directly()
-    }
-
-    pub fn panic_in_background_thread(&self) {
-        std::thread::spawn(panic_directly);
-        sleep(Duration::from_secs(1));
-    }
-
-    pub fn panic_in_tokio(&self) {
-        self.rt.handle().spawn(async { panic_directly() });
-        sleep(Duration::from_secs(1));
-    }
-}
-
-fn panic_directly() {
-    let instant = Instant::now();
-    let duration = Duration::from_secs(u64::MAX); // Max value of u64
-
-    let _result = instant - duration;
 }
 
 impl Drop for LightningNode {
@@ -906,16 +884,5 @@ fn get_foreground_periods() -> TaskPeriods {
             }
         }
         Err(_) => FOREGROUND_PERIODS,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::panic_directly;
-
-    #[test]
-    #[should_panic]
-    fn test_panic_directly() {
-        panic_directly();
     }
 }

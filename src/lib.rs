@@ -400,18 +400,6 @@ impl LightningNode {
         }])
     }
 
-    pub fn panic_directly(&self) {
-        self.core_node.panic_directly();
-    }
-
-    pub fn panic_in_background_thread(&self) {
-        self.core_node.panic_in_background_thread()
-    }
-
-    pub fn panic_in_tokio(&self) {
-        self.core_node.panic_in_tokio()
-    }
-
     fn register_email(&self, email: String) -> graphql::Result<()> {
         let variables = register_email::Variables { email };
         let access_token = self.auth.query_token()?;

@@ -153,10 +153,6 @@ interface LightningNode {
     // Get a list of currently available fund offers
     [Throws=LnError]
     sequence<OfferInfo> query_available_offers();
-
-    void panic_directly();
-    void panic_in_background_thread();
-    void panic_in_tokio();
 };
 
 // An object that holds all configuration needed to start a LightningNode instance.
