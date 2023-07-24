@@ -21,7 +21,7 @@ lightning-background-processor = "0.0.115"
 lightning-invoice = "0.23.0"
 lightning-net-tokio = "0.0.115"
 lightning-persister = "0.0.115"
-lightning-rapid-gossip-sync = "0.0.115"
+lightning-rapid-gossip-sync = "0.0.116"
 lightning-transaction-sync = { version = "0.0.115", features = ["esplora-async"] }
 log = "0.4.19"
 num_enum = "0.6.1"
