@@ -29,7 +29,7 @@ use lightning::util::ser::{ReadableArgs, Writeable};
 use lightning_persister::FilesystemPersister;
 use log::{debug, error, warn};
 use perro::Error::RuntimeError;
-use perro::{invalid_input, permanent_failure, MapToError, ResultTrait};
+use perro::{invalid_input, permanent_failure, runtime_error, MapToError, ResultTrait};
 use std::fs;
 use std::io::{BufReader, Cursor};
 use std::ops::Deref;
@@ -44,6 +44,11 @@ static OBJECTS_BUCKET: &str = "objects";
 static MANAGER_KEY: &str = "manager";
 static GRAPH_KEY: &str = "network_graph";
 static SCORER_KEY: &str = "scorer";
+
+pub(crate) enum CorruptedMonitorPolicy {
+    Ignore,
+    Fail,
+}
 
 pub(crate) struct StoragePersister {
     storage: Arc<Box<dyn RemoteStorage>>,
@@ -98,8 +103,11 @@ impl StoragePersister {
             .map_to_permanent_failure("Failed to read channel monitors from disk")?;
 
         // Fetch remote channel monitors to make sure remote state hasn't advanced
-        let mut remote_channel_monitors =
-            self.fetch_remote_channel_monitors(entropy_source, signer_provider)?;
+        let mut remote_channel_monitors = self.fetch_remote_channel_monitors(
+            entropy_source,
+            signer_provider,
+            CorruptedMonitorPolicy::Ignore,
+        )?;
 
         Self::verify_local_state_is_latest_state::<SP>(
             &mut local_channel_monitors,
@@ -114,6 +122,7 @@ impl StoragePersister {
         &self,
         entropy_source: ES,
         signer_provider: SP,
+        corrupted_monitor_policy: CorruptedMonitorPolicy,
     ) -> Result<
         Vec<(
             BlockHash,
@@ -160,11 +169,12 @@ impl StoragePersister {
                         "Failed to deserialize remote ChannelMonitor `{}`: {}",
                         key, e
                     );
-                    // TODO: Should we return this information to the caller?
-                    //      A corrupt remote ChannelMonitor could be harmless if in this case we
-                    //      load the local ChannelMonitors and the situation gets fixed. If this
-                    //      is a wallet recovery, we will need to load the remote ChannelMonitors,
-                    //      and this channel will be lost.
+                    match corrupted_monitor_policy {
+                        CorruptedMonitorPolicy::Ignore => {}
+                        CorruptedMonitorPolicy::Fail => {
+                            return Err(runtime_error(RuntimeErrorCode::RemoteStorageError, "Failed to deserialize a remote ChannelMonitor. Proceeding could cause this channel to be lost."));
+                        }
+                    }
                 }
             }
         }

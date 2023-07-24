@@ -2,7 +2,7 @@ use crate::errors::Result;
 use crate::interfaces::RemoteStorage;
 use crate::key_derivation;
 use crate::keys_manager::init_keys_manager;
-use crate::storage_persister::{has_local_install, StoragePersister};
+use crate::storage_persister::{has_local_install, CorruptedMonitorPolicy, StoragePersister};
 use log::info;
 use perro::{invalid_input, MapToError};
 use std::fs;
@@ -38,8 +38,11 @@ pub fn recover_lightning_node(
     seed_first_half.copy_from_slice(&seed[..32]);
     let keys_manager = Arc::new(init_keys_manager(&seed_first_half)?);
 
-    let remote_channel_monitors =
-        storage.fetch_remote_channel_monitors(&*keys_manager, &*keys_manager)?;
+    let remote_channel_monitors = storage.fetch_remote_channel_monitors(
+        &*keys_manager,
+        &*keys_manager,
+        CorruptedMonitorPolicy::Fail,
+    )?;
     info!(
         "Fetched {} channel monitors from remote storage during recovery procedure",
         remote_channel_monitors.len()
