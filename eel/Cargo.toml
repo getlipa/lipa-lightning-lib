@@ -17,7 +17,7 @@ ecies = { version = "0.2.4", default-features = false, features = ["pure"] }
 esplora-client = { version = "0.5.0", default-features = false, features = ["blocking"] }
 futures = "0.3.24"
 lightning = { version = "0.0.115", features = ["max_level_trace"] }
-lightning-background-processor = "0.0.115"
+lightning-background-processor = "0.0.116"
 lightning-invoice = "0.23.0"
 lightning-net-tokio = "0.0.115"
 lightning-persister = "0.0.115"
