@@ -421,7 +421,7 @@ pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) 
     let seed = sanitize_input::strong_type_seed(&seed)
         .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
     let auth = build_auth(&seed, environment.backend_url)?;
-    auth.accept_terms_and_conditions()
+    auth.accept_custom_terms_and_conditions(CustomTermsAndConditions::Lipa)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
 
