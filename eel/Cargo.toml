@@ -38,9 +38,11 @@ perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
 
 # Bundle sqlite for all targets except iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]
-rusqlite = { version = "0.29.0", features = ["bundled", "chrono"] }
+# Downgrading to be comatible with breez-sdk-core.
+rusqlite = { version = "0.28.0", features = ["bundled", "chrono"] }
 [target.'cfg(target_os = "ios")'.dependencies]
-rusqlite = { version = "0.29.0", features = ["chrono"] }
+# Downgrading to be comatible with breez-sdk-core.
+rusqlite = { version = "0.28.0", features = ["chrono"] }
 
 [dev-dependencies]
 colored = "2.0.4"
