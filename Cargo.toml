@@ -18,9 +18,9 @@ nigiri = []
 [dependencies]
 eel = { path = "eel" }
 
-chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.7.0" }
-honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.7.0" }
-mole = { git = "https://github.com/getlipa/wild", tag = "v1.7.0" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.7.1" }
+honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.7.1" }
+mole = { git = "https://github.com/getlipa/wild", tag = "v1.7.1" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
 
 chrono = { version = "0.4.26", default-features = false, features = ["serde"] }

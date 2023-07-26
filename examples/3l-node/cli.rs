@@ -1,10 +1,10 @@
 use crate::hinter::{CommandHint, CommandHinter};
 
-use uniffi_lipalightninglib::{Amount, MaxRoutingFeeMode, TopupCurrency, TzConfig};
+use uniffi_lipalightninglib::{Amount, MaxRoutingFeeMode, OfferKind, TopupCurrency, TzConfig};
 
 use bitcoin::secp256k1::PublicKey;
 use chrono::offset::FixedOffset;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
 use colored::Colorize;
 use eel::payment::PaymentState;
 use rustyline::config::{Builder, CompletionType};
@@ -113,6 +113,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", message.red());
                     }
                 }
+                "listoffers" => {
+                    if let Err(message) = list_offers(node) {
+                        println!("{}", message.red());
+                    }
+                }
                 "listpayments" => {
                     if let Err(message) = list_payments(node) {
                         println!("{}", message.red());
@@ -183,6 +188,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "registertopup <IBAN> <currency> [email]",
         "registertopup ",
     ));
+    hints.insert(CommandHint::new("listoffers", "listoffers"));
 
     hints.insert(CommandHint::new("listpayments", "listpayments"));
     hints.insert(CommandHint::new("foreground", "foreground"));
@@ -214,6 +220,7 @@ fn help() {
     println!("  payopeninvoice <invoice> <amount in SAT>");
     println!();
     println!("  registertopup <IBAN> <currency> [email]");
+    println!("  listoffers");
     println!();
     println!("  listpayments");
     println!();
@@ -512,6 +519,53 @@ fn register_topup(
     };
 
     println!("{topup_info:?}");
+
+    Ok(())
+}
+
+fn list_offers(node: &LightningNode) -> Result<(), String> {
+    let offers = match node.query_available_offers() {
+        Ok(p) => p,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    println!("Total of {} offers\n", offers.len().to_string().bold());
+    for offer in offers {
+        let kind = match offer.offer_kind {
+            OfferKind::Pocket { .. } => "Pocket",
+        };
+
+        let created_at: DateTime<Local> = offer.created_at.into();
+        let expires_at: DateTime<Local> = offer.expires_at.into();
+
+        println!("{kind} offer created at {created_at}:");
+        println!("      Expires at:         {}", expires_at);
+        println!(
+            "      Amount:             {}",
+            amount_to_string(offer.amount)
+        );
+        println!("      LNURL-w:            {:?}", offer.lnurlw);
+        match offer.offer_kind {
+            OfferKind::Pocket {
+                exchange_fee,
+                exchange_fee_rate_permyriad,
+            } => {
+                println!(
+                    "      Exchange fee rate:  {}%",
+                    exchange_fee_rate_permyriad as f64 / 100_f64
+                );
+                let converted_at: DateTime<Utc> = exchange_fee.converted_at.into();
+                let fiat = format!(
+                    "{:.2} {} as of {}",
+                    exchange_fee.minor_units as f64 / 100f64,
+                    exchange_fee.currency_code,
+                    converted_at.format("%d/%m/%Y %T UTC"),
+                );
+                println!("      Exchange fee value:  {}", fiat);
+            }
+        }
+        println!();
+    }
 
     Ok(())
 }

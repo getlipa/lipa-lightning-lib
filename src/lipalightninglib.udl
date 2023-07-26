@@ -399,7 +399,7 @@ dictionary OfferInfo {
 interface OfferKind {
     Pocket(
         FiatValue exchange_fee, // The fee paid to perform the exchange from fiat to sats
-        f64 exchange_fee_rate // The rate of the fee (e.g. 1.5% is represented as 0.015)
+        u16 exchange_fee_rate_permyriad // The rate of the fee expressed in permyriad (e.g. 1.5% would be 150)
     );
 };
 
