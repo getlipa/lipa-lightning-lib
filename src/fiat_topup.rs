@@ -122,20 +122,15 @@ pub struct CreateOrderResponse {
 pub(crate) struct PocketClient {
     pocket_url: String,
     client: reqwest::blocking::Client,
-    core_node: Arc<LightningNode>,
 }
 
 impl PocketClient {
-    pub fn new(pocket_url: String, core_node: Arc<LightningNode>) -> Result<Self> {
+    pub fn new(pocket_url: String) -> Result<Self> {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(20))
             .build()
             .map_to_permanent_failure("Failed to build reqwest client for PocketClient")?;
-        Ok(Self {
-            pocket_url,
-            client,
-            core_node,
-        })
+        Ok(Self { pocket_url, client })
     }
 
     pub fn register_pocket_fiat_topup(
@@ -191,11 +186,10 @@ impl PocketClient {
             "I confirm my bitcoin wallet. [{}]",
             challenge_response.token
         );
-        let signature = self
-            .core_node
-            .sign_message(&message)
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
-        let node_pubkey = self.core_node.get_node_info().node_pubkey.to_string();
+        // There is an open issue requesting a feature to sign arbitrary messages.
+        // https://github.com/breez/breez-sdk/issues/109
+        let signature = "signature".to_string();
+        let node_pubkey = "key".to_string();
 
         let user_currency = match user_currency {
             TopupCurrency::EUR => "eur",

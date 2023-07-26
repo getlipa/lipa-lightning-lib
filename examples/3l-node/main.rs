@@ -13,7 +13,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::{env, fs};
 
-static BASE_DIR: &str = ".3l_node";
+static BASE_DIR: &str = ".3l_node_breez_sdk_prototype";
 static LOG_FILE: &str = "logs.txt";
 
 fn main() {
@@ -47,22 +47,11 @@ fn main() {
     cli::poll_for_user_input(&node, &format!("{base_dir}/{LOG_FILE}"));
 }
 
-fn read_or_generate_seed(base_dir: &str) -> Vec<u8> {
-    let passphrase = "".to_string();
-    let filename = format!("{base_dir}/recovery_phrase");
-    match fs::read(filename.clone()) {
-        Ok(mnemonic) => {
-            let mnemonic = std::str::from_utf8(&mnemonic).unwrap();
-            let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
-            mnemonic_to_secret(mnemonic, passphrase).unwrap().seed
-        }
-        Err(_) => {
-            let secret = generate_secret(passphrase).unwrap();
-            let recovery_phrase = secret.mnemonic.join(" ");
-            fs::write(filename, &recovery_phrase).unwrap();
-            secret.seed
-        }
-    }
+fn read_or_generate_seed(_base_dir: &str) -> Vec<u8> {
+    let passphrase = String::new();
+    let mnemonic = env!("BREEZ_SDK_MNEMONIC");
+    let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
+    mnemonic_to_secret(mnemonic, passphrase).unwrap().seed
 }
 
 fn map_environment_code(code: &str) -> EnvironmentCode {

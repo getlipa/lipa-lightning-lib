@@ -24,12 +24,14 @@ mole = { git = "https://github.com/getlipa/wild", tag = "v1.7.1" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.1.4" }
+bitcoin = "0.29.2"
+tokio = { version = "1.29.0", features = ["rt-multi-thread", "time", "sync"] }
 # Pinning some problematic dependencies.
-txoo = "=0.4.2"
 ecies = { version = "=0.2.4", default-features = false, features = ["pure"] }
 flutter_rust_bridge = "=1.75.2"
 lightning = { version = "=0.0.115", features = ["max_level_trace"] }
 lightning-invoice = "=0.23.0"
+txoo = "=0.4.2"
 
 chrono = { version = "0.4.26", default-features = false, features = ["serde"] }
 email_address = "0.2.4"

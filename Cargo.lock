@@ -2189,6 +2189,7 @@ dependencies = [
  "simplelog",
  "strip-ansi-escapes",
  "thiserror",
+ "tokio",
  "txoo",
  "uniffi",
  "uniffi_bindgen",

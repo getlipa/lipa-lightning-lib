@@ -20,17 +20,16 @@ use crate::amount::ToAmount;
 pub use crate::amount::{Amount, FiatValue};
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::Config;
-use crate::eel_interface_impl::{EventsImpl, RemoteStorageGraphql};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 pub use crate::errors::{Error as LnError, Result, RuntimeErrorCode};
-use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
 
 use crate::backend_client::BackendClient;
 pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
+use bitcoin::secp256k1::PublicKey;
 pub use eel::config::TzConfig;
 use eel::errors::{PayError, PayErrorCode, PayResult};
 pub use eel::interfaces::ExchangeRate;
@@ -51,8 +50,15 @@ use perro::{invalid_input, MapToError, ResultTrait};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 use std::{env, fs};
+
+use breez_sdk_core::{
+    parse_invoice, BreezEvent, BreezServices, EnvironmentType, EventListener, GreenlightNodeConfig,
+    LNInvoice,
+};
+use std::time::Duration;
+use tokio::runtime::{Builder, Runtime};
 
 const LOG_LEVEL: log::Level = log::Level::Trace;
 const LOGS_DIR: &str = "logs";
@@ -132,15 +138,39 @@ pub enum OfferKind {
     },
 }
 
+struct LipaEventListener;
+
+impl EventListener for LipaEventListener {
+    fn on_event(&self, e: BreezEvent) {
+        match e {
+            BreezEvent::NewBlock { .. } => {}
+            BreezEvent::InvoicePaid { details: _ } => {
+                println!("A payment was received!")
+            }
+            BreezEvent::Synced => {}
+            BreezEvent::PaymentSucceed { .. } => {
+                println!("A payment as been sent!")
+            }
+            BreezEvent::PaymentFailed { details } => {
+                println!("A payment failed to be send! Error: {}", details.error);
+            }
+            BreezEvent::BackupStarted => {}
+            BreezEvent::BackupSucceeded => {}
+            BreezEvent::BackupFailed { .. } => {}
+        }
+    }
+}
+
 pub struct LightningNode {
-    core_node: Arc<eel::LightningNode>,
     auth: Arc<Auth>,
     fiat_topup_client: PocketClient,
     backend_client: BackendClient,
+    rt: Runtime,
+    sdk: Arc<BreezServices>,
 }
 
 impl LightningNode {
-    pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
+    pub fn new(config: Config, _events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         enable_backtrace();
         fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
             "Failed to create directory: {}",
@@ -157,194 +187,201 @@ impl LightningNode {
 
         let environment = Environment::load(config.environment);
 
-        let eel_config = eel::config::Config {
-            network: environment.network,
-            seed,
-            fiat_currency: config.fiat_currency,
-            esplora_api_url: environment.esplora_url,
-            rgs_url: environment.rgs_url,
-            lsp_url: environment.lsp_url,
-            lsp_token: environment.lsp_token,
-            local_persistence_path: config.local_persistence_path,
-            timezone_config: config.timezone_config,
-        };
-
         let auth = Arc::new(build_auth(&seed, environment.backend_url.clone())?);
 
-        let remote_storage = Box::new(RemoteStorageGraphql::new(
-            environment.backend_url.clone(),
-            environment.backend_health_url.clone(),
-            Arc::clone(&auth),
-        ));
+        let rt = Builder::new_multi_thread()
+            .worker_threads(4)
+            .thread_name("breez-async-runtime")
+            .enable_time()
+            .enable_io()
+            .build()
+            .unwrap();
 
-        let user_event_handler = Box::new(EventsImpl { events_callback });
-
-        let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
-            environment.backend_url.clone(),
-            Arc::clone(&auth),
-        ));
-
-        let core_node = Arc::new(
-            eel::LightningNode::new(
-                eel_config,
-                remote_storage,
-                user_event_handler,
-                exchange_rate_provider,
-            )
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?,
+        let api_key = env!("BREEZ_SDK_API_KEY").to_string();
+        let invite_code = Some(env!("BREEZ_SDK_INVITE_CODE").to_string());
+        let mut breez_config = BreezServices::default_config(
+            EnvironmentType::Production,
+            api_key,
+            breez_sdk_core::NodeConfig::Greenlight {
+                config: GreenlightNodeConfig {
+                    partner_credentials: None,
+                    invite_code,
+                },
+            },
         );
+        breez_config.working_dir = config.local_persistence_path;
+        breez_config.maxfee_percent = 5.0;
 
-        let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&core_node))?;
+        print!("Calling connect() ... ");
+        let now = Instant::now();
+        let sdk = rt
+            .block_on(BreezServices::connect(
+                breez_config,
+                config.seed.clone(),
+                Box::new(LipaEventListener {}),
+            ))
+            .unwrap();
+        println!("in {}ms", now.elapsed().as_millis());
+
+        // print!("Calling list_lsps() ... ");
+        // let now = Instant::now();
+        // let lsps = rt.block_on(sdk.list_lsps()).expect("List of LSPs");
+        // println!("in {}ms", now.elapsed().as_millis());
+        // println!("{:?}", lsps);
+        // let lsp = lsps.first().expect("At least one LSP");
+
+        // print!("Calling connect_lsp() ...");
+        // let now = Instant::now();
+        // rt.block_on(sdk.connect_lsp(lsp.id.clone()))
+        //     .expect("Connect to the LSP");
+        // println!("in {}ms", now.elapsed().as_millis());
+
+        let fiat_topup_client = PocketClient::new(environment.pocket_url)?;
         let backend_client = BackendClient::new(environment.backend_url, Arc::clone(&auth))?;
 
         Ok(LightningNode {
-            core_node,
             auth,
+            rt,
+            sdk,
             fiat_topup_client,
             backend_client,
         })
     }
 
     pub fn get_node_info(&self) -> NodeInfo {
+        let breez_info = self.sdk.node_info().unwrap();
         let rate = self.get_exchange_rate();
-        let node = self.core_node.get_node_info();
-        let channels = node.channels_info;
         let channels_info = ChannelsInfo {
-            num_channels: channels.num_channels,
-            num_usable_channels: channels.num_usable_channels,
-            local_balance: channels.local_balance_msat.to_amount_down(&rate),
-            total_channel_capacities: channels.total_channel_capacities_msat.to_amount_down(&rate),
-            inbound_capacity: channels.inbound_capacity_msat.to_amount_down(&rate),
-            outbound_capacity: channels.outbound_capacity_msat.to_amount_down(&rate),
+            num_channels: 0,
+            num_usable_channels: 0,
+            local_balance: breez_info.channels_balance_msat.to_amount_down(&rate),
+            inbound_capacity: breez_info.inbound_liquidity_msats.to_amount_down(&rate),
+            outbound_capacity: breez_info.max_payable_msat.to_amount_down(&rate),
+            total_channel_capacities: (0 as u64).to_amount_down(&rate),
         };
+        let node_pubkey = PublicKey::from_str(&breez_info.id)
+            .unwrap()
+            .serialize()
+            .to_vec();
         NodeInfo {
-            node_pubkey: node.node_pubkey.serialize().to_vec(),
-            num_peers: node.num_peers,
+            node_pubkey,
+            num_peers: breez_info.connected_peers.len() as u16,
             channels_info,
         }
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        let fee = self
-            .core_node
-            .query_lsp_fee()
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
-        let channel_minimum_fee = fee
-            .channel_minimum_fee_msat
-            .to_amount_up(&self.get_exchange_rate());
+        let lsp_info = self.rt.block_on(self.sdk.lsp_info()).unwrap();
+        let channel_minimum_fee =
+            (lsp_info.channel_minimum_fee_msat as u64).to_amount_up(&self.get_exchange_rate());
         Ok(LspFee {
             channel_minimum_fee,
-            channel_fee_permyriad: fee.channel_fee_permyriad,
+            channel_fee_permyriad: lsp_info.channel_fee_permyriad as u64,
         })
     }
 
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<Amount> {
         let rate = self.get_exchange_rate();
-        self.core_node
-            .calculate_lsp_fee(amount_sat * 1_000)
-            .map(|fee| fee.to_amount_up(&rate))
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        let lsp_info = self.query_lsp_fee().unwrap();
+
+        if self.get_node_info().channels_info.inbound_capacity.sats >= amount_sat {
+            Ok((0 as u64).to_amount_down(&rate))
+        } else {
+            let fee = amount_sat * lsp_info.channel_fee_permyriad / 10_000;
+            if fee > lsp_info.channel_minimum_fee.sats {
+                Ok(fee.to_amount_up(&rate))
+            } else {
+                Ok(lsp_info.channel_minimum_fee)
+            }
+        }
     }
 
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
-        let rate = self.get_exchange_rate();
-        self.core_node
-            .get_payment_amount_limits()
-            .map(|limits| to_limits(limits, &rate))
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
     pub fn create_invoice(
         &self,
         amount_sat: u64,
         description: String,
-        metadata: String,
+        _metadata: String,
     ) -> Result<InvoiceDetails> {
-        let rate = self.get_exchange_rate();
         let invoice = self
-            .core_node
-            .create_invoice(amount_sat * 1000, description, metadata)
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
-        Ok(InvoiceDetails::from_local_invoice(invoice, &rate))
+            .rt
+            .block_on(self.sdk.receive_payment(amount_sat, description))
+            .map_to_permanent_failure("Failed to create invoice")?;
+        let rate = self.get_exchange_rate();
+        Ok(to_invoice_details(invoice, &rate))
     }
 
     pub fn decode_invoice(
         &self,
         invoice: String,
     ) -> std::result::Result<InvoiceDetails, DecodeInvoiceError> {
-        let invoice = self.core_node.decode_invoice(invoice)?;
+        let invoice = parse_invoice(&invoice)
+            .map_err(|e| DecodeInvoiceError::ParseError { msg: e.to_string() })?;
         let rate = self.get_exchange_rate();
-        Ok(InvoiceDetails::from_remote_invoice(invoice, &rate))
+        Ok(to_invoice_details(invoice, &rate))
     }
 
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
-        match self
-            .core_node
-            .get_payment_max_routing_fee_mode(amount_sat * 1000)
-        {
-            eel::MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
-                MaxRoutingFeeMode::Relative { max_fee_permyriad }
-            }
-            eel::MaxRoutingFeeMode::Absolute { max_fee_msat } => MaxRoutingFeeMode::Absolute {
-                max_fee_amount: max_fee_msat.to_amount_up(&self.get_exchange_rate()),
-            },
-        }
+        todo!()
     }
 
-    pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {
-        self.core_node.pay_invoice(invoice, metadata)
+    pub fn pay_invoice(&self, invoice: String, _metadata: String) -> PayResult<()> {
+        print!("Calling pay_invoice() ... ");
+        let now = Instant::now();
+        self.rt
+            .block_on(self.sdk.send_payment(invoice, None))
+            .map_to_runtime_error(PayErrorCode::UnexpectedError, "Failed to pay invoice")?;
+        println!("in {}ms", now.elapsed().as_millis());
+        Ok(())
     }
 
     pub fn pay_open_invoice(
         &self,
         invoice: String,
         amount_sat: u64,
-        metadata: String,
+        _metadata: String,
     ) -> PayResult<()> {
-        self.core_node
-            .pay_open_invoice(invoice, amount_sat * 1000, metadata)
+        print!("Calling pay_open_invoice() ... ");
+        let now = Instant::now();
+        self.rt
+            .block_on(self.sdk.send_payment(invoice, Some(amount_sat)))
+            .map_to_runtime_error(PayErrorCode::UnexpectedError, "Failed to pay invoice")?;
+        println!("in {}ms", now.elapsed().as_millis());
+
+        Ok(())
     }
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
-        self.core_node
-            .get_latest_payments(number_of_payments)
-            .map(|ps| ps.into_iter().map(to_payment).collect())
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
-        self.core_node
-            .get_payment(&hash)
-            .map(to_payment)
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
-    pub fn foreground(&self) {
-        self.core_node.foreground()
-    }
+    pub fn foreground(&self) {}
 
-    pub fn background(&self) {
-        self.core_node.background()
-    }
+    pub fn background(&self) {}
 
     pub fn list_currency_codes(&self) -> Vec<String> {
-        self.core_node
-            .list_exchange_rates()
-            .into_iter()
-            .map(|r| r.currency_code)
-            .collect()
+        todo!()
     }
 
     pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
-        self.core_node.get_exchange_rate()
+        Some(ExchangeRate {
+            currency_code: "EUR".into(),
+            rate: 3552,
+            updated_at: SystemTime::now(),
+        })
     }
 
-    pub fn change_fiat_currency(&self, fiat_currency: String) {
-        self.core_node.change_fiat_currency(fiat_currency);
-    }
+    pub fn change_fiat_currency(&self, fiat_currency: String) {}
 
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
-        self.core_node.change_timezone_config(timezone_config);
+        todo!()
     }
 
     pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
@@ -374,7 +411,7 @@ impl LightningNode {
         }
 
         self.auth
-            .register_node(self.core_node.get_node_info().node_pubkey.to_string())
+            .register_node(self.sdk.node_info().unwrap().id)
             .map_runtime_error_to(RuntimeErrorCode::TopupServiceUnavailable)?;
 
         self.fiat_topup_client
@@ -417,6 +454,20 @@ fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
         generate_keypair(),
     )
     .map_to_permanent_failure("Failed to build auth client")
+}
+
+fn to_invoice_details(invoice: LNInvoice, rate: &Option<ExchangeRate>) -> InvoiceDetails {
+    InvoiceDetails {
+        invoice: invoice.bolt11,
+        amount: invoice.amount_msat.map(|a| a.to_amount_down(rate)),
+        description: invoice.description.unwrap(),
+        payment_hash: invoice.payment_hash,
+        payee_pub_key: invoice.payee_pubkey,
+        creation_timestamp: SystemTime::UNIX_EPOCH + Duration::from_secs(invoice.timestamp),
+        expiry_interval: Duration::from_secs(invoice.expiry),
+        expiry_timestamp: SystemTime::UNIX_EPOCH
+            + Duration::from_secs(invoice.timestamp + invoice.expiry),
+    }
 }
 
 fn to_payment(payment: eel::payment::Payment) -> Payment {
