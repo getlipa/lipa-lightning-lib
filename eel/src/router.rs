@@ -69,7 +69,7 @@ impl lightning::routing::router::Router for FeeLimitingRouter {
         payer: &PublicKey,
         route_params: &RouteParameters,
         first_hops: Option<&[&ChannelDetails]>,
-        inflight_htlcs: &InFlightHtlcs,
+        inflight_htlcs: InFlightHtlcs,
     ) -> Result<Route, LightningError> {
         let max_fee_msat = self
             .max_fee_strategy
@@ -96,7 +96,7 @@ impl lightning::routing::router::Router for FeeLimitingRouter {
         payer: &PublicKey,
         route_params: &RouteParameters,
         first_hops: Option<&[&ChannelDetails]>,
-        inflight_htlcs: &InFlightHtlcs,
+        inflight_htlcs: InFlightHtlcs,
         payment_hash: PaymentHash,
         payment_id: PaymentId,
     ) -> Result<Route, LightningError> {

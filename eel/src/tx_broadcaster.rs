@@ -15,12 +15,12 @@ impl TxBroadcaster {
 }
 
 impl BroadcasterInterface for TxBroadcaster {
-    fn broadcast_transaction(&self, tx: &Transaction) {
-        let tx = tx.clone();
-        let txid = tx.txid();
-
-        if let Err(e) = self.esplora_client.broadcast(&tx) {
-            error!("Error on broadcasting txid: {} message: {}", txid, e);
+    fn broadcast_transactions(&self, txs: &[&Transaction]) {
+        for tx in txs {
+            let txid = tx.txid();
+            if let Err(e) = self.esplora_client.broadcast(tx) {
+                error!("Error on broadcasting txid: {} message: {}", txid, e);
+            }
         }
     }
 }
@@ -54,6 +54,6 @@ mod tests {
         assert!(tx.is_ok());
         let tx = tx.unwrap();
 
-        broadcaster.broadcast_transaction(&tx);
+        broadcaster.broadcast_transactions(&[&tx]);
     }
 }

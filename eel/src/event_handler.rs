@@ -295,6 +295,9 @@ impl EventHandler for LipaEventHandler {
             Event::ChannelReady { .. } => {
                 info!("EVENT: ChannelReady");
             }
+            Event::BumpTransaction(..) => {
+                info!("EVENT: BumpTransaction");
+            }
         }
     }
 }
