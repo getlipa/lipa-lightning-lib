@@ -4,7 +4,7 @@ mod setup_env;
 #[cfg(feature = "nigiri")]
 mod data_store_test {
     use eel::payment::{Payment, PaymentState, PaymentType, TzTime};
-    use eel::Invoice;
+    use eel::Bolt11Invoice;
     use log::info;
     use serial_test::file_serial;
     use std::str::FromStr;
@@ -167,7 +167,7 @@ mod data_store_test {
             fail_reason: None,
             hash: "<unknown>".to_string(),
             amount_msat: TWO_K_SATS,
-            invoice: Invoice::from_str(&invoice).unwrap(),
+            invoice: Bolt11Invoice::from_str(&invoice).unwrap(),
             created_at: dummy_timestamp.clone(),
             latest_state_change_at: dummy_timestamp,
             description: "Fixed amount".to_string(),
@@ -212,7 +212,7 @@ mod data_store_test {
             payment_dummy.network_fees_msat = None;
             payment_dummy.exchange_rate = node.get_exchange_rate();
             payment_dummy.metadata = "Some metadata".to_string();
-            payment_dummy.invoice = Invoice::from_str(&invoice).unwrap();
+            payment_dummy.invoice = Bolt11Invoice::from_str(&invoice).unwrap();
 
             node.pay_open_invoice(invoice, ONE_SAT, "Some metadata".to_string())
                 .unwrap();

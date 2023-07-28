@@ -13,15 +13,15 @@ use bitcoin::Network;
 use lightning::chain::chaininterface::{BroadcasterInterface, FeeEstimator};
 use lightning::chain::chainmonitor::{MonitorUpdateId, Persist};
 use lightning::chain::channelmonitor::{ChannelMonitor, ChannelMonitorUpdate};
-use lightning::chain::keysinterface::{
-    EntropySource, InMemorySigner, KeysManager, NodeSigner, SignerProvider,
-    WriteableEcdsaChannelSigner,
-};
 use lightning::chain::transaction::OutPoint;
 use lightning::chain::{ChannelMonitorUpdateStatus, Watch};
 use lightning::ln::channelmanager::ChainParameters;
 use lightning::routing::router;
-use lightning::routing::scoring::{ProbabilisticScoringParameters, WriteableScore};
+use lightning::routing::scoring::{ProbabilisticScoringDecayParameters, WriteableScore};
+use lightning::sign::{
+    EntropySource, InMemorySigner, KeysManager, NodeSigner, SignerProvider,
+    WriteableEcdsaChannelSigner,
+};
 use lightning::util::config::UserConfig;
 use lightning::util::logger::Logger;
 use lightning::util::persist::{KVStorePersister, Persister};
@@ -36,7 +36,7 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, Weak};
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 static MONITORS_BUCKET: &str = "monitors";
 static OBJECTS_BUCKET: &str = "objects";
@@ -295,6 +295,10 @@ impl StoragePersister {
                     keys_manager,
                     user_config,
                     chain_params,
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map_to_permanent_failure("Failed to compute current timestamp")?
+                        .as_secs() as u32,
                 );
                 Ok(channel_manager)
             }
@@ -361,11 +365,7 @@ impl StoragePersister {
         logger: Arc<LightningLogger>,
     ) -> Result<Scorer> {
         let path = PathBuf::from(self.fs_persister.get_data_dir()).join(Path::new(SCORER_KEY));
-        let params = ProbabilisticScoringParameters {
-            base_penalty_amount_multiplier_msat: 8192 * 50,
-            base_penalty_msat: 500 * 50,
-            ..Default::default()
-        };
+        let params = ProbabilisticScoringDecayParameters::default();
         #[allow(unreachable_code, unused_variables, clippy::needless_borrow)]
         if let Ok(file) = fs::File::open(&path) {
             // TODO: Remove the code and the attributes above once the bug is fixed.
@@ -376,7 +376,7 @@ impl StoragePersister {
                 return Ok(Scorer::new(params, graph, logger));
             }
 
-            let args = (params.clone(), Arc::clone(&graph), Arc::clone(&logger));
+            let args = (params, Arc::clone(&graph), Arc::clone(&logger));
             if let Ok(scorer) = Scorer::read(&mut BufReader::new(file), args) {
                 debug!("Successfully read the scorer from the local filesystem");
                 return Ok(scorer);
@@ -674,7 +674,7 @@ mod tests {
     use crate::storage_persister::StoragePersister;
     use bitcoin::BlockHash;
     use lightning::chain::channelmonitor::ChannelMonitor;
-    use lightning::chain::keysinterface::{InMemorySigner, KeysManager};
+    use lightning::sign::{InMemorySigner, KeysManager};
     use lightning::util::ser::ReadableArgs;
     use std::fs;
     use std::io::Cursor;

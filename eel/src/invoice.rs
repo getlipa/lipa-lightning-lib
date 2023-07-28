@@ -12,12 +12,12 @@ use crate::lsp;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::Network;
-use lightning::chain::keysinterface::{KeysManager, NodeSigner, Recipient};
 use lightning::ln::channelmanager::ChannelDetails;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
-use lightning_invoice::{Currency, Invoice, InvoiceBuilder};
-use lightning_invoice::{ParseOrSemanticError, SignedRawInvoice};
+use lightning::sign::{KeysManager, NodeSigner, Recipient};
+use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder};
+use lightning_invoice::{ParseOrSemanticError, SignedRawBolt11Invoice};
 use log::info;
 use perro::{invalid_input, MapToError, MapToErrorForUnitType, ResultTrait};
 use secp256k1::ecdsa::RecoverableSignature;
@@ -42,8 +42,8 @@ pub enum DecodeInvoiceError {
 pub(crate) fn decode_invoice(
     invoice: &str,
     expected: Network,
-) -> std::result::Result<Invoice, DecodeInvoiceError> {
-    let invoice = match Invoice::from_str(chomp_prefix(invoice.trim())) {
+) -> std::result::Result<Bolt11Invoice, DecodeInvoiceError> {
+    let invoice = match Bolt11Invoice::from_str(chomp_prefix(invoice.trim())) {
         Ok(invoice) => match invoice.amount_milli_satoshis() {
             Some(0) => Err(DecodeInvoiceError::SemanticError {
                 msg: "Invoice amount contains leading zeros".to_string(),
@@ -86,7 +86,7 @@ pub(crate) async fn create_invoice(
     data_store: &mut DataStore,
     fiat_currency: &str,
     exchange_rates: Vec<ExchangeRate>,
-) -> Result<SignedRawInvoice> {
+) -> Result<SignedRawBolt11Invoice> {
     let amount_msat = params.amount_msat;
 
     // Do we need a new channel to receive this payment?

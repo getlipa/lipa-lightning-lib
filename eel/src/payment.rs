@@ -1,5 +1,5 @@
 use crate::interfaces::ExchangeRate;
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 
 use crate::errors::PayErrorCode;
 use num_enum::TryFromPrimitive;
@@ -60,7 +60,7 @@ pub struct Payment {
     pub fail_reason: Option<PayErrorCode>,
     pub hash: String,
     pub amount_msat: u64,
-    pub invoice: Invoice,
+    pub invoice: Bolt11Invoice,
     pub created_at: TzTime,
     pub latest_state_change_at: TzTime,
     pub description: String,

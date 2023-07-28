@@ -6,9 +6,9 @@ use crate::payment::{Payment, PaymentState, PaymentType, TzTime};
 use crate::schema_migration::migrate_schema;
 
 use chrono::{DateTime, Utc};
-use lightning::chain::keysinterface::SpendableOutputDescriptor;
+use lightning::sign::SpendableOutputDescriptor;
 use lightning::util::ser::{Readable, Writeable};
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 use perro::{MapToError, OptionToError};
 use rusqlite::types::Type;
 use rusqlite::{Connection, Row};
@@ -486,7 +486,7 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let network_fees_msat = row.get(5)?;
     let lsp_fees_msat = row.get(6)?;
     let invoice: String = row.get(7)?;
-    let invoice = Invoice::from_str(&invoice)
+    let invoice = Bolt11Invoice::from_str(&invoice)
         .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, Type::Text, Box::new(e)))?;
     let metadata = row.get(8)?;
     let payment_state: u8 = row.get(9)?;
@@ -584,8 +584,8 @@ mod tests {
     use crate::payment::{FiatValues, PaymentState, PaymentType};
 
     use crate::errors::PayErrorCode;
-    use lightning::chain::keysinterface::SpendableOutputDescriptor;
     use lightning::ln::PaymentSecret;
+    use lightning::sign::SpendableOutputDescriptor;
     use lightning::util::ser::Readable;
     use lightning_invoice::{Currency, InvoiceBuilder};
     use secp256k1::hashes::{sha256, Hash};

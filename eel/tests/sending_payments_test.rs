@@ -5,7 +5,7 @@ mod setup_env;
 mod sending_payments_test {
     use eel::invoice::DecodeInvoiceError;
     use eel::LightningNode;
-    use lightning_invoice::{Description, Invoice, InvoiceDescription};
+    use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
     use serial_test::file_serial;
     use std::thread::sleep;
     use std::time::Duration;
@@ -251,7 +251,7 @@ mod sending_payments_test {
     }
 
     fn assert_invoice_details(
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         amount_msat: Option<u64>,
         description: &str,
         expiry_time: Duration,
@@ -260,7 +260,7 @@ mod sending_payments_test {
         assert_eq!(invoice.amount_milli_satoshis(), amount_msat);
         assert_eq!(
             invoice.description(),
-            InvoiceDescription::Direct(&Description::new(description.to_string()).unwrap())
+            Bolt11InvoiceDescription::Direct(&Description::new(description.to_string()).unwrap())
         );
         assert_eq!(invoice.expiry_time(), expiry_time);
         let pub_key = match invoice.payee_pub_key() {

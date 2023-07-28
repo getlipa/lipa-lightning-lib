@@ -4,7 +4,7 @@ use crate::secret::Secret;
 
 use bip39::{Language, Mnemonic};
 use cipher::consts::U32;
-use lightning::chain::keysinterface::KeysManager;
+use lightning::sign::KeysManager;
 use perro::MapToError;
 use std::str::FromStr;
 use std::time::SystemTime;
