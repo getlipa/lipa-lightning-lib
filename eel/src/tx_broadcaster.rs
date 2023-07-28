@@ -19,7 +19,7 @@ impl BroadcasterInterface for TxBroadcaster {
         for tx in txs {
             let txid = tx.txid();
             if let Err(e) = self.esplora_client.broadcast(tx) {
-                error!("Error on broadcasting txid: {} message: {}", txid, e);
+                error!("Error on broadcasting txid: {txid} message: {e}");
             }
         }
     }
