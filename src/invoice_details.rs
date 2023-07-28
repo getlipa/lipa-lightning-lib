@@ -1,7 +1,7 @@
 use crate::amount::{Amount, ToAmount};
 
 use eel::interfaces::ExchangeRate;
-use eel::{Invoice, InvoiceDescription};
+use eel::{Bolt11Invoice, Bolt11InvoiceDescription};
 use std::time::{Duration, SystemTime};
 
 pub struct InvoiceDetails {
@@ -16,14 +16,14 @@ pub struct InvoiceDetails {
 }
 
 impl InvoiceDetails {
-    pub(crate) fn from_local_invoice(invoice: Invoice, rate: &Option<ExchangeRate>) -> Self {
+    pub(crate) fn from_local_invoice(invoice: Bolt11Invoice, rate: &Option<ExchangeRate>) -> Self {
         let amount = invoice
             .amount_milli_satoshis()
             .map(|a| a.to_amount_down(rate));
         to_invoice_details(invoice, amount)
     }
 
-    pub(crate) fn from_remote_invoice(invoice: Invoice, rate: &Option<ExchangeRate>) -> Self {
+    pub(crate) fn from_remote_invoice(invoice: Bolt11Invoice, rate: &Option<ExchangeRate>) -> Self {
         let amount = invoice
             .amount_milli_satoshis()
             .map(|a| a.to_amount_up(rate));
@@ -31,10 +31,10 @@ impl InvoiceDetails {
     }
 }
 
-fn to_invoice_details(invoice: Invoice, amount: Option<Amount>) -> InvoiceDetails {
+fn to_invoice_details(invoice: Bolt11Invoice, amount: Option<Amount>) -> InvoiceDetails {
     let description = match invoice.description() {
-        InvoiceDescription::Direct(d) => d.to_string(),
-        InvoiceDescription::Hash(_) => String::new(),
+        Bolt11InvoiceDescription::Direct(d) => d.to_string(),
+        Bolt11InvoiceDescription::Hash(_) => String::new(),
     };
 
     let payee_pub_key = match invoice.payee_pub_key() {
@@ -81,8 +81,8 @@ mod tests {
     const MAINNET_INVOICE_EXPIRY: Duration = Duration::from_secs(604800);
     const MAINNET_INVOICE_DESCRIPTION: &str = "";
 
-    fn parse_invoice(invoice: &str) -> Invoice {
-        Invoice::from_str(invoice).unwrap()
+    fn parse_invoice(invoice: &str) -> Bolt11Invoice {
+        Bolt11Invoice::from_str(invoice).unwrap()
     }
 
     #[test]

@@ -5,10 +5,10 @@ use crate::tx_broadcaster::TxBroadcaster;
 
 use crate::router::FeeLimitingRouter;
 use lightning::chain::chainmonitor::ChainMonitor as LdkChainMonitor;
-use lightning::chain::keysinterface::{InMemorySigner, KeysManager};
 use lightning::ln::peer_handler::IgnoringMessageHandler;
 use lightning::routing::router::DefaultRouter;
-use lightning::routing::scoring::ProbabilisticScorer;
+use lightning::routing::scoring::{ProbabilisticScorer, ProbabilisticScoringFeeParameters};
+use lightning::sign::{InMemorySigner, KeysManager};
 use lightning_net_tokio::SocketDescriptor;
 use lightning_transaction_sync::EsploraSyncClient;
 use std::sync::{Arc, Mutex};
@@ -66,6 +66,8 @@ pub(crate) type Router = DefaultRouter<
     Arc<NetworkGraph>,
     Arc<LightningLogger>,
     Arc<Mutex<ProbabilisticScorer<Arc<NetworkGraph>, Arc<LightningLogger>>>>,
+    ProbabilisticScoringFeeParameters,
+    ProbabilisticScorer<Arc<NetworkGraph>, Arc<LightningLogger>>,
 >;
 
 pub(crate) type Scorer = ProbabilisticScorer<Arc<NetworkGraph>, Arc<LightningLogger>>;

@@ -95,6 +95,7 @@ impl LdkFeeEstimator for FeeEstimator {
             ConfirmationTarget::Background => self.fees.background.load(Ordering::Acquire),
             ConfirmationTarget::Normal => self.fees.normal.load(Ordering::Acquire),
             ConfirmationTarget::HighPriority => self.fees.high_prioriy.load(Ordering::Acquire),
+            ConfirmationTarget::MempoolMinimum => self.fees.background.load(Ordering::Acquire), // TODO: we might want to provide a better estimation here
         }
     }
 }

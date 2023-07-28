@@ -63,18 +63,17 @@ pub use bitcoin::Network;
 use cipher::consts::U32;
 use invoice::DecodeInvoiceError;
 use lightning::chain::channelmonitor::ChannelMonitor;
-use lightning::chain::keysinterface::{
-    EntropySource, InMemorySigner, KeysManager, SpendableOutputDescriptor,
-};
 use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Confirm, Watch};
 use lightning::ln::channelmanager::{ChainParameters, Retry, RetryableSendFailure};
 use lightning::ln::peer_handler::IgnoringMessageHandler;
-use lightning::util::config::UserConfig;
+use lightning::routing::scoring::ProbabilisticScoringFeeParameters;
+use lightning::sign::{EntropySource, InMemorySigner, KeysManager, SpendableOutputDescriptor};
+use lightning::util::config::{MaxDustHTLCExposure, UserConfig};
 use lightning::util::message_signing::sign;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_invoice::payment::{pay_invoice, pay_zero_value_invoice, PaymentError};
 use lightning_invoice::Currency;
-pub use lightning_invoice::{Invoice, InvoiceDescription};
+pub use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription};
 pub use log::Level as LogLevel;
 use log::{error, trace};
 use log::{info, warn};
@@ -219,12 +218,18 @@ impl LightningNode {
 
         // Step 13: Initialize the Router
         let max_routing_fee_strategy = Arc::new(SimpleMaxRoutingFeeStrategy::new(21_000, 50));
+        let score_params = ProbabilisticScoringFeeParameters {
+            base_penalty_amount_multiplier_msat: 8192 * 50,
+            base_penalty_msat: 500 * 50,
+            ..Default::default()
+        };
         let router = Arc::new(FeeLimitingRouter::new(
             Router::new(
                 Arc::clone(&graph),
                 Arc::clone(&logger),
                 keys_manager.get_secure_random_bytes(),
                 Arc::clone(&scorer),
+                score_params,
             ),
             Arc::clone(&max_routing_fee_strategy),
         ));
@@ -407,7 +412,7 @@ impl LightningNode {
         amount_msat: u64,
         description: String,
         metadata: String,
-    ) -> Result<Invoice> {
+    ) -> Result<Bolt11Invoice> {
         trace!(
             "create_invoice() - called with:\n   amount_msat: {}\n   description: {}, metadata: {}",
             amount_msat,
@@ -440,13 +445,14 @@ impl LightningNode {
             &fiat_currency,
             exchage_rates,
         ))?;
-        Invoice::from_signed(signed_invoice).map_to_permanent_failure("Failed to construct invoice")
+        Bolt11Invoice::from_signed(signed_invoice)
+            .map_to_permanent_failure("Failed to construct invoice")
     }
 
     pub fn decode_invoice(
         &self,
         invoice: String,
-    ) -> std::result::Result<Invoice, DecodeInvoiceError> {
+    ) -> std::result::Result<Bolt11Invoice, DecodeInvoiceError> {
         let network = self.config.lock().unwrap().network;
         invoice::decode_invoice(&invoice, network)
     }
@@ -581,7 +587,7 @@ impl LightningNode {
 
     fn validate_persist_new_outgoing_payment_attempt(
         &self,
-        invoice: &Invoice,
+        invoice: &Bolt11Invoice,
         amount_msat: u64,
         metadata: &str,
     ) -> PayResult<()> {
@@ -626,8 +632,8 @@ impl LightningNode {
         } else {
             trace!("Starting our first attempt to pay an invoice");
             let description = match invoice.description() {
-                InvoiceDescription::Direct(d) => d.clone().into_inner(),
-                InvoiceDescription::Hash(h) => h.0.to_hex(),
+                Bolt11InvoiceDescription::Direct(d) => d.clone().into_inner(),
+                Bolt11InvoiceDescription::Hash(h) => h.0.to_hex(),
             };
             let fiat_currency = self.config.lock().unwrap().fiat_currency.clone();
             let exchange_rates = self.task_manager.lock().unwrap().get_exchange_rates();
@@ -831,7 +837,8 @@ fn build_mobile_node_user_config() -> UserConfig {
         .max_inbound_htlc_value_in_flight_percent_of_channel = 100;
 
     // Increase the max dust htlc exposure from the 5000 sat default to 1M sats
-    user_config.channel_config.max_dust_htlc_exposure_msat = 1_000_000_000;
+    user_config.channel_config.max_dust_htlc_exposure =
+        MaxDustHTLCExposure::FixedLimitMsat(1_000_000_000);
 
     // Manually accept inbound requests to open a new channel to support
     // zero-conf channels.
