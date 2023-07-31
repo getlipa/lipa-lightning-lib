@@ -389,7 +389,7 @@ dictionary FiatTopupInfo {
 // Information on a funds offer that can be claimed using LNURL-w.
 dictionary OfferInfo {
     OfferKind offer_kind;
-    Amount amount;
+    Amount amount; // Amount available for withdrawal
     string lnurlw;
     timestamp created_at;
     timestamp expires_at;
@@ -398,6 +398,7 @@ dictionary OfferInfo {
 [Enum]
 interface OfferKind {
     Pocket(
+        FiatValue topup_value, // The original fiat amount sent to the exchange
         FiatValue exchange_fee, // The fee paid to perform the exchange from fiat to sats
         u16 exchange_fee_rate_permyriad // The rate of the fee expressed in permyriad (e.g. 1.5% would be 150)
     );

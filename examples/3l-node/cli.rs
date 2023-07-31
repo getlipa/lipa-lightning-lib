@@ -1,6 +1,8 @@
 use crate::hinter::{CommandHint, CommandHinter};
 
-use uniffi_lipalightninglib::{Amount, MaxRoutingFeeMode, OfferKind, TopupCurrency, TzConfig};
+use uniffi_lipalightninglib::{
+    Amount, FiatValue, MaxRoutingFeeMode, OfferKind, TopupCurrency, TzConfig,
+};
 
 use bitcoin::secp256k1::PublicKey;
 use chrono::offset::FixedOffset;
@@ -547,21 +549,22 @@ fn list_offers(node: &LightningNode) -> Result<(), String> {
         println!("      LNURL-w:            {:?}", offer.lnurlw);
         match offer.offer_kind {
             OfferKind::Pocket {
+                topup_value,
                 exchange_fee,
                 exchange_fee_rate_permyriad,
             } => {
                 println!(
+                    "      Value exchanged:    {}",
+                    fiat_value_to_string(topup_value)
+                );
+                println!(
                     "      Exchange fee rate:  {}%",
                     exchange_fee_rate_permyriad as f64 / 100_f64
                 );
-                let converted_at: DateTime<Utc> = exchange_fee.converted_at.into();
-                let fiat = format!(
-                    "{:.2} {} as of {}",
-                    exchange_fee.minor_units as f64 / 100f64,
-                    exchange_fee.currency_code,
-                    converted_at.format("%d/%m/%Y %T UTC"),
+                println!(
+                    "      Exchange fee value: {}",
+                    fiat_value_to_string(exchange_fee)
                 );
-                println!("      Exchange fee value:  {}", fiat);
             }
         }
         println!();
@@ -619,18 +622,20 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
     Ok(())
 }
 
+fn fiat_value_to_string(value: FiatValue) -> String {
+    let converted_at: DateTime<Utc> = value.converted_at.into();
+    format!(
+        "{:.2} {} as of {}",
+        value.minor_units as f64 / 100f64,
+        value.currency_code,
+        converted_at.format("%d/%m/%Y %T UTC"),
+    )
+}
+
 fn amount_to_string(amount: Amount) -> String {
     let fiat = match amount.fiat {
-        Some(fiat) => {
-            let converted_at: DateTime<Utc> = fiat.converted_at.into();
-            format!(
-                "{:.2} {} as of {}",
-                fiat.minor_units as f64 / 100f64,
-                fiat.currency_code,
-                converted_at.format("%d/%m/%Y %T UTC"),
-            )
-        }
-        None => "exchange rate uknown".to_string(),
+        Some(fiat) => fiat_value_to_string(fiat),
+        None => "exchange rate unknown".to_string(),
     };
     format!("{} SAT ({fiat})", amount.sats)
 }

@@ -65,7 +65,10 @@ fn topup_to_offer_info(topup: &ListAvailableTopupsTopup) -> graphql::Result<Offe
         )?,
     );
     let exchange_rate = (100_000_000_f64 / topup.exchange_rate).round() as u32;
-    let fiat_value_minor_units = (topup.exchange_fee_user_currency * 100_f64).round() as u64;
+    let topup_fiat_value_minor_units = (topup.amount_user_currency * 100_f64).round() as u64;
+    let exchange_fee_fiat_value_minor_units =
+        (topup.exchange_fee_user_currency * 100_f64).round() as u64;
+    let currency_code = topup.user_currency.to_string().to_uppercase();
     let lnurlw = topup
         .lnurl
         .as_ref()
@@ -77,16 +80,22 @@ fn topup_to_offer_info(topup: &ListAvailableTopupsTopup) -> graphql::Result<Offe
 
     Ok(OfferInfo {
         offer_kind: OfferKind::Pocket {
+            topup_value: FiatValue {
+                minor_units: topup_fiat_value_minor_units,
+                currency_code: currency_code.clone(),
+                rate: exchange_rate,
+                converted_at: created_at,
+            },
             exchange_fee: FiatValue {
-                minor_units: fiat_value_minor_units,
-                currency_code: topup.user_currency.to_string().to_uppercase(),
+                minor_units: exchange_fee_fiat_value_minor_units,
+                currency_code: currency_code.clone(),
                 rate: exchange_rate,
                 converted_at: created_at,
             },
             exchange_fee_rate_permyriad: (topup.exchange_fee_rate * 10000_f64).round() as u16,
         },
         amount: (topup.amount_sat * 1000).to_amount_down(&Some(ExchangeRate {
-            currency_code: topup.user_currency.to_string().to_uppercase(),
+            currency_code,
             rate: exchange_rate,
             updated_at: created_at,
         })),
@@ -131,6 +140,7 @@ mod tests {
         let offer_info = topup_to_offer_info(&topup).unwrap();
 
         let OfferKind::Pocket {
+            topup_value,
             exchange_fee,
             exchange_fee_rate_permyriad,
         } = offer_info.offer_kind;
@@ -142,7 +152,7 @@ mod tests {
         assert_eq!(offer_info.lnurlw, String::from(LNURL));
         assert_eq!(
             offer_info.amount.fiat.unwrap().minor_units + exchange_fee.minor_units,
-            (amount_user_currency * 100.0).round() as u64
+            topup_value.minor_units
         );
 
         topup.lnurl = None;
