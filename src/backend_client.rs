@@ -85,7 +85,7 @@ fn topup_to_offer_info(topup: &ListAvailableTopupsTopup) -> graphql::Result<Offe
             },
             exchange_fee_rate_permyriad: (topup.exchange_fee_rate * 10000_f64).round() as u16,
         },
-        amount: (topup.amount_sat * 1000).to_amount_up(&Some(ExchangeRate {
+        amount: (topup.amount_sat * 1000).to_amount_down(&Some(ExchangeRate {
             currency_code: topup.user_currency.to_string().to_uppercase(),
             rate: exchange_rate,
             updated_at: created_at,
@@ -109,14 +109,15 @@ mod tests {
 
     #[test]
     fn test_topup_to_offer_info() {
+        let amount_user_currency = 8.0;
         let mut topup = ListAvailableTopupsTopup {
             additional_info: None,
-            amount_sat: 123456,
-            amount_user_currency: 32.53,
+            amount_sat: 42578,
+            amount_user_currency,
             created_at: "2023-07-21T16:39:21.271+00:00".to_string(),
             exchange_fee_rate: 0.014999999664723873,
-            exchange_fee_user_currency: 0.4799999123,
-            exchange_rate: 26347.94,
+            exchange_fee_user_currency: 0.11999999731779099,
+            exchange_rate: 18507.0,
             expires_at: Some("2023-09-21T16:39:21.919+00:00".to_string()),
             id: "1707e09e-ebe1-4004-abd7-7a64604501b3".to_string(),
             lightning_fee_user_currency: 0.0,
@@ -133,12 +134,16 @@ mod tests {
             exchange_fee,
             exchange_fee_rate_permyriad,
         } = offer_info.offer_kind;
-        assert_eq!(exchange_fee.minor_units, 48);
+        assert_eq!(exchange_fee.minor_units, 12);
         assert_eq!(exchange_fee.currency_code, "EUR");
-        assert_eq!(exchange_fee.rate, 3795);
+        assert_eq!(exchange_fee.rate, 5403);
         assert_eq!(exchange_fee_rate_permyriad, 150);
-        assert_eq!(offer_info.amount.sats, 123456);
+        assert_eq!(offer_info.amount.sats, 42578);
         assert_eq!(offer_info.lnurlw, String::from(LNURL));
+        assert_eq!(
+            offer_info.amount.fiat.unwrap().minor_units + exchange_fee.minor_units,
+            (amount_user_currency * 100.0).round() as u64
+        );
 
         topup.lnurl = None;
         assert!(matches!(
