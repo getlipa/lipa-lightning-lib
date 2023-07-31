@@ -127,6 +127,7 @@ pub struct OfferInfo {
 
 pub enum OfferKind {
     Pocket {
+        topup_value: FiatValue,
         exchange_fee: FiatValue,
         exchange_fee_rate_permyriad: u16,
     },
