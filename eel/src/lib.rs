@@ -840,6 +840,11 @@ fn build_mobile_node_user_config() -> UserConfig {
     user_config.channel_config.max_dust_htlc_exposure =
         MaxDustHTLCExposure::FixedLimitMsat(1_000_000_000);
 
+    // Enable support for anchor outputs channels
+    user_config
+        .channel_handshake_config
+        .negotiate_anchors_zero_fee_htlc_tx = true;
+
     // Manually accept inbound requests to open a new channel to support
     // zero-conf channels.
     user_config.manually_accept_inbound_channels = true;
