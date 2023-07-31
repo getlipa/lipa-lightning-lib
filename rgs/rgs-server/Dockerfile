@@ -1,7 +1,7 @@
 FROM rust:latest as builder
 
 WORKDIR /usr/src
-ARG checkout=ccd1c465be6982102b6e82a12ac1f4e79ca19fa2
+ARG checkout=5e6a00a
 RUN git clone --branch main https://github.com/lightningdevkit/rapid-gossip-sync-server.git
 WORKDIR /usr/src/rapid-gossip-sync-server
 RUN git checkout $checkout
