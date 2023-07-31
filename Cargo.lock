@@ -612,18 +612,20 @@ dependencies = [
 
 [[package]]
 name = "ecies"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aff9aacff2fff78a72266a30382b091e9c3c3162b5d030b0aba1be5fd5ab3b1"
+checksum = "53f43496fc04523aa716c5dd76133cb6d7c81eb213375684d06a8b1683f8bc1e"
 dependencies = [
  "aes-gcm",
  "getrandom",
  "hkdf",
  "libsecp256k1",
  "once_cell",
- "rand",
+ "parking_lot 0.12.1",
+ "rand_core",
  "sha2",
  "typenum",
+ "wasm-bindgen",
 ]
 
 [[package]]
