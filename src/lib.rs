@@ -387,6 +387,13 @@ impl LightningNode {
             .query_available_topups()
             .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
     }
+
+    pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
+        let amout_msat = offer.amount.sats * 1000;
+        self.core_node
+            .lnurl_withdraw(&offer.lnurlw, amout_msat)
+            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+    }
 }
 
 pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) -> Result<()> {

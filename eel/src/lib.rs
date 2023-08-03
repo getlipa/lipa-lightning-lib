@@ -74,6 +74,7 @@ use lightning_background_processor::{BackgroundProcessor, GossipSync};
 use lightning_invoice::payment::{pay_invoice, pay_zero_value_invoice, PaymentError};
 use lightning_invoice::Currency;
 pub use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription};
+use lnurl::{LnUrlResponse, Response};
 pub use log::Level as LogLevel;
 use log::{error, trace};
 use log::{info, warn};
@@ -544,6 +545,61 @@ impl LightningNode {
                 self.process_failed_payment_attempts(e, &invoice.payment_hash().to_string())
             }
         }
+    }
+
+    pub fn lnurl_withdraw(&self, lnurlw: &str, amount_msat: u64) -> Result<String> {
+        let client = lnurl::Builder {
+            proxy: None,
+            timeout: Some(10_000),
+        }
+        .build_blocking()
+        .map_to_permanent_failure("Failed to build LNURL client")?;
+        let response = client
+            .make_request(lnurlw)
+            .map_to_runtime_error(RuntimeErrorCode::LNURLError, "Failed to query server")?;
+        let response = match response {
+            LnUrlResponse::LnUrlPayResponse(_) => Err(runtime_error(
+                RuntimeErrorCode::LNURLError,
+                "Expected Withdraw response, got Pay resposne",
+            )),
+            LnUrlResponse::LnUrlWithdrawResponse(response) => Ok(response),
+            LnUrlResponse::LnUrlChannelResponse(_) => Err(runtime_error(
+                RuntimeErrorCode::LNURLError,
+                "Expected Withdraw response, got Channel response",
+            )),
+        }?;
+
+        let min = response.min_withdrawable.unwrap_or(1);
+        let max = response.max_withdrawable;
+        if amount_msat < min {
+            return Err(runtime_error(
+                RuntimeErrorCode::LNURLError,
+                format!("Expected: {amount_msat} msat is below min withdrawable: {min} msat"),
+            ));
+        } else if amount_msat > max {
+            return Err(runtime_error(
+                RuntimeErrorCode::LNURLError,
+                format!("Expected: {amount_msat} msat is above max withdrawable: {max} msat"),
+            ));
+        }
+
+        let description = String::new();
+        // TODO: Put info about the offer.
+        let metadata = "".to_string();
+        let invoice = self.create_invoice(response.max_withdrawable, description, metadata)?;
+
+        match client.do_withdrawal(&response, &invoice.to_string()) {
+            Ok(Response::Ok { .. }) => Ok(()),
+            Ok(Response::Error { reason }) => Err(runtime_error(
+                RuntimeErrorCode::LNURLError,
+                format!("Failed to withdraw: {reason}"),
+            )),
+            Err(e) => Err(runtime_error(
+                RuntimeErrorCode::LNURLError,
+                format!("Failed to withdraw: {e}"),
+            )),
+        }?;
+        Ok(invoice.payment_hash().to_hex())
     }
 
     fn process_failed_payment_attempts(

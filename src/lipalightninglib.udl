@@ -153,6 +153,13 @@ interface LightningNode {
     // Get a list of currently available fund offers
     [Throws=LnError]
     sequence<OfferInfo> query_available_offers();
+
+    // Request to collect the offer.
+    // A payment hash will be returned to track incoming payment.
+    // The offer collection might be considered successfull once payment_received() is called,
+    // or status of the payment becomes Succeeded.
+    [Throws=LnError]
+    string request_offer_collection(OfferInfo offer);
 };
 
 // An object that holds all configuration needed to start a LightningNode instance.
