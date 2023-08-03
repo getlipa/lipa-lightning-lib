@@ -27,6 +27,7 @@ impl RuntimeErrorCode {
             EelRuntimeErrorCode::LspServiceUnavailable => Self::LspServiceUnavailable,
             EelRuntimeErrorCode::RemoteStorageError => Self::RemoteStorageError,
             EelRuntimeErrorCode::NonExistingWallet => Self::NonExistingWallet,
+            EelRuntimeErrorCode::LNURLError => Self::TopupServiceUnavailable,
         }
     }
 }

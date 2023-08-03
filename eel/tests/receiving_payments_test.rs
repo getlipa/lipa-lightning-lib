@@ -4,6 +4,7 @@ mod setup_env;
 #[cfg(feature = "nigiri")]
 mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
+    use eel::errors::{Error, RuntimeErrorCode};
     use eel::limits::LiquidityLimit;
     use eel::LightningNode;
     use log::info;
@@ -236,6 +237,31 @@ mod receiving_payments_test {
         assert!(nigiri::cln_pay_invoice(NodeInstance::NigiriCln, &invoice).is_err());
 
         assert_payment_received(&node, TWENTY_K_SATS);
+    }
+
+    #[test]
+    #[file_serial(key, "/tmp/3l-int-tests-lock")]
+    fn test_lnurl_withdraw() {
+        nigiri::ensure_environment_running();
+        let node = mocked_storage_node().start_or_panic();
+
+        let lnurlw = "https://localhost:9".to_string();
+        let result = node.lnurl_withdraw(&lnurlw, 1000).unwrap_err();
+        assert!(matches!(
+            result,
+            Error::RuntimeError {
+                code: RuntimeErrorCode::LNURLError,
+                ..
+            }
+        ));
+
+        let lnurlw = "https://lnurl.fiatjaf.com/lnurl-withdraw?session=ddc19a396530af00dbf9d916fd95c521427e80d19494911bba3c22dac13e5a83".to_string();
+        match node.lnurl_withdraw(&lnurlw, 5000).unwrap_err() {
+            Error::InvalidInput { msg } => {
+                assert_eq!(msg, "Payment amount must be higher than lsp fees")
+            }
+            error => panic!("Unexpected error: {error}"),
+        };
     }
 
     fn run_jit_channel_open_flow(

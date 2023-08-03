@@ -8,6 +8,7 @@ pub enum RuntimeErrorCode {
     LspServiceUnavailable,
     RemoteStorageError,
     NonExistingWallet,
+    LNURLError,
 }
 
 impl Display for RuntimeErrorCode {
