@@ -584,8 +584,7 @@ impl LightningNode {
         }
 
         let description = String::new();
-        // TODO: Put info about the offer.
-        let metadata = "".to_string();
+        let metadata = String::new();
         let invoice = self.create_invoice(response.max_withdrawable, description, metadata)?;
 
         match client.do_withdrawal(&response, &invoice.to_string()) {
