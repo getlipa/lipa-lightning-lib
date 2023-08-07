@@ -28,6 +28,15 @@ Create `.cargo/config.toml` file with desired values (see `.cargo/config.toml.sa
 
 ### Set up the local environment
 
+This repository requires git submodules, to clone the project and the required submodules, run:
+```sh
+git clone --recursive git@github.com:getlipa/lipa-lightning-lib.git
+```
+To pull the submodules separately, run:
+```sh
+git submodule update --init
+```
+
 If running for the first time or after a change to the development environment, run:
 ```sh
 make build-dev-env
