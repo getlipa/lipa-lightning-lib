@@ -2,6 +2,7 @@ services:
   rgs-bitcoin:
     container_name: rgs-bitcoin
     image: ruimarinho/bitcoin-core:alpine
+    platform: linux/amd64
     command:
       - -regtest=1
       - -server=1
