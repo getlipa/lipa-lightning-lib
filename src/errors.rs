@@ -6,6 +6,7 @@ pub enum RuntimeErrorCode {
     // 3L runtime errors
     AuthServiceUnavailable,
     TopupServiceUnavailable,
+    NotificationServiceUnavailable,
 
     // Eel runtime errors
     EsploraServiceUnavailable,

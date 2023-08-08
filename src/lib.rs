@@ -29,6 +29,8 @@ pub use crate::recovery::recover_lightning_node;
 
 pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
+use crow::CountryCode;
+use crow::LanguageCode;
 use crow::{OfferManager, TopupInfo};
 pub use eel::config::TzConfig;
 use eel::errors::{PayError, PayErrorCode, PayResult};
@@ -399,6 +401,17 @@ impl LightningNode {
         self.core_node
             .lnurl_withdraw(&offer.lnurlw, amout_msat)
             .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+    }
+
+    pub fn register_notification_token(
+        &self,
+        notification_token: String,
+        language: LanguageCode,
+        country: CountryCode,
+    ) -> Result<()> {
+        self.offer_manager
+            .register_notification_token(notification_token, language, country)
+            .map_runtime_error_to(RuntimeErrorCode::NotificationServiceUnavailable)
     }
 }
 
