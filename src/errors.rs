@@ -5,8 +5,7 @@ use std::fmt::{Display, Formatter};
 pub enum RuntimeErrorCode {
     // 3L runtime errors
     AuthServiceUnavailable,
-    TopupServiceUnavailable,
-    NotificationServiceUnavailable,
+    OfferServiceUnavailable,
 
     // Eel runtime errors
     EsploraServiceUnavailable,
@@ -28,7 +27,7 @@ impl RuntimeErrorCode {
             EelRuntimeErrorCode::LspServiceUnavailable => Self::LspServiceUnavailable,
             EelRuntimeErrorCode::RemoteStorageError => Self::RemoteStorageError,
             EelRuntimeErrorCode::NonExistingWallet => Self::NonExistingWallet,
-            EelRuntimeErrorCode::LNURLError => Self::TopupServiceUnavailable,
+            EelRuntimeErrorCode::LNURLError => Self::OfferServiceUnavailable,
         }
     }
 }

@@ -378,7 +378,7 @@ impl LightningNode {
 
         self.offer_manager
             .register_node(self.core_node.get_node_info().node_pubkey.to_string())
-            .map_runtime_error_to(RuntimeErrorCode::TopupServiceUnavailable)?;
+            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
 
         self.fiat_topup_client
             .register_pocket_fiat_topup(&user_iban, user_currency)
@@ -388,7 +388,7 @@ impl LightningNode {
         let topup_infos = self
             .offer_manager
             .query_available_topups()
-            .map_runtime_error_to(RuntimeErrorCode::TopupServiceUnavailable)?;
+            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
         let rate = self.get_exchange_rate();
         Ok(topup_infos
             .into_iter()
@@ -411,7 +411,7 @@ impl LightningNode {
     ) -> Result<()> {
         self.offer_manager
             .register_notification_token(notification_token, language, country)
-            .map_runtime_error_to(RuntimeErrorCode::NotificationServiceUnavailable)
+            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)
     }
 }
 
