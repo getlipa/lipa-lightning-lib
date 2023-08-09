@@ -3,7 +3,6 @@
 extern crate core;
 
 mod amount;
-mod backend_client;
 mod callbacks;
 mod config;
 mod eel_interface_impl;
@@ -28,9 +27,9 @@ use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
 
-use crate::backend_client::BackendClient;
 pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
+use crow::{OfferManager, TopupInfo};
 pub use eel::config::TzConfig;
 use eel::errors::{PayError, PayErrorCode, PayResult};
 pub use eel::interfaces::ExchangeRate;
@@ -127,6 +126,7 @@ pub struct OfferInfo {
 
 pub enum OfferKind {
     Pocket {
+        id: String,
         topup_value: FiatValue,
         exchange_fee: FiatValue,
         exchange_fee_rate_permyriad: u16,
@@ -137,7 +137,7 @@ pub struct LightningNode {
     core_node: Arc<eel::LightningNode>,
     auth: Arc<Auth>,
     fiat_topup_client: PocketClient,
-    backend_client: BackendClient,
+    offer_manager: OfferManager,
 }
 
 impl LightningNode {
@@ -196,13 +196,13 @@ impl LightningNode {
         );
 
         let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&core_node))?;
-        let backend_client = BackendClient::new(environment.backend_url, Arc::clone(&auth))?;
+        let offer_manager = OfferManager::new(environment.backend_url, Arc::clone(&auth));
 
         Ok(LightningNode {
             core_node,
             auth,
             fiat_topup_client,
-            backend_client,
+            offer_manager,
         })
     }
 
@@ -369,12 +369,12 @@ impl LightningNode {
             if let Err(e) = EmailAddress::from_str(&email) {
                 return Err(invalid_input(format!("Invalid email: {}", e)));
             }
-            self.backend_client
+            self.offer_manager
                 .register_email(email)
                 .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
         }
 
-        self.auth
+        self.offer_manager
             .register_node(self.core_node.get_node_info().node_pubkey.to_string())
             .map_runtime_error_to(RuntimeErrorCode::TopupServiceUnavailable)?;
 
@@ -383,9 +383,15 @@ impl LightningNode {
     }
 
     pub fn query_available_offers(&self) -> Result<Vec<OfferInfo>> {
-        self.backend_client
+        let topup_infos = self
+            .offer_manager
             .query_available_topups()
-            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
+            .map_runtime_error_to(RuntimeErrorCode::TopupServiceUnavailable)?;
+        let rate = self.get_exchange_rate();
+        Ok(topup_infos
+            .into_iter()
+            .map(|o| to_offer(o, &rate))
+            .collect())
     }
 
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
@@ -393,6 +399,33 @@ impl LightningNode {
         self.core_node
             .lnurl_withdraw(&offer.lnurlw, amout_msat)
             .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+    }
+}
+
+fn to_offer(topup_info: TopupInfo, rate: &Option<ExchangeRate>) -> OfferInfo {
+    let topup_value = FiatValue {
+        converted_at: topup_info.exchange_rate.updated_at,
+        currency_code: topup_info.exchange_rate.currency_code.clone(),
+        minor_units: topup_info.topup_value_minor_units,
+        rate: topup_info.exchange_rate.sats_per_unit,
+    };
+    let exchange_fee = FiatValue {
+        converted_at: topup_info.exchange_rate.updated_at,
+        currency_code: topup_info.exchange_rate.currency_code,
+        minor_units: topup_info.exchange_fee_minor_units,
+        rate: topup_info.exchange_rate.sats_per_unit,
+    };
+    OfferInfo {
+        offer_kind: OfferKind::Pocket {
+            id: topup_info.id,
+            topup_value,
+            exchange_fee,
+            exchange_fee_rate_permyriad: topup_info.exchange_fee_rate_permyriad,
+        },
+        amount: (topup_info.amount_sat * 1000).to_amount_down(rate),
+        lnurlw: topup_info.lnurlw,
+        created_at: topup_info.exchange_rate.updated_at,
+        expires_at: topup_info.expires_at,
     }
 }
 

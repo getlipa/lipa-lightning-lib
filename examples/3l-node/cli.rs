@@ -549,10 +549,12 @@ fn list_offers(node: &LightningNode) -> Result<(), String> {
         println!("      LNURL-w:            {:?}", offer.lnurlw);
         match offer.offer_kind {
             OfferKind::Pocket {
+                id,
                 topup_value,
                 exchange_fee,
                 exchange_fee_rate_permyriad,
             } => {
+                println!("                   ID:    {id}");
                 println!(
                     "      Value exchanged:    {}",
                     fiat_value_to_string(topup_value)
