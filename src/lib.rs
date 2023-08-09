@@ -38,7 +38,6 @@ pub use eel::interfaces::ExchangeRate;
 pub use eel::invoice::DecodeInvoiceError;
 use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{mnemonic_to_secret, words_by_prefix, MnemonicError};
-pub use eel::payment::FiatValues;
 use eel::payment::{PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
 pub use eel::Network;

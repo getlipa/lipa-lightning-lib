@@ -581,7 +581,7 @@ mod tests {
     use crate::config::TzConfig;
     use crate::data_store::DataStore;
     use crate::interfaces::ExchangeRate;
-    use crate::payment::{FiatValues, PaymentState, PaymentType};
+    use crate::payment::{PaymentState, PaymentType};
 
     use crate::errors::PayErrorCode;
     use lightning::ln::PaymentSecret;
@@ -902,40 +902,6 @@ mod tests {
     fn reset_db(db_name: &str) {
         let _ = fs::create_dir(TEST_DB_PATH);
         let _ = fs::remove_file(format!("{TEST_DB_PATH}/{db_name}"));
-    }
-
-    #[test]
-    fn test_fiat_value_from_exchange_rate() {
-        let exchange_rate = ExchangeRate {
-            currency_code: "EUR".to_string(),
-            rate: 5_000,
-            updated_at: SystemTime::now(),
-        };
-        let exchange_rate_usd = ExchangeRate {
-            currency_code: "USD".to_string(),
-            rate: 5_050,
-            updated_at: SystemTime::now(),
-        };
-        assert_eq!(
-            FiatValues::from_amount_msat(1_000, &exchange_rate, &exchange_rate_usd).amount,
-            0
-        );
-        assert_eq!(
-            FiatValues::from_amount_msat(10_000, &exchange_rate, &exchange_rate_usd).amount,
-            2
-        );
-        assert_eq!(
-            FiatValues::from_amount_msat(100_000, &exchange_rate, &exchange_rate_usd).amount,
-            20
-        );
-        assert_eq!(
-            FiatValues::from_amount_msat(1_000_000, &exchange_rate, &exchange_rate_usd).amount,
-            200
-        );
-        assert_eq!(
-            FiatValues::from_amount_msat(10_000_000, &exchange_rate, &exchange_rate_usd).amount,
-            2_000
-        );
     }
 
     #[test]

@@ -30,30 +30,6 @@ pub struct TzTime {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct FiatValues {
-    pub fiat: String,
-    pub amount: u64,
-    pub amount_usd: u64,
-}
-
-impl FiatValues {
-    pub fn from_amount_msat(
-        amount_msat: u64,
-        exchange_rate: &ExchangeRate,
-        exchange_rate_usd: &ExchangeRate,
-    ) -> Self {
-        // Fiat amount in thousandths of the major fiat unit.
-        let amount = amount_msat / (exchange_rate.rate as u64);
-        let amount_usd = amount_msat / (exchange_rate_usd.rate as u64);
-        FiatValues {
-            fiat: exchange_rate.currency_code.clone(),
-            amount,
-            amount_usd,
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,
