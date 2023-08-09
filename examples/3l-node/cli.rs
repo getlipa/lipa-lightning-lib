@@ -286,11 +286,22 @@ fn payment_amount_limits(node: &LightningNode) {
 
 fn node_info(node: &LightningNode) {
     let node_info = node.get_node_info();
+    let peers_list = if node_info.peers.is_empty() {
+        "None".to_string()
+    } else {
+        node_info
+            .peers
+            .iter()
+            .map(|p| PublicKey::from_slice(p).unwrap().to_string())
+            .collect::<Vec<String>>()
+            .join(", ")
+    };
+
     println!(
         "Node PubKey: {}",
         PublicKey::from_slice(&node_info.node_pubkey).unwrap()
     );
-    println!("Number of connected peers: {}", node_info.num_peers);
+    println!("Connected peer(s): {}", peers_list);
     println!(
         "       Number of channels: {}",
         node_info.channels_info.num_channels

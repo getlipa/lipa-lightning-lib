@@ -7,7 +7,7 @@ use crate::setup_env::config::get_testing_config;
 use crate::setup_env::nigiri::NodeInstance;
 use crate::setup_env::nigiri::NodeInstance::LspdLnd;
 use crate::setup_env::{nigiri, CHANNEL_SIZE_MSAT};
-use crate::wait_for_eq;
+use crate::wait_for;
 
 use eel::config::Config;
 use eel::errors::{InternalResult, InternalRuntimeErrorCode};
@@ -93,7 +93,7 @@ impl<S: RemoteStorage + Clone + 'static, X: ExchangeRateProvider + Clone> NodeHa
 
 #[allow(dead_code)]
 pub fn setup_outbound_capacity(node: &LightningNode) -> String {
-    wait_for_eq!(node.get_node_info().num_peers, 1);
+    wait_for!(!node.get_node_info().peers.is_empty());
     let funding_txid =
         nigiri::initiate_channel_from_remote(node.get_node_info().node_pubkey, LspdLnd);
 

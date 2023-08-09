@@ -46,7 +46,7 @@ mod receiving_payments_test {
 
         {
             let node = node_handle.start_or_panic();
-            wait_for_eq!(node.get_node_info().num_peers, 1);
+            wait_for!(!node.get_node_info().peers.is_empty());
 
             let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
                 .unwrap()
@@ -201,7 +201,7 @@ mod receiving_payments_test {
 
         let node = mocked_storage_node().start_or_panic();
         let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
-        wait_for_eq!(node.get_node_info().num_peers, 1);
+        wait_for!(!node.get_node_info().peers.is_empty());
 
         let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
             .unwrap()

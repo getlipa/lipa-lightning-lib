@@ -376,10 +376,17 @@ impl LightningNode {
     }
 
     pub fn get_node_info(&self) -> NodeInfo {
+        let peer_pubkeys = self
+            .peer_manager
+            .get_peer_node_ids()
+            .iter()
+            .map(|p| p.0)
+            .collect();
+
         let channels_info = get_channels_info(&self.channel_manager.list_channels());
         NodeInfo {
             node_pubkey: self.channel_manager.get_our_node_id(),
-            num_peers: self.peer_manager.get_peer_node_ids().len() as u16,
+            peers: peer_pubkeys,
             channels_info,
         }
     }
@@ -821,14 +828,14 @@ impl LightningNode {
 
         trace!(
             "Logging node state...\n\
-            Number of connected peers: {}\n\
+            Connected peers: {:?}\n\
             Number of channels: {}\n\
             Number of usable channels: {}\n\
             Local balance msat: {}\n\
             Inbound capacity msat: {}\n\
             Outbound capacity msat: {}\n\
             Capacity of all channels msat: {}",
-            node_info.num_peers,
+            node_info.peers,
             node_info.channels_info.num_channels,
             node_info.channels_info.num_usable_channels,
             node_info.channels_info.local_balance_msat,

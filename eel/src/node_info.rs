@@ -14,7 +14,7 @@ pub struct ChannelsInfo {
 #[derive(Debug, PartialEq, Eq)]
 pub struct NodeInfo {
     pub node_pubkey: PublicKey,
-    pub num_peers: u16,
+    pub peers: Vec<PublicKey>,
     pub channels_info: ChannelsInfo,
 }
 

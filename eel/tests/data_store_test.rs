@@ -34,7 +34,7 @@ mod data_store_test {
 
         {
             let node = node_handle.start_or_panic();
-            wait_for_eq!(node.get_node_info().num_peers, 1);
+            wait_for!(!node.get_node_info().peers.is_empty());
 
             let lspd_node_id = nigiri::query_node_info(NodeInstance::LspdLnd)
                 .unwrap()
