@@ -331,6 +331,7 @@ dictionary Payment {
     Amount? lsp_fees; // LSP fees paid in a `Receiving` payment. Will never be present for `Sending` payments but might be 0 for `Receiving` payments.
         // The amount is only paid if successful.
         // The value that is received in practice is given by `amount` - `lsp_fees`
+    OfferKind? offer; // An offer the incoming payment came from if any
     string metadata;
 };
 

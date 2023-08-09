@@ -110,6 +110,7 @@ pub struct Payment {
     pub preimage: Option<String>,
     pub network_fees: Option<Amount>,
     pub lsp_fees: Option<Amount>,
+    pub offer: Option<OfferKind>,
     pub metadata: String,
 }
 
@@ -496,6 +497,7 @@ fn to_payment(payment: eel::payment::Payment) -> Payment {
         preimage: payment.preimage,
         network_fees: payment.network_fees_msat.map(|fee| fee.to_amount_up(&rate)),
         lsp_fees: payment.lsp_fees_msat.map(|fee| fee.to_amount_up(&rate)),
+        offer: None,
         metadata: payment.metadata,
     }
 }
