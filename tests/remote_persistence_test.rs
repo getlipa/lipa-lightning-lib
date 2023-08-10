@@ -30,7 +30,7 @@ mod remote_persistence_test {
             let node = node_handle.start().unwrap();
             let node_info = node.get_node_info();
             let node_id = node_info.node_pubkey.to_hex();
-            assert_eq!(node_info.num_peers, 1);
+            assert_eq!(node_info.peers.len(), 1);
 
             // open 2 channels
             nigiri::lnd_node_open_channel(NodeInstance::LspdLnd, &node_id, false).unwrap();

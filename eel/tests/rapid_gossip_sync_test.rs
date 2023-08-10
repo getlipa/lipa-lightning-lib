@@ -40,7 +40,7 @@ mod rapid_gossip_sync_test {
         {
             let node = node_handle.start_or_panic();
             let lipa_node_id = node.get_node_info().node_pubkey.to_hex();
-            wait_for_eq!(node.get_node_info().num_peers, 1);
+            wait_for!(!node.get_node_info().peers.is_empty());
 
             // Setup channels:
             // NigiriLND -> LspdLnd  -> 3L
