@@ -411,8 +411,10 @@ dictionary OfferInfo {
 interface OfferKind {
     Pocket(
         string id,
-        FiatValue topup_value, // The original fiat amount sent to the exchange
-        FiatValue exchange_fee, // The fee paid to perform the exchange from fiat to sats
+        // Fiat currency is the currency the user sent to the exchange.
+        ExchangeRate exchange_rate, // The exchange rate used by the exchange to exchange fiat to sats
+        u64 topup_value_minor_units, // The original fiat amount sent to the exchange
+        u64 exchange_fee_minor_units, // The fee paid to perform the exchange from fiat to sats
         u16 exchange_fee_rate_permyriad // The rate of the fee expressed in permyriad (e.g. 1.5% would be 150)
     );
 };
