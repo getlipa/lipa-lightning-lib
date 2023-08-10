@@ -83,8 +83,8 @@ pub struct LspFee {
 }
 
 pub struct NodeInfo {
-    pub node_pubkey: Vec<u8>,
-    pub peers: Vec<Vec<u8>>,
+    pub node_pubkey: String,
+    pub peers: Vec<String>,
     pub channels_info: ChannelsInfo,
 }
 
@@ -224,12 +224,8 @@ impl LightningNode {
         };
 
         NodeInfo {
-            node_pubkey: node.node_pubkey.serialize().to_vec(),
-            peers: node
-                .peers
-                .iter()
-                .map(|peer| peer.serialize().to_vec())
-                .collect(),
+            node_pubkey: node.node_pubkey.to_string(),
+            peers: node.peers.iter().map(|peer| peer.to_string()).collect(),
             channels_info,
         }
     }

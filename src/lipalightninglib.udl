@@ -246,8 +246,8 @@ callback interface EventsCallback {
 
 // Information about the Lightning node running in the background
 dictionary NodeInfo {
-    bytes node_pubkey; // Lightning network public key of the node (also known as node id)
-    sequence<bytes> peers; // List of node ids of all the peers the node is connected to
+    string node_pubkey; // Lightning network public key of the node (also known as node id)
+    sequence<string> peers; // List of node ids of all the peers the node is connected to
     ChannelsInfo channels_info; // Information about the channels of the node
 };
 
