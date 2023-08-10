@@ -130,8 +130,9 @@ pub struct OfferInfo {
 pub enum OfferKind {
     Pocket {
         id: String,
-        topup_value: FiatValue,
-        exchange_fee: FiatValue,
+        exchange_rate: ExchangeRate,
+        topup_value_minor_units: u64,
+        exchange_fee_minor_units: u64,
         exchange_fee_rate_permyriad: u16,
     },
 }
@@ -421,27 +422,21 @@ impl LightningNode {
     }
 }
 
-fn to_offer(topup_info: TopupInfo, rate: &Option<ExchangeRate>) -> OfferInfo {
-    let topup_value = FiatValue {
-        converted_at: topup_info.exchange_rate.updated_at,
-        currency_code: topup_info.exchange_rate.currency_code.clone(),
-        minor_units: topup_info.topup_value_minor_units,
-        rate: topup_info.exchange_rate.sats_per_unit,
-    };
-    let exchange_fee = FiatValue {
-        converted_at: topup_info.exchange_rate.updated_at,
+fn to_offer(topup_info: TopupInfo, current_rate: &Option<ExchangeRate>) -> OfferInfo {
+    let exchange_rate = ExchangeRate {
         currency_code: topup_info.exchange_rate.currency_code,
-        minor_units: topup_info.exchange_fee_minor_units,
         rate: topup_info.exchange_rate.sats_per_unit,
+        updated_at: topup_info.exchange_rate.updated_at,
     };
     OfferInfo {
         offer_kind: OfferKind::Pocket {
             id: topup_info.id,
-            topup_value,
-            exchange_fee,
+            exchange_rate,
+            topup_value_minor_units: topup_info.topup_value_minor_units,
+            exchange_fee_minor_units: topup_info.exchange_fee_minor_units,
             exchange_fee_rate_permyriad: topup_info.exchange_fee_rate_permyriad,
         },
-        amount: (topup_info.amount_sat * 1000).to_amount_down(rate),
+        amount: (topup_info.amount_sat * 1000).to_amount_down(current_rate),
         lnurlw: topup_info.lnurlw,
         created_at: topup_info.exchange_rate.updated_at,
         expires_at: topup_info.expires_at,

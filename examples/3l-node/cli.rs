@@ -561,22 +561,30 @@ fn list_offers(node: &LightningNode) -> Result<(), String> {
         match offer.offer_kind {
             OfferKind::Pocket {
                 id,
-                topup_value,
-                exchange_fee,
+                exchange_rate,
+                topup_value_minor_units,
+                exchange_fee_minor_units,
                 exchange_fee_rate_permyriad,
             } => {
                 println!("                   ID:    {id}");
                 println!(
-                    "      Value exchanged:    {}",
-                    fiat_value_to_string(topup_value)
+                    "      Value exchanged:    {:.2} {}",
+                    topup_value_minor_units as f64 / 100f64,
+                    exchange_rate.currency_code,
                 );
                 println!(
                     "      Exchange fee rate:  {}%",
                     exchange_fee_rate_permyriad as f64 / 100_f64
                 );
                 println!(
-                    "      Exchange fee value: {}",
-                    fiat_value_to_string(exchange_fee)
+                    "      Exchange fee value: {:.2} {}",
+                    exchange_fee_minor_units as f64 / 100f64,
+                    exchange_rate.currency_code,
+                );
+                let exchanged_at: DateTime<Utc> = exchange_rate.updated_at.into();
+                println!(
+                    "             Exchange at: {}",
+                    exchanged_at.format("%d/%m/%Y %T UTC"),
                 );
             }
         }
