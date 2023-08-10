@@ -40,8 +40,8 @@ impl RapidSyncClient {
             .map_to_permanent_failure("Current system time is before unix epoch")?
             .as_secs();
 
-        if now - u64::from(last_sync_timestamp) >= SECONDS_IN_ONE_DAY {
-            info!("Last sync ({}) older than one day, forcefully updating the network graph from scratch", last_sync_timestamp);
+        if now - last_sync_timestamp as u64 >= SECONDS_IN_ONE_DAY {
+            info!("Last sync ({last_sync_timestamp}) older than one day, forcefully updating the network graph from scratch");
             last_sync_timestamp = 0;
         }
 
