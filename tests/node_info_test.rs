@@ -8,6 +8,7 @@ mod setup_env;
 mod node_info_test {
     use crate::setup_3l::NodeHandle;
     use crate::setup_env::nigiri;
+    use std::str::FromStr;
 
     use bitcoin::secp256k1::PublicKey;
     use serial_test::file_serial;
@@ -21,7 +22,7 @@ mod node_info_test {
         let node_info = node.get_node_info();
 
         assert!(
-            PublicKey::from_slice(&*node_info.node_pubkey).is_ok(),
+            PublicKey::from_str(&*node_info.node_pubkey).is_ok(),
             "Node public key is not valid"
         );
         assert!(

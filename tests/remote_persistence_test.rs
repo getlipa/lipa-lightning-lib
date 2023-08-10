@@ -12,8 +12,10 @@ mod remote_persistence_test {
     use crate::{try_cmd_repeatedly, wait_for, wait_for_eq};
 
     use bitcoin::hashes::hex::ToHex;
+    use bitcoin::secp256k1::PublicKey;
     use serial_test::file_serial;
     use std::process::{Command, Output};
+    use std::str::FromStr;
     use std::time::Duration;
 
     const HALF_SEC: Duration = Duration::from_millis(500);
@@ -29,7 +31,9 @@ mod remote_persistence_test {
         {
             let node = node_handle.start().unwrap();
             let node_info = node.get_node_info();
-            let node_id = node_info.node_pubkey.to_hex();
+            let node_id = PublicKey::from_str(&node_info.node_pubkey)
+                .unwrap()
+                .to_hex();
             assert_eq!(node_info.peers.len(), 1);
 
             // open 2 channels

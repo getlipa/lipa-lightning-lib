@@ -4,7 +4,6 @@ use uniffi_lipalightninglib::{
     Amount, FiatValue, MaxRoutingFeeMode, OfferKind, TopupCurrency, TzConfig,
 };
 
-use bitcoin::secp256k1::PublicKey;
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Local, Utc};
 use colored::Colorize;
@@ -23,10 +22,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("{}", "3L Example Node".blue().bold());
     println!("Detailed logs are available at {}", log_file_path);
     println!("To stop the node, please type \"stop\" for a graceful shutdown.");
-    println!(
-        "Local Node ID is: {}",
-        PublicKey::from_slice(&node.get_node_info().node_pubkey).unwrap()
-    );
+    println!("Local Node ID is: {}", &node.get_node_info().node_pubkey);
 
     let prompt = "3L ϟ ".bold().blue().to_string();
     let history_path = Path::new(".3l_cli_history");
@@ -287,21 +283,13 @@ fn payment_amount_limits(node: &LightningNode) {
 fn node_info(node: &LightningNode) {
     let node_info = node.get_node_info();
     let peers_list = if node_info.peers.is_empty() {
-        "None".to_string()
+        vec!["None".to_string()]
     } else {
-        node_info
-            .peers
-            .iter()
-            .map(|p| PublicKey::from_slice(p).unwrap().to_string())
-            .collect::<Vec<String>>()
-            .join(", ")
+        node_info.peers
     };
 
-    println!(
-        "Node PubKey: {}",
-        PublicKey::from_slice(&node_info.node_pubkey).unwrap()
-    );
-    println!("Connected peer(s): {}", peers_list);
+    println!("Node PubKey: {}", node_info.node_pubkey);
+    println!("Connected peer(s): {}", peers_list.join(", "));
     println!(
         "       Number of channels: {}",
         node_info.channels_info.num_channels
