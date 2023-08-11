@@ -111,7 +111,7 @@ impl DataStore {
 					VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                     (payment_id, pocket_id, currency_code, rate, exchanged_at, topup_value_minor_units, exchange_fee_minor_units, exchange_fee_rate_permyriad),
                 )
-                .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
+                .map_to_invalid_input("Failed to add new incoming pocket offer to offers db")?;
             }
             None => (),
         };
