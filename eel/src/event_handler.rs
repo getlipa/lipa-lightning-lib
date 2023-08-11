@@ -6,6 +6,7 @@ use crate::task_manager::TaskManager;
 use crate::types::ChannelManager;
 
 use bitcoin::hashes::hex::ToHex;
+use bitcoin::hashes::{sha256, Hash};
 use lightning::events::{Event, EventHandler, PaymentFailureReason, PaymentPurpose};
 use log::{error, info, trace};
 use std::sync::{Arc, Mutex};
@@ -166,7 +167,31 @@ impl EventHandler for LipaEventHandler {
                 }
                 self.user_event_handler.payment_failed(payment_hash);
             }
-            Event::PaymentPathSuccessful { .. } => {}
+            Event::PaymentPathSuccessful {
+                payment_id: _,
+                payment_hash,
+                path,
+            } => {
+                let payment_hash = payment_hash.unwrap(); // We can safely unwrap. This is an Option within LDK only for backwards-compatibility's sake.
+                let payment_hash = match sha256::Hash::from_slice(&payment_hash.0) {
+                    Ok(hash) => hash,
+                    Err(_) => {
+                        error!("Failed to convert payment hash to hex");
+                        return;
+                    }
+                };
+
+                let hops_short_channel_id = path
+                    .hops
+                    .iter()
+                    .map(|hop| hop.short_channel_id.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ");
+
+                let blinded_tail_amount_hops = path.blinded_tail.map_or(0, |tail| tail.hops.len());
+
+                info!("Payment with hash {payment_hash:?} was successfully routed through the following path (Short channel IDs): {hops_short_channel_id} (amount of hops within blinded tail: {blinded_tail_amount_hops})");
+            }
             Event::PaymentPathFailed { .. } => {}
             Event::ProbeSuccessful { .. } => {}
             Event::ProbeFailed { .. } => {}
