@@ -172,7 +172,7 @@ mod persistence_test {
         let initial_balance = node.get_node_info().channels_info.local_balance_msat;
 
         let invoice = node
-            .create_invoice(payment_amount, "test".to_string(), String::new())
+            .create_invoice(payment_amount, "test".to_string(), None, String::new())
             .unwrap()
             .to_string();
 

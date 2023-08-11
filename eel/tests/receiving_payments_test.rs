@@ -5,12 +5,14 @@ mod setup_env;
 mod receiving_payments_test {
     use bitcoin::hashes::hex::ToHex;
     use eel::errors::{Error, RuntimeErrorCode};
+    use eel::interfaces::ExchangeRate;
     use eel::limits::LiquidityLimit;
+    use eel::payment::OfferKind;
     use eel::LightningNode;
     use log::info;
     use serial_test::file_serial;
     use std::thread::sleep;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
 
     use crate::setup::{connect_node_to_lsp, issue_invoice, mocked_storage_node};
     use crate::setup_env::nigiri;
@@ -245,8 +247,22 @@ mod receiving_payments_test {
         nigiri::ensure_environment_running();
         let node = mocked_storage_node().start_or_panic();
 
+        let offer_kind = OfferKind::Pocket {
+            id: "id".to_string(),
+            exchange_rate: ExchangeRate {
+                currency_code: "EUR".to_string(),
+                rate: 1234,
+                updated_at: SystemTime::now(),
+            },
+            topup_value_minor_units: 10000,
+            exchange_fee_minor_units: 15,
+            exchange_fee_rate_permyriad: 150,
+        };
+
         let lnurlw = "https://localhost:9".to_string();
-        let result = node.lnurl_withdraw(&lnurlw, 1000).unwrap_err();
+        let result = node
+            .lnurl_withdraw(&lnurlw, 1000, offer_kind.clone())
+            .unwrap_err();
         assert!(matches!(
             result,
             Error::RuntimeError {
@@ -256,7 +272,7 @@ mod receiving_payments_test {
         ));
 
         let lnurlw = "https://lnurl.fiatjaf.com/lnurl-withdraw?session=ddc19a396530af00dbf9d916fd95c521427e80d19494911bba3c22dac13e5a83".to_string();
-        match node.lnurl_withdraw(&lnurlw, 5000).unwrap_err() {
+        match node.lnurl_withdraw(&lnurlw, 5000, offer_kind).unwrap_err() {
             Error::InvalidInput { msg } => {
                 assert_eq!(msg, "Payment amount must be higher than lsp fees")
             }

@@ -78,6 +78,7 @@ use lnurl::{LnUrlResponse, Response};
 pub use log::Level as LogLevel;
 use log::{error, trace};
 use log::{info, warn};
+use payment::OfferKind;
 pub use perro::{
     invalid_input, permanent_failure, runtime_error, MapToError, MapToErrorForUnitType,
     OptionToError,
@@ -419,6 +420,7 @@ impl LightningNode {
         &self,
         amount_msat: u64,
         description: String,
+        offer_kind: Option<OfferKind>,
         metadata: String,
     ) -> Result<Bolt11Invoice> {
         trace!(
@@ -452,6 +454,7 @@ impl LightningNode {
             &mut self.data_store.lock().unwrap(),
             &fiat_currency,
             exchage_rates,
+            offer_kind,
         ))?;
         Bolt11Invoice::from_signed(signed_invoice)
             .map_to_permanent_failure("Failed to construct invoice")
@@ -554,7 +557,12 @@ impl LightningNode {
         }
     }
 
-    pub fn lnurl_withdraw(&self, lnurlw: &str, amount_msat: u64) -> Result<String> {
+    pub fn lnurl_withdraw(
+        &self,
+        lnurlw: &str,
+        amount_msat: u64,
+        offer_kind: OfferKind,
+    ) -> Result<String> {
         let client = lnurl::Builder {
             proxy: None,
             timeout: Some(10_000),
@@ -592,7 +600,12 @@ impl LightningNode {
 
         let description = String::new();
         let metadata = String::new();
-        let invoice = self.create_invoice(response.max_withdrawable, description, metadata)?;
+        let invoice = self.create_invoice(
+            response.max_withdrawable,
+            description,
+            Some(offer_kind),
+            metadata,
+        )?;
 
         match client.do_withdrawal(&response, &invoice.to_string()) {
             Ok(Response::Ok { .. }) => Ok(()),

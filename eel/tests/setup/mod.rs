@@ -102,7 +102,7 @@ pub fn setup_outbound_capacity(node: &LightningNode) -> String {
     assert!(node.get_node_info().channels_info.inbound_capacity_msat > REBALANCE_AMOUNT);
 
     let invoice = node
-        .create_invoice(REBALANCE_AMOUNT, "test".to_string(), String::new())
+        .create_invoice(REBALANCE_AMOUNT, "test".to_string(), None, String::new())
         .unwrap()
         .to_string();
     assert!(invoice.starts_with("lnbc"));
@@ -125,7 +125,7 @@ pub fn setup_outbound_capacity(node: &LightningNode) -> String {
 #[allow(dead_code)]
 pub fn issue_invoice(node: &LightningNode, payment_amount: u64) -> String {
     let invoice = node
-        .create_invoice(payment_amount, "test".to_string(), String::new())
+        .create_invoice(payment_amount, "test".to_string(), None, String::new())
         .unwrap()
         .to_string();
     assert!(invoice.starts_with("lnbc"));

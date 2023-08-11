@@ -2,6 +2,7 @@ use crate::errors::*;
 use crate::interfaces::ExchangeRate;
 use crate::lsp::{LspClient, PaymentRequest};
 use crate::node_info::{estimate_max_incoming_payment_size, get_channels_info};
+use crate::payment::OfferKind;
 use crate::types::ChannelManager;
 use bitcoin::bech32::ToBase32;
 use std::str::FromStr;
@@ -78,6 +79,7 @@ fn chomp_prefix(string: &str) -> &str {
     string.strip_prefix("lightning:").unwrap_or(string)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn create_invoice(
     params: CreateInvoiceParams,
     channel_manager: &ChannelManager,
@@ -86,6 +88,7 @@ pub(crate) async fn create_invoice(
     data_store: &mut DataStore,
     fiat_currency: &str,
     exchange_rates: Vec<ExchangeRate>,
+    offer_kind: Option<OfferKind>,
 ) -> Result<SignedRawBolt11Invoice> {
     let amount_msat = params.amount_msat;
 
@@ -196,6 +199,7 @@ pub(crate) async fn create_invoice(
             &params.metadata,
             fiat_currency,
             exchange_rates,
+            offer_kind,
         )
         .map_to_permanent_failure("Failed to store new payment in payment db")?;
 

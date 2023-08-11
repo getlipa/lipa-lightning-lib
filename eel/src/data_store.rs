@@ -2,7 +2,7 @@ use crate::config::TzConfig;
 use crate::errors::{Error, PayErrorCode, Result};
 use crate::interfaces::ExchangeRate;
 use crate::migrations::get_migrations;
-use crate::payment::{Payment, PaymentState, PaymentType, TzTime};
+use crate::payment::{OfferKind, Payment, PaymentState, PaymentType, TzTime};
 use crate::schema_migration::migrate_schema;
 
 use chrono::{DateTime, Utc};
@@ -48,6 +48,7 @@ impl DataStore {
         metadata: &str,
         fiat_currency: &str,
         exchange_rates: Vec<ExchangeRate>,
+        offer_kind: Option<OfferKind>,
     ) -> Result<()> {
         let tx = self
             .db_conn
@@ -73,20 +74,48 @@ impl DataStore {
                 snapshot_id,
             ),
         )
-        .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
+		.map_to_invalid_input("Failed to add new incoming payment to payments db")?;
+        let payment_id = tx.last_insert_rowid();
         tx.execute(
             "\
             INSERT INTO events (payment_id, type, timezone_id, timezone_utc_offset_secs) \
             VALUES (?1, ?2, ?3, ?4) \
             ",
             (
-                tx.last_insert_rowid(),
+                payment_id,
                 PaymentState::Created as u8,
                 &self.timezone_config.timezone_id,
                 self.timezone_config.timezone_utc_offset_secs,
             ),
         )
         .map_to_invalid_input("Failed to add new incoming payment to payments db")?;
+
+        #[allow(clippy::single_match)]
+        match offer_kind {
+            Some(OfferKind::Pocket {
+                id: pocket_id,
+                exchange_rate:
+                    ExchangeRate {
+                        currency_code,
+                        rate,
+                        updated_at,
+                    },
+                topup_value_minor_units,
+                exchange_fee_minor_units,
+                exchange_fee_rate_permyriad,
+            }) => {
+                let exchanged_at: DateTime<Utc> = updated_at.into();
+                tx.execute(
+                    "\
+					INSERT INTO offers (payment_id, pocket_id, fiat_currency, rate, exchanged_at, topup_value_minor_units, exchange_fee_minor_units, exchange_fee_rate_permyriad)\
+					VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    (payment_id, pocket_id, currency_code, rate, exchanged_at, topup_value_minor_units, exchange_fee_minor_units, exchange_fee_rate_permyriad),
+                )
+                .map_to_invalid_input("Failed to add new incoming pocket offer to offers db")?;
+            }
+            None => (),
+        };
+
         tx.commit()
             .map_to_permanent_failure("Failed to commit new incoming payment transaction")
     }
@@ -265,12 +294,18 @@ impl DataStore {
             lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
             recent_events.timezone_id, recent_events.timezone_utc_offset_secs, description, \
             creation_events.inserted_at, creation_events.timezone_id, creation_events.timezone_utc_offset_secs, \
-            h.fiat_currency, h.rate, h.updated_at, recent_events.fail_reason \
+			\
+            h.fiat_currency, h.rate, h.updated_at, recent_events.fail_reason, \
+			\
+			o.pocket_id, o.fiat_currency, o.rate, o.exchanged_at, o.topup_value_minor_units, \
+			o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad \
+			\
             FROM payments \
             JOIN recent_events ON payments.payment_id=recent_events.payment_id \
             JOIN creation_events ON payments.payment_id=creation_events.payment_id \
             LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snaphot_id=h.snapshot_id \
                 AND payments.fiat_currency=h.fiat_currency \
+			LEFT JOIN offers o ON o.payment_id=payments.payment_id \
             ORDER BY payments.payment_id DESC \
             LIMIT ? \
             ")
@@ -297,12 +332,18 @@ impl DataStore {
             lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
             recent_events.timezone_id, recent_events.timezone_utc_offset_secs, description, \
             creation_events.inserted_at, creation_events.timezone_id, creation_events.timezone_utc_offset_secs, \
-            h.fiat_currency, h.rate, h.updated_at, recent_events.fail_reason \
+			\
+            h.fiat_currency, h.rate, h.updated_at, recent_events.fail_reason, \
+			\
+			o.pocket_id, o.fiat_currency, o.rate, o.exchanged_at, o.topup_value_minor_units, \
+			o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad \
+			\
             FROM payments \
             JOIN recent_events ON payments.payment_id=recent_events.payment_id \
             JOIN creation_events ON payments.payment_id=creation_events.payment_id \
             LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snaphot_id=h.snapshot_id \
                 AND payments.fiat_currency=h.fiat_currency \
+			LEFT JOIN offers o ON o.payment_id=payments.payment_id \
             WHERE payments.hash=? \
             ")
             .map_to_permanent_failure("Failed to prepare SQL query")?;
@@ -327,7 +368,8 @@ impl DataStore {
             lsp_fees_msat, invoice, metadata, recent_events.type as state, recent_events.inserted_at, \
             recent_events.timezone_id, recent_events.timezone_utc_offset_secs, description, \
             creation_events.inserted_at, creation_events.timezone_id, creation_events.timezone_utc_offset_secs, \
-            h.fiat_currency, h.rate, h.updated_at, recent_events.fail_reason \
+            h.fiat_currency, h.rate, h.updated_at, recent_events.fail_reason, \
+			NULL, NULL, NULL, NULL, NULL, NULL, NULL \
             FROM payments \
             JOIN recent_events ON payments.payment_id=recent_events.payment_id \
             JOIN creation_events ON payments.payment_id=creation_events.payment_id \
@@ -476,6 +518,36 @@ fn insert_snapshot(
     Ok(Some(snapshot_id))
 }
 
+fn offer_kind_from_row(row: &Row) -> rusqlite::Result<Option<OfferKind>> {
+    let pocket_id: Option<String> = row.get(21)?;
+    match pocket_id {
+        Some(pocket_id) => {
+            let fiat_currency: String = row.get(22)?;
+            let rate: u32 = row.get(23)?;
+            let exchanged_at: chrono::DateTime<chrono::Utc> = row.get(24)?;
+            let exchanged_at = SystemTime::from(exchanged_at);
+            let topup_value_minor_units: u64 = row.get(25)?;
+            let exchange_fee_minor_units: u64 = row.get(26)?;
+            let exchange_fee_rate_permyriad: u16 = row.get(27)?;
+
+            let exchange_rate = ExchangeRate {
+                currency_code: fiat_currency,
+                rate,
+                updated_at: exchanged_at,
+            };
+
+            Ok(Some(OfferKind::Pocket {
+                id: pocket_id,
+                exchange_rate,
+                topup_value_minor_units,
+                exchange_fee_minor_units,
+                exchange_fee_rate_permyriad,
+            }))
+        }
+        None => Ok(None),
+    }
+}
+
 fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
     let payment_type: u8 = row.get(1)?;
     let payment_type = PaymentType::try_from(payment_type)
@@ -531,6 +603,12 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
             rusqlite::Error::FromSqlConversionFailure(1, Type::Integer, Box::new(e))
         })?),
     };
+
+    let offer_kind = match payment_type {
+        PaymentType::Sending => None,
+        PaymentType::Receiving => offer_kind_from_row(row)?,
+    };
+
     Ok(Payment {
         payment_type,
         payment_state,
@@ -545,6 +623,7 @@ fn payment_from_row(row: &Row) -> rusqlite::Result<Payment> {
         network_fees_msat,
         lsp_fees_msat,
         exchange_rate,
+        offer_kind,
         metadata,
     })
 }
@@ -580,10 +659,10 @@ fn spendable_output_from_row(row: &Row) -> rusqlite::Result<SpendableOutputDescr
 mod tests {
     use crate::config::TzConfig;
     use crate::data_store::DataStore;
-    use crate::interfaces::ExchangeRate;
-    use crate::payment::{PaymentState, PaymentType};
-
     use crate::errors::PayErrorCode;
+    use crate::interfaces::ExchangeRate;
+    use crate::payment::{OfferKind, PaymentState, PaymentType};
+
     use lightning::ln::PaymentSecret;
     use lightning::sign::SpendableOutputDescriptor;
     use lightning::util::ser::Readable;
@@ -630,6 +709,7 @@ mod tests {
                 &metadata,
                 "EUR",
                 Vec::new(),
+                None,
             )
             .unwrap();
 
@@ -664,6 +744,19 @@ mod tests {
             updated_at: SystemTime::now(),
         };
 
+        let exchanged_at = SystemTime::now();
+        let offer_kind = OfferKind::Pocket {
+            id: "id".to_string(),
+            exchange_rate: ExchangeRate {
+                currency_code: "CHF".to_string(),
+                rate: 1234,
+                updated_at: exchanged_at.clone(),
+            },
+            topup_value_minor_units: 10000,
+            exchange_fee_minor_units: 15,
+            exchange_fee_rate_permyriad: 150,
+        };
+
         data_store
             .new_incoming_payment(
                 hash,
@@ -674,6 +767,7 @@ mod tests {
                 &metadata,
                 "EUR",
                 vec![exchange_rate.clone()],
+                Some(offer_kind),
             )
             .unwrap();
 
@@ -696,6 +790,24 @@ mod tests {
         assert_eq!(payment.created_at.timezone_utc_offset_secs, TEST_TZ_OFFSET);
         assert_eq!(payment.created_at, payment.latest_state_change_at);
         let created_at = payment.created_at.time;
+
+        match payment.offer_kind.clone().unwrap() {
+            OfferKind::Pocket {
+                id,
+                exchange_rate,
+                topup_value_minor_units,
+                exchange_fee_minor_units,
+                exchange_fee_rate_permyriad,
+            } => {
+                assert_eq!(id, "id");
+                assert_eq!(exchange_rate.currency_code, "CHF");
+                assert_eq!(exchange_rate.rate, 1234);
+                assert_eq!(exchange_rate.updated_at, exchanged_at);
+                assert_eq!(topup_value_minor_units, 10000);
+                assert_eq!(exchange_fee_minor_units, 15);
+                assert_eq!(exchange_fee_rate_permyriad, 150);
+            }
+        };
 
         data_store.fill_preimage(hash, preimage).unwrap();
 
@@ -953,6 +1065,7 @@ mod tests {
                     &metadata,
                     "CHF",
                     vec![exchange_rate.clone()],
+                    None,
                 )
                 .unwrap();
         }

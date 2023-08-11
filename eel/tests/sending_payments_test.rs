@@ -122,7 +122,7 @@ mod sending_payments_test {
         assert_eq!(channels_info.total_channel_capacities_msat, ONE_M_SATS);
 
         let invoice = node
-            .create_invoice(NINE_HUNDRED_K_SATS, "test".to_string(), String::new())
+            .create_invoice(NINE_HUNDRED_K_SATS, "test".to_string(), None, String::new())
             .unwrap()
             .to_string();
         assert!(invoice.starts_with("lnbc"));
@@ -144,7 +144,7 @@ mod sending_payments_test {
         );
 
         let invoice = node
-            .create_invoice(NINE_HUNDRED_K_SATS, "test".to_string(), String::new())
+            .create_invoice(NINE_HUNDRED_K_SATS, "test".to_string(), None, String::new())
             .unwrap()
             .to_string();
         assert!(invoice.starts_with("lnbc"));

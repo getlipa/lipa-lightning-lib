@@ -11,6 +11,7 @@ pub(crate) fn get_migrations() -> Vec<Migration> {
         migration_03_store_spendable_outputs,
         migration_04_store_exchange_rates_history,
         migration_05_store_payment_failure_reason,
+        migration_06_store_offer_kind,
     ]
 }
 
@@ -123,6 +124,27 @@ fn migration_05_store_payment_failure_reason(connection: &Connection) -> Result<
         .execute_batch(
             "\
             ALTER TABLE events ADD COLUMN fail_reason INTEGER NULL;
+        ",
+        )
+        .map_to_permanent_failure("Failed to set up local database")
+}
+
+fn migration_06_store_offer_kind(connection: &Connection) -> Result<()> {
+    connection
+        .execute_batch(
+            "\
+            CREATE TABLE offers (
+                id INTEGER NOT NULL PRIMARY KEY,
+                payment_id INTEGER NOT NULL,
+
+                pocket_id TEXT NULL,
+                fiat_currency TEXT NULL,
+                rate INTEGER NULL,
+                exchanged_at INTEGER NULL,
+                topup_value_minor_units INTEGER NULL,
+                exchange_fee_minor_units INTEGER NULL,
+                exchange_fee_rate_permyriad INTEGER NULL
+            );
         ",
         )
         .map_to_permanent_failure("Failed to set up local database")

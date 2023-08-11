@@ -38,6 +38,7 @@ pub use eel::interfaces::ExchangeRate;
 pub use eel::invoice::DecodeInvoiceError;
 use eel::key_derivation::derive_key_pair_hex;
 use eel::keys_manager::{mnemonic_to_secret, words_by_prefix, MnemonicError};
+pub use eel::payment::OfferKind;
 use eel::payment::{PaymentState, PaymentType, TzTime};
 use eel::secret::Secret;
 pub use eel::Network;
@@ -124,16 +125,6 @@ pub struct OfferInfo {
     pub lnurlw: String,
     pub created_at: SystemTime,
     pub expires_at: SystemTime,
-}
-
-pub enum OfferKind {
-    Pocket {
-        id: String,
-        exchange_rate: ExchangeRate,
-        topup_value_minor_units: u64,
-        exchange_fee_minor_units: u64,
-        exchange_fee_rate_permyriad: u16,
-    },
 }
 
 pub struct LightningNode {
@@ -268,7 +259,7 @@ impl LightningNode {
         let rate = self.get_exchange_rate();
         let invoice = self
             .core_node
-            .create_invoice(amount_sat * 1000, description, metadata)
+            .create_invoice(amount_sat * 1000, description, None, metadata)
             .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
         Ok(InvoiceDetails::from_local_invoice(invoice, &rate))
     }
@@ -401,7 +392,7 @@ impl LightningNode {
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
         let amout_msat = offer.amount.sats * 1000;
         self.core_node
-            .lnurl_withdraw(&offer.lnurlw, amout_msat)
+            .lnurl_withdraw(&offer.lnurlw, amout_msat, offer.offer_kind)
             .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
     }
 
@@ -492,7 +483,7 @@ fn to_payment(payment: eel::payment::Payment) -> Payment {
         preimage: payment.preimage,
         network_fees: payment.network_fees_msat.map(|fee| fee.to_amount_up(&rate)),
         lsp_fees: payment.lsp_fees_msat.map(|fee| fee.to_amount_up(&rate)),
-        offer: None,
+        offer: payment.offer_kind,
         metadata: payment.metadata,
     }
 }

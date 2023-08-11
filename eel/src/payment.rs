@@ -5,6 +5,17 @@ use crate::errors::PayErrorCode;
 use num_enum::TryFromPrimitive;
 use std::time::SystemTime;
 
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum OfferKind {
+    Pocket {
+        id: String,
+        exchange_rate: ExchangeRate,
+        topup_value_minor_units: u64,
+        exchange_fee_minor_units: u64,
+        exchange_fee_rate_permyriad: u16,
+    },
+}
+
 #[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
 pub enum PaymentType {
@@ -44,6 +55,7 @@ pub struct Payment {
     pub network_fees_msat: Option<u64>,
     pub lsp_fees_msat: Option<u64>,
     pub exchange_rate: Option<ExchangeRate>,
+    pub offer_kind: Option<OfferKind>,
     pub metadata: String,
 }
 
