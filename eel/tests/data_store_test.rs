@@ -109,7 +109,7 @@ mod data_store_test {
         try_cmd_repeatedly!(nigiri::mine_blocks, N_RETRIES, HALF_SEC, 10);
 
         let invoice = node
-            .create_invoice(TWENTY_K_SATS, "test".to_string(), String::new())
+            .create_invoice(TWENTY_K_SATS, "test".to_string(), None, String::new())
             .unwrap();
         assert!(invoice.to_string().starts_with("lnbc"));
 
@@ -133,6 +133,7 @@ mod data_store_test {
             network_fees_msat: None,
             lsp_fees_msat: Some(node.calculate_lsp_fee(TWENTY_K_SATS).unwrap()),
             exchange_rate: node.get_exchange_rate(),
+            offer_kind: None,
             metadata: "".to_string(),
         };
 
@@ -175,6 +176,7 @@ mod data_store_test {
             network_fees_msat: None,
             lsp_fees_msat: None,
             exchange_rate: node.get_exchange_rate(),
+            offer_kind: None,
             metadata: "".to_string(),
         };
 

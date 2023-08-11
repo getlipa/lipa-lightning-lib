@@ -77,7 +77,7 @@ mod rapid_gossip_sync_test {
 
             // Pay from NigiriCln to 3L to create outbound liquidity
             let invoice_cln = node
-                .create_invoice(HUNDRED_K_SATS, "test".to_string(), String::new())
+                .create_invoice(HUNDRED_K_SATS, "test".to_string(), None, String::new())
                 .unwrap()
                 .to_string();
             assert!(invoice_cln.starts_with("lnbc"));
@@ -133,7 +133,7 @@ mod rapid_gossip_sync_test {
 
             // Pay from NigiriLnd to 3L to create outbound liquidity (LspdLnd -> NigiriLnd)
             let invoice_lnd = node
-                .create_invoice(HUNDRED_K_SATS, "test".to_string(), String::new())
+                .create_invoice(HUNDRED_K_SATS, "test".to_string(), None, String::new())
                 .unwrap()
                 .to_string();
             assert!(invoice_lnd.starts_with("lnbc"));

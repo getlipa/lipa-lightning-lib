@@ -1,7 +1,7 @@
 use crate::hinter::{CommandHint, CommandHinter};
 
 use uniffi_lipalightninglib::{
-    Amount, FiatValue, MaxRoutingFeeMode, OfferKind, TopupCurrency, TzConfig,
+    Amount, ExchangeRate, FiatValue, MaxRoutingFeeMode, OfferKind, TopupCurrency, TzConfig,
 };
 
 use chrono::offset::FixedOffset;
@@ -625,10 +625,37 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
         println!("      Preimage:     {:?}", payment.preimage);
         println!("      Description:  {}", payment.description);
         println!("      Invoice:      {}", payment.invoice_details.invoice);
-        println!();
+        println!("      Offer:        {}", offer_to_string(payment.offer));
     }
 
     Ok(())
+}
+
+fn offer_to_string(offer: Option<OfferKind>) -> String {
+    match offer {
+        Some(OfferKind::Pocket {
+            id,
+            exchange_rate:
+                ExchangeRate {
+                    currency_code,
+                    rate,
+                    updated_at,
+                },
+            topup_value_minor_units,
+            exchange_fee_minor_units,
+            exchange_fee_rate_permyriad,
+        }) => {
+            let updated_at: DateTime<Utc> = updated_at.into();
+            format!(
+				"Pocket exchange ({id}) of {:.2} {currency_code} at {} at rate {rate} SATS per {currency_code}, fee was {:.2}% or {:.2} {currency_code}",
+				topup_value_minor_units as f64 / 100f64,
+				updated_at.format("%d/%m/%Y %T UTC"),
+				exchange_fee_rate_permyriad as f64 / 100f64,
+				exchange_fee_minor_units as f64 / 100f64
+			)
+        }
+        None => "None".to_string(),
+    }
 }
 
 fn fiat_value_to_string(value: FiatValue) -> String {
