@@ -399,9 +399,14 @@ impl LightningNode {
     pub fn register_notification_token(
         &self,
         notification_token: String,
-        language: LanguageCode,
-        country: CountryCode,
+        language_iso_639_1: String,
+        country_iso_3166_1_alpha_2: String,
     ) -> Result<()> {
+        let language = LanguageCode::from_str(&language_iso_639_1.to_lowercase())
+            .map_to_invalid_input("Invalid language code")?;
+        let country = CountryCode::for_alpha2(&country_iso_3166_1_alpha_2.to_uppercase())
+            .map_to_invalid_input("Invalid country code")?;
+
         self.offer_manager
             .register_notification_token(notification_token, language, country)
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)
