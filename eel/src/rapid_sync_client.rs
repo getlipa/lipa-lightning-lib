@@ -5,13 +5,15 @@ use log::info;
 use perro::{runtime_error, MapToError};
 use reqwest::blocking::Client;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub(crate) struct RapidSyncClient {
     rgs_url: String,
     rapid_sync: Arc<RapidGossipSync>,
     client: Client,
 }
+
+const SECONDS_IN_ONE_DAY: u64 = 60 * 60 * 24;
 
 impl RapidSyncClient {
     pub fn new(rgs_url: String, rapid_sync: Arc<RapidGossipSync>) -> Result<Self> {
@@ -27,11 +29,21 @@ impl RapidSyncClient {
     }
 
     pub fn sync(&self) -> InternalResult<()> {
-        let last_sync_timestamp = self
+        let mut last_sync_timestamp = self
             .rapid_sync
             .network_graph()
             .get_last_rapid_gossip_sync_timestamp()
             .unwrap_or(0);
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_to_permanent_failure("Current system time is before unix epoch")?
+            .as_secs();
+
+        if now - last_sync_timestamp as u64 >= SECONDS_IN_ONE_DAY {
+            info!("Last sync ({last_sync_timestamp}) older than one day, forcefully updating the network graph from scratch");
+            last_sync_timestamp = 0;
+        }
 
         let snapshot_contents = self
             .client
