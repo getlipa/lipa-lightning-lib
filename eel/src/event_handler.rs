@@ -172,13 +172,17 @@ impl EventHandler for LipaEventHandler {
                 payment_hash,
                 path,
             } => {
-                let payment_hash = payment_hash.unwrap(); // We can safely unwrap. This is an Option within LDK only for backwards-compatibility's sake.
-                let payment_hash = match sha256::Hash::from_slice(&payment_hash.0) {
-                    Ok(hash) => hash,
-                    Err(_) => {
-                        error!("Failed to convert payment hash to hex");
-                        return;
-                    }
+                let payment_hash = match payment_hash {
+                    Some(payment_hash) => match sha256::Hash::from_slice(&payment_hash.0) {
+                        Ok(hash) => format!("{hash:?}"),
+                        Err(_) => {
+                            error!(
+                                "Failed to convert payment hash to hex (payment_hash: {payment_hash:?})"
+                            );
+                            "[invalid payment hash]".to_string()
+                        }
+                    },
+                    None => "[unknown payment hash]".to_string(),
                 };
 
                 let hops_short_channel_id = path
@@ -190,7 +194,7 @@ impl EventHandler for LipaEventHandler {
 
                 let blinded_tail_amount_hops = path.blinded_tail.map_or(0, |tail| tail.hops.len());
 
-                info!("Payment with hash {payment_hash:?} was successfully routed through the following path (Short channel IDs): {hops_short_channel_id} (amount of hops within blinded tail: {blinded_tail_amount_hops})");
+                info!("Payment with hash {payment_hash} was successfully routed through the following path (Short channel IDs): {hops_short_channel_id} (amount of hops within blinded tail: {blinded_tail_amount_hops})");
             }
             Event::PaymentPathFailed { .. } => {}
             Event::ProbeSuccessful { .. } => {}
