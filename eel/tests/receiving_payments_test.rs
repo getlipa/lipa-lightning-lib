@@ -259,7 +259,9 @@ mod receiving_payments_test {
             exchange_fee_rate_permyriad: 150,
         };
 
-        let lnurlw = "https://localhost:9".to_string();
+        // Bech32 encoded String: https://localhost:9
+        let lnurlw = "LNURL1DP68GURN8GHJ7MR0VDSKC6R0WD6R5WGW2U3CS".to_string();
+
         let result = node
             .lnurl_withdraw(&lnurlw, 1000, offer_kind.clone())
             .unwrap_err();
@@ -271,7 +273,9 @@ mod receiving_payments_test {
             }
         ));
 
-        let lnurlw = "https://lnurl.fiatjaf.com/lnurl-withdraw?session=ddc19a396530af00dbf9d916fd95c521427e80d19494911bba3c22dac13e5a83".to_string();
+        // Bech32 encoded String: https://lnurl.fiatjaf.com/lnurl-withdraw?session=ddc19a396530af00dbf9d916fd95c521427e80d19494911bba3c22dac13e5a83
+        let lnurlw = "LNURL1DP68GURN8GHJ7MRWW4EXCTNXD9SHG6NPVCHXXMMD9AKXUATJDSKHW6T5DPJ8YCTH8AEK2UMND9HKU0TYV33NZWTPXVUNVDFNXPSKVVPSV33XVWTY8YCNVENY8Y6KXDFJXY6RYDM98QCXGVFEXSUNGWF3X93XYCFNVVERYERPVVCNXEF4VYURXSP5ANH".to_string();
+
         match node.lnurl_withdraw(&lnurlw, 5000, offer_kind).unwrap_err() {
             Error::InvalidInput { msg } => {
                 assert_eq!(msg, "Payment amount must be higher than lsp fees")
