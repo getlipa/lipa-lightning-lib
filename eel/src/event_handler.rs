@@ -7,8 +7,10 @@ use crate::types::ChannelManager;
 
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash};
-use lightning::events::{Event, EventHandler, PaymentFailureReason, PaymentPurpose};
-use log::{error, info, trace};
+use lightning::events::{Event, EventHandler, PathFailure, PaymentFailureReason, PaymentPurpose};
+use lightning::ln::PaymentHash;
+use lightning::routing::router::Path;
+use log::{error, info, trace, warn};
 use std::sync::{Arc, Mutex};
 
 pub(crate) struct LipaEventHandler {
@@ -31,6 +33,24 @@ impl LipaEventHandler {
             user_event_handler,
             data_store,
         })
+    }
+
+    fn stringify_payment_hash(payment_hash: &PaymentHash) -> String {
+        match sha256::Hash::from_slice(&payment_hash.0) {
+            Ok(hash) => format!("{hash:?}"),
+            Err(_) => {
+                error!("Failed to convert payment hash to hex (payment_hash: {payment_hash:?})");
+                "[invalid payment hash]".to_string()
+            }
+        }
+    }
+
+    fn path_to_string(path: &Path) -> String {
+        path.hops
+            .iter()
+            .map(|hop| hop.short_channel_id.to_string())
+            .collect::<Vec<String>>()
+            .join(", ")
     }
 }
 
@@ -173,30 +193,50 @@ impl EventHandler for LipaEventHandler {
                 path,
             } => {
                 let payment_hash = match payment_hash {
-                    Some(payment_hash) => match sha256::Hash::from_slice(&payment_hash.0) {
-                        Ok(hash) => format!("{hash:?}"),
-                        Err(_) => {
-                            error!(
-                                "Failed to convert payment hash to hex (payment_hash: {payment_hash:?})"
-                            );
-                            "[invalid payment hash]".to_string()
-                        }
-                    },
+                    Some(payment_hash) => Self::stringify_payment_hash(&payment_hash),
                     None => "[unknown payment hash]".to_string(),
                 };
 
-                let hops_short_channel_id = path
-                    .hops
-                    .iter()
-                    .map(|hop| hop.short_channel_id.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ");
-
+                let hops_short_channel_id = Self::path_to_string(&path);
                 let blinded_tail_amount_hops = path.blinded_tail.map_or(0, |tail| tail.hops.len());
 
                 info!("Payment with hash {payment_hash} was successfully routed through the following path (Short channel IDs): {hops_short_channel_id} (amount of hops within blinded tail: {blinded_tail_amount_hops})");
             }
-            Event::PaymentPathFailed { .. } => {}
+            Event::PaymentPathFailed {
+                payment_id: _,
+                payment_hash,
+                payment_failed_permanently,
+                failure,
+                path,
+                short_channel_id: _,
+            } => {
+                let payment_hash = Self::stringify_payment_hash(&payment_hash);
+
+                if payment_failed_permanently {
+                    warn!("Payment with hash {payment_hash} was rejected by the recipient. No more attempts will be made.");
+                }
+
+                match failure {
+                    PathFailure::InitialSend { err } => {
+                        warn!("Could not initiate payment with hash {payment_hash}: {err:?}");
+                    }
+
+                    PathFailure::OnPath { network_update } => {
+                        let hops_short_channel_id = Self::path_to_string(&path);
+                        let blinded_tail_amount_hops =
+                            path.blinded_tail.map_or(0, |tail| tail.hops.len());
+
+                        let additional_info = match network_update {
+                            Some(network_update) => {
+                                format!(" | Additional information: {network_update:?}")
+                            }
+                            None => "".to_string(),
+                        };
+
+                        warn!("Payment with hash {payment_hash} failed to be routed through the following path (Short channel IDs): {hops_short_channel_id} (amount of hops within blinded tail: {blinded_tail_amount_hops}){additional_info}");
+                    }
+                }
+            }
             Event::ProbeSuccessful { .. } => {}
             Event::ProbeFailed { .. } => {}
             Event::PendingHTLCsForwardable {
