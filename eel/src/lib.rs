@@ -58,6 +58,8 @@ use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, R
 
 pub use crate::router::MaxRoutingFeeMode;
 use crate::router::{FeeLimitingRouter, SimpleMaxRoutingFeeStrategy};
+use bitcoin::bech32;
+use bitcoin::bech32::FromBase32;
 use bitcoin::hashes::hex::ToHex;
 pub use bitcoin::Network;
 use cipher::consts::U32;
@@ -569,8 +571,9 @@ impl LightningNode {
         }
         .build_blocking()
         .map_to_permanent_failure("Failed to build LNURL client")?;
+        let url = Self::decode_bech32(lnurlw)?;
         let response = client
-            .make_request(lnurlw)
+            .make_request(&url)
             .map_to_runtime_error(RuntimeErrorCode::LNURLError, "Failed to query server")?;
         let response = match response {
             LnUrlResponse::LnUrlPayResponse(_) => Err(runtime_error(
@@ -619,6 +622,20 @@ impl LightningNode {
             )),
         }?;
         Ok(invoice.payment_hash().to_hex())
+    }
+
+    fn decode_bech32(payload: &str) -> Result<String> {
+        let raw = bech32::decode(payload).map_to_invalid_input(format!(
+            "Could not decode bech32: {payload} - Invalid bech32"
+        ))?;
+
+        let bytes = Vec::<u8>::from_base32(&raw.1).map_to_invalid_input(format!(
+            "Could not decode Bech32: {payload} - Invalid base32",
+        ))?;
+
+        String::from_utf8(bytes).map_to_invalid_input(format!(
+            "Could not decode Bech32: {payload} - Could not parse to String",
+        ))
     }
 
     fn process_failed_payment_attempts(
@@ -966,5 +983,43 @@ fn get_foreground_periods() -> TaskPeriods {
             }
         }
         Err(_) => FOREGROUND_PERIODS,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MOCKUP_URL: &str =
+        "https://some-url.com/api/lnurl/withdraw/24cdf2c0-4086-52f8-999a-014b4fe1508d";
+    const MOCKUP_LNURL: &str = "lnurl1dp68gurn8ghj7um0d4jj6atjdshxxmmd9ashq6f0d3h82unv9amkjargv3exzae0xg6xxerxxf3nqtf5xqurvtf4xfnrstfe8yukztfsxy6xydrxv5cn2vpcvsz0nyxz";
+
+    #[test]
+    pub fn test_decoding_bech32_string() {
+        let lower_case = MOCKUP_LNURL;
+        let upper_case = MOCKUP_LNURL.to_ascii_uppercase();
+        let mixed_case = format!(
+            "{}{}",
+            &MOCKUP_LNURL[..10],
+            &MOCKUP_LNURL[10..].to_ascii_uppercase()
+        );
+        let entirely_wrong = format!("{MOCKUP_LNURL}x");
+
+        assert_eq!(
+            LightningNode::decode_bech32(lower_case).unwrap(),
+            MOCKUP_URL
+        );
+        assert_eq!(
+            LightningNode::decode_bech32(&upper_case).unwrap(),
+            MOCKUP_URL
+        );
+        assert!(matches!(
+            LightningNode::decode_bech32(&mixed_case),
+            Err(Error::InvalidInput { .. })
+        ));
+        assert!(matches!(
+            LightningNode::decode_bech32(&entirely_wrong),
+            Err(Error::InvalidInput { .. })
+        ));
     }
 }
