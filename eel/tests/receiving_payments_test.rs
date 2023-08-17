@@ -275,13 +275,68 @@ mod receiving_payments_test {
 
         // Bech32 encoded String: https://lnurl.fiatjaf.com/lnurl-withdraw?session=ddc19a396530af00dbf9d916fd95c521427e80d19494911bba3c22dac13e5a83
         let lnurlw = "LNURL1DP68GURN8GHJ7MRWW4EXCTNXD9SHG6NPVCHXXMMD9AKXUATJDSKHW6T5DPJ8YCTH8AEK2UMND9HKU0TYV33NZWTPXVUNVDFNXPSKVVPSV33XVWTY8YCNVENY8Y6KXDFJXY6RYDM98QCXGVFEXSUNGWF3X93XYCFNVVERYERPVVCNXEF4VYURXSP5ANH".to_string();
+        let lower_than_min_withdrawable = 500; // lnurl.fiatjaf.com uses arbitrary amounts that change on every request, but the values are always bigger than this value
+        let higher_than_max_withdrawable = 500_000; // lnurl.fiatjaf.com uses arbitrary amounts that change on every request, but the values are always smaller than this value
+        let lower_than_lsp_minimum = 9_000; // Lower than LSP minimum of 10_000 and *sometimes* lower than the minimum withdrawable amount of lnurl.fiatjaf.com
 
-        match node.lnurl_withdraw(&lnurlw, 5000, offer_kind).unwrap_err() {
-            Error::InvalidInput { msg } => {
-                assert_eq!(msg, "Payment amount must be higher than lsp fees")
+        match node
+            .lnurl_withdraw(&lnurlw, lower_than_min_withdrawable, offer_kind.clone())
+            .unwrap_err()
+        {
+            Error::RuntimeError {
+                code: RuntimeErrorCode::LNURLError,
+                msg,
+            } => {
+                assert!(msg.starts_with(&format!(
+                    "Expected: {lower_than_min_withdrawable} msat is below min withdrawable:"
+                )));
             }
             error => panic!("Unexpected error: {error}"),
         };
+
+        match node
+            .lnurl_withdraw(&lnurlw, higher_than_max_withdrawable, offer_kind.clone())
+            .unwrap_err()
+        {
+            Error::RuntimeError {
+                code: RuntimeErrorCode::LNURLError,
+                msg,
+            } => {
+                assert!(msg.starts_with(&format!(
+                    "Expected: {higher_than_max_withdrawable} msat is above max withdrawable"
+                )));
+            }
+            error => panic!("Unexpected error: {error}"),
+        };
+
+        // Loop until lnurl.fiatjaf.com returns a min-withdrawable amount that is higher than the LSP minimum
+        for i in 0..100 {
+            match node
+                .lnurl_withdraw(&lnurlw, lower_than_lsp_minimum, offer_kind.clone())
+                .unwrap_err()
+            {
+                Error::RuntimeError {
+                    code: RuntimeErrorCode::LNURLError,
+                    msg,
+                } => {
+                    if msg.contains("msat is below min withdrawable") {
+                        if i == 99 {
+                            panic!("lnurl.fiatjaf.com returned a min-withdrawable amount that is lower than the LSP minimum after 100 tries");
+                        }
+                    }
+                }
+                // The actual case we are testing for. Leaves the loop if successful.
+                Error::InvalidInput { msg } => {
+                    assert_eq!(msg, "Payment amount must be higher than lsp fees");
+                    break;
+                }
+                error => panic!("Unexpected error: {error}"),
+            };
+
+            if i == 99 {
+                panic!("Testing for LNURL withdrawing an amount that is lower than the LSP minimum failed after 100 tries");
+            }
+        }
     }
 
     fn run_jit_channel_open_flow(
