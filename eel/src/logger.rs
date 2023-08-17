@@ -9,9 +9,17 @@ impl Logger for LightningLogger {
         if log_enabled!(target: record.module_path, level) {
             let file = strip_prefix(record.file);
             let location = (record.module_path, "", file, record.line);
-            // Using the internal function because log!() allows to provive
-            // target to override `module_path`, but not file nor line.
-            log::__private_api_log(record.args, level, &location, None);
+
+            log::logger().log(
+                &log::Record::builder()
+                    .args(record.args)
+                    .level(level)
+                    .target(location.0)
+                    .module_path_static(Some(location.1))
+                    .file_static(Some(location.2))
+                    .line(Some(location.3))
+                    .build(),
+            );
         }
     }
 }
