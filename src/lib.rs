@@ -371,11 +371,18 @@ impl LightningNode {
     }
 
     pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
+        let currency_code = "EUR".to_string();
+
+        let rates = self.rt.block_on(self.sdk.fetch_fiat_rates()).unwrap();
+        let eur_per_btc = rates.iter().filter(|r| r.coin == currency_code).map(|r| r.value).next().unwrap();
+        let sat_per_eur = (100_000_000f64 / eur_per_btc) as u32;
+
         Some(ExchangeRate {
-            currency_code: "EUR".into(),
-            rate: 3552,
+            currency_code,
+            rate: sat_per_eur,
             updated_at: SystemTime::now(),
         })
+
     }
 
     pub fn change_fiat_currency(&self, fiat_currency: String) {}
