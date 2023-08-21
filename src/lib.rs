@@ -47,6 +47,7 @@ use iban::Iban;
 use log::trace;
 use logger::init_logger_once;
 use perro::{invalid_input, MapToError, ResultTrait};
+use std::cmp::max;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -55,7 +56,7 @@ use std::{env, fs};
 
 use breez_sdk_core::{
     parse_invoice, BreezEvent, BreezServices, EnvironmentType, EventListener, GreenlightNodeConfig,
-    LNInvoice,
+    LNInvoice, PaymentDetails, PaymentTypeFilter,
 };
 use std::time::Duration;
 use tokio::runtime::{Builder, Runtime};
@@ -355,11 +356,98 @@ impl LightningNode {
     }
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
-        todo!()
+        let mut payments = Vec::new();
+
+        let exchange_rate = self.get_exchange_rate();
+        let lsps = self.rt.block_on(self.sdk.list_lsps()).unwrap();
+        let breez_lsp = lsps.first().unwrap();
+
+        self.rt
+            .block_on(self.sdk.list_payments(PaymentTypeFilter::All, None, None))
+            .unwrap()
+            .iter()
+            .take(number_of_payments as usize)
+            .for_each(|p| {
+                // Breez SDK only lists pending and successful payments here, not failed ones.
+                // Therefore the Lipa states Failed, Retried, InvoiceExpired do not exist here.
+                let payment_state = if p.pending {
+                    PaymentState::Created
+                } else {
+                    PaymentState::Succeeded
+                };
+
+                let payment_type = match p.payment_type {
+                    breez_sdk_core::PaymentType::Received => PaymentType::Receiving,
+                    breez_sdk_core::PaymentType::ClosedChannel => PaymentType::Receiving,
+                    breez_sdk_core::PaymentType::Sent => PaymentType::Sending,
+                };
+
+                let created_at = TzTime {
+                    time: SystemTime::UNIX_EPOCH + Duration::from_secs(p.payment_time as u64),
+                    timezone_id: "".to_string(),
+                    timezone_utc_offset_secs: 0,
+                };
+
+                let payment_details = if let PaymentDetails::Ln { data } = p.details.clone() {
+                    data
+                } else {
+                    return;
+                };
+
+                let amount = p.amount_msat.to_amount_down(&exchange_rate);
+
+                let invoice_details = InvoiceDetails {
+                    invoice: payment_details.bolt11,
+                    amount: Some(amount),
+                    description: p.description.clone().unwrap_or("".to_string()),
+                    payment_hash: payment_details.payment_hash.clone(),
+                    payee_pub_key: payment_details.destination_pubkey,
+                    creation_timestamp: SystemTime::now(), // missing from Breez SDK
+                    expiry_interval: Default::default(),   // missing from Breez SDK
+                    expiry_timestamp: SystemTime::now(),   // missing from Breez SDK
+                };
+
+                let lsp_fee = max(
+                    p.amount_msat.to_amount_down(&exchange_rate).sats as i64
+                        * breez_lsp.channel_fee_permyriad
+                        / 10_000,
+                    breez_lsp.channel_minimum_fee_msat,
+                ) as u64;
+
+                let payment = Payment {
+                    payment_type,
+                    payment_state,
+                    fail_reason: None,
+                    hash: payment_details.payment_hash.clone(),
+                    amount: p.amount_msat.to_amount_down(&exchange_rate),
+                    invoice_details,
+                    created_at: created_at.clone(),
+                    latest_state_change_at: created_at.clone(), // missing from Breez SDK
+                    description: p.description.clone().unwrap_or("".to_string()),
+                    preimage: Some(payment_details.payment_preimage),
+                    network_fees: Some(p.fee_msat.to_amount_up(&exchange_rate)),
+                    lsp_fees: Some(lsp_fee.to_amount_up(&exchange_rate)), // We can calculate the LSP fees as demonstrated here
+                    // However, we canNOT actually tell for each payment whether a new channel has been opened or not.
+                    // So we do NOT know for which payment LSP fees were due.
+                    // On the other hand, channel closing fees, which we haven't dealt with so far,
+                    // could probably be derived: Payment > PaymentDetails > ClosedChannel > ClosedChannelPaymentDetails > funding_txid
+                    // ( but they're likely to be paid by the LSP, so it's not that relevant )
+                    metadata: "".to_string(), // missing from Breez SDK
+                };
+
+                payments.push(payment);
+            });
+
+        Ok(payments)
     }
 
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
-        todo!()
+        Ok(self
+            .get_latest_payments(u32::MAX)?
+            .into_iter()
+            .filter(|p| p.hash == hash)
+            .next()
+            .unwrap())
     }
 
     pub fn foreground(&self) {}
@@ -374,7 +462,12 @@ impl LightningNode {
         let currency_code = "EUR".to_string();
 
         let rates = self.rt.block_on(self.sdk.fetch_fiat_rates()).unwrap();
-        let eur_per_btc = rates.iter().filter(|r| r.coin == currency_code).map(|r| r.value).next().unwrap();
+        let eur_per_btc = rates
+            .iter()
+            .filter(|r| r.coin == currency_code)
+            .map(|r| r.value)
+            .next()
+            .unwrap();
         let sat_per_eur = (100_000_000f64 / eur_per_btc) as u32;
 
         Some(ExchangeRate {
@@ -382,7 +475,6 @@ impl LightningNode {
             rate: sat_per_eur,
             updated_at: SystemTime::now(),
         })
-
     }
 
     pub fn change_fiat_currency(&self, fiat_currency: String) {}
