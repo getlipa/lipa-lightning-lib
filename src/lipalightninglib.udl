@@ -164,6 +164,14 @@ interface LightningNode {
     // Registers a new notification token. If a token has already been registered, it will be updated.
     [Throws=LnError]
     void register_notification_token(string notification_token, string language_iso_639_1, string country_iso_3166_1_alpha_2);
+
+    // Get the wallet UUID v5 from the wallet pubkey
+    //
+    // Returns an optional value. If the auth flow has never succeeded in this Auth instance, the wallet UUID v5
+    // is unknown and None is returned. Otherwise, this method will always return the wallet UUID v5.
+    //
+    // This method does not access the internet
+    string? get_wallet_pubkey_id();
 };
 
 // An object that holds all configuration needed to start a LightningNode instance.

@@ -44,6 +44,9 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 "nodeinfo" => {
                     node_info(node);
                 }
+                "walletpubkeyid" => {
+                    wallet_pubkey_id(node);
+                }
                 "lspfee" => {
                     lsp_fee(node);
                 }
@@ -148,6 +151,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
 
     let mut hints = HashSet::new();
     hints.insert(CommandHint::new("nodeinfo", "nodeinfo"));
+    hints.insert(CommandHint::new("walletpubkeyid", "walletpubkeyid"));
     hints.insert(CommandHint::new("lspfee", "lspfee"));
     hints.insert(CommandHint::new(
         "calculatelspfee <amount in SAT>",
@@ -203,6 +207,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
 
 fn help() {
     println!("  nodeinfo");
+    println!("  walletpubkeyid");
     println!("  lspfee");
     println!("  calculatelspfee <amount in SAT>");
     println!("  paymentamountlimits");
@@ -314,6 +319,13 @@ fn node_info(node: &LightningNode) {
         " Capacity of all channels: {}",
         amount_to_string(node_info.channels_info.total_channel_capacities)
     );
+}
+
+fn wallet_pubkey_id(node: &LightningNode) {
+    match node.get_wallet_pubkey_id() {
+        Some(wallet_pubkey_id) => println!("{wallet_pubkey_id}"),
+        None => eprintln!("Wallet PubKey Id is currently unavailable."),
+    }
 }
 
 fn get_exchange_rate(node: &LightningNode) -> Result<(), String> {
