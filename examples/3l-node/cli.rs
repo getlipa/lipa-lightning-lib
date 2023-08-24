@@ -324,7 +324,7 @@ fn node_info(node: &LightningNode) {
 fn wallet_pubkey_id(node: &LightningNode) {
     match node.get_wallet_pubkey_id() {
         Some(wallet_pubkey_id) => println!("{wallet_pubkey_id}"),
-        None => println!("Wallet PubKey Id is currently unavailable."),
+        None => eprintln!("Wallet PubKey Id is currently unavailable."),
     }
 }
 
