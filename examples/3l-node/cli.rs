@@ -588,6 +588,7 @@ fn list_offers(node: &LightningNode) -> Result<(), String> {
                 );
             }
         }
+        println!("      Status:             {:?}", offer.status);
         println!();
     }
 
