@@ -411,6 +411,10 @@ impl LightningNode {
             .register_notification_token(notification_token, language, country)
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)
     }
+
+    pub fn get_wallet_pubkey_id(&self) -> Option<String> {
+        self.auth.get_wallet_pubkey_id()
+    }
 }
 
 fn to_offer(topup_info: TopupInfo, current_rate: &Option<ExchangeRate>) -> OfferInfo {
