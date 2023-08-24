@@ -29,8 +29,8 @@ pub use crate::recovery::recover_lightning_node;
 
 pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
-use crow::CountryCode;
 use crow::LanguageCode;
+use crow::{CountryCode, TopupStatus};
 use crow::{OfferManager, TopupInfo};
 pub use eel::config::TzConfig;
 use eel::errors::{PayError, PayErrorCode, PayResult};
@@ -119,12 +119,20 @@ pub enum MaxRoutingFeeMode {
     Absolute { max_fee_amount: Amount },
 }
 
+#[derive(Debug)]
+pub enum OfferStatus {
+    READY,
+    FAILED,
+    SETTLED,
+}
+
 pub struct OfferInfo {
     pub offer_kind: OfferKind,
     pub amount: Amount,
     pub lnurlw: String,
     pub created_at: SystemTime,
     pub expires_at: SystemTime,
+    pub status: OfferStatus,
 }
 
 pub struct LightningNode {
@@ -419,6 +427,13 @@ fn to_offer(topup_info: TopupInfo, current_rate: &Option<ExchangeRate>) -> Offer
         rate: topup_info.exchange_rate.sats_per_unit,
         updated_at: topup_info.exchange_rate.updated_at,
     };
+
+    let status = match topup_info.status {
+        TopupStatus::READY => OfferStatus::READY,
+        TopupStatus::FAILED => OfferStatus::FAILED,
+        TopupStatus::SETTLED => OfferStatus::SETTLED,
+    };
+
     OfferInfo {
         offer_kind: OfferKind::Pocket {
             id: topup_info.id,
@@ -431,6 +446,7 @@ fn to_offer(topup_info: TopupInfo, current_rate: &Option<ExchangeRate>) -> Offer
         lnurlw: topup_info.lnurlw,
         created_at: topup_info.exchange_rate.updated_at,
         expires_at: topup_info.expires_at,
+        status,
     }
 }
 

@@ -405,6 +405,7 @@ dictionary OfferInfo {
     string lnurlw;
     timestamp created_at;
     timestamp expires_at;
+    OfferStatus status;
 };
 
 [Enum]
@@ -419,6 +420,11 @@ interface OfferKind {
     );
 };
 
+enum OfferStatus {
+    "READY",
+    "FAILED",
+    "SETTLED",
+};
 
 //
 // ----------------------------- TOP LEVEL FUNCTIONS + RELATED DEFINITIONS -----------------------------
