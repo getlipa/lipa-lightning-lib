@@ -1,5 +1,5 @@
 use crate::interfaces::ExchangeRate;
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice_ldk_node::Bolt11Invoice;
 
 use crate::errors::PayErrorCode;
 use num_enum::TryFromPrimitive;

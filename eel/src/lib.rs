@@ -58,22 +58,26 @@ use crate::types::{ChainMonitor, ChannelManager, PeerManager, RapidGossipSync, R
 
 pub use crate::router::MaxRoutingFeeMode;
 use crate::router::{FeeLimitingRouter, SimpleMaxRoutingFeeStrategy};
-use bitcoin::hashes::hex::ToHex;
+use bitcoin::bech32::FromBase32;
+use bitcoin::hashes::{Hash};
 pub use bitcoin::Network;
+use bitcoin::{Script, WPubkeyHash};
 use cipher::consts::U32;
 use invoice::DecodeInvoiceError;
 use lightning::chain::channelmonitor::ChannelMonitor;
 use lightning::chain::{BestBlock, ChannelMonitorUpdateStatus, Confirm, Watch};
 use lightning::ln::channelmanager::{ChainParameters, Retry, RetryableSendFailure};
 use lightning::ln::peer_handler::IgnoringMessageHandler;
+use lightning::ln::script::ShutdownScript;
 use lightning::routing::scoring::ProbabilisticScoringFeeParameters;
 use lightning::sign::{EntropySource, InMemorySigner, KeysManager, SpendableOutputDescriptor};
 use lightning::util::config::{MaxDustHTLCExposure, UserConfig};
 use lightning::util::message_signing::sign;
 use lightning_background_processor::{BackgroundProcessor, GossipSync};
-use lightning_invoice::payment::{pay_invoice, pay_zero_value_invoice, PaymentError};
-use lightning_invoice::Currency;
-pub use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription};
+use lightning_invoice_ldk_node::payment::{pay_invoice, pay_zero_value_invoice, PaymentError};
+use lightning_invoice_ldk_node::Currency;
+use hex;
+pub use lightning_invoice_ldk_node::{Bolt11Invoice, Bolt11InvoiceDescription};
 pub use log::Level as LogLevel;
 use log::{error, trace};
 use log::{info, warn};
@@ -81,9 +85,13 @@ pub use perro::{
     invalid_input, permanent_failure, runtime_error, MapToError, MapToErrorForUnitType,
     OptionToError,
 };
+use secp256k1::Secp256k1;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+use bitcoin::hashes::hex::ToHex;
+use bitcoin::psbt::serialize::Serialize;
 use tokio::time::Duration;
 
 const PAYMENT_TIMEOUT: Duration = Duration::from_secs(90);
@@ -376,7 +384,9 @@ impl LightningNode {
 
     pub fn get_node_info(&self) -> NodeInfo {
         let channels_info = get_channels_info(&self.channel_manager.list_channels());
+        let config = self.config.lock().unwrap();
         NodeInfo {
+            network: config.network,
             node_pubkey: self.channel_manager.get_our_node_id(),
             num_peers: self.peer_manager.get_peer_node_ids().len() as u16,
             channels_info,
@@ -804,6 +814,111 @@ impl LightningNode {
     pub fn sign_message(&self, message: &str) -> Result<String> {
         sign(message.as_bytes(), &self.keys_manager.get_node_secret_key())
             .map_to_permanent_failure("Failed to sign message")
+    }
+
+    // The user might either have LN funds, on-chain funds or both of them.
+    // Since we have difficulties sending the full amount over LN anyways,
+    // the strategy followed in this prototype is to close all channels and
+    // migrate all the funds on Layer 1.
+    pub fn migrate_funds_to_onchain_address(&self) {
+        // This does not work. Just left the code here as a proof that it doesn't work.
+        // self.close_channels_cooperatively_to_address();
+
+        // First, try cooperative closes.
+        self.cooperatively_close_all_channels();
+
+        // If there are still channels left, force-close them
+        self.channel_manager
+            .force_close_all_channels_broadcasting_latest_txn();
+
+        // Move funds on-chain to Greenlight
+        self.send_funds_on_chain();
+    }
+
+    // This shows a failed attempt to close a channel onto an external address.
+    // It throws the error: Cannot override shutdown script for a channel with one already set
+    // The problem is, that we already commit to a shutdown script when we open the channel
+    // Check out the default setting: https://docs.rs/lightning/latest/lightning/util/config/struct.ChannelHandshakeConfig.html#structfield.commit_upfront_shutdown_pubkey
+    // Therefore, there won't be any proper way to close a channel onto an external address.
+    // We'll have to close it first and then craft a second TX that sends the funds to Greenlight.
+    fn cooperatively_close_all_channels(&self) {
+        for channel in self.channel_manager.list_channels() {
+            println!("Closing channel: {channel:?}");
+            self.channel_manager
+                .close_channel(&channel.channel_id, &channel.counterparty.node_id)
+                .unwrap();
+        }
+    }
+
+    // This shows a failed attempt to close a channel onto an external address.
+    // It throws the error: Cannot override shutdown script for a channel with one already set
+    // The problem is, that we already commit to a shutdown script when we open the channel
+    // Check out the default setting: https://docs.rs/lightning/latest/lightning/util/config/struct.ChannelHandshakeConfig.html#structfield.commit_upfront_shutdown_pubkey
+    // Therefore, there won't be any proper way to close a channel onto an external address.
+    // We'll have to close it first and then craft a second TX that sends the funds to Greenlight.
+    fn close_channels_cooperatively_to_address(&self) {
+        let dummy_fee_rate_sats_per_vbyte = 10;
+        let receiver_pubkey = "034c830a75c01b073d24d1cab221347e04ced7a8f8095d4ad69e23d017cf3d6894"; // PrivKey: cSC1HsYpG9t86GE5fvoNLwUy7pAXrwodjm6QsFs3Uac3To5xstae
+                                                                                                    // Address: tb1qavpnrctk9lxv6v6ce9uqkvjp20m6tmceml0u0d
+        let fee_rate_sats_per_1000_weight = dummy_fee_rate_sats_per_vbyte / 4 * 1000;
+
+        let shutdown_pubkey = secp256k1::PublicKey::from_str(receiver_pubkey).unwrap();
+        let pubkey_hash = WPubkeyHash::hash(&shutdown_pubkey.serialize());
+        let shutdown_script = ShutdownScript::new_p2wpkh(&pubkey_hash);
+
+        for channel in self.channel_manager.list_channels() {
+            println!("channel: {channel:?}");
+            self.channel_manager
+                .close_channel_with_feerate_and_script(
+                    &channel.channel_id,
+                    &channel.counterparty.node_id,
+                    Some(fee_rate_sats_per_1000_weight),
+                    Some(shutdown_script.clone()),
+                )
+                .unwrap();
+        }
+    }
+
+    // todo: For now this method just sends the on-chain funds to the dummy address tb1qavpnrctk9lxv6v6ce9uqkvjp20m6tmceml0u0d .
+    //       What is missing is sending the funds to the Breez-SDK swap-in address.
+    fn send_funds_on_chain(&self) {
+        let data_store = self.data_store.lock().unwrap();
+        let spendable_outputs = data_store.get_all_spendable_outputs().unwrap();
+
+        // quick dirty fix: For some reason I get the same spendable output twice.
+        let first_output = spendable_outputs.first().unwrap().clone();
+        let spendable_outputs = vec![first_output];
+
+        let spendable_outputs_borrowed: Vec<&SpendableOutputDescriptor> =
+            spendable_outputs.iter().collect();
+
+        // Dummy data:
+        let dummy_fee_rate_sats_per_vbyte = 10;
+        let receiver_pubkey = "034c830a75c01b073d24d1cab221347e04ced7a8f8095d4ad69e23d017cf3d6894"; // PrivKey: cSC1HsYpG9t86GE5fvoNLwUy7pAXrwodjm6QsFs3Uac3To5xstae
+        // Address: tb1qavpnrctk9lxv6v6ce9uqkvjp20m6tmceml0u0d
+        let fee_rate_sats_per_1000_weight = dummy_fee_rate_sats_per_vbyte / 4 * 1000; // todo fix this calcualtion, ends up being 8 sat/vbyte instead of 10
+
+        let shutdown_pubkey = secp256k1::PublicKey::from_str(receiver_pubkey).unwrap();
+        let pubkey_hash = WPubkeyHash::hash(&shutdown_pubkey.serialize());
+
+        let script = Script::new_v0_p2wpkh(&pubkey_hash);
+        let secp_ctx = Secp256k1::new();
+
+        // send everything to 'change address': It is actually our destination address
+        let tx = self
+            .keys_manager
+            .spend_spendable_outputs(
+                spendable_outputs_borrowed.as_slice(),
+                vec![], // empty vec, because we want to send everything to the change address
+                script,
+                fee_rate_sats_per_1000_weight,
+                None,
+                &secp_ctx,
+            ).unwrap();
+
+        // todo: this TX needs to be broadcasted to the Bitcoin network
+        println!("tx: {:?}", tx);
+        println!("tx hex: {}", hex::encode(&tx.serialize()));
     }
 }
 

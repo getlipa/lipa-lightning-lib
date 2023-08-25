@@ -54,6 +54,8 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 use std::{env, fs};
 
+use crate::eel_interface_impl::{EventsImpl, RemoteStorageGraphql};
+use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 use breez_sdk_core::{
     parse_invoice, BreezEvent, BreezServices, EnvironmentType, EventListener, GreenlightNodeConfig,
     LNInvoice, PaymentDetails, PaymentTypeFilter,
@@ -89,7 +91,8 @@ pub struct LspFee {
 }
 
 pub struct NodeInfo {
-    pub node_pubkey: Vec<u8>,
+    pub network: Network,
+    pub node_pubkey: String,
     pub num_peers: u16,
     pub channels_info: ChannelsInfo,
 }
@@ -164,6 +167,7 @@ impl EventListener for LipaEventListener {
 
 pub struct LightningNode {
     auth: Arc<Auth>,
+    ldk_node: Arc<eel::LightningNode>,
     fiat_topup_client: PocketClient,
     backend_client: BackendClient,
     rt: Runtime,
@@ -171,7 +175,7 @@ pub struct LightningNode {
 }
 
 impl LightningNode {
-    pub fn new(config: Config, _events_callback: Box<dyn EventsCallback>) -> Result<Self> {
+    pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         enable_backtrace();
         fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
             "Failed to create directory: {}",
@@ -188,7 +192,42 @@ impl LightningNode {
 
         let environment = Environment::load(config.environment);
 
+        let eel_config = eel::config::Config {
+            network: environment.network,
+            seed,
+            fiat_currency: config.fiat_currency,
+            esplora_api_url: environment.esplora_url,
+            rgs_url: environment.rgs_url,
+            lsp_url: environment.lsp_url,
+            lsp_token: environment.lsp_token,
+            local_persistence_path: config.local_persistence_path.clone(),
+            timezone_config: config.timezone_config,
+        };
+
         let auth = Arc::new(build_auth(&seed, environment.backend_url.clone())?);
+
+        let remote_storage = Box::new(RemoteStorageGraphql::new(
+            environment.backend_url.clone(),
+            environment.backend_health_url.clone(),
+            Arc::clone(&auth),
+        ));
+
+        let user_event_handler = Box::new(EventsImpl { events_callback });
+
+        let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
+            environment.backend_url.clone(),
+            Arc::clone(&auth),
+        ));
+
+        let ldk_node = Arc::new(
+            eel::LightningNode::new(
+                eel_config,
+                remote_storage,
+                user_event_handler,
+                exchange_rate_provider,
+            )
+            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?,
+        );
 
         let rt = Builder::new_multi_thread()
             .worker_threads(4)
@@ -242,6 +281,7 @@ impl LightningNode {
 
         Ok(LightningNode {
             auth,
+            ldk_node,
             rt,
             sdk,
             fiat_topup_client,
@@ -260,12 +300,10 @@ impl LightningNode {
             outbound_capacity: breez_info.max_payable_msat.to_amount_down(&rate),
             total_channel_capacities: (0 as u64).to_amount_down(&rate),
         };
-        let node_pubkey = PublicKey::from_str(&breez_info.id)
-            .unwrap()
-            .serialize()
-            .to_vec();
+
         NodeInfo {
-            node_pubkey,
+            network: Network::Bitcoin,
+            node_pubkey: breez_info.id,
             num_peers: breez_info.connected_peers.len() as u16,
             channels_info,
         }
@@ -521,6 +559,39 @@ impl LightningNode {
         self.backend_client
             .query_available_topups()
             .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
+    }
+
+    pub fn ldk_node_info(&self) -> NodeInfo {
+        let rate = self.get_exchange_rate();
+        let node = self.ldk_node.get_node_info();
+        let channels = node.channels_info;
+        let channels_info = ChannelsInfo {
+            num_channels: channels.num_channels,
+            num_usable_channels: channels.num_usable_channels,
+            local_balance: channels.local_balance_msat.to_amount_down(&rate),
+            total_channel_capacities: channels.total_channel_capacities_msat.to_amount_down(&rate),
+            inbound_capacity: channels.inbound_capacity_msat.to_amount_down(&rate),
+            outbound_capacity: channels.outbound_capacity_msat.to_amount_down(&rate),
+        };
+
+        NodeInfo {
+            network: node.network,
+            node_pubkey: node.node_pubkey.to_string(),
+            num_peers: node.num_peers,
+            channels_info,
+        }
+    }
+
+    pub fn migrate_funds_to_onchain_address(&self) {
+        self.ldk_node.migrate_funds_to_onchain_address();
+
+        // for testing purposes to create a new channel. Does not belong here.
+        let ten_k_sat = 10_000_000;
+        let invoice = self
+            .ldk_node
+            .create_invoice(ten_k_sat, "Lorem".to_string(), "Ipsum".to_string())
+            .unwrap();
+        println!("Invoice for creating a new channel: {invoice}");
     }
 }
 

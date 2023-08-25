@@ -1,6 +1,8 @@
 use crate::hinter::{CommandHint, CommandHinter};
 
-use uniffi_lipalightninglib::{Amount, MaxRoutingFeeMode, OfferKind, TopupCurrency, TzConfig};
+use uniffi_lipalightninglib::{
+    Amount, MaxRoutingFeeMode, NodeInfo, OfferKind, TopupCurrency, TzConfig,
+};
 
 use bitcoin::secp256k1::PublicKey;
 use chrono::offset::FixedOffset;
@@ -21,10 +23,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("{}", "3L Example Node".blue().bold());
     println!("Detailed logs are available at {}", log_file_path);
     println!("To stop the node, please type \"stop\" for a graceful shutdown.");
-    println!(
-        "Local Node ID is: {}",
-        PublicKey::from_slice(&node.get_node_info().node_pubkey).unwrap()
-    );
+    println!("Local Node ID is: {}", node.get_node_info().node_pubkey);
 
     let prompt = "3L ϟ ".bold().blue().to_string();
     let history_path = Path::new(".3l_cli_history");
@@ -131,6 +130,9 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 }
                 "stop" => {
                     break;
+                }
+                "migrate" => {
+                    node.migrate_funds_to_onchain_address();
                 }
                 _ => println!(
                     "{}",
@@ -283,11 +285,19 @@ fn payment_amount_limits(node: &LightningNode) {
 }
 
 fn node_info(node: &LightningNode) {
+    println!("============= Greenlight node =============");
     let node_info = node.get_node_info();
-    println!(
-        "Node PubKey: {}",
-        PublicKey::from_slice(&node_info.node_pubkey).unwrap()
-    );
+    print_node_info(node_info);
+
+    // Only useful until migration is complete
+    println!("\n============= LDK node =============");
+    let ldk_node_info = node.ldk_node_info();
+    print_node_info(ldk_node_info);
+}
+
+fn print_node_info(node_info: NodeInfo) {
+    println!("Network: {}", &node_info.network);
+    println!("Node PubKey: {}", &node_info.node_pubkey);
     println!("Number of connected peers: {}", node_info.num_peers);
     println!(
         "       Number of channels: {}",

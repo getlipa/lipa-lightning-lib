@@ -8,7 +8,7 @@ use crate::schema_migration::migrate_schema;
 use chrono::{DateTime, Utc};
 use lightning::sign::SpendableOutputDescriptor;
 use lightning::util::ser::{Readable, Writeable};
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice_ldk_node::Bolt11Invoice;
 use perro::{MapToError, OptionToError};
 use rusqlite::types::Type;
 use rusqlite::{Connection, Row};
@@ -587,7 +587,7 @@ mod tests {
     use lightning::ln::PaymentSecret;
     use lightning::sign::SpendableOutputDescriptor;
     use lightning::util::ser::Readable;
-    use lightning_invoice::{Currency, InvoiceBuilder};
+    use lightning_invoice_ldk_node::{Currency, InvoiceBuilder};
     use secp256k1::hashes::{sha256, Hash};
     use secp256k1::{Secp256k1, SecretKey};
     use std::fs;
