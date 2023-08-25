@@ -1615,6 +1615,7 @@ dependencies = [
  "email_address",
  "esplora-client 0.5.0",
  "file-rotate",
+ "hex",
  "honey-badger",
  "iban_validate",
  "log",

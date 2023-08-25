@@ -176,6 +176,8 @@ interface LightningNode {
     // Get the payment UUID v5 from the payment hash
     //
     // Returns a UUID v5 derived from the payment hash. This will always return the same output given the same input.
+    // The payment hash must be in the hex representation.
+    [Throws=LnError]
     string get_payment_uuid(string payment_hash);
 };
 

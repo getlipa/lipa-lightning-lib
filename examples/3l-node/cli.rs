@@ -124,11 +124,10 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", message.red());
                     }
                 }
-                "paymentuuid" => {
-                    if let Err(message) = payment_uuid(node, &mut words) {
-                        println!("{}", message.red());
-                    }
-                }
+                "paymentuuid" => match payment_uuid(node, &mut words) {
+                    Ok(uuid) => println!("{uuid}"),
+                    Err(message) => eprintln!("{}", message.red()),
+                },
                 "foreground" => {
                     node.foreground();
                 }
@@ -654,14 +653,18 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
     Ok(())
 }
 
-fn payment_uuid(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<(), String> {
+fn payment_uuid(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<String, String> {
     let payment_hash = words
         .next()
         .ok_or_else(|| "Payment Hash is required".to_string())?;
 
-    println!("{}", node.get_payment_uuid(payment_hash.to_string()));
-
-    Ok(())
+    match node.get_payment_uuid(payment_hash.to_string()) {
+        Ok(uuid) => return Ok(uuid),
+        Err(e) => return Err(e.to_string()),
+    };
 }
 
 fn offer_to_string(offer: Option<OfferKind>) -> String {

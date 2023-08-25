@@ -425,10 +425,13 @@ impl LightningNode {
         self.auth.get_wallet_pubkey_id()
     }
 
-    pub fn get_payment_uuid(&self, payment_hash: String) -> String {
-        Uuid::new_v5(&Uuid::NAMESPACE_OID, payment_hash.as_bytes())
+    pub fn get_payment_uuid(&self, payment_hash: String) -> Result<String> {
+        let hash =
+            hex::decode(payment_hash).map_to_invalid_input("Invalid payment hash encoding")?;
+
+        Ok(Uuid::new_v5(&Uuid::NAMESPACE_OID, &hash)
             .hyphenated()
-            .to_string()
+            .to_string())
     }
 }
 
