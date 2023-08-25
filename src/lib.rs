@@ -54,6 +54,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::{env, fs};
+use uuid::Uuid;
 
 const LOG_LEVEL: log::Level = log::Level::Trace;
 const LOGS_DIR: &str = "logs";
@@ -422,6 +423,12 @@ impl LightningNode {
 
     pub fn get_wallet_pubkey_id(&self) -> Option<String> {
         self.auth.get_wallet_pubkey_id()
+    }
+
+    pub fn get_payment_uuid(&self, payment_hash: String) -> String {
+        Uuid::new_v5(&Uuid::NAMESPACE_OID, payment_hash.as_bytes())
+            .hyphenated()
+            .to_string()
     }
 }
 

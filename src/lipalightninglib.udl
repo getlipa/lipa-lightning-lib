@@ -172,6 +172,11 @@ interface LightningNode {
     //
     // This method does not access the internet
     string? get_wallet_pubkey_id();
+
+    // Get the payment UUID v5 from the payment hash
+    //
+    // Returns a UUID v5 derived from the payment hash. This will always return the same output given the same input.
+    string get_payment_uuid(string payment_hash);
 };
 
 // An object that holds all configuration needed to start a LightningNode instance.

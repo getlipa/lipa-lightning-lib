@@ -124,6 +124,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", message.red());
                     }
                 }
+                "paymentuuid" => {
+                    if let Err(message) = payment_uuid(node, &mut words) {
+                        println!("{}", message.red());
+                    }
+                }
                 "foreground" => {
                     node.foreground();
                 }
@@ -193,6 +198,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("listoffers", "listoffers"));
 
     hints.insert(CommandHint::new("listpayments", "listpayments"));
+    hints.insert(CommandHint::new(
+        "paymentuuid <payment hash>",
+        "paymentuuid",
+    ));
     hints.insert(CommandHint::new("foreground", "foreground"));
     hints.insert(CommandHint::new("background", "background"));
     hints.insert(CommandHint::new("stop", "stop"));
@@ -226,6 +235,7 @@ fn help() {
     println!("  listoffers");
     println!();
     println!("  listpayments");
+    println!("  paymentuuid <payment hash>");
     println!();
     println!("  foreground");
     println!("  background");
@@ -640,6 +650,16 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
         println!("      Invoice:      {}", payment.invoice_details.invoice);
         println!("      Offer:        {}", offer_to_string(payment.offer));
     }
+
+    Ok(())
+}
+
+fn payment_uuid(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<(), String> {
+    let payment_hash = words
+        .next()
+        .ok_or_else(|| "Payment Hash is required".to_string())?;
+
+    println!("{}", node.get_payment_uuid(payment_hash.to_string()));
 
     Ok(())
 }
