@@ -426,12 +426,7 @@ impl LightningNode {
     }
 
     pub fn get_payment_uuid(&self, payment_hash: String) -> Result<String> {
-        let hash =
-            hex::decode(payment_hash).map_to_invalid_input("Invalid payment hash encoding")?;
-
-        Ok(Uuid::new_v5(&Uuid::NAMESPACE_OID, &hash)
-            .hyphenated()
-            .to_string())
+        get_payment_uuid(payment_hash)
     }
 }
 
@@ -544,8 +539,47 @@ fn to_limits(
     }
 }
 
+fn get_payment_uuid(payment_hash: String) -> Result<String> {
+    let hash = hex::decode(payment_hash).map_to_invalid_input("Invalid payment hash encoding")?;
+
+    Ok(Uuid::new_v5(&Uuid::NAMESPACE_OID, &hash)
+        .hyphenated()
+        .to_string())
+}
+
 pub(crate) fn enable_backtrace() {
     env::set_var("RUST_BACKTRACE", "1");
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perro::Error;
+
+    const PAYMENT_HASH: &str = "0b78877a596f18d5f6effde3dda1df25a5cf20439ff1ac91478d7e518211040f";
+    const PAYMENT_UUID: &str = "c6e597bd-0a98-5b46-8e74-f6098f5d16a3";
+
+    #[test]
+    pub fn test_payment_uuid() {
+        let payment_uuid = get_payment_uuid(PAYMENT_HASH.to_string());
+
+        assert!(payment_uuid.is_ok());
+        assert_eq!(payment_uuid.unwrap(), PAYMENT_UUID.to_string());
+    }
+
+    #[test]
+    pub fn test_payment_uuid_invalid_input() {
+        let invalid_hash_encoding = get_payment_uuid("INVALID_HEX_STRING".to_string());
+
+        assert!(invalid_hash_encoding.is_err());
+        assert!(matches!(
+            invalid_hash_encoding,
+            Err(Error::InvalidInput { .. })
+        ));
+
+        let error = invalid_hash_encoding.unwrap_err();
+        assert!(error.to_string().starts_with("InvalidInput: Invalid payment hash encoding"), "Error message didn't start with 'InvalidInput: Invalid payment hash encoding' but was '{error}'")
+    }
+}
