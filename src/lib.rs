@@ -565,21 +565,21 @@ mod tests {
     pub fn test_payment_uuid() {
         let payment_uuid = get_payment_uuid(PAYMENT_HASH.to_string());
 
-        assert!(payment_uuid.is_ok());
-        assert_eq!(payment_uuid.unwrap(), PAYMENT_UUID.to_string());
+        assert_eq!(payment_uuid, Ok(PAYMENT_UUID.to_string()));
     }
 
     #[test]
     pub fn test_payment_uuid_invalid_input() {
         let invalid_hash_encoding = get_payment_uuid("INVALID_HEX_STRING".to_string());
 
-        assert!(invalid_hash_encoding.is_err());
         assert!(matches!(
             invalid_hash_encoding,
             Err(Error::InvalidInput { .. })
         ));
 
-        let error = invalid_hash_encoding.unwrap_err();
-        assert!(error.to_string().starts_with("InvalidInput: Invalid payment hash encoding"), "Error message didn't start with 'InvalidInput: Invalid payment hash encoding' but was '{error}'")
+        assert_eq!(
+            &invalid_hash_encoding.unwrap_err().to_string()[0..43],
+            "InvalidInput: Invalid payment hash encoding"
+        );
     }
 }
