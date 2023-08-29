@@ -5,7 +5,6 @@ extern crate core;
 mod amount;
 mod callbacks;
 mod config;
-mod eel_interface_impl;
 mod environment;
 mod errors;
 mod exchange_rate_provider;
@@ -14,12 +13,12 @@ mod invoice_details;
 mod logger;
 mod recovery;
 mod sanitize_input;
+mod interfaces;
 
 use crate::amount::ToAmount;
 pub use crate::amount::{Amount, FiatValue};
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::Config;
-use crate::eel_interface_impl::{EventsImpl, RemoteStorageGraphql};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 pub use crate::errors::{Error as LnError, Result, RuntimeErrorCode};
@@ -32,16 +31,6 @@ use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 use crow::LanguageCode;
 use crow::{CountryCode, TopupStatus};
 use crow::{OfferManager, TopupInfo};
-pub use eel::config::TzConfig;
-use eel::errors::{PayError, PayErrorCode, PayResult};
-pub use eel::interfaces::ExchangeRate;
-pub use eel::invoice::DecodeInvoiceError;
-use eel::key_derivation::derive_key_pair_hex;
-use eel::keys_manager::{mnemonic_to_secret, words_by_prefix, MnemonicError};
-pub use eel::payment::OfferKind;
-use eel::payment::{PaymentState, PaymentType, TzTime};
-use eel::secret::Secret;
-pub use eel::Network;
 use email_address::EmailAddress;
 use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
@@ -161,25 +150,7 @@ impl LightningNode {
 
         let environment = Environment::load(config.environment);
 
-        let eel_config = eel::config::Config {
-            network: environment.network,
-            seed,
-            fiat_currency: config.fiat_currency,
-            esplora_api_url: environment.esplora_url,
-            rgs_url: environment.rgs_url,
-            lsp_url: environment.lsp_url,
-            lsp_token: environment.lsp_token,
-            local_persistence_path: config.local_persistence_path,
-            timezone_config: config.timezone_config,
-        };
-
         let auth = Arc::new(build_auth(&seed, environment.backend_url.clone())?);
-
-        let remote_storage = Box::new(RemoteStorageGraphql::new(
-            environment.backend_url.clone(),
-            environment.backend_health_url.clone(),
-            Arc::clone(&auth),
-        ));
 
         let user_event_handler = Box::new(EventsImpl { events_callback });
 
@@ -187,16 +158,6 @@ impl LightningNode {
             environment.backend_url.clone(),
             Arc::clone(&auth),
         ));
-
-        let core_node = Arc::new(
-            eel::LightningNode::new(
-                eel_config,
-                remote_storage,
-                user_event_handler,
-                exchange_rate_provider,
-            )
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?,
-        );
 
         let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&core_node))?;
         let offer_manager = OfferManager::new(environment.backend_url, Arc::clone(&auth));
@@ -210,53 +171,19 @@ impl LightningNode {
     }
 
     pub fn get_node_info(&self) -> NodeInfo {
-        let rate = self.get_exchange_rate();
-        let node = self.core_node.get_node_info();
-        let channels = node.channels_info;
-        let channels_info = ChannelsInfo {
-            num_channels: channels.num_channels,
-            num_usable_channels: channels.num_usable_channels,
-            local_balance: channels.local_balance_msat.to_amount_down(&rate),
-            total_channel_capacities: channels.total_channel_capacities_msat.to_amount_down(&rate),
-            inbound_capacity: channels.inbound_capacity_msat.to_amount_down(&rate),
-            outbound_capacity: channels.outbound_capacity_msat.to_amount_down(&rate),
-        };
-
-        NodeInfo {
-            node_pubkey: node.node_pubkey.to_string(),
-            peers: node.peers.iter().map(|peer| peer.to_string()).collect(),
-            channels_info,
-        }
+        todo!()
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        let fee = self
-            .core_node
-            .query_lsp_fee()
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
-        let channel_minimum_fee = fee
-            .channel_minimum_fee_msat
-            .to_amount_up(&self.get_exchange_rate());
-        Ok(LspFee {
-            channel_minimum_fee,
-            channel_fee_permyriad: fee.channel_fee_permyriad,
-        })
+        todo!()
     }
 
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<Amount> {
-        let rate = self.get_exchange_rate();
-        self.core_node
-            .calculate_lsp_fee(amount_sat * 1_000)
-            .map(|fee| fee.to_amount_up(&rate))
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
-        let rate = self.get_exchange_rate();
-        self.core_node
-            .get_payment_amount_limits()
-            .map(|limits| to_limits(limits, &rate))
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
     pub fn create_invoice(
@@ -265,39 +192,22 @@ impl LightningNode {
         description: String,
         metadata: String,
     ) -> Result<InvoiceDetails> {
-        let rate = self.get_exchange_rate();
-        let invoice = self
-            .core_node
-            .create_invoice(amount_sat * 1000, description, None, metadata)
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
-        Ok(InvoiceDetails::from_local_invoice(invoice, &rate))
+        todo!()
     }
 
     pub fn decode_invoice(
         &self,
         invoice: String,
     ) -> std::result::Result<InvoiceDetails, DecodeInvoiceError> {
-        let invoice = self.core_node.decode_invoice(invoice)?;
-        let rate = self.get_exchange_rate();
-        Ok(InvoiceDetails::from_remote_invoice(invoice, &rate))
+        todo!()
     }
 
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
-        match self
-            .core_node
-            .get_payment_max_routing_fee_mode(amount_sat * 1000)
-        {
-            eel::MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
-                MaxRoutingFeeMode::Relative { max_fee_permyriad }
-            }
-            eel::MaxRoutingFeeMode::Absolute { max_fee_msat } => MaxRoutingFeeMode::Absolute {
-                max_fee_amount: max_fee_msat.to_amount_up(&self.get_exchange_rate()),
-            },
-        }
+        todo!()
     }
 
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {
-        self.core_node.pay_invoice(invoice, metadata)
+        todo!()
     }
 
     pub fn pay_open_invoice(
@@ -306,50 +216,39 @@ impl LightningNode {
         amount_sat: u64,
         metadata: String,
     ) -> PayResult<()> {
-        self.core_node
-            .pay_open_invoice(invoice, amount_sat * 1000, metadata)
+        todo!()
     }
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
-        self.core_node
-            .get_latest_payments(number_of_payments)
-            .map(|ps| ps.into_iter().map(to_payment).collect())
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
-        self.core_node
-            .get_payment(&hash)
-            .map(to_payment)
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
     pub fn foreground(&self) {
-        self.core_node.foreground()
+        todo!()
     }
 
     pub fn background(&self) {
-        self.core_node.background()
+        todo!()
     }
 
     pub fn list_currency_codes(&self) -> Vec<String> {
-        self.core_node
-            .list_exchange_rates()
-            .into_iter()
-            .map(|r| r.currency_code)
-            .collect()
+        todo!()
     }
 
     pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
-        self.core_node.get_exchange_rate()
+        todo!()
     }
 
     pub fn change_fiat_currency(&self, fiat_currency: String) {
-        self.core_node.change_fiat_currency(fiat_currency);
+        todo!()
     }
 
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
-        self.core_node.change_timezone_config(timezone_config);
+        todo!()
     }
 
     pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
@@ -379,7 +278,7 @@ impl LightningNode {
         }
 
         self.offer_manager
-            .register_node(self.core_node.get_node_info().node_pubkey.to_string())
+            .register_node(self.get_node_info().node_pubkey.to_string())
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
 
         self.fiat_topup_client
@@ -399,10 +298,7 @@ impl LightningNode {
     }
 
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
-        let amout_msat = offer.amount.sats * 1000;
-        self.core_node
-            .lnurl_withdraw(&offer.lnurlw, amout_msat, offer.offer_kind)
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
     pub fn register_notification_token(

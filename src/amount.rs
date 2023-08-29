@@ -1,4 +1,4 @@
-use eel::interfaces::ExchangeRate;
+use crate::ExchangeRate;
 use std::time::SystemTime;
 
 pub struct FiatValue {

@@ -1,4 +1,4 @@
-use eel::Network;
+use crate::Network;
 
 #[derive(Clone, Copy, Debug)]
 pub enum EnvironmentCode {
