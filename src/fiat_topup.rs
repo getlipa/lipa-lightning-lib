@@ -1,6 +1,5 @@
 use crate::errors::{Result, RuntimeErrorCode};
 use chrono::{DateTime, Utc};
-use eel::LightningNode;
 use log::error;
 use perro::{runtime_error, MapToError, ResultTrait};
 use reqwest::StatusCode;

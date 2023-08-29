@@ -1,8 +1,7 @@
-use eel::errors::{InternalResult, InternalRuntimeErrorCode};
-use eel::interfaces::{ExchangeRate, ExchangeRateProvider};
 use honey_badger::Auth;
 use perro::ResultTrait;
 use std::sync::Arc;
+use crate::ExchangeRate;
 
 pub struct ExchangeRateProviderImpl {
     provider: chameleon::ExchangeRateProvider,

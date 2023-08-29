@@ -1,7 +1,6 @@
 use crate::amount::{Amount, ToAmount};
 
-use eel::interfaces::ExchangeRate;
-use eel::{Bolt11Invoice, Bolt11InvoiceDescription};
+use crate::ExchangeRate;
 use std::time::{Duration, SystemTime};
 
 pub struct InvoiceDetails {
