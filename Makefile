@@ -61,10 +61,6 @@ check-udl:
 .PHONY: pr
 pr: fmt buildall test clippy check-mod-test check-udl
 
-.PHONY: run-eel
-run-eel:
-	cargo run --manifest-path eel/Cargo.toml --example eel-node
-
 .PHONY: run-3l
 run-3l: ARGS =
 run-3l:
