@@ -1,4 +1,5 @@
 use crate::errors::{Result, RuntimeErrorCode};
+use breez_sdk_core::BreezServices;
 use chrono::{DateTime, Utc};
 use log::error;
 use perro::{runtime_error, MapToError, ResultTrait};
@@ -121,11 +122,11 @@ pub struct CreateOrderResponse {
 pub(crate) struct PocketClient {
     pocket_url: String,
     client: reqwest::blocking::Client,
-    core_node: Arc<LightningNode>,
+    sdk: Arc<BreezServices>,
 }
 
 impl PocketClient {
-    pub fn new(pocket_url: String, core_node: Arc<LightningNode>) -> Result<Self> {
+    pub fn new(pocket_url: String, sdk: Arc<BreezServices>) -> Result<Self> {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(20))
             .build()
@@ -133,7 +134,7 @@ impl PocketClient {
         Ok(Self {
             pocket_url,
             client,
-            core_node,
+            sdk,
         })
     }
 
@@ -190,8 +191,10 @@ impl PocketClient {
             "I confirm my bitcoin wallet. [{}]",
             challenge_response.token
         );
+        todo!();
+        /*
         let signature = self
-            .core_node
+            .sdk
             .sign_message(&message)
             .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
         let node_pubkey = self.core_node.get_node_info().node_pubkey.to_string();
@@ -241,5 +244,6 @@ impl PocketClient {
                 RuntimeErrorCode::OfferServiceUnavailable,
                 "Failed to parse CreateOrderResponse",
             )
+        */
     }
 }

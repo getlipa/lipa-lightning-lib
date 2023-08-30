@@ -1,13 +1,12 @@
 use crate::hinter::{CommandHint, CommandHinter};
 
 use uniffi_lipalightninglib::{
-    Amount, ExchangeRate, FiatValue, MaxRoutingFeeMode, OfferKind, TopupCurrency, TzConfig,
+    Amount, FiatValue, MaxRoutingFeeMode, OfferKind, PaymentState, TopupCurrency,
 };
 
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Local, Utc};
 use colored::Colorize;
-use eel::payment::PaymentState;
 use rustyline::config::{Builder, CompletionType};
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -17,6 +16,8 @@ use std::path::Path;
 use uniffi_lipalightninglib::LiquidityLimit;
 
 use crate::LightningNode;
+use crate::TzConfig;
+use uniffi_lipalightninglib::ExchangeRate;
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("{}", "3L Example Node".blue().bold());
