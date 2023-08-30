@@ -1,12 +1,11 @@
 use crate::print_events_handler::PrintEventsHandler;
-use crate::setup_env::config::{get_testing_config, LOCAL_PERSISTENCE_PATH};
 
-use uniffi_lipalightninglib::{recover_lightning_node, Config};
+use uniffi_lipalightninglib::{recover_lightning_node, Config, TzConfig, mnemonic_to_secret};
 use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
 
 use crate::wait_for;
-use eel::config::TzConfig;
 use std::fs;
+use std::string::ToString;
 
 type Result<T> = std::result::Result<T, perro::Error<RuntimeErrorCode>>;
 
@@ -15,26 +14,60 @@ pub struct NodeHandle {
     config: Config,
 }
 
+const LOCAL_PERSISTENCE_PATH: &str = ".3l_local_test";
+
+#[macro_export]
+macro_rules! wait_for_condition {
+    ($cond:expr, $message_if_not_satisfied:expr) => {
+        (|| {
+            let attempts = 1100;
+            let sleep_duration = std::time::Duration::from_millis(100);
+            for _ in 0..attempts {
+                if $cond {
+                    return;
+                }
+
+                std::thread::sleep(sleep_duration);
+            }
+
+            let total_duration = sleep_duration * attempts;
+            panic!("{} [after {total_duration:?}]", $message_if_not_satisfied);
+        })();
+    };
+}
+
+#[macro_export]
+macro_rules! wait_for {
+    ($cond:expr) => {
+        let message_if_not_satisfied = format!("Failed to wait for `{}`", stringify!($cond));
+        wait_for_condition!($cond, message_if_not_satisfied);
+    };
+}
+
 #[allow(dead_code)]
 impl NodeHandle {
+
     pub fn new() -> Self {
         std::env::set_var("TESTING_TASK_PERIODS", "5");
 
         Self::reset_state();
 
-        let eel_config = get_testing_config();
+        let mnemonic = env!("BREEZ_SDK_MNEMONIC");
+        let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
 
         NodeHandle {
             config: Config {
                 environment: uniffi_lipalightninglib::EnvironmentCode::Local,
-                seed: eel_config.seed.to_vec(),
+                seed: mnemonic_to_secret(mnemonic, "".to_string()).unwrap().seed,
                 fiat_currency: "EUR".to_string(),
-                local_persistence_path: eel_config.local_persistence_path,
+                local_persistence_path: LOCAL_PERSISTENCE_PATH.to_string(),
                 timezone_config: TzConfig {
                     timezone_id: String::from("int_test_timezone_id"),
                     timezone_utc_offset_secs: 1234,
                 },
                 enable_file_logging: false,
+                api_key: env!("BREEZ_SDK_API_KEY").to_string(),
+                invite_code: Some(env!("BREEZ_SDK_INVITE_CODE").to_string()),
             },
         }
     }
@@ -50,8 +83,8 @@ impl NodeHandle {
     }
 
     pub fn reset_state() {
-        let _ = fs::remove_dir_all(LOCAL_PERSISTENCE_PATH);
-        fs::create_dir(LOCAL_PERSISTENCE_PATH).unwrap();
+        let _ = fs::remove_dir_all(LOCAL_PERSISTENCE_PATH.to_string());
+        fs::create_dir(LOCAL_PERSISTENCE_PATH.to_string()).unwrap();
     }
 
     pub fn recover(&self) -> Result<()> {

@@ -5,7 +5,6 @@ mod setup_3l;
 #[cfg(feature = "nigiri")]
 mod node_info_test {
     use crate::setup_3l::NodeHandle;
-    use crate::setup_env::nigiri;
     use std::str::FromStr;
 
     use bitcoin::secp256k1::PublicKey;
@@ -14,8 +13,6 @@ mod node_info_test {
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_get_node_info() {
-        nigiri::setup_environment_with_lsp();
-
         let node = NodeHandle::new().start().unwrap();
         let node_info = node.get_node_info();
 
