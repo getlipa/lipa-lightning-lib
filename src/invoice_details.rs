@@ -1,6 +1,7 @@
 use crate::amount::{Amount, ToAmount};
 
 use crate::ExchangeRate;
+use lightning::offers::invoice::Invoice;
 use std::time::{Duration, SystemTime};
 
 pub struct InvoiceDetails {
@@ -15,41 +16,12 @@ pub struct InvoiceDetails {
 }
 
 impl InvoiceDetails {
-    pub(crate) fn from_local_invoice(invoice: Bolt11Invoice, rate: &Option<ExchangeRate>) -> Self {
-        let amount = invoice
-            .amount_milli_satoshis()
-            .map(|a| a.to_amount_down(rate));
-        to_invoice_details(invoice, amount)
+    pub(crate) fn from_local_invoice(invoice: Invoice, rate: &Option<ExchangeRate>) -> Self {
+        todo!()
     }
 
-    pub(crate) fn from_remote_invoice(invoice: Bolt11Invoice, rate: &Option<ExchangeRate>) -> Self {
-        let amount = invoice
-            .amount_milli_satoshis()
-            .map(|a| a.to_amount_up(rate));
-        to_invoice_details(invoice, amount)
-    }
-}
-
-fn to_invoice_details(invoice: Bolt11Invoice, amount: Option<Amount>) -> InvoiceDetails {
-    let description = match invoice.description() {
-        Bolt11InvoiceDescription::Direct(d) => d.to_string(),
-        Bolt11InvoiceDescription::Hash(_) => String::new(),
-    };
-
-    let payee_pub_key = match invoice.payee_pub_key() {
-        None => invoice.recover_payee_pub_key().to_string(),
-        Some(p) => p.to_string(),
-    };
-
-    InvoiceDetails {
-        invoice: invoice.to_string(),
-        amount,
-        description,
-        payment_hash: invoice.payment_hash().to_string(),
-        payee_pub_key,
-        creation_timestamp: invoice.timestamp(),
-        expiry_interval: invoice.expiry_time(),
-        expiry_timestamp: invoice.timestamp() + invoice.expiry_time(),
+    pub(crate) fn from_remote_invoice(invoice: Invoice, rate: &Option<ExchangeRate>) -> Self {
+        todo!()
     }
 }
 

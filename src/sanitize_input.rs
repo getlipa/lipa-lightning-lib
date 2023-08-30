@@ -1,5 +1,5 @@
-use perro::Error;
 use crate::Result;
+use perro::Error;
 
 pub(crate) fn strong_type_seed(seed: &Vec<u8>) -> Result<[u8; 64]> {
     if seed.len() != 64 {

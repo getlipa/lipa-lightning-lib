@@ -1,8 +1,6 @@
 #[path = "print_events_handler/mod.rs"]
 mod print_events_handler;
 mod setup_3l;
-#[path = "../eel/tests/setup_env/mod.rs"]
-mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod node_info_test {

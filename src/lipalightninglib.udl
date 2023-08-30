@@ -62,7 +62,7 @@ interface LightningNode {
 
     // Decodes an invoice returning detailed information
     //    - invoice - a BOLT-11 invoice (Mainnet invoices start with "lnbc")
-    [Throws=DecodeInvoiceError]
+    [Throws=LnError]
     InvoiceDetails decode_invoice(string invoice);
 
     // Get the max routing fee mode that will be employed to restrict the fees for paying a given amount in sats
@@ -79,7 +79,7 @@ interface LightningNode {
     //          * have not expired
     //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
     //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
-    [Throws=PayError]
+    [Throws=LnError]
     void pay_invoice(string invoice, string metadata);
 
     // Differs from pay_invoice(string invoice, string metadata) in that the passed in invoice does not have any payment amount specified,
@@ -87,7 +87,7 @@ interface LightningNode {
     //
     // Additional Parameters:
     //    - amount_sat - amount in sats to be paid
-    [Throws=PayError]
+    [Throws=LnError]
     void pay_open_invoice(string invoice, u64 amount_sat, string metadata);
 
     // Get a list of the latest payments
@@ -201,6 +201,8 @@ dictionary Config {
     string local_persistence_path;
     TzConfig timezone_config;
     boolean enable_file_logging;
+    string api_key;
+    string? invite_code;
 };
 
 // A code of the environment for the node to run.
@@ -332,7 +334,7 @@ interface MaxRoutingFeeMode {
 dictionary Payment {
     PaymentType payment_type;
     PaymentState payment_state;
-    PayErrorCode? fail_reason;
+    PayErrorCode? fail_reason; // TODO Handle Pay Error Code
     string hash; // Hex representation of payment hash
     Amount amount; // Nominal amount specified in the invoice
     InvoiceDetails invoice_details;
@@ -446,26 +448,26 @@ enum OfferStatus {
 //
 
 namespace lipalightninglib {
+    // TODO reimplement with breez sdk
     // Generate a new mnemonic with an optional passphrase. Provide an empty string to use no passphrase.
-    [Throws=SimpleError]
-    Secret generate_secret(string passphrase);
+    //[Throws=SimpleError]
+    //Secret generate_secret(string passphrase);
 
     // Generate a Secret object (containing the seed). Provide an empty string to use no passphrase.
-    [Throws=MnemonicError]
-    Secret mnemonic_to_secret(sequence<string> mnemonic_string, string passphrase);
+    //Secret mnemonic_to_secret(sequence<string> mnemonic_string, string passphrase);
 
     // Return a list of valid BIP-39 English words starting with the prefix.
     // Calling this function with empty prefix will return the full list of BIP-39 words.
-    sequence<string> words_by_prefix(string prefix);
+    //sequence<string> words_by_prefix(string prefix);
 
-    [Throws=LnError]
-    void accept_terms_and_conditions(EnvironmentCode environment, bytes seed);
+    //[Throws=LnError]
+    //void accept_terms_and_conditions(EnvironmentCode environment, bytes seed);
 
     // Performs a recovery procedure by fetching necessary data from remote storage.
     // It should and can only be called on a fresh install of the app, if the user wants to recover a previously created wallet.
     // If no existing wallet is found, returns an error.
-    [Throws=LnError]
-    void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path, boolean enable_file_logging);
+    //[Throws=LnError]
+    //void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path, boolean enable_file_logging);
 };
 
 // An object that holds necessary secrets. Should be dealt with carefully and never be logged.
@@ -495,27 +497,6 @@ interface SimpleError {
 };
 
 [Error]
-interface MnemonicError {
-    // Mnemonic has a word count that is not a multiple of 6.
-    BadWordCount(u64 count);
-    // Mnemonic contains an unknown word at the pointed index.
-    UnknownWord(u64 index);
-    // Entropy was not a multiple of 32 bits or between 128-256n bits in length.
-    BadEntropyBitCount();
-    // The mnemonic has an invalid checksum.
-    InvalidChecksum();
-    // The mnemonic can be interpreted as multiple languages.
-    AmbiguousLanguages();
-};
-
-[Error]
-interface DecodeInvoiceError {
-    ParseError(string msg);
-    SemanticError(string msg);
-    NetworkMismatch(Network expected, Network found);
-};
-
-[Error]
 interface LnError {
     // Invalid input.
     // Consider fixing the input and retrying the request.
@@ -535,20 +516,13 @@ enum RuntimeErrorCode {
     // CONNECTIVITY ERRORS
     "AuthServiceUnavailable", // The backend auth service is unavailable.
     "OfferServiceUnavailable",
+    "ExchangeRateProviderUnavailable",
     "EsploraServiceUnavailable", // The esplora service is unavailable. Could there be a loss of internet connection?
     "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
     "RemoteStorageError", // Any error related to the remote storage. Could be a network error or a data error.
 
     // RECOVERY ERRORS
     "NonExistingWallet", // A recovery process couldn't be completed because no recovery data could be found. Most likely the recovery phrase wasn't created by the lipa wallet.
-};
-
-[Error]
-// As documented for LnError
-interface PayError {
-    InvalidInput(string msg);
-    RuntimeError(PayErrorCode code, string msg);
-    PermanentFailure(string msg);
 };
 
 // A code that specifies the PayError that occurred.
