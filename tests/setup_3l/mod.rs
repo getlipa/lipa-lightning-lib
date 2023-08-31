@@ -54,6 +54,8 @@ impl NodeHandle {
         let mnemonic = env!("BREEZ_SDK_MNEMONIC");
         let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
 
+        let invite_code = option_env!("BREEZ_SDK_INVITE_CODE").map(|s| s.to_string());
+
         NodeHandle {
             config: Config {
                 environment: uniffi_lipalightninglib::EnvironmentCode::Local,
@@ -66,7 +68,7 @@ impl NodeHandle {
                 },
                 enable_file_logging: false,
                 api_key: env!("BREEZ_SDK_API_KEY").to_string(),
-                invite_code: Some(env!("BREEZ_SDK_INVITE_CODE").to_string()),
+                invite_code,
             },
         }
     }
