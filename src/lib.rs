@@ -168,6 +168,8 @@ pub struct OfferInfo {
     pub status: OfferStatus,
 }
 
+// TODO remove dead code after breez sdk implementation
+#[allow(dead_code)]
 pub struct LightningNode {
     sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
@@ -194,6 +196,8 @@ impl EventListener for LipaEventListener {
 }
 
 impl LightningNode {
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         enable_backtrace();
         fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
@@ -245,7 +249,7 @@ impl LightningNode {
             ))
             .unwrap();
 
-        let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
+        let _exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
             environment.backend_url.clone(),
             Arc::clone(&auth),
         ));
@@ -270,6 +274,8 @@ impl LightningNode {
         todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<Amount> {
         todo!()
     }
@@ -278,6 +284,8 @@ impl LightningNode {
         todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn create_invoice(
         &self,
         amount_sat: u64,
@@ -287,6 +295,8 @@ impl LightningNode {
         todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn decode_invoice(
         &self,
         invoice: String,
@@ -294,14 +304,20 @@ impl LightningNode {
         todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
         todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {
         todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn pay_open_invoice(
         &self,
         invoice: String,
@@ -311,10 +327,14 @@ impl LightningNode {
         todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
         todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
         todo!()
     }
@@ -335,10 +355,14 @@ impl LightningNode {
         todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn change_fiat_currency(&self, fiat_currency: String) {
         todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
         todo!()
     }
@@ -389,6 +413,8 @@ impl LightningNode {
             .collect())
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
         todo!()
     }

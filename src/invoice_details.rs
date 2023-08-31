@@ -1,9 +1,9 @@
-use crate::amount::{Amount, ToAmount};
+use crate::amount::Amount;
 
-use crate::ExchangeRate;
-use lightning::offers::invoice::Invoice;
 use std::time::{Duration, SystemTime};
 
+// TODO remove dead code after breez sdk implementation
+#[allow(dead_code)]
 pub struct InvoiceDetails {
     pub invoice: String,
     pub amount: Option<Amount>,

@@ -8,6 +8,8 @@ pub enum EnvironmentCode {
     Prod,
 }
 
+// TODO remove dead code after breez sdk implementation
+#[allow(dead_code)]
 pub(crate) struct Environment {
     pub network: Network,
     pub backend_url: String,
