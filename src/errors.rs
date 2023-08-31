@@ -1,6 +1,7 @@
 use lightning::events::PaymentFailureReason;
 use num_enum::TryFromPrimitive;
 use std::fmt::{Display, Formatter};
+use crate::Network;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RuntimeErrorCode {
@@ -75,3 +76,42 @@ impl Display for InternalRuntimeErrorCode {
 
 type InternalError = perro::Error<InternalRuntimeErrorCode>;
 pub type InternalResult<T> = std::result::Result<T, InternalError>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum DecodeInvoiceError {
+    #[error("Parse error: {msg}")]
+    ParseError { msg: String },
+    #[error("Semantic error: {msg}")]
+    SemanticError { msg: String },
+    #[error("Network mismatch (expected {expected}, found {found})")]
+    NetworkMismatch { expected: Network, found: Network },
+}
+
+
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum MnemonicError {
+    #[error("BadWordCount with count: {count}")]
+    BadWordCount { count: u64 },
+    #[error("UnknownWord at index: {index}")]
+    UnknownWord { index: u64 },
+    #[error("BadEntropyBitCount")]
+    BadEntropyBitCount,
+    #[error("InvalidChecksum")]
+    InvalidChecksum,
+    #[error("AmbiguousLanguages")]
+    AmbiguousLanguages,
+}
+
+pub fn to_mnemonic_error(e: bip39::Error) -> MnemonicError {
+    match e {
+        bip39::Error::BadWordCount(count) => MnemonicError::BadWordCount {
+            count: count as u64,
+        },
+        bip39::Error::UnknownWord(index) => MnemonicError::UnknownWord {
+            index: index as u64,
+        },
+        bip39::Error::BadEntropyBitCount(_) => MnemonicError::BadEntropyBitCount,
+        bip39::Error::InvalidChecksum => MnemonicError::InvalidChecksum,
+        bip39::Error::AmbiguousLanguages(_) => MnemonicError::AmbiguousLanguages,
+    }
+}
