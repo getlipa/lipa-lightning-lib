@@ -70,7 +70,6 @@ impl NodeHandle {
                     timezone_utc_offset_secs: 1234,
                 },
                 enable_file_logging: false,
-                api_key: std::env::var("BREEZ_SDK_API_KEY").unwrap(),
                 invite_code,
             },
         }

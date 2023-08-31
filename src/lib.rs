@@ -228,7 +228,7 @@ impl LightningNode {
 
         let mut breez_config = BreezServices::default_config(
             environment.environment_type,
-            config.api_key,
+            env!("BREEZ_SDK_API_KEY").to_string(),
             NodeConfig::Greenlight {
                 config: GreenlightNodeConfig {
                     partner_credentials: None,

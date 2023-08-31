@@ -201,7 +201,6 @@ dictionary Config {
     string local_persistence_path;
     TzConfig timezone_config;
     boolean enable_file_logging;
-    string api_key;
     string? invite_code;
 };
 

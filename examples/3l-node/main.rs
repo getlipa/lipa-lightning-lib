@@ -39,7 +39,6 @@ fn main() {
             timezone_utc_offset_secs: 1 * 60 * 60,
         },
         enable_file_logging: true,
-        api_key: env!("BREEZ_SDK_API_KEY").to_string(),
         invite_code,
     };
 
