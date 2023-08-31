@@ -29,6 +29,7 @@ lightning = { version = "=0.0.115", features = ["max_level_trace"] }
 lightning-invoice = "=0.23.0"
 rand = "0.8.5"
 txoo = "=0.4.2"
+tonic = "0.9.2"
 
 chrono = { version = "0.4.26", default-features = false, features = ["serde"] }
 email_address = "0.2.4"
