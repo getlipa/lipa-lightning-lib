@@ -27,6 +27,8 @@ fn main() {
 
     let seed = read_seed_from_env();
 
+    let invite_code: Option<String> = option_env!("BREEZ_SDK_INVITE_CODE").map(|s| s.to_string());
+
     let config = Config {
         environment,
         seed,
@@ -38,7 +40,7 @@ fn main() {
         },
         enable_file_logging: true,
         api_key: env!("BREEZ_SDK_API_KEY").to_string(),
-        invite_code: Some(env!("BREEZ_SDK_INVITE_CODE").to_string()),
+        invite_code,
     };
 
     let node = LightningNode::new(config, events).unwrap();
