@@ -5,7 +5,7 @@ mod print_events_handler;
 
 use crate::print_events_handler::PrintEventsHandler;
 
-use uniffi_lipalightninglib::{generate_secret, mnemonic_to_secret, LightningNode};
+use uniffi_lipalightninglib::{mnemonic_to_secret, LightningNode};
 use uniffi_lipalightninglib::{Config, EnvironmentCode, TzConfig};
 
 use std::thread::sleep;

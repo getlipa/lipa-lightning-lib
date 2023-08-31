@@ -1,5 +1,4 @@
 use crate::print_events_handler::PrintEventsHandler;
-use std::env::VarError;
 
 use uniffi_lipalightninglib::{mnemonic_to_secret, recover_lightning_node, Config, TzConfig};
 use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
