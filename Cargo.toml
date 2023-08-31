@@ -63,9 +63,6 @@ camino = "1.1.6"
 uniffi_bindgen = "0.24.0"
 tonic-build = "0.9.2"
 
-[package.metadata.cross.build]
-pre-build = ["apt update --no-show-upgraded && apt install --yes protobuf-compiler"]
-
 # Enable debug symbols for our and Breez crates, but not others.
 [profile.release]
 debug = 1
