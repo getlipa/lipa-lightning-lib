@@ -1,12 +1,8 @@
-use crate::environment::Environment;
-use crate::errors::{Result, RuntimeErrorCode};
-use crate::logger::init_logger_once;
-use crate::{build_auth, enable_backtrace, sanitize_input, EnvironmentCode, LOGS_DIR, LOG_LEVEL};
-use perro::{MapToError, ResultTrait};
-use std::fs;
-use std::path::Path;
-use std::sync::Arc;
+use crate::errors::Result;
+use crate::EnvironmentCode;
 
+// TODO remove unused_variables after breez sdk implementation
+#[allow(unused_variables)]
 pub fn recover_lightning_node(
     environment: EnvironmentCode,
     seed: Vec<u8>,

@@ -2,7 +2,7 @@ use crate::errors::{Result, RuntimeErrorCode};
 use breez_sdk_core::BreezServices;
 use chrono::{DateTime, Utc};
 use log::error;
-use perro::{runtime_error, MapToError, ResultTrait};
+use perro::{runtime_error, MapToError};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -119,6 +119,8 @@ pub struct CreateOrderResponse {
     payout_method: PayoutMethod,
 }
 
+// TODO remove dead code after breez sdk implementation
+#[allow(dead_code)]
 pub(crate) struct PocketClient {
     pocket_url: String,
     client: reqwest::blocking::Client,
@@ -181,6 +183,8 @@ impl PocketClient {
             )
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     fn create_order(
         &self,
         challenge_response: ChallengeResponse,

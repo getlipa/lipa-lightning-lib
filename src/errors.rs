@@ -1,5 +1,4 @@
 use crate::Network;
-use lightning::events::PaymentFailureReason;
 use num_enum::TryFromPrimitive;
 use std::fmt::{Display, Formatter};
 
@@ -39,19 +38,6 @@ pub enum PayErrorCode {
     UnexpectedError,
 }
 
-impl PayErrorCode {
-    pub(crate) fn from_failure_reason(reason: PaymentFailureReason) -> Self {
-        match reason {
-            PaymentFailureReason::RecipientRejected => Self::RecipientRejected,
-            PaymentFailureReason::UserAbandoned => Self::UnexpectedError,
-            PaymentFailureReason::RetriesExhausted => Self::RetriesExhausted,
-            PaymentFailureReason::PaymentExpired => Self::InvoiceExpired,
-            PaymentFailureReason::RouteNotFound => Self::NoMoreRoutes,
-            PaymentFailureReason::UnexpectedError => Self::UnexpectedError,
-        }
-    }
-}
-
 impl Display for PayErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
@@ -60,22 +46,6 @@ impl Display for PayErrorCode {
 
 pub type PayError = perro::Error<PayErrorCode>;
 pub type PayResult<T> = std::result::Result<T, PayError>;
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum InternalRuntimeErrorCode {
-    ExchangeRateProviderUnavailable,
-    RgsUpdateError,
-    RgsServiceUnavailable,
-}
-
-impl Display for InternalRuntimeErrorCode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-type InternalError = perro::Error<InternalRuntimeErrorCode>;
-pub type InternalResult<T> = std::result::Result<T, InternalError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DecodeInvoiceError {
