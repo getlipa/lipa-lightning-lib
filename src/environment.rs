@@ -1,4 +1,5 @@
 use crate::Network;
+use breez_sdk_core::EnvironmentType;
 
 #[derive(Clone, Copy, Debug)]
 pub enum EnvironmentCode {
@@ -12,6 +13,7 @@ pub enum EnvironmentCode {
 #[allow(dead_code)]
 pub(crate) struct Environment {
     pub network: Network,
+    pub environment_type: EnvironmentType,
     pub backend_url: String,
     pub backend_health_url: String,
     pub lsp_url: String,
@@ -29,7 +31,8 @@ impl Environment {
 
         match environment {
             EnvironmentCode::Local => Self {
-                network: Network::Regtest,
+                network: Network::Bitcoin,
+                environment_type: EnvironmentType::Staging,
                 backend_url,
                 backend_health_url,
                 lsp_url: env!("LSP_URL_LOCAL").to_string(),
@@ -39,7 +42,8 @@ impl Environment {
                 pocket_url: env!("POCKET_URL_LOCAL").to_string(),
             },
             EnvironmentCode::Dev => Self {
-                network: Network::Testnet,
+                network: Network::Bitcoin,
+                environment_type: EnvironmentType::Staging,
                 backend_url,
                 backend_health_url,
                 lsp_url: env!("LSP_URL_DEV").to_string(),
@@ -50,6 +54,7 @@ impl Environment {
             },
             EnvironmentCode::Stage => Self {
                 network: Network::Bitcoin,
+                environment_type: EnvironmentType::Staging,
                 backend_url,
                 backend_health_url,
                 lsp_url: env!("LSP_URL_STAGE").to_string(),
@@ -60,6 +65,7 @@ impl Environment {
             },
             EnvironmentCode::Prod => Self {
                 network: Network::Bitcoin,
+                environment_type: EnvironmentType::Production,
                 backend_url,
                 backend_health_url,
                 lsp_url: env!("LSP_URL_PROD").to_string(),

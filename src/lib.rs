@@ -38,9 +38,7 @@ use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
-use breez_sdk_core::{
-    BreezEvent, BreezServices, EnvironmentType, EventListener, GreenlightNodeConfig, NodeConfig,
-};
+use breez_sdk_core::{BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, NodeConfig};
 use crow::LanguageCode;
 use crow::{CountryCode, TopupStatus};
 use crow::{OfferManager, TopupInfo};
@@ -229,7 +227,7 @@ impl LightningNode {
         )?);
 
         let mut breez_config = BreezServices::default_config(
-            to_breez_env(environment.network),
+            environment.environment_type,
             config.api_key,
             NodeConfig::Greenlight {
                 config: GreenlightNodeConfig {
@@ -441,15 +439,6 @@ impl LightningNode {
 
     pub fn get_payment_uuid(&self, payment_hash: String) -> Result<String> {
         get_payment_uuid(payment_hash)
-    }
-}
-
-fn to_breez_env(network: Network) -> EnvironmentType {
-    match network {
-        Network::Bitcoin => EnvironmentType::Production,
-        Network::Testnet => EnvironmentType::Staging,
-        Network::Signet => EnvironmentType::Staging,
-        Network::Regtest => EnvironmentType::Staging,
     }
 }
 
