@@ -56,25 +56,6 @@ fn read_seed_from_env() -> Vec<u8> {
     mnemonic_to_secret(mnemonic, "".to_string()).unwrap().seed
 }
 
-// Not used as we currently do not have a greenlight partner certificate
-fn read_or_generate_seed(base_dir: &str) -> Vec<u8> {
-    let passphrase = "".to_string();
-    let filename = format!("{base_dir}/recovery_phrase");
-    match fs::read(filename.clone()) {
-        Ok(mnemonic) => {
-            let mnemonic = std::str::from_utf8(&mnemonic).unwrap();
-            let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
-            mnemonic_to_secret(mnemonic, passphrase).unwrap().seed
-        }
-        Err(_) => {
-            let secret = generate_secret(passphrase).unwrap();
-            let recovery_phrase = secret.mnemonic.join(" ");
-            fs::write(filename, &recovery_phrase).unwrap();
-            secret.seed
-        }
-    }
-}
-
 fn map_environment_code(code: &str) -> EnvironmentCode {
     match code {
         "local" => EnvironmentCode::Local,

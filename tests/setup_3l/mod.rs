@@ -1,4 +1,5 @@
 use crate::print_events_handler::PrintEventsHandler;
+use std::env::VarError;
 
 use uniffi_lipalightninglib::{mnemonic_to_secret, recover_lightning_node, Config, TzConfig};
 use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
@@ -51,10 +52,13 @@ impl NodeHandle {
 
         Self::reset_state();
 
-        let mnemonic = env!("BREEZ_SDK_MNEMONIC");
+        let mnemonic = std::env::var("BREEZ_SDK_MNEMONIC").unwrap();
         let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
 
-        let invite_code = option_env!("BREEZ_SDK_INVITE_CODE").map(|s| s.to_string());
+        let invite_code = match std::env::var("BREEZ_SDK_INVITE_CODE") {
+            Ok(s) => Some(s.to_string()),
+            Err(_) => None,
+        };
 
         NodeHandle {
             config: Config {
@@ -67,7 +71,7 @@ impl NodeHandle {
                     timezone_utc_offset_secs: 1234,
                 },
                 enable_file_logging: false,
-                api_key: env!("BREEZ_SDK_API_KEY").to_string(),
+                api_key: std::env::var("BREEZ_SDK_API_KEY").unwrap(),
                 invite_code,
             },
         }
