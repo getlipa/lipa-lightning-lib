@@ -213,7 +213,7 @@ impl LightningNode {
 
         let rt = Builder::new_multi_thread()
             .worker_threads(4)
-            .thread_name("breez-async-runtime")
+            .thread_name("3l-async-runtime")
             .enable_time()
             .enable_io()
             .build()
