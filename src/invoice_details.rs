@@ -14,14 +14,3 @@ pub struct InvoiceDetails {
     pub expiry_interval: Duration,
     pub expiry_timestamp: SystemTime,
 }
-
-impl InvoiceDetails {
-    pub(crate) fn from_local_invoice(invoice: Invoice, rate: &Option<ExchangeRate>) -> Self {
-        todo!()
-    }
-
-    pub(crate) fn from_remote_invoice(invoice: Invoice, rate: &Option<ExchangeRate>) -> Self {
-        todo!()
-    }
-}
-
