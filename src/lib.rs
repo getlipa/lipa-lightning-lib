@@ -31,7 +31,8 @@ use bip39::{Language, Mnemonic};
 use bitcoin::Network;
 use cipher::generic_array::typenum::U32;
 
-pub use crate::errors::{PayErrorCode, PayResult, PayError, DecodeInvoiceError, MnemonicError};
+use crate::errors::to_mnemonic_error;
+pub use crate::errors::{DecodeInvoiceError, MnemonicError, PayError, PayErrorCode, PayResult};
 pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 use bitcoin::hashes::hex::ToHex;
@@ -40,7 +41,6 @@ use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use breez_sdk_core::{
     BreezEvent, BreezServices, EnvironmentType, EventListener, GreenlightNodeConfig, NodeConfig,
 };
-use crate::errors::to_mnemonic_error;
 use crow::LanguageCode;
 use crow::{CountryCode, TopupStatus};
 use crow::{OfferManager, TopupInfo};
@@ -287,7 +287,10 @@ impl LightningNode {
         todo!()
     }
 
-    pub fn decode_invoice(&self, invoice: String) -> std::result::Result<InvoiceDetails, DecodeInvoiceError> {
+    pub fn decode_invoice(
+        &self,
+        invoice: String,
+    ) -> std::result::Result<InvoiceDetails, DecodeInvoiceError> {
         todo!()
     }
 
@@ -489,8 +492,7 @@ pub fn mnemonic_to_secret(
     mnemonic_string: Vec<String>,
     passphrase: String,
 ) -> std::result::Result<Secret, MnemonicError> {
-    let mnemonic =
-        Mnemonic::from_str(&mnemonic_string.join(" ")).map_err(to_mnemonic_error)?;
+    let mnemonic = Mnemonic::from_str(&mnemonic_string.join(" ")).map_err(to_mnemonic_error)?;
     Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
 }
 

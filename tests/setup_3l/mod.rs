@@ -1,6 +1,6 @@
 use crate::print_events_handler::PrintEventsHandler;
 
-use uniffi_lipalightninglib::{recover_lightning_node, Config, TzConfig, mnemonic_to_secret};
+use uniffi_lipalightninglib::{mnemonic_to_secret, recover_lightning_node, Config, TzConfig};
 use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
 
 use crate::wait_for;
@@ -46,7 +46,6 @@ macro_rules! wait_for {
 
 #[allow(dead_code)]
 impl NodeHandle {
-
     pub fn new() -> Self {
         std::env::set_var("TESTING_TASK_PERIODS", "5");
 

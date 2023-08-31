@@ -1,7 +1,7 @@
+use crate::Network;
 use lightning::events::PaymentFailureReason;
 use num_enum::TryFromPrimitive;
 use std::fmt::{Display, Formatter};
-use crate::Network;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RuntimeErrorCode {
@@ -86,7 +86,6 @@ pub enum DecodeInvoiceError {
     #[error("Network mismatch (expected {expected}, found {found})")]
     NetworkMismatch { expected: Network, found: Network },
 }
-
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum MnemonicError {
