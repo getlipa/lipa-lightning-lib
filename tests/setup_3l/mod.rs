@@ -1,18 +1,47 @@
 use crate::print_events_handler::PrintEventsHandler;
-use crate::setup_env::config::{get_testing_config, LOCAL_PERSISTENCE_PATH};
 
-use uniffi_lipalightninglib::{recover_lightning_node, Config};
+use uniffi_lipalightninglib::{mnemonic_to_secret, recover_lightning_node, Config, TzConfig};
 use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
 
 use crate::wait_for;
-use eel::config::TzConfig;
 use std::fs;
+use std::string::ToString;
 
 type Result<T> = std::result::Result<T, perro::Error<RuntimeErrorCode>>;
 
 #[allow(dead_code)]
 pub struct NodeHandle {
     config: Config,
+}
+
+const LOCAL_PERSISTENCE_PATH: &str = ".3l_local_test";
+
+#[macro_export]
+macro_rules! wait_for_condition {
+    ($cond:expr, $message_if_not_satisfied:expr) => {
+        (|| {
+            let attempts = 1100;
+            let sleep_duration = std::time::Duration::from_millis(100);
+            for _ in 0..attempts {
+                if $cond {
+                    return;
+                }
+
+                std::thread::sleep(sleep_duration);
+            }
+
+            let total_duration = sleep_duration * attempts;
+            panic!("{} [after {total_duration:?}]", $message_if_not_satisfied);
+        })();
+    };
+}
+
+#[macro_export]
+macro_rules! wait_for {
+    ($cond:expr) => {
+        let message_if_not_satisfied = format!("Failed to wait for `{}`", stringify!($cond));
+        wait_for_condition!($cond, message_if_not_satisfied);
+    };
 }
 
 #[allow(dead_code)]
@@ -22,14 +51,15 @@ impl NodeHandle {
 
         Self::reset_state();
 
-        let eel_config = get_testing_config();
+        let mnemonic = std::env::var("BREEZ_SDK_MNEMONIC").unwrap();
+        let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
 
         NodeHandle {
             config: Config {
                 environment: uniffi_lipalightninglib::EnvironmentCode::Local,
-                seed: eel_config.seed.to_vec(),
+                seed: mnemonic_to_secret(mnemonic, "".to_string()).unwrap().seed,
                 fiat_currency: "EUR".to_string(),
-                local_persistence_path: eel_config.local_persistence_path,
+                local_persistence_path: LOCAL_PERSISTENCE_PATH.to_string(),
                 timezone_config: TzConfig {
                     timezone_id: String::from("int_test_timezone_id"),
                     timezone_utc_offset_secs: 1234,

@@ -5,55 +5,57 @@ extern crate core;
 mod amount;
 mod callbacks;
 mod config;
-mod eel_interface_impl;
 mod environment;
 mod errors;
 mod exchange_rate_provider;
 mod fiat_topup;
 mod invoice_details;
 mod logger;
+mod random;
 mod recovery;
 mod sanitize_input;
+mod secret;
 
 use crate::amount::ToAmount;
 pub use crate::amount::{Amount, FiatValue};
 pub use crate::callbacks::EventsCallback;
-pub use crate::config::Config;
-use crate::eel_interface_impl::{EventsImpl, RemoteStorageGraphql};
+pub use crate::config::{Config, TzConfig, TzTime};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 pub use crate::errors::{Error as LnError, Result, RuntimeErrorCode};
-use crate::exchange_rate_provider::ExchangeRateProviderImpl;
+pub use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProviderImpl};
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
+use crate::secret::Secret;
+use bip39::{Language, Mnemonic};
+use bitcoin::Network;
+use cipher::generic_array::typenum::U32;
 
+use crate::errors::to_mnemonic_error;
+pub use crate::errors::{DecodeInvoiceError, MnemonicError, PayError, PayErrorCode, PayResult};
 pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
+use bitcoin::hashes::hex::ToHex;
+use bitcoin::secp256k1::{PublicKey, SECP256K1};
+use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
+use breez_sdk_core::{BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, NodeConfig};
 use crow::LanguageCode;
 use crow::{CountryCode, TopupStatus};
 use crow::{OfferManager, TopupInfo};
-pub use eel::config::TzConfig;
-use eel::errors::{PayError, PayErrorCode, PayResult};
-pub use eel::interfaces::ExchangeRate;
-pub use eel::invoice::DecodeInvoiceError;
-use eel::key_derivation::derive_key_pair_hex;
-use eel::keys_manager::{mnemonic_to_secret, words_by_prefix, MnemonicError};
-pub use eel::payment::OfferKind;
-use eel::payment::{PaymentState, PaymentType, TzTime};
-use eel::secret::Secret;
-pub use eel::Network;
 use email_address::EmailAddress;
 use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
 use iban::Iban;
 use log::trace;
 use logger::init_logger_once;
+use num_enum::TryFromPrimitive;
 use perro::{invalid_input, MapToError, ResultTrait};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::{env, fs};
+use tokio::runtime::{Builder, Runtime};
 use uuid::Uuid;
 
 const LOG_LEVEL: log::Level = log::Level::Trace;
@@ -98,6 +100,23 @@ pub struct ChannelsInfo {
     pub total_channel_capacities: Amount,
 }
 
+#[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
+#[repr(u8)]
+pub enum PaymentType {
+    Receiving,
+    Sending,
+}
+
+#[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
+#[repr(u8)]
+pub enum PaymentState {
+    Created,
+    Succeeded,
+    Failed,
+    Retried,
+    InvoiceExpired,
+}
+
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,
@@ -127,6 +146,17 @@ pub enum OfferStatus {
     SETTLED,
 }
 
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum OfferKind {
+    Pocket {
+        id: String,
+        exchange_rate: ExchangeRate,
+        topup_value_minor_units: u64,
+        exchange_fee_minor_units: u64,
+        exchange_fee_rate_permyriad: u16,
+    },
+}
+
 pub struct OfferInfo {
     pub offer_kind: OfferKind,
     pub amount: Amount,
@@ -136,19 +166,41 @@ pub struct OfferInfo {
     pub status: OfferStatus,
 }
 
+// TODO remove dead code after breez sdk implementation
+#[allow(dead_code)]
 pub struct LightningNode {
-    core_node: Arc<eel::LightningNode>,
+    sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
     fiat_topup_client: PocketClient,
     offer_manager: OfferManager,
+    rt: Runtime,
+}
+
+struct LipaEventListener;
+
+impl EventListener for LipaEventListener {
+    fn on_event(&self, e: BreezEvent) {
+        match e {
+            BreezEvent::NewBlock { .. } => {}
+            BreezEvent::InvoicePaid { .. } => {}
+            BreezEvent::Synced => {}
+            BreezEvent::PaymentSucceed { .. } => {}
+            BreezEvent::PaymentFailed { .. } => {}
+            BreezEvent::BackupStarted => {}
+            BreezEvent::BackupSucceeded => {}
+            BreezEvent::BackupFailed { .. } => {}
+        }
+    }
 }
 
 impl LightningNode {
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         enable_backtrace();
         fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
             "Failed to create directory: {}",
-            config.local_persistence_path,
+            &config.local_persistence_path,
         ))?;
         if config.enable_file_logging {
             init_logger_once(
@@ -156,200 +208,161 @@ impl LightningNode {
                 &Path::new(&config.local_persistence_path).join(LOGS_DIR),
             )?;
         }
-        let seed = sanitize_input::strong_type_seed(&config.seed)
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
+
+        let rt = Builder::new_multi_thread()
+            .worker_threads(4)
+            .thread_name("3l-async-runtime")
+            .enable_time()
+            .enable_io()
+            .build()
+            .unwrap();
 
         let environment = Environment::load(config.environment);
 
-        let eel_config = eel::config::Config {
-            network: environment.network,
-            seed,
-            fiat_currency: config.fiat_currency,
-            esplora_api_url: environment.esplora_url,
-            rgs_url: environment.rgs_url,
-            lsp_url: environment.lsp_url,
-            lsp_token: environment.lsp_token,
-            local_persistence_path: config.local_persistence_path,
-            timezone_config: config.timezone_config,
-        };
-
-        let auth = Arc::new(build_auth(&seed, environment.backend_url.clone())?);
-
-        let remote_storage = Box::new(RemoteStorageGraphql::new(
+        // TODO implement error handling
+        let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed).unwrap();
+        let auth = Arc::new(build_auth(
+            &strong_typed_seed,
             environment.backend_url.clone(),
-            environment.backend_health_url.clone(),
-            Arc::clone(&auth),
-        ));
+        )?);
 
-        let user_event_handler = Box::new(EventsImpl { events_callback });
-
-        let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
-            environment.backend_url.clone(),
-            Arc::clone(&auth),
-        ));
-
-        let core_node = Arc::new(
-            eel::LightningNode::new(
-                eel_config,
-                remote_storage,
-                user_event_handler,
-                exchange_rate_provider,
-            )
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?,
+        let mut breez_config = BreezServices::default_config(
+            environment.environment_type,
+            env!("BREEZ_SDK_API_KEY").to_string(),
+            NodeConfig::Greenlight {
+                config: GreenlightNodeConfig {
+                    partner_credentials: None,
+                    invite_code: None,
+                },
+            },
         );
 
-        let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&core_node))?;
+        breez_config.working_dir = config.local_persistence_path;
+
+        let sdk = rt
+            .block_on(BreezServices::connect(
+                breez_config,
+                config.seed,
+                Box::new(LipaEventListener {}),
+            ))
+            .unwrap();
+
+        let _exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
+            environment.backend_url.clone(),
+            Arc::clone(&auth),
+        ));
+
+        let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&sdk))?;
         let offer_manager = OfferManager::new(environment.backend_url, Arc::clone(&auth));
 
         Ok(LightningNode {
-            core_node,
+            sdk,
             auth,
             fiat_topup_client,
             offer_manager,
+            rt,
         })
     }
 
     pub fn get_node_info(&self) -> NodeInfo {
-        let rate = self.get_exchange_rate();
-        let node = self.core_node.get_node_info();
-        let channels = node.channels_info;
-        let channels_info = ChannelsInfo {
-            num_channels: channels.num_channels,
-            num_usable_channels: channels.num_usable_channels,
-            local_balance: channels.local_balance_msat.to_amount_down(&rate),
-            total_channel_capacities: channels.total_channel_capacities_msat.to_amount_down(&rate),
-            inbound_capacity: channels.inbound_capacity_msat.to_amount_down(&rate),
-            outbound_capacity: channels.outbound_capacity_msat.to_amount_down(&rate),
-        };
-
-        NodeInfo {
-            node_pubkey: node.node_pubkey.to_string(),
-            peers: node.peers.iter().map(|peer| peer.to_string()).collect(),
-            channels_info,
-        }
+        todo!()
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        let fee = self
-            .core_node
-            .query_lsp_fee()
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
-        let channel_minimum_fee = fee
-            .channel_minimum_fee_msat
-            .to_amount_up(&self.get_exchange_rate());
-        Ok(LspFee {
-            channel_minimum_fee,
-            channel_fee_permyriad: fee.channel_fee_permyriad,
-        })
+        todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<Amount> {
-        let rate = self.get_exchange_rate();
-        self.core_node
-            .calculate_lsp_fee(amount_sat * 1_000)
-            .map(|fee| fee.to_amount_up(&rate))
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
-        let rate = self.get_exchange_rate();
-        self.core_node
-            .get_payment_amount_limits()
-            .map(|limits| to_limits(limits, &rate))
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn create_invoice(
         &self,
         amount_sat: u64,
         description: String,
         metadata: String,
     ) -> Result<InvoiceDetails> {
-        let rate = self.get_exchange_rate();
-        let invoice = self
-            .core_node
-            .create_invoice(amount_sat * 1000, description, None, metadata)
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
-        Ok(InvoiceDetails::from_local_invoice(invoice, &rate))
+        todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn decode_invoice(
         &self,
         invoice: String,
     ) -> std::result::Result<InvoiceDetails, DecodeInvoiceError> {
-        let invoice = self.core_node.decode_invoice(invoice)?;
-        let rate = self.get_exchange_rate();
-        Ok(InvoiceDetails::from_remote_invoice(invoice, &rate))
+        todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
-        match self
-            .core_node
-            .get_payment_max_routing_fee_mode(amount_sat * 1000)
-        {
-            eel::MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
-                MaxRoutingFeeMode::Relative { max_fee_permyriad }
-            }
-            eel::MaxRoutingFeeMode::Absolute { max_fee_msat } => MaxRoutingFeeMode::Absolute {
-                max_fee_amount: max_fee_msat.to_amount_up(&self.get_exchange_rate()),
-            },
-        }
+        todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {
-        self.core_node.pay_invoice(invoice, metadata)
+        todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn pay_open_invoice(
         &self,
         invoice: String,
         amount_sat: u64,
         metadata: String,
     ) -> PayResult<()> {
-        self.core_node
-            .pay_open_invoice(invoice, amount_sat * 1000, metadata)
+        todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
-        self.core_node
-            .get_latest_payments(number_of_payments)
-            .map(|ps| ps.into_iter().map(to_payment).collect())
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
-        self.core_node
-            .get_payment(&hash)
-            .map(to_payment)
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
     pub fn foreground(&self) {
-        self.core_node.foreground()
+        todo!()
     }
 
     pub fn background(&self) {
-        self.core_node.background()
+        todo!()
     }
 
     pub fn list_currency_codes(&self) -> Vec<String> {
-        self.core_node
-            .list_exchange_rates()
-            .into_iter()
-            .map(|r| r.currency_code)
-            .collect()
+        todo!()
     }
 
     pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
-        self.core_node.get_exchange_rate()
+        todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn change_fiat_currency(&self, fiat_currency: String) {
-        self.core_node.change_fiat_currency(fiat_currency);
+        todo!()
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
-        self.core_node.change_timezone_config(timezone_config);
+        todo!()
     }
 
     pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
@@ -379,7 +392,7 @@ impl LightningNode {
         }
 
         self.offer_manager
-            .register_node(self.core_node.get_node_info().node_pubkey.to_string())
+            .register_node(self.get_node_info().node_pubkey)
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
 
         self.fiat_topup_client
@@ -398,11 +411,10 @@ impl LightningNode {
             .collect())
     }
 
+    // TODO remove unused_variables after breez sdk implementation
+    #[allow(unused_variables)]
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
-        let amout_msat = offer.amount.sats * 1000;
-        self.core_node
-            .lnurl_withdraw(&offer.lnurlw, amout_msat, offer.offer_kind)
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)
+        todo!()
     }
 
     pub fn register_notification_token(
@@ -462,15 +474,49 @@ fn to_offer(topup_info: TopupInfo, current_rate: &Option<ExchangeRate>) -> Offer
 pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) -> Result<()> {
     enable_backtrace();
     let environment = Environment::load(environment);
-    let seed = sanitize_input::strong_type_seed(&seed)
-        .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
+    // TODO implement error handling
+    let seed = sanitize_input::strong_type_seed(&seed).unwrap();
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions()
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
 
+fn derive_secret_from_mnemonic(mnemonic: Mnemonic, passphrase: String) -> Secret {
+    let seed = mnemonic.to_seed(&passphrase);
+    let mnemonic_string: Vec<String> = mnemonic.word_iter().map(String::from).collect();
+
+    Secret {
+        mnemonic: mnemonic_string,
+        passphrase,
+        seed: seed.to_vec(),
+    }
+}
+
 pub fn generate_secret(passphrase: String) -> std::result::Result<Secret, SimpleError> {
-    eel::keys_manager::generate_secret(passphrase).map_err(|msg| SimpleError::Simple { msg })
+    let entropy = random::generate_random_bytes::<U32>().map_err(|e| SimpleError::Simple {
+        msg: format!("Failed to generate random bytes: {e}"),
+    })?;
+    let mnemonic = Mnemonic::from_entropy(&entropy).map_err(|e| SimpleError::Simple {
+        msg: format!("Failed to generate mnemonic: {e}"),
+    })?;
+
+    Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
+}
+
+pub fn mnemonic_to_secret(
+    mnemonic_string: Vec<String>,
+    passphrase: String,
+) -> std::result::Result<Secret, MnemonicError> {
+    let mnemonic = Mnemonic::from_str(&mnemonic_string.join(" ")).map_err(to_mnemonic_error)?;
+    Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
+}
+
+pub fn words_by_prefix(prefix: String) -> Vec<String> {
+    Language::English
+        .words_by_prefix(&prefix)
+        .iter()
+        .map(|w| w.to_string())
+        .collect()
 }
 
 fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
@@ -490,53 +536,24 @@ fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
     .map_to_permanent_failure("Failed to build auth client")
 }
 
-fn to_payment(payment: eel::payment::Payment) -> Payment {
-    let rate = payment.exchange_rate;
-    let amount = match payment.payment_type {
-        PaymentType::Receiving => payment.amount_msat.to_amount_down(&rate),
-        PaymentType::Sending => payment.amount_msat.to_amount_up(&rate),
-    };
-    let invoice_details = match payment.payment_type {
-        PaymentType::Receiving => InvoiceDetails::from_local_invoice(payment.invoice, &rate),
-        PaymentType::Sending => InvoiceDetails::from_remote_invoice(payment.invoice, &rate),
-    };
-    Payment {
-        payment_type: payment.payment_type,
-        payment_state: payment.payment_state,
-        fail_reason: payment.fail_reason,
-        hash: payment.hash,
-        amount,
-        invoice_details,
-        created_at: payment.created_at,
-        latest_state_change_at: payment.latest_state_change_at,
-        description: payment.description,
-        preimage: payment.preimage,
-        network_fees: payment.network_fees_msat.map(|fee| fee.to_amount_up(&rate)),
-        lsp_fees: payment.lsp_fees_msat.map(|fee| fee.to_amount_up(&rate)),
-        offer: payment.offer_kind,
-        metadata: payment.metadata,
-    }
-}
+pub fn derive_key_pair_hex(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair> {
+    let master_xpriv = ExtendedPrivKey::new_master(Network::Bitcoin, seed)
+        .map_to_invalid_input("Failed to get xpriv from from seed")?;
 
-fn to_limits(
-    limits: eel::limits::PaymentAmountLimits,
-    rate: &Option<ExchangeRate>,
-) -> PaymentAmountLimits {
-    let liquidity_limit = match limits.liquidity_limit {
-        eel::limits::LiquidityLimit::None => LiquidityLimit::None,
-        eel::limits::LiquidityLimit::MaxFreeReceive { amount_msat } => {
-            LiquidityLimit::MaxFreeReceive {
-                amount: amount_msat.to_amount_down(rate),
-            }
-        }
-        eel::limits::LiquidityLimit::MinReceive { amount_msat } => LiquidityLimit::MinReceive {
-            amount: amount_msat.to_amount_up(rate),
-        },
-    };
-    PaymentAmountLimits {
-        max_receive: limits.max_receive_msat.to_amount_down(rate),
-        liquidity_limit,
-    }
+    let derivation_path = DerivationPath::from_str(derivation_path)
+        .map_to_invalid_input("Invalid derivation path")?;
+
+    let derived_xpriv = master_xpriv
+        .derive_priv(SECP256K1, &derivation_path)
+        .map_to_permanent_failure("Failed to derive keys")?;
+
+    let secret_key = derived_xpriv.private_key.secret_bytes();
+    let public_key = PublicKey::from_secret_key(SECP256K1, &derived_xpriv.private_key).serialize();
+
+    Ok(KeyPair {
+        secret_key: secret_key.to_vec().to_hex(),
+        public_key: public_key.to_hex(),
+    })
 }
 
 fn get_payment_uuid(payment_hash: String) -> Result<String> {
@@ -556,10 +573,20 @@ include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bip39::Mnemonic;
     use perro::Error;
+    use std::str::FromStr;
 
     const PAYMENT_HASH: &str = "0b78877a596f18d5f6effde3dda1df25a5cf20439ff1ac91478d7e518211040f";
     const PAYMENT_UUID: &str = "c6e597bd-0a98-5b46-8e74-f6098f5d16a3";
+    const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
+    // Values used for testing were obtained from https://iancoleman.io/bip39
+    const MNEMONIC_STR: &str = "between angry ketchup hill admit attitude echo wisdom still barrel coral obscure home museum trick grow magic eagle school tilt loop actress equal law";
+    const SEED_HEX: &str = "781bfd3b2c6a5cfa9ed1551303fa20edf12baa5864521e7782d42a1bb15c2a444f7b81785f537bec6e38a533d0dc88e2a7effad7b975dd7c9bca1f9e7117966d";
+    const DERIVED_AUTH_SECRET_KEY_HEX: &str =
+        "1b64f7c3f7462e3815eacef53ddf18e5623bf8945d065761b05b022f19e60251";
+    const DERIVED_AUTH_PUBLIC_KEY_HEX: &str =
+        "02549b15801b155d32ca3931665361b1d2997ee531859b2d48cebbc2ccf21aac96";
 
     #[test]
     pub fn test_payment_uuid() {
@@ -581,5 +608,24 @@ mod tests {
             &invalid_hash_encoding.unwrap_err().to_string()[0..43],
             "InvalidInput: Invalid payment hash encoding"
         );
+    }
+
+    fn mnemonic_to_seed(mnemonic: &str) -> [u8; 64] {
+        let mnemonic = Mnemonic::from_str(mnemonic).unwrap();
+        let mut seed = [0u8; 64];
+        seed.copy_from_slice(&mnemonic.to_seed("")[0..64]);
+
+        seed
+    }
+
+    #[test]
+    fn test_derive_auth_key_pair() {
+        let seed = mnemonic_to_seed(MNEMONIC_STR);
+        assert_eq!(seed.to_hex(), SEED_HEX.to_string());
+
+        let key_pair = derive_key_pair_hex(&seed, BACKEND_AUTH_DERIVATION_PATH).unwrap();
+
+        assert_eq!(key_pair.secret_key, DERIVED_AUTH_SECRET_KEY_HEX.to_string());
+        assert_eq!(key_pair.public_key, DERIVED_AUTH_PUBLIC_KEY_HEX.to_string());
     }
 }

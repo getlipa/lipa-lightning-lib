@@ -5,10 +5,9 @@ mod print_events_handler;
 
 use crate::print_events_handler::PrintEventsHandler;
 
-use uniffi_lipalightninglib::LightningNode;
+use uniffi_lipalightninglib::{mnemonic_to_secret, LightningNode};
 use uniffi_lipalightninglib::{Config, EnvironmentCode, TzConfig};
 
-use eel::keys_manager::{generate_secret, mnemonic_to_secret};
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, fs};
@@ -26,7 +25,7 @@ fn main() {
 
     let events = Box::new(PrintEventsHandler {});
 
-    let seed = read_or_generate_seed(&base_dir);
+    let seed = read_seed_from_env();
 
     let config = Config {
         environment,
@@ -47,22 +46,10 @@ fn main() {
     cli::poll_for_user_input(&node, &format!("{base_dir}/{LOG_FILE}"));
 }
 
-fn read_or_generate_seed(base_dir: &str) -> Vec<u8> {
-    let passphrase = "".to_string();
-    let filename = format!("{base_dir}/recovery_phrase");
-    match fs::read(filename.clone()) {
-        Ok(mnemonic) => {
-            let mnemonic = std::str::from_utf8(&mnemonic).unwrap();
-            let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
-            mnemonic_to_secret(mnemonic, passphrase).unwrap().seed
-        }
-        Err(_) => {
-            let secret = generate_secret(passphrase).unwrap();
-            let recovery_phrase = secret.mnemonic.join(" ");
-            fs::write(filename, &recovery_phrase).unwrap();
-            secret.seed
-        }
-    }
+fn read_seed_from_env() -> Vec<u8> {
+    let mnemonic = env!("BREEZ_SDK_MNEMONIC");
+    let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
+    mnemonic_to_secret(mnemonic, "".to_string()).unwrap().seed
 }
 
 fn map_environment_code(code: &str) -> EnvironmentCode {

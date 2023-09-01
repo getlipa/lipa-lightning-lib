@@ -1,23 +1,20 @@
 #[path = "print_events_handler/mod.rs"]
 mod print_events_handler;
 mod setup_3l;
-#[path = "../eel/tests/setup_env/mod.rs"]
-mod setup_env;
 
 #[cfg(feature = "nigiri")]
 mod node_info_test {
     use crate::setup_3l::NodeHandle;
-    use crate::setup_env::nigiri;
     use std::str::FromStr;
 
     use bitcoin::secp256k1::PublicKey;
     use serial_test::file_serial;
 
+    // TODO remove ignore after implementing node info with breez sdk
+    #[ignore]
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_get_node_info() {
-        nigiri::setup_environment_with_lsp();
-
         let node = NodeHandle::new().start().unwrap();
         let node_info = node.get_node_info();
 

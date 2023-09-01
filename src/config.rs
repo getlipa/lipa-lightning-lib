@@ -1,5 +1,5 @@
 use crate::environment::EnvironmentCode;
-use eel::config::TzConfig;
+use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -9,4 +9,17 @@ pub struct Config {
     pub local_persistence_path: String,
     pub timezone_config: TzConfig,
     pub enable_file_logging: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct TzConfig {
+    pub timezone_id: String,
+    pub timezone_utc_offset_secs: i32,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct TzTime {
+    pub time: SystemTime,
+    pub timezone_id: String,
+    pub timezone_utc_offset_secs: i32,
 }
