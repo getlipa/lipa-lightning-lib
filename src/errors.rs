@@ -14,6 +14,9 @@ pub enum RuntimeErrorCode {
     LspServiceUnavailable,
     RemoteStorageError,
     NonExistingWallet,
+
+    // Breez runtime errors
+    NodeUnavailable,
 }
 
 impl Display for RuntimeErrorCode {

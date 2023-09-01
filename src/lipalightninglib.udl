@@ -30,7 +30,8 @@ interface LightningNode {
     [Throws=LnError]
     constructor(Config config, EventsCallback events_callback);
 
-    // Request some basic info about the local node
+    // Request some basic info about the node
+    [Throws=LnError]
     NodeInfo get_node_info();
 
     // When *receiving* payments, a new channel MAY be required. A fee will be charged to the user. This does NOT impact *sending* payments.
@@ -539,6 +540,7 @@ enum RuntimeErrorCode {
     "EsploraServiceUnavailable", // The esplora service is unavailable. Could there be a loss of internet connection?
     "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
     "RemoteStorageError", // Any error related to the remote storage. Could be a network error or a data error.
+    "NodeUnavailable", // Information about the remote node isn't cached and couldn't be accessed. Could be a network error.
 
     // RECOVERY ERRORS
     "NonExistingWallet", // A recovery process couldn't be completed because no recovery data could be found. Most likely the recovery phrase wasn't created by the lipa wallet.
