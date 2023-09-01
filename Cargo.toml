@@ -54,9 +54,6 @@ strip-ansi-escapes = "0.2.0"
 camino = "1.1.6"
 uniffi_bindgen = "0.24.0"
 
-[package.metadata.cross.build]
-pre-build = ["apt update --no-show-upgraded && apt install --yes protobuf-compiler"]
-
 # Enable debug symbols for our and LDK crates, but not others.
 [profile.release]
 debug = 1
