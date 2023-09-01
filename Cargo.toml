@@ -24,6 +24,7 @@ honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.9.0" }
 mole = { git = "https://github.com/getlipa/wild", tag = "v1.9.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
 
+bitcoin = "0.29.2"
 chrono = { version = "0.4.28", default-features = false, features = ["serde"] }
 email_address = "0.2.4"
 file-rotate = "0.7.5"
@@ -39,7 +40,6 @@ uniffi = "0.24.3"
 uuid = { version = "1.4.1", features = ["v5"] }
 
 [dev-dependencies]
-bitcoin = "0.29.2"
 chrono = { version = "0.4.28", default-features = false }
 colored = "2.0.4"
 ctor = "0.2.4"

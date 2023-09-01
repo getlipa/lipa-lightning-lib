@@ -29,6 +29,8 @@ pub use crate::recovery::recover_lightning_node;
 
 pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
+use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
+use bitcoin::util::bip32::{ChildNumber, ExtendedPrivKey};
 use crow::LanguageCode;
 use crow::{CountryCode, TopupStatus};
 use crow::{OfferManager, TopupInfo};
@@ -197,6 +199,14 @@ impl LightningNode {
             )
             .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?,
         );
+
+        println!(
+            "The eel node id is {}",
+            core_node.get_node_info().node_pubkey
+        );
+        let (_secret_key, public_key) = Self::derive_legacy_node_keypair(seed)?;
+        println!("The derived legacy node is {}", public_key);
+        panic!();
 
         let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&core_node))?;
         let offer_manager = OfferManager::new(environment.backend_url, Arc::clone(&auth));
@@ -427,6 +437,20 @@ impl LightningNode {
 
     pub fn get_payment_uuid(&self, payment_hash: String) -> Result<String> {
         get_payment_uuid(payment_hash)
+    }
+
+    fn derive_legacy_node_keypair(seed: [u8; 64]) -> Result<(SecretKey, PublicKey)> {
+        let mut first_half = [0u8; 32];
+        first_half.copy_from_slice(&seed[..32]);
+        // Note that when we aren't serializing the key, network doesn't matter
+        let master_key = ExtendedPrivKey::new_master(Network::Testnet, &first_half)
+            .map_to_permanent_failure("Failed to build master key")?;
+        let node_secret = master_key
+            .ckd_priv(SECP256K1, ChildNumber::from_hardened_idx(0).unwrap())
+            .map_to_permanent_failure("Failed to build node secret")?
+            .private_key;
+        let node_id = PublicKey::from_secret_key(SECP256K1, &node_secret);
+        Ok((node_secret, node_id))
     }
 }
 
