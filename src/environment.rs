@@ -9,7 +9,7 @@ pub enum EnvironmentCode {
     Prod,
 }
 
-// TODO remove dead code after breez sdk implementation
+// TODO remove dead code after breez sdk implementation and fix implementation (e.g. currently it selects mainnet when Local or Dev codes are provided)
 #[allow(dead_code)]
 pub(crate) struct Environment {
     pub network: Network,

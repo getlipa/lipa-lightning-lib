@@ -392,7 +392,7 @@ impl LightningNode {
         }
 
         self.offer_manager
-            .register_node(self.get_node_info().node_pubkey.to_string())
+            .register_node(self.get_node_info().node_pubkey)
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
 
         self.fiat_topup_client

@@ -80,8 +80,8 @@ impl NodeHandle {
     }
 
     pub fn reset_state() {
-        let _ = fs::remove_dir_all(LOCAL_PERSISTENCE_PATH.to_string());
-        fs::create_dir(LOCAL_PERSISTENCE_PATH.to_string()).unwrap();
+        let _ = fs::remove_dir_all(LOCAL_PERSISTENCE_PATH);
+        fs::create_dir(LOCAL_PERSISTENCE_PATH).unwrap();
     }
 
     pub fn recover(&self) -> Result<()> {
