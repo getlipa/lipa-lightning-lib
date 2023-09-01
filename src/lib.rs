@@ -95,7 +95,9 @@ pub struct NodeInfo {
 }
 
 pub struct ChannelsInfo {
+    // This field will currently always be 0 until Breez SDK exposes more detailed channel information https://github.com/breez/breez-sdk/issues/421
     pub num_channels: u16,
+    // This field will currently always be 0 until Breez SDK exposes more detailed channel information https://github.com/breez/breez-sdk/issues/421
     pub num_usable_channels: u16,
     pub local_balance: Amount,
     pub inbound_capacity: Amount,
