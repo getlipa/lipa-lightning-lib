@@ -232,7 +232,7 @@ impl LightningNode {
             NodeConfig::Greenlight {
                 config: GreenlightNodeConfig {
                     partner_credentials: None,
-                    invite_code: config.invite_code,
+                    invite_code: None,
                 },
             },
         );

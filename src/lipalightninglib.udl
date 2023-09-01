@@ -201,7 +201,6 @@ dictionary Config {
     string local_persistence_path;
     TzConfig timezone_config;
     boolean enable_file_logging;
-    string? invite_code;
 };
 
 // A code of the environment for the node to run.

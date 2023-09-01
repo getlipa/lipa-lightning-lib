@@ -54,11 +54,6 @@ impl NodeHandle {
         let mnemonic = std::env::var("BREEZ_SDK_MNEMONIC").unwrap();
         let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
 
-        let invite_code = match std::env::var("BREEZ_SDK_INVITE_CODE") {
-            Ok(s) => Some(s.to_string()),
-            Err(_) => None,
-        };
-
         NodeHandle {
             config: Config {
                 environment: uniffi_lipalightninglib::EnvironmentCode::Local,
@@ -70,7 +65,6 @@ impl NodeHandle {
                     timezone_utc_offset_secs: 1234,
                 },
                 enable_file_logging: false,
-                invite_code,
             },
         }
     }

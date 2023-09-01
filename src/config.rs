@@ -9,7 +9,6 @@ pub struct Config {
     pub local_persistence_path: String,
     pub timezone_config: TzConfig,
     pub enable_file_logging: bool,
-    pub invite_code: Option<String>,
 }
 
 #[derive(Clone, Debug)]

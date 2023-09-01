@@ -27,8 +27,6 @@ fn main() {
 
     let seed = read_seed_from_env();
 
-    let invite_code: Option<String> = option_env!("BREEZ_SDK_INVITE_CODE").map(|s| s.to_string());
-
     let config = Config {
         environment,
         seed,
@@ -39,7 +37,6 @@ fn main() {
             timezone_utc_offset_secs: 1 * 60 * 60,
         },
         enable_file_logging: true,
-        invite_code,
     };
 
     let node = LightningNode::new(config, events).unwrap();
