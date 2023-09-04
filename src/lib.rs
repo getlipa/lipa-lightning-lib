@@ -283,9 +283,9 @@ impl LightningNode {
                 num_channels: 0,
                 num_usable_channels: 0,
                 local_balance: node_state.channels_balance_msat.to_amount_down(&rate),
-                inbound_capacity: node_state.max_receivable_msat.to_amount_down(&rate),
+                inbound_capacity: node_state.inbound_liquidity_msats.to_amount_down(&rate),
                 outbound_capacity: node_state.max_payable_msat.to_amount_down(&rate),
-                total_channel_capacities: node_state.max_payable_msat.to_amount_down(&rate),
+                total_channel_capacities: 0.to_amount_down(&rate),
             },
         })
     }

@@ -274,6 +274,7 @@ dictionary ChannelsInfo {
     u16 num_usable_channels; // Number of usable channels. E.g. if a peer if offline, channels with that peer won't be usable.
     Amount local_balance; // The balance of the local node. Please keep in mind not all of this balance is spendable
         // due to Lightning channel reserves
+    // This field will currently always be 0 until Breez SDK exposes more detailed channel information https://github.com/breez/breez-sdk/issues/421
     Amount total_channel_capacities; // Total capacity of all usable channels of the node
 
     // Capacity the node can actually receive.
