@@ -198,6 +198,8 @@ impl EventListener for LipaEventListener {
     }
 }
 
+const MAX_FEE_PERMYRIAD: u16 = 50;
+
 impl LightningNode {
     // TODO remove unused_variables after breez sdk implementation
     #[allow(unused_variables)]
@@ -243,6 +245,7 @@ impl LightningNode {
         );
 
         breez_config.working_dir = config.local_persistence_path;
+        breez_config.maxfee_percent = (MAX_FEE_PERMYRIAD / 100).into();
 
         let sdk = rt
             .block_on(BreezServices::connect(
@@ -324,10 +327,10 @@ impl LightningNode {
         todo!()
     }
 
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
-    pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
-        todo!()
+    pub fn get_payment_max_routing_fee_mode(&self, _amount_sat: u64) -> MaxRoutingFeeMode {
+        MaxRoutingFeeMode::Relative {
+            max_fee_permyriad: MAX_FEE_PERMYRIAD,
+        }
     }
 
     // TODO remove unused_variables after breez sdk implementation
