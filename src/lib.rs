@@ -331,13 +331,13 @@ impl LightningNode {
 
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
         if amount_sat * (MAX_FEE_PERMYRIAD as u64) / 100 < EXEMPT_FEE_MSAT {
-            return MaxRoutingFeeMode::Absolute {
-                max_fee_amount: EXEMPT_FEE_MSAT.to_amount_down(&self.get_exchange_rate()),
-            };
-        }
-
-        MaxRoutingFeeMode::Relative {
-            max_fee_permyriad: MAX_FEE_PERMYRIAD,
+            MaxRoutingFeeMode::Absolute {
+                max_fee_amount: EXEMPT_FEE_MSAT.to_amount_up(&self.get_exchange_rate()),
+            }
+        } else {
+            MaxRoutingFeeMode::Relative {
+                max_fee_permyriad: MAX_FEE_PERMYRIAD,
+            }
         }
     }
 
