@@ -199,6 +199,7 @@ impl EventListener for LipaEventListener {
 }
 
 const MAX_FEE_PERMYRIAD: u16 = 50;
+const EXEMPT_FEE_MSAT: u64 = 20_000;
 
 impl LightningNode {
     // TODO remove unused_variables after breez sdk implementation
@@ -245,6 +246,7 @@ impl LightningNode {
         );
 
         breez_config.working_dir = config.local_persistence_path;
+        // TODO configure `exemptfee` when exposed by Breez
         breez_config.maxfee_percent = (MAX_FEE_PERMYRIAD / 100).into();
 
         let sdk = rt
@@ -327,7 +329,13 @@ impl LightningNode {
         todo!()
     }
 
-    pub fn get_payment_max_routing_fee_mode(&self, _amount_sat: u64) -> MaxRoutingFeeMode {
+    pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
+        if amount_sat * (MAX_FEE_PERMYRIAD as u64) / 100 < EXEMPT_FEE_MSAT {
+            return MaxRoutingFeeMode::Absolute {
+                max_fee_amount: EXEMPT_FEE_MSAT.to_amount_down(&self.get_exchange_rate()),
+            };
+        }
+
         MaxRoutingFeeMode::Relative {
             max_fee_permyriad: MAX_FEE_PERMYRIAD,
         }
