@@ -55,4 +55,4 @@ strip-ansi-escapes = "0.2.0"
 storage-mock = { path = "../util/storage-mock" }
 
 [build-dependencies]
-tonic-build = "0.9.2"
+tonic-build = "0.10.0"
