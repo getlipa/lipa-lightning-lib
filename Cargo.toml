@@ -17,42 +17,36 @@ honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.9.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.1.4" }
-bitcoin = "0.29.2"
-bip39 = "2.0.0"
-cipher = "0.4.4"
-tokio = { version = "1.29.0", features = ["rt-multi-thread", "time", "sync"] }
 # Pinning some problematic dependencies.
 ecies = { version = "=0.2.4", default-features = false, features = ["pure"] }
 flutter_rust_bridge = "=1.75.2"
 lightning = { version = "=0.0.115", features = ["max_level_trace"] }
 lightning-invoice = "=0.23.0"
-rand = "0.8.5"
 txoo = "=0.4.2"
 
+bip39 = "2.0.0"
+bitcoin = "0.29.2"
 chrono = { version = "0.4.26", default-features = false, features = ["serde"] }
+cipher = "0.4.4"
 email_address = "0.2.4"
 file-rotate = "0.7.5"
 hex = "0.4.3"
 iban_validate = "4.0.1"
 log = "0.4.20"
 num_enum = "0.7.0"
+rand = "0.8.5"
 reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "rustls-tls"]}
 serde = { version = "1.0", features = ["derive"]}
-serde_json = "1.0"
 simplelog = { version = "0.12.0" }
 thiserror = "1.0.47"
+tokio = { version = "1.29.0", features = ["rt-multi-thread", "time", "sync"] }
 uniffi = "0.24.3"
 uuid = { version = "1.4.1", features = ["v5"] }
 
 [dev-dependencies]
-bitcoin = "0.29.2"
-chrono = { version = "0.4.26", default-features = false }
 colored = "2.0.4"
 ctor = "0.2.4"
-esplora-client = { version = "0.5.0", default-features = false, features = ["blocking"] }
-rand = "0.8.5"
 rustyline = { version = "12.0.0", features = ["derive"] }
-serde_json = "1.0"
 serial_test = { version =  "2.0.0", features = ["file_locks"] }
 strip-ansi-escapes = "0.2.0"
 
