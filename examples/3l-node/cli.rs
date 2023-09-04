@@ -23,7 +23,10 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("{}", "3L Example Node".blue().bold());
     println!("Detailed logs are available at {}", log_file_path);
     println!("To stop the node, please type \"stop\" for a graceful shutdown.");
-    println!("Local Node ID is: {}", &node.get_node_info().node_pubkey);
+    println!(
+        "Local Node ID is: {}",
+        &node.get_node_info().unwrap().node_pubkey
+    );
 
     let prompt = "3L ϟ ".bold().blue().to_string();
     let history_path = Path::new(".3l_cli_history");
@@ -296,7 +299,13 @@ fn payment_amount_limits(node: &LightningNode) {
 }
 
 fn node_info(node: &LightningNode) {
-    let node_info = node.get_node_info();
+    let node_info = match node.get_node_info() {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("{}", e);
+            return;
+        }
+    };
     let peers_list = if node_info.peers.is_empty() {
         vec!["None".to_string()]
     } else {

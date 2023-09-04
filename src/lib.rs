@@ -38,7 +38,9 @@ use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
-use breez_sdk_core::{BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, NodeConfig};
+use breez_sdk_core::{
+    BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, NodeConfig, NodeState,
+};
 use crow::LanguageCode;
 use crow::{CountryCode, TopupStatus};
 use crow::{OfferManager, TopupInfo};
@@ -49,6 +51,7 @@ use iban::Iban;
 use log::trace;
 use logger::init_logger_once;
 use num_enum::TryFromPrimitive;
+use perro::Error::RuntimeError;
 use perro::{invalid_input, MapToError, ResultTrait};
 use std::path::Path;
 use std::str::FromStr;
@@ -92,7 +95,9 @@ pub struct NodeInfo {
 }
 
 pub struct ChannelsInfo {
+    // This field will currently always be 0 until Breez SDK exposes more detailed channel information https://github.com/breez/breez-sdk/issues/421
     pub num_channels: u16,
+    // This field will currently always be 0 until Breez SDK exposes more detailed channel information https://github.com/breez/breez-sdk/issues/421
     pub num_usable_channels: u16,
     pub local_balance: Amount,
     pub inbound_capacity: Amount,
@@ -264,8 +269,25 @@ impl LightningNode {
         })
     }
 
-    pub fn get_node_info(&self) -> NodeInfo {
-        todo!()
+    pub fn get_node_info(&self) -> Result<NodeInfo> {
+        let node_state: NodeState = self.sdk.node_info().map_err(|e| RuntimeError {
+            code: RuntimeErrorCode::NodeUnavailable,
+            msg: e.to_string(),
+        })?;
+        let rate = self.get_exchange_rate();
+
+        Ok(NodeInfo {
+            node_pubkey: node_state.id,
+            peers: node_state.connected_peers,
+            channels_info: ChannelsInfo {
+                num_channels: 0,
+                num_usable_channels: 0,
+                local_balance: node_state.channels_balance_msat.to_amount_down(&rate),
+                inbound_capacity: node_state.inbound_liquidity_msats.to_amount_down(&rate),
+                outbound_capacity: node_state.max_payable_msat.to_amount_down(&rate),
+                total_channel_capacities: 0.to_amount_down(&rate),
+            },
+        })
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
@@ -350,7 +372,8 @@ impl LightningNode {
     }
 
     pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
-        todo!()
+        // TODO implement get exchange rate
+        None
     }
 
     // TODO remove unused_variables after breez sdk implementation
@@ -392,7 +415,7 @@ impl LightningNode {
         }
 
         self.offer_manager
-            .register_node(self.get_node_info().node_pubkey)
+            .register_node(self.get_node_info()?.node_pubkey)
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
 
         self.fiat_topup_client

@@ -74,7 +74,7 @@ impl NodeHandle {
         let node = LightningNode::new(self.config.clone(), Box::new(events_handler))?;
 
         // Wait for the the P2P background task to connect to the LSP
-        wait_for!(!node.get_node_info().peers.is_empty());
+        wait_for!(!node.get_node_info().unwrap().peers.is_empty());
 
         Ok(node)
     }

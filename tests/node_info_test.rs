@@ -10,13 +10,11 @@ mod node_info_test {
     use bitcoin::secp256k1::PublicKey;
     use serial_test::file_serial;
 
-    // TODO remove ignore after implementing node info with breez sdk
-    #[ignore]
     #[test]
     #[file_serial(key, "/tmp/3l-int-tests-lock")]
     fn test_get_node_info() {
         let node = NodeHandle::new().start().unwrap();
-        let node_info = node.get_node_info();
+        let node_info = node.get_node_info().unwrap();
 
         assert!(
             PublicKey::from_str(&*node_info.node_pubkey).is_ok(),
