@@ -304,15 +304,24 @@ impl LightningNode {
         todo!()
     }
 
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
     pub fn create_invoice(
         &self,
         amount_sat: u64,
         description: String,
-        metadata: String,
+        _metadata: String,
     ) -> Result<InvoiceDetails> {
-        todo!()
+        let ln_invoice = self
+            .rt
+            .block_on(self.sdk.receive_payment(amount_sat, description))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to create an invoice",
+            )?;
+        // TODO: store info about this payment in local db (metadata, exchange rates, offerkind, lsp fee, etc)
+        Ok(InvoiceDetails::from_ln_invoice(
+            ln_invoice,
+            &self.get_exchange_rate(),
+        ))
     }
 
     // TODO remove unused_variables after breez sdk implementation
