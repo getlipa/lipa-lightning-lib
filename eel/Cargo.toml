@@ -26,7 +26,7 @@ lightning-transaction-sync = { version = "0.0.116", features = ["esplora-async"]
 lnurl-rs = { version = "0.2.6", default-features = false, features = ["blocking" ] }
 log = "0.4.20"
 num_enum = "0.7.0"
-prost = "0.11.9"
+prost = "0.12.0"
 rand = "0.8.5"
 reqwest = { version = "0.11.20", default-features = false, features = ["blocking", "rustls-tls"] }
 # Explicitly depend on secp256k1 for secp256k1::SECP256K1.
