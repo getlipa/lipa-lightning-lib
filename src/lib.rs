@@ -330,21 +330,36 @@ impl LightningNode {
         todo!()
     }
 
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
-    pub fn pay_invoice(&self, invoice: String, metadata: String) -> PayResult<()> {
-        todo!()
+    pub fn pay_invoice(&self, invoice: String, _metadata: String) -> PayResult<()> {
+        match self.rt.block_on(self.sdk.send_payment(invoice, None)) {
+            Ok(_) => Ok(()),
+            // TODO: properly handle errors (requires changing either ours or the SDK's error model)
+            Err(e) => Err(RuntimeError {
+                code: PayErrorCode::UnexpectedError,
+                msg: format!("Failed to start paying invoice: {e}"),
+            }),
+        }
+        // TODO: persist information about this payment in local db
     }
 
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
     pub fn pay_open_invoice(
         &self,
         invoice: String,
         amount_sat: u64,
-        metadata: String,
+        _metadata: String,
     ) -> PayResult<()> {
-        todo!()
+        match self
+            .rt
+            .block_on(self.sdk.send_payment(invoice, Some(amount_sat)))
+        {
+            Ok(_) => Ok(()),
+            // TODO: properly handle errors (requires changing either ours or the SDK's error model)
+            Err(e) => Err(RuntimeError {
+                code: PayErrorCode::UnexpectedError,
+                msg: format!("Failed to start paying invoice: {e}"),
+            }),
+        }
+        // TODO: persist information about this payment in local db
     }
 
     // TODO remove unused_variables after breez sdk implementation
