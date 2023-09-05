@@ -310,16 +310,27 @@ impl LightningNode {
         description: String,
         _metadata: String,
     ) -> Result<InvoiceDetails> {
-        let ln_invoice = self
+        let response = self
             .rt
-            .block_on(self.sdk.receive_payment(amount_sat, description))
+            .block_on(
+                self.sdk
+                    .receive_payment(breez_sdk_core::ReceivePaymentRequest {
+                        amount_sats: amount_sat,
+                        description,
+                        preimage: None,
+                        opening_fee_params: None,
+                        use_description_hash: None,
+                        expiry: None,
+                        cltv: None,
+                    }),
+            )
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to create an invoice",
             )?;
         // TODO: store info about this payment in local db (metadata, exchange rates, offerkind, lsp fee, etc)
         Ok(InvoiceDetails::from_ln_invoice(
-            ln_invoice,
+            response.ln_invoice,
             &self.get_exchange_rate(),
         ))
     }
