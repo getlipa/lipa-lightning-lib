@@ -4,8 +4,6 @@ use crate::ExchangeRate;
 use breez_sdk_core::LNInvoice;
 use std::time::{Duration, SystemTime};
 
-// TODO remove dead code after breez sdk implementation
-#[allow(dead_code)]
 pub struct InvoiceDetails {
     pub invoice: String,
     pub amount: Option<Amount>,
