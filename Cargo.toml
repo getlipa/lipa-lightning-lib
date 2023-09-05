@@ -36,12 +36,31 @@ log = "0.4.20"
 num_enum = "0.7.0"
 rand = "0.8.5"
 reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "rustls-tls"]}
+rusqlite_migration = "1"
 serde = { version = "1.0", features = ["derive"]}
 simplelog = { version = "0.12.0" }
 thiserror = "1.0.47"
 tokio = { version = "1.29.0", features = ["rt-multi-thread", "time", "sync"] }
 uniffi = "0.24.3"
 uuid = { version = "1.4.1", features = ["v5"] }
+
+# Bundle sqlite for all targets except iOS.
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+rusqlite = { version = "0.28.0", features = [
+    "serde_json",
+    "bundled",
+    "load_extension",
+    "backup",
+    "hooks",
+] }
+[target.'cfg(target_os = "ios")'.dependencies]
+rusqlite = { version = "0.28.0", features = [
+    "serde_json",
+    "load_extension",
+    "backup",
+    "hooks",
+] }
+
 
 [dev-dependencies]
 colored = "2.0.4"

@@ -5,12 +5,14 @@ extern crate core;
 mod amount;
 mod callbacks;
 mod config;
+mod data_store;
 mod environment;
 mod errors;
 mod exchange_rate_provider;
 mod fiat_topup;
 mod invoice_details;
 mod logger;
+mod migrations;
 mod random;
 mod recovery;
 mod sanitize_input;
@@ -22,29 +24,28 @@ pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
+use crate::errors::to_mnemonic_error;
+pub use crate::errors::{DecodeInvoiceError, MnemonicError, PayError, PayErrorCode, PayResult};
 pub use crate::errors::{Error as LnError, Result, RuntimeErrorCode};
 pub use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProviderImpl};
+pub use crate::fiat_topup::TopupCurrency;
+use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
-use bip39::{Language, Mnemonic};
-use bitcoin::Network;
-use cipher::generic_array::typenum::U32;
 
-use crate::errors::to_mnemonic_error;
-pub use crate::errors::{DecodeInvoiceError, MnemonicError, PayError, PayErrorCode, PayResult};
-pub use crate::fiat_topup::TopupCurrency;
-use crate::fiat_topup::{FiatTopupInfo, PocketClient};
+use bip39::{Language, Mnemonic};
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
+use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, InputType, NodeConfig,
     NodeState,
 };
-use crow::LanguageCode;
-use crow::{CountryCode, TopupStatus};
-use crow::{OfferManager, TopupInfo};
+use cipher::generic_array::typenum::U32;
+use crow::{CountryCode, LanguageCode, OfferManager, TopupInfo, TopupStatus};
+use data_store::DataStore;
 use email_address::EmailAddress;
 use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
@@ -56,7 +57,7 @@ use perro::Error::RuntimeError;
 use perro::{invalid_input, MapToError, ResultTrait};
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use std::{env, fs};
 use tokio::runtime::{Builder, Runtime};
@@ -180,6 +181,7 @@ pub struct LightningNode {
     fiat_topup_client: PocketClient,
     offer_manager: OfferManager,
     rt: Runtime,
+    data_store: Mutex<DataStore>,
 }
 
 struct LipaEventListener;
@@ -246,7 +248,7 @@ impl LightningNode {
             },
         );
 
-        breez_config.working_dir = config.local_persistence_path;
+        breez_config.working_dir = config.local_persistence_path.clone();
         // TODO configure `exemptfee` when exposed by Breez
         breez_config.maxfee_percent = (MAX_FEE_PERMYRIAD / 100).into();
 
@@ -266,12 +268,16 @@ impl LightningNode {
         let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&sdk))?;
         let offer_manager = OfferManager::new(environment.backend_url, Arc::clone(&auth));
 
+        let db_path = format!("{}/db2.db3", config.local_persistence_path);
+        let data_store = Mutex::new(DataStore::new(&db_path)?);
+
         Ok(LightningNode {
             sdk,
             auth,
             fiat_topup_client,
             offer_manager,
             rt,
+            data_store,
         })
     }
 
