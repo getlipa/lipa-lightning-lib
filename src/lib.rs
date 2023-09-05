@@ -11,6 +11,7 @@ mod errors;
 mod exchange_rate_provider;
 mod fiat_topup;
 mod invoice_details;
+mod limits;
 mod logger;
 mod migrations;
 mod random;
@@ -34,6 +35,7 @@ pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
 
+pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 use bip39::{Language, Mnemonic};
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
@@ -54,7 +56,9 @@ use log::trace;
 use logger::init_logger_once;
 use num_enum::TryFromPrimitive;
 use perro::Error::RuntimeError;
-use perro::{invalid_input, permanent_failure, runtime_error, MapToError, ResultTrait};
+use perro::{
+    invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
+};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -72,17 +76,6 @@ const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 pub enum SimpleError {
     #[error("SimpleError: {msg}")]
     Simple { msg: String },
-}
-
-pub struct PaymentAmountLimits {
-    pub max_receive: Amount,
-    pub liquidity_limit: LiquidityLimit,
-}
-
-pub enum LiquidityLimit {
-    None,
-    MaxFreeReceive { amount: Amount },
-    MinReceive { amount: Amount },
 }
 
 pub struct LspFee {
@@ -271,6 +264,25 @@ impl LightningNode {
             ))
             .map_to_permanent_failure("Failed to initialize a breez sdk instance")?;
 
+        if (rt.block_on(sdk.lsp_id()).map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to get current lsp id",
+        ))?
+        .is_none()
+        {
+            let lsps = rt
+                .block_on(sdk.list_lsps())
+                .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list lsps")?;
+            let lsp = lsps
+                .first()
+                .ok_or_runtime_error(RuntimeErrorCode::NodeUnavailable, "No lsp available")?;
+            rt.block_on(sdk.connect_lsp(lsp.id.clone()))
+                .map_to_runtime_error(
+                    RuntimeErrorCode::NodeUnavailable,
+                    "Failed to connect to lsp",
+                )?;
+        }
+
         let _exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
             environment.backend_url.clone(),
             Arc::clone(&auth),
@@ -315,17 +327,55 @@ impl LightningNode {
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        todo!()
+        let lsp_id = self
+            .rt
+            .block_on(self.sdk.lsp_id())
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to get lsp id")?
+            .ok_or_permanent_failure("No lsp connected")?;
+        let lsp_information = self
+            .rt
+            .block_on(self.sdk.fetch_lsp_info(lsp_id))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to fetch lsp info",
+            )?
+            .ok_or_permanent_failure("The currently connected lsp isn't available anymore")?;
+        let cheapest_opening_fee = lsp_information
+            .opening_fee_params_list
+            .get_cheapest_opening_fee_params()
+            .map_to_permanent_failure("Failed to get cheapest opening fee params")?;
+        Ok(LspFee {
+            channel_minimum_fee: cheapest_opening_fee
+                .min_msat
+                .to_amount_up(&self.get_exchange_rate()),
+            channel_fee_permyriad: cheapest_opening_fee.proportional as u64 / 100,
+        })
     }
 
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<Amount> {
-        todo!()
+        // TODO: update the following logic to use the new sdk method open_channel_fee() when it's available
+        // https://github.com/breez/breez-sdk/pull/416
+        if amount_sat > self.get_node_info()?.channels_info.inbound_capacity.sats {
+            let lsp_fee = self.query_lsp_fee()?;
+            let relative_fee_sat = amount_sat * lsp_fee.channel_fee_permyriad / 10_000;
+            if relative_fee_sat < lsp_fee.channel_minimum_fee.sats {
+                Ok(lsp_fee.channel_minimum_fee)
+            } else {
+                Ok((relative_fee_sat * 1_000).to_amount_up(&self.get_exchange_rate()))
+            }
+        } else {
+            Ok(0_u64.to_amount_down(&self.get_exchange_rate()))
+        }
     }
 
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
-        todo!()
+        let lsp_min_fee_amount = self.query_lsp_fee()?.channel_minimum_fee;
+        let max_inbound_amount = self.get_node_info()?.channels_info.inbound_capacity;
+        Ok(PaymentAmountLimits::calculate(
+            max_inbound_amount.sats,
+            lsp_min_fee_amount.sats,
+            &self.get_exchange_rate(),
+        ))
     }
 
     pub fn create_invoice(
