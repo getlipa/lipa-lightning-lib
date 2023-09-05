@@ -25,7 +25,7 @@ pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
-use crate::errors::to_mnemonic_error;
+use crate::errors::{to_mnemonic_error, Error};
 pub use crate::errors::{DecodeInvoiceError, MnemonicError, PayError, PayErrorCode, PayResult};
 pub use crate::errors::{Error as LnError, Result, RuntimeErrorCode};
 pub use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProviderImpl};
@@ -264,24 +264,30 @@ impl LightningNode {
             ))
             .map_to_permanent_failure("Failed to initialize a breez sdk instance")?;
 
-        if (rt.block_on(sdk.lsp_id()).map_to_runtime_error(
-            RuntimeErrorCode::NodeUnavailable,
-            "Failed to get current lsp id",
-        ))?
-        .is_none()
-        {
-            let lsps = rt
-                .block_on(sdk.list_lsps())
-                .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list lsps")?;
-            let lsp = lsps
-                .first()
-                .ok_or_runtime_error(RuntimeErrorCode::NodeUnavailable, "No lsp available")?;
-            rt.block_on(sdk.connect_lsp(lsp.id.clone()))
+        rt.block_on(async {
+            if sdk
+                .lsp_id()
+                .await
                 .map_to_runtime_error(
+                    RuntimeErrorCode::NodeUnavailable,
+                    "Failed to get current lsp id",
+                )?
+                .is_none()
+            {
+                let lsps = sdk.list_lsps().await.map_to_runtime_error(
+                    RuntimeErrorCode::NodeUnavailable,
+                    "Failed to list lsps",
+                )?;
+                let lsp = lsps
+                    .first()
+                    .ok_or_runtime_error(RuntimeErrorCode::NodeUnavailable, "No lsp available")?;
+                sdk.connect_lsp(lsp.id.clone()).await.map_to_runtime_error(
                     RuntimeErrorCode::NodeUnavailable,
                     "Failed to connect to lsp",
                 )?;
-        }
+            }
+            Ok::<(), Error>(())
+        })?;
 
         let _exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
             environment.backend_url.clone(),
@@ -327,28 +333,32 @@ impl LightningNode {
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        let lsp_id = self
-            .rt
-            .block_on(self.sdk.lsp_id())
-            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to get lsp id")?
-            .ok_or_permanent_failure("No lsp connected")?;
-        let lsp_information = self
-            .rt
-            .block_on(self.sdk.fetch_lsp_info(lsp_id))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to fetch lsp info",
-            )?
-            .ok_or_permanent_failure("The currently connected lsp isn't available anymore")?;
-        let cheapest_opening_fee = lsp_information
-            .opening_fee_params_list
-            .get_cheapest_opening_fee_params()
-            .map_to_permanent_failure("Failed to get cheapest opening fee params")?;
-        Ok(LspFee {
-            channel_minimum_fee: cheapest_opening_fee
-                .min_msat
-                .to_amount_up(&self.get_exchange_rate()),
-            channel_fee_permyriad: cheapest_opening_fee.proportional as u64 / 100,
+        self.rt.block_on(async {
+            let lsp_id = self
+                .sdk
+                .lsp_id()
+                .await
+                .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to get lsp id")?
+                .ok_or_permanent_failure("No lsp connected")?;
+            let lsp_information = self
+                .sdk
+                .fetch_lsp_info(lsp_id)
+                .await
+                .map_to_runtime_error(
+                    RuntimeErrorCode::NodeUnavailable,
+                    "Failed to fetch lsp info",
+                )?
+                .ok_or_permanent_failure("The currently connected lsp isn't available anymore")?;
+            let cheapest_opening_fee = lsp_information
+                .opening_fee_params_list
+                .get_cheapest_opening_fee_params()
+                .map_to_permanent_failure("Failed to get cheapest opening fee params")?;
+            Ok(LspFee {
+                channel_minimum_fee: cheapest_opening_fee
+                    .min_msat
+                    .to_amount_up(&self.get_exchange_rate()),
+                channel_fee_permyriad: cheapest_opening_fee.proportional as u64 / 100,
+            })
         })
     }
 
