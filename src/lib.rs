@@ -341,19 +341,12 @@ impl LightningNode {
         invoice: String,
     ) -> std::result::Result<InvoiceDetails, DecodeInvoiceError> {
         match self.rt.block_on(parse(&invoice)) {
-            Ok(input_type) => match input_type {
-                InputType::Bolt11 {
-                    invoice: ln_invoice,
-                } => Ok(InvoiceDetails::from_ln_invoice(
-                    ln_invoice,
-                    &self.get_exchange_rate(),
-                )),
-                _ => Err(DecodeInvoiceError::SemanticError {
-                    msg: "Failed to decode invoice - provided string was recognized but not as a Bolt11 invoice".to_string(),
-                }),
-            },
+            Ok(InputType::Bolt11 {invoice}) => Ok(InvoiceDetails::from_ln_invoice(invoice, &self.get_exchange_rate())),
+            Ok(_) => Err(DecodeInvoiceError::SemanticError {
+                msg: "Failed to decode invoice - provided string was recognized but not as a Bolt11 invoice".to_string(),
+            }),
             Err(e) => Err(DecodeInvoiceError::ParseError {
-                msg: format!("Failed to parse invoice: {}", e),
+                msg: format!("Failed to parse invoice: {e}"),
             }),
         }
     }
