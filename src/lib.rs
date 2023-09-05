@@ -216,8 +216,6 @@ const MAX_FEE_PERMYRIAD: u16 = 50;
 const EXEMPT_FEE_MSAT: u64 = 20_000;
 
 impl LightningNode {
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         enable_backtrace();
         fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
@@ -269,7 +267,7 @@ impl LightningNode {
                 config.seed,
                 Box::new(LipaEventListener { events_callback }),
             ))
-            .unwrap();
+            .map_to_permanent_failure("Failed to initialize a breez sdk instance")?;
 
         let _exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
             environment.backend_url.clone(),
