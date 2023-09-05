@@ -237,12 +237,11 @@ impl LightningNode {
             .enable_time()
             .enable_io()
             .build()
-            .unwrap();
+            .map_to_permanent_failure("Failed to build tokio runtime")?;
 
         let environment = Environment::load(config.environment);
 
-        // TODO implement error handling
-        let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed).unwrap();
+        let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)?;
         let auth = Arc::new(build_auth(
             &strong_typed_seed,
             environment.backend_url.clone(),
@@ -559,8 +558,7 @@ fn to_offer(topup_info: TopupInfo, current_rate: &Option<ExchangeRate>) -> Offer
 pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) -> Result<()> {
     enable_backtrace();
     let environment = Environment::load(environment);
-    // TODO implement error handling
-    let seed = sanitize_input::strong_type_seed(&seed).unwrap();
+    let seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions()
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
