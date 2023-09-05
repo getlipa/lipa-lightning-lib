@@ -40,7 +40,7 @@ use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, InputType, NodeConfig,
-    NodeState,
+    NodeState, PaymentDetails,
 };
 use crow::LanguageCode;
 use crow::{CountryCode, TopupStatus};
@@ -182,16 +182,29 @@ pub struct LightningNode {
     rt: Runtime,
 }
 
-struct LipaEventListener;
+struct LipaEventListener {
+    events_callback: Box<dyn EventsCallback>,
+}
 
 impl EventListener for LipaEventListener {
     fn on_event(&self, e: BreezEvent) {
         match e {
             BreezEvent::NewBlock { .. } => {}
-            BreezEvent::InvoicePaid { .. } => {}
+            BreezEvent::InvoicePaid { details } => {
+                self.events_callback.payment_received(details.payment_hash)
+            }
             BreezEvent::Synced => {}
-            BreezEvent::PaymentSucceed { .. } => {}
-            BreezEvent::PaymentFailed { .. } => {}
+            BreezEvent::PaymentSucceed { details } => {
+                if let PaymentDetails::Ln { data } = details.details {
+                    self.events_callback
+                        .payment_sent(data.payment_hash, data.payment_preimage)
+                }
+            }
+            BreezEvent::PaymentFailed { details } => {
+                if let Some(invoice) = details.invoice {
+                    self.events_callback.payment_failed(invoice.payment_hash)
+                }
+            }
             BreezEvent::BackupStarted => {}
             BreezEvent::BackupSucceeded => {}
             BreezEvent::BackupFailed { .. } => {}
@@ -254,7 +267,7 @@ impl LightningNode {
             .block_on(BreezServices::connect(
                 breez_config,
                 config.seed,
-                Box::new(LipaEventListener {}),
+                Box::new(LipaEventListener { events_callback }),
             ))
             .unwrap();
 
