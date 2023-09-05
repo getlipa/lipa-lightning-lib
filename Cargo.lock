@@ -1723,21 +1723,6 @@ dependencies = [
 
 [[package]]
 name = "hyper-rustls"
-version = "0.23.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1788965e61b367cd03a62950836d5cd41560c3577d90e40e0819373194d1661c"
-dependencies = [
- "http",
- "hyper",
- "log",
- "rustls 0.20.8",
- "rustls-native-certs",
- "tokio",
- "tokio-rustls 0.23.4",
-]
-
-[[package]]
-name = "hyper-rustls"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d78e1e73ec14cf7375674f74d7dde185c8206fd9dea6fb6295e8a98098aaa97"
@@ -1745,7 +1730,9 @@ dependencies = [
  "futures-util",
  "http",
  "hyper",
+ "log",
  "rustls 0.21.7",
+ "rustls-native-certs",
  "tokio",
  "tokio-rustls 0.24.1",
 ]
@@ -2056,7 +2043,7 @@ dependencies = [
  "strip-ansi-escapes",
  "thiserror",
  "tokio",
- "txoo",
+ "txoo 0.6.1",
  "uniffi",
  "uniffi_bindgen",
  "uuid",
@@ -2748,7 +2735,7 @@ dependencies = [
  "http",
  "http-body",
  "hyper",
- "hyper-rustls 0.24.1",
+ "hyper-rustls",
  "hyper-tls",
  "ipnet",
  "js-sys",
@@ -3780,14 +3767,25 @@ checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 
 [[package]]
 name = "txoo"
-version = "0.4.2"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bfb3663c4091fffce7b627174df15fd5e751d5fae99ee31f4f6c637c1ed963a"
+checksum = "4cac014d4e4c0b72e99a1ba84b51492c8e10ee72640290b7afab67045215afbc"
+dependencies = [
+ "bitcoin",
+ "log",
+ "serde",
+]
+
+[[package]]
+name = "txoo"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b35482e5bf458fa43996535afbca884b2562ab6419e20686340bb19f5305b30"
 dependencies = [
  "async-trait",
  "bitcoin",
  "hyper",
- "hyper-rustls 0.23.2",
+ "hyper-rustls",
  "log",
  "serde",
  "serde_yaml",
@@ -4057,7 +4055,7 @@ dependencies = [
  "serde_bolt",
  "serde_derive",
  "serde_with",
- "txoo",
+ "txoo 0.4.5",
 ]
 
 [[package]]

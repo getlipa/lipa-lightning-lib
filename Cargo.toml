@@ -22,7 +22,7 @@ ecies = { version = "=0.2.4", default-features = false, features = ["pure"] }
 flutter_rust_bridge = "=1.75.2"
 lightning = { version = "=0.0.115", features = ["max_level_trace"] }
 lightning-invoice = "=0.23.0"
-txoo = "=0.4.2"
+txoo = "=0.6.1"
 
 bip39 = "2.0.0"
 bitcoin = "0.29.2"
