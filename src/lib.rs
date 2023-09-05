@@ -199,6 +199,9 @@ impl EventListener for LipaEventListener {
     }
 }
 
+const MAX_FEE_PERMYRIAD: u16 = 50;
+const EXEMPT_FEE_MSAT: u64 = 20_000;
+
 impl LightningNode {
     // TODO remove unused_variables after breez sdk implementation
     #[allow(unused_variables)]
@@ -244,6 +247,8 @@ impl LightningNode {
         );
 
         breez_config.working_dir = config.local_persistence_path;
+        // TODO configure `exemptfee` when exposed by Breez
+        breez_config.maxfee_percent = (MAX_FEE_PERMYRIAD / 100).into();
 
         let sdk = rt
             .block_on(BreezServices::connect(
@@ -351,10 +356,8 @@ impl LightningNode {
         }
     }
 
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
-        todo!()
+        get_payment_max_routing_fee_mode(amount_sat, &self.get_exchange_rate())
     }
 
     pub fn pay_invoice(&self, invoice: String, _metadata: String) -> PayResult<()> {
@@ -633,6 +636,21 @@ pub(crate) fn enable_backtrace() {
     env::set_var("RUST_BACKTRACE", "1");
 }
 
+fn get_payment_max_routing_fee_mode(
+    amount_sat: u64,
+    exchange_rate: &Option<ExchangeRate>,
+) -> MaxRoutingFeeMode {
+    if amount_sat * (MAX_FEE_PERMYRIAD as u64) / 10 < EXEMPT_FEE_MSAT {
+        MaxRoutingFeeMode::Absolute {
+            max_fee_amount: EXEMPT_FEE_MSAT.to_amount_up(exchange_rate),
+        }
+    } else {
+        MaxRoutingFeeMode::Relative {
+            max_fee_permyriad: MAX_FEE_PERMYRIAD,
+        }
+    }
+}
+
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
 
 #[cfg(test)]
@@ -692,5 +710,33 @@ mod tests {
 
         assert_eq!(key_pair.secret_key, DERIVED_AUTH_SECRET_KEY_HEX.to_string());
         assert_eq!(key_pair.public_key, DERIVED_AUTH_PUBLIC_KEY_HEX.to_string());
+    }
+
+    #[test]
+    fn test_get_payment_max_routing_fee_mode_absolute() {
+        let max_routing_mode = get_payment_max_routing_fee_mode(3_900, &None);
+
+        match max_routing_mode {
+            MaxRoutingFeeMode::Absolute { max_fee_amount } => {
+                assert_eq!(max_fee_amount.sats, EXEMPT_FEE_MSAT / 1_000);
+            }
+            _ => {
+                panic!("Unexpected variant");
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_payment_max_routing_fee_mode_relative() {
+        let max_routing_mode = get_payment_max_routing_fee_mode(4_000, &None);
+
+        match max_routing_mode {
+            MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
+                assert_eq!(max_fee_permyriad, MAX_FEE_PERMYRIAD);
+            }
+            _ => {
+                panic!("Unexpected variant");
+            }
+        }
     }
 }
