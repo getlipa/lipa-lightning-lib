@@ -2049,6 +2049,8 @@ dependencies = [
  "perro",
  "rand",
  "reqwest",
+ "rusqlite",
+ "rusqlite_migration",
  "rustyline",
  "serde",
  "serial_test",
