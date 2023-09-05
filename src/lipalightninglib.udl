@@ -249,6 +249,7 @@ callback interface EventsCallback {
     void payment_failed(string payment_hash);
 
     // This callback will be called when a channel has started closing
+    // This will currently not be called as the BreezSDK doesn't support channel closed events.
     //
     // On the MVP version of lipa wallet, this event is unexpected and is likely to result in funds moving
     // on-chain, thus becoming unavailable. If this happens, the user should be informed of the problem and that he

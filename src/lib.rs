@@ -41,7 +41,7 @@ use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, InputType, NodeConfig,
-    NodeState,
+    NodeState, PaymentDetails,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupInfo, TopupStatus};
@@ -184,16 +184,29 @@ pub struct LightningNode {
     data_store: Mutex<DataStore>,
 }
 
-struct LipaEventListener;
+struct LipaEventListener {
+    events_callback: Box<dyn EventsCallback>,
+}
 
 impl EventListener for LipaEventListener {
     fn on_event(&self, e: BreezEvent) {
         match e {
             BreezEvent::NewBlock { .. } => {}
-            BreezEvent::InvoicePaid { .. } => {}
+            BreezEvent::InvoicePaid { details } => {
+                self.events_callback.payment_received(details.payment_hash)
+            }
             BreezEvent::Synced => {}
-            BreezEvent::PaymentSucceed { .. } => {}
-            BreezEvent::PaymentFailed { .. } => {}
+            BreezEvent::PaymentSucceed { details } => {
+                if let PaymentDetails::Ln { data } = details.details {
+                    self.events_callback
+                        .payment_sent(data.payment_hash, data.payment_preimage)
+                }
+            }
+            BreezEvent::PaymentFailed { details } => {
+                if let Some(invoice) = details.invoice {
+                    self.events_callback.payment_failed(invoice.payment_hash)
+                }
+            }
             BreezEvent::BackupStarted => {}
             BreezEvent::BackupSucceeded => {}
             BreezEvent::BackupFailed { .. } => {}
@@ -205,8 +218,6 @@ const MAX_FEE_PERMYRIAD: u16 = 50;
 const EXEMPT_FEE_MSAT: u64 = 20_000;
 
 impl LightningNode {
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         enable_backtrace();
         fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
@@ -256,9 +267,9 @@ impl LightningNode {
             .block_on(BreezServices::connect(
                 breez_config,
                 config.seed,
-                Box::new(LipaEventListener {}),
+                Box::new(LipaEventListener { events_callback }),
             ))
-            .unwrap();
+            .map_to_permanent_failure("Failed to initialize a breez sdk instance")?;
 
         let _exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
             environment.backend_url.clone(),
