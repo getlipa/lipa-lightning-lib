@@ -16,7 +16,7 @@ crow = { git = "https://github.com/getlipa/wild", tag = "v1.9.0" }
 honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.9.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
 
-breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.1.4" }
+breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.2" }
 # Pinning some problematic dependencies.
 ecies = { version = "=0.2.4", default-features = false, features = ["pure"] }
 flutter_rust_bridge = "=1.75.2"
