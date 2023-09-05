@@ -182,6 +182,7 @@ pub struct LightningNode {
     offer_manager: OfferManager,
     rt: Runtime,
     data_store: Mutex<DataStore>,
+    config: Mutex<Config>,
 }
 
 struct LipaEventListener {
@@ -266,7 +267,7 @@ impl LightningNode {
         let sdk = rt
             .block_on(BreezServices::connect(
                 breez_config,
-                config.seed,
+                config.seed.clone(),
                 Box::new(LipaEventListener { events_callback }),
             ))
             .map_to_permanent_failure("Failed to initialize a breez sdk instance")?;
@@ -279,7 +280,7 @@ impl LightningNode {
         let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&sdk))?;
         let offer_manager = OfferManager::new(environment.backend_url, Arc::clone(&auth));
 
-        let db_path = format!("{}/db2.db3", config.local_persistence_path);
+        let db_path = format!("{}/db2.db3", config.local_persistence_path.clone());
         let data_store = Mutex::new(DataStore::new(&db_path)?);
 
         Ok(LightningNode {
@@ -289,6 +290,7 @@ impl LightningNode {
             offer_manager,
             rt,
             data_store,
+            config: Mutex::new(config),
         })
     }
 
@@ -438,16 +440,14 @@ impl LightningNode {
         None
     }
 
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
     pub fn change_fiat_currency(&self, fiat_currency: String) {
-        todo!()
+        let mut config = self.config.lock().unwrap();
+        config.fiat_currency = fiat_currency;
     }
 
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
-        todo!()
+        let mut config = self.config.lock().unwrap();
+        config.timezone_config = timezone_config;
     }
 
     pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
