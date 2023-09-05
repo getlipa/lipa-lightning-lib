@@ -333,32 +333,19 @@ impl LightningNode {
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        self.rt.block_on(async {
-            let lsp_id = self
-                .sdk
-                .lsp_id()
-                .await
-                .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to get lsp id")?
-                .ok_or_permanent_failure("No lsp connected")?;
-            let lsp_information = self
-                .sdk
-                .fetch_lsp_info(lsp_id)
-                .await
-                .map_to_runtime_error(
-                    RuntimeErrorCode::NodeUnavailable,
-                    "Failed to fetch lsp info",
-                )?
-                .ok_or_permanent_failure("The currently connected lsp isn't available anymore")?;
-            let cheapest_opening_fee = lsp_information
-                .opening_fee_params_list
-                .get_cheapest_opening_fee_params()
-                .map_to_permanent_failure("Failed to get cheapest opening fee params")?;
-            Ok(LspFee {
-                channel_minimum_fee: cheapest_opening_fee
-                    .min_msat
-                    .to_amount_up(&self.get_exchange_rate()),
-                channel_fee_permyriad: cheapest_opening_fee.proportional as u64 / 100,
-            })
+        let lsp_information = self.rt.block_on(self.sdk.lsp_info()).map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to fetch lsp info",
+        )?;
+        let cheapest_opening_fee = lsp_information
+            .opening_fee_params_list
+            .get_cheapest_opening_fee_params()
+            .map_to_permanent_failure("Failed to get cheapest opening fee params")?;
+        Ok(LspFee {
+            channel_minimum_fee: cheapest_opening_fee
+                .min_msat
+                .to_amount_up(&self.get_exchange_rate()),
+            channel_fee_permyriad: cheapest_opening_fee.proportional as u64 / 100,
         })
     }
 
