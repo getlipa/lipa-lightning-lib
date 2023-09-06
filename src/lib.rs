@@ -43,7 +43,7 @@ use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, InputType,
-    LnUrlCallbackStatus, NodeConfig, NodeState, PaymentDetails,
+    LnUrlCallbackStatus, NodeConfig, NodeState, OpenChannelFeeRequest, PaymentDetails,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupInfo, TopupStatus};
@@ -350,22 +350,24 @@ impl LightningNode {
     }
 
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<Amount> {
-        // TODO: update the following logic to use the new sdk method open_channel_fee() when it's available
-        // https://github.com/breez/breez-sdk/pull/416
-        if amount_sat > self.get_node_info()?.channels_info.inbound_capacity.sats {
-            let lsp_fee = self.query_lsp_fee()?;
-            let relative_fee_sat = amount_sat * lsp_fee.channel_fee_permyriad / 10_000;
-            if relative_fee_sat < lsp_fee.channel_minimum_fee.sats {
-                Ok(lsp_fee.channel_minimum_fee)
-            } else {
-                Ok((relative_fee_sat * 1_000).to_amount_up(&self.get_exchange_rate()))
-            }
-        } else {
-            Ok(0_u64.to_amount_down(&self.get_exchange_rate()))
-        }
+        let req = OpenChannelFeeRequest {
+            amount_msat: amount_sat * 1_000,
+            expiry: None,
+        };
+        let res = self
+            .rt
+            .block_on(self.sdk.open_channel_fee(req))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to compute opening channel fee",
+            )?;
+        // TODO: use the returned res.used_fee_params when creating an invoice to make sure the
+        //      lsp fee estimated here is actually the one charged
+        Ok(res.fee_msat.to_amount_up(&self.get_exchange_rate()))
     }
 
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
+        // TODO: try to move this logic inside the SDK
         let lsp_min_fee_amount = self.query_lsp_fee()?.channel_minimum_fee;
         let max_inbound_amount = self.get_node_info()?.channels_info.inbound_capacity;
         Ok(PaymentAmountLimits::calculate(
