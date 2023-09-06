@@ -173,16 +173,21 @@ pub struct OfferInfo {
     pub status: OfferStatus,
 }
 
+pub(crate) struct UserPreferences {
+    fiat_currency: String,
+    timezone_config: TzConfig,
+}
+
 // TODO remove dead code after breez sdk implementation
 #[allow(dead_code)]
 pub struct LightningNode {
+    user_preferences: Arc<Mutex<UserPreferences>>,
     sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
     fiat_topup_client: PocketClient,
     offer_manager: OfferManager,
     rt: Runtime,
     data_store: Mutex<DataStore>,
-    config: Mutex<Config>,
 }
 
 struct LipaEventListener {
@@ -266,7 +271,7 @@ impl LightningNode {
         let sdk = rt
             .block_on(BreezServices::connect(
                 breez_config,
-                config.seed.clone(),
+                config.seed,
                 Box::new(LipaEventListener { events_callback }),
             ))
             .map_to_permanent_failure("Failed to initialize a breez sdk instance")?;
@@ -279,17 +284,21 @@ impl LightningNode {
         let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&sdk))?;
         let offer_manager = OfferManager::new(environment.backend_url, Arc::clone(&auth));
 
-        let db_path = format!("{}/db2.db3", config.local_persistence_path.clone());
-        let data_store = Mutex::new(DataStore::new(&db_path)?);
+        let db_path = format!("{}/db2.db3", config.local_persistence_path);
+        let user_preferences = Arc::new(Mutex::new(UserPreferences {
+            fiat_currency: config.fiat_currency,
+            timezone_config: config.timezone_config,
+        }));
+        let data_store = Mutex::new(DataStore::new(&db_path, Arc::clone(&user_preferences))?);
 
         Ok(LightningNode {
+            user_preferences,
             sdk,
             auth,
             fiat_topup_client,
             offer_manager,
             rt,
             data_store,
-            config: Mutex::new(config),
         })
     }
 
@@ -440,13 +449,11 @@ impl LightningNode {
     }
 
     pub fn change_fiat_currency(&self, fiat_currency: String) {
-        let mut config = self.config.lock().unwrap();
-        config.fiat_currency = fiat_currency;
+        self.user_preferences.lock().unwrap().fiat_currency = fiat_currency;
     }
 
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
-        let mut config = self.config.lock().unwrap();
-        config.timezone_config = timezone_config;
+        self.user_preferences.lock().unwrap().timezone_config = timezone_config;
     }
 
     pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
