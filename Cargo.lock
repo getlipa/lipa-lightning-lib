@@ -696,8 +696,8 @@ name = "chameleon"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.9.0#e08e111f0d0d2dace90bc95d4a464096b0cc437a"
 dependencies = [
- "graphql",
- "honey-badger",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.9.0)",
+ "honey-badger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.9.0)",
 ]
 
 [[package]]
@@ -865,10 +865,10 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.9.0#e08e111f0d0d2dace90bc95d4a464096b0cc437a"
+source = "git+https://github.com/getlipa/wild?tag=v1.10.0#078f506c11d0de3cca536c7b975f84d2cc9ae763"
 dependencies = [
- "graphql",
- "honey-badger",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.10.0)",
+ "honey-badger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.10.0)",
  "isocountry",
  "isolanguage-1",
 ]
@@ -1495,6 +1495,19 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
+source = "git+https://github.com/getlipa/wild?tag=v1.10.0#078f506c11d0de3cca536c7b975f84d2cc9ae763"
+dependencies = [
+ "chrono",
+ "graphql_client",
+ "log",
+ "perro",
+ "reqwest",
+ "serde",
+]
+
+[[package]]
+name = "graphql"
+version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.9.0#e08e111f0d0d2dace90bc95d4a464096b0cc437a"
 dependencies = [
  "chrono",
@@ -1702,11 +1715,25 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
+source = "git+https://github.com/getlipa/wild?tag=v1.10.0#078f506c11d0de3cca536c7b975f84d2cc9ae763"
+dependencies = [
+ "base64 0.21.3",
+ "bdk",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.10.0)",
+ "log",
+ "rand",
+ "secp256k1 0.24.3",
+ "serde_json",
+]
+
+[[package]]
+name = "honey-badger"
+version = "1.0.1"
 source = "git+https://github.com/getlipa/wild?tag=v1.9.0#e08e111f0d0d2dace90bc95d4a464096b0cc437a"
 dependencies = [
  "base64 0.21.3",
  "bdk",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.9.0)",
  "log",
  "rand",
  "secp256k1 0.24.3",
@@ -2096,7 +2123,7 @@ dependencies = [
  "file-rotate",
  "flutter_rust_bridge",
  "hex",
- "honey-badger",
+ "honey-badger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.9.0)",
  "iban_validate",
  "lightning",
  "lightning-invoice",
