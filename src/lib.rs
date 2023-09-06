@@ -421,11 +421,11 @@ impl LightningNode {
     }
 
     pub fn foreground(&self) {
-        todo!()
+        // TODO: implement if/when we have a task manager, otherwise remove this method
     }
 
     pub fn background(&self) {
-        todo!()
+        // TODO: implement if/when we have a task manager, otherwise remove this method
     }
 
     pub fn list_currency_codes(&self) -> Vec<String> {
