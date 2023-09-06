@@ -4,12 +4,14 @@ pub use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProviderImpl};
 
 use crate::data_store::DataStore;
 use crate::exchange_rate_provider::ExchangeRateProvider;
+use breez_sdk_core::BreezServices;
 use log::{error, trace};
 use std::sync::{Arc, Mutex};
 use tokio::time::Duration;
 
 pub(crate) struct TaskPeriods {
     pub update_exchange_rates: Option<Duration>,
+    pub sync_breez: Option<Duration>,
 }
 
 pub(crate) struct TaskManager {
@@ -17,6 +19,7 @@ pub(crate) struct TaskManager {
     exchange_rate_provider: Arc<dyn ExchangeRateProvider>,
     exchange_rates: Arc<Mutex<Vec<ExchangeRate>>>,
     data_store: Arc<Mutex<DataStore>>,
+    sdk: Arc<BreezServices>,
 
     task_handles: Vec<RepeatingTaskHandle>,
 }
@@ -26,6 +29,7 @@ impl TaskManager {
         runtime_handle: Handle,
         exchange_rate_provider: Box<dyn ExchangeRateProvider>,
         data_store: Arc<Mutex<DataStore>>,
+        sdk: Arc<BreezServices>,
     ) -> Result<Self> {
         let exchange_rates = data_store.lock().unwrap().get_all_exchange_rates()?;
 
@@ -34,6 +38,7 @@ impl TaskManager {
             exchange_rate_provider: Arc::from(exchange_rate_provider),
             exchange_rates: Arc::new(Mutex::new(exchange_rates)),
             data_store,
+            sdk,
             task_handles: Vec::new(),
         })
     }
@@ -56,6 +61,24 @@ impl TaskManager {
             self.task_handles
                 .push(self.start_exchange_rate_update(period));
         }
+
+        // Sync breez sdk.
+        if let Some(period) = periods.sync_breez {
+            self.task_handles.push(self.start_breez_sync(period));
+        }
+    }
+
+    fn start_breez_sync(&self, period: Duration) -> RepeatingTaskHandle {
+        let sdk = Arc::clone(&self.sdk);
+        self.runtime_handle.spawn_repeating_task(period, move || {
+            let sdk = Arc::clone(&sdk);
+            async move {
+                trace!("Starting breez sdk sync");
+                if let Err(e) = sdk.sync().await {
+                    error!("Failed to sync breez sdk: {e}");
+                }
+            }
+        })
     }
 
     fn start_exchange_rate_update(&self, period: Duration) -> RepeatingTaskHandle {

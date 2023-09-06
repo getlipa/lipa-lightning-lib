@@ -223,6 +223,7 @@ const EXEMPT_FEE_MSAT: u64 = 20_000;
 
 const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_exchange_rates: Some(Duration::from_secs(10 * 60)),
+    sync_breez: Some(Duration::from_secs(10 * 60)),
 };
 
 impl LightningNode {
@@ -320,6 +321,7 @@ impl LightningNode {
             rt.handle(),
             exchange_rate_provider,
             Arc::clone(&data_store),
+            Arc::clone(&sdk),
         )?));
         task_manager
             .lock()
@@ -347,6 +349,7 @@ impl LightningNode {
                 let period = Duration::from_secs(period);
                 TaskPeriods {
                     update_exchange_rates: Some(period),
+                    sync_breez: Some(period),
                 }
             }
             Err(_) => FOREGROUND_PERIODS,
