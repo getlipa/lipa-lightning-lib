@@ -47,6 +47,7 @@ uuid = { version = "1.4.1", features = ["v5"] }
 # Bundle sqlite for all targets except iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]
 rusqlite = { version = "0.28.0", features = [
+    "chrono",
     "serde_json",
     "bundled",
     "load_extension",
@@ -55,6 +56,7 @@ rusqlite = { version = "0.28.0", features = [
 ] }
 [target.'cfg(target_os = "ios")'.dependencies]
 rusqlite = { version = "0.28.0", features = [
+    "chrono",
     "serde_json",
     "load_extension",
     "backup",

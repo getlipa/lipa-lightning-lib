@@ -33,6 +33,12 @@ const MIGRATION_01_INIT: &str = "
         exchange_fee_minor_units INTEGER NULL,
         exchange_fee_rate_permyriad INTEGER NULL
     );
+
+    CREATE TABLE exchange_rates (
+        fiat_currency TEXT NOT NULL PRIMARY KEY,
+        rate INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
 ";
 
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {

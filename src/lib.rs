@@ -3,6 +3,7 @@
 extern crate core;
 
 mod amount;
+mod async_runtime;
 mod callbacks;
 mod config;
 mod data_store;
@@ -18,6 +19,7 @@ mod random;
 mod recovery;
 mod sanitize_input;
 mod secret;
+mod task_manager;
 
 use crate::amount::ToAmount;
 pub use crate::amount::{Amount, FiatValue};
@@ -35,7 +37,9 @@ pub use crate::invoice_details::InvoiceDetails;
 pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
 
+use crate::async_runtime::AsyncRuntime;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
+use crate::task_manager::{TaskManager, TaskPeriods};
 use bip39::{Language, Mnemonic};
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
@@ -62,9 +66,8 @@ use perro::{
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use std::{env, fs};
-use tokio::runtime::{Builder, Runtime};
 use uuid::Uuid;
 
 const LOG_LEVEL: log::Level = log::Level::Trace;
@@ -179,8 +182,9 @@ pub struct LightningNode {
     auth: Arc<Auth>,
     fiat_topup_client: PocketClient,
     offer_manager: OfferManager,
-    rt: Runtime,
-    data_store: Mutex<DataStore>,
+    rt: AsyncRuntime,
+    data_store: Arc<Mutex<DataStore>>,
+    task_manager: Arc<Mutex<TaskManager>>,
 }
 
 struct LipaEventListener {
@@ -216,6 +220,10 @@ impl EventListener for LipaEventListener {
 const MAX_FEE_PERMYRIAD: u16 = 50;
 const EXEMPT_FEE_MSAT: u64 = 20_000;
 
+const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
+    update_exchange_rates: Some(Duration::from_secs(10 * 60)),
+};
+
 impl LightningNode {
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         enable_backtrace();
@@ -230,13 +238,7 @@ impl LightningNode {
             )?;
         }
 
-        let rt = Builder::new_multi_thread()
-            .worker_threads(4)
-            .thread_name("3l-async-runtime")
-            .enable_time()
-            .enable_io()
-            .build()
-            .map_to_permanent_failure("Failed to build tokio runtime")?;
+        let rt = AsyncRuntime::new()?;
 
         let environment = Environment::load(config.environment);
 
@@ -262,14 +264,15 @@ impl LightningNode {
         breez_config.maxfee_percent = (MAX_FEE_PERMYRIAD / 100).into();
 
         let sdk = rt
+            .handle()
             .block_on(BreezServices::connect(
                 breez_config,
-                config.seed,
+                config.seed.clone(),
                 Box::new(LipaEventListener { events_callback }),
             ))
             .map_to_permanent_failure("Failed to initialize a breez sdk instance")?;
 
-        rt.block_on(async {
+        rt.handle().block_on(async {
             if sdk
                 .lsp_id()
                 .await
@@ -294,7 +297,7 @@ impl LightningNode {
             Ok::<(), Error>(())
         })?;
 
-        let _exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
+        let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
             environment.backend_url.clone(),
             Arc::clone(&auth),
         ));
@@ -307,7 +310,20 @@ impl LightningNode {
             fiat_currency: config.fiat_currency,
             timezone_config: config.timezone_config,
         }));
-        let data_store = Mutex::new(DataStore::new(&db_path, Arc::clone(&user_preferences))?);
+        let data_store = Arc::new(Mutex::new(DataStore::new(
+            &db_path,
+            Arc::clone(&user_preferences),
+        )?));
+
+        let task_manager = Arc::new(Mutex::new(TaskManager::new(
+            rt.handle(),
+            exchange_rate_provider,
+            Arc::clone(&data_store),
+        )?));
+        task_manager
+            .lock()
+            .unwrap()
+            .restart(Self::get_foreground_periods());
 
         Ok(LightningNode {
             user_preferences,
@@ -317,7 +333,23 @@ impl LightningNode {
             offer_manager,
             rt,
             data_store,
+            task_manager,
         })
+    }
+
+    fn get_foreground_periods() -> TaskPeriods {
+        match env::var("TESTING_TASK_PERIODS") {
+            Ok(period) => {
+                let period: u64 = period
+                    .parse()
+                    .expect("TESTING_TASK_PERIODS should be an integer number");
+                let period = Duration::from_secs(period);
+                TaskPeriods {
+                    update_exchange_rates: Some(period),
+                }
+            }
+            Err(_) => FOREGROUND_PERIODS,
+        }
     }
 
     pub fn get_node_info(&self) -> Result<NodeInfo> {
@@ -342,10 +374,14 @@ impl LightningNode {
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        let lsp_information = self.rt.block_on(self.sdk.lsp_info()).map_to_runtime_error(
-            RuntimeErrorCode::NodeUnavailable,
-            "Failed to fetch lsp info",
-        )?;
+        let lsp_information = self
+            .rt
+            .handle()
+            .block_on(self.sdk.lsp_info())
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to fetch lsp info",
+            )?;
         let cheapest_opening_fee = lsp_information
             .opening_fee_params_list
             .get_cheapest_opening_fee_params()
@@ -365,6 +401,7 @@ impl LightningNode {
         };
         let res = self
             .rt
+            .handle()
             .block_on(self.sdk.open_channel_fee(req))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
@@ -394,6 +431,7 @@ impl LightningNode {
     ) -> Result<InvoiceDetails> {
         let response = self
             .rt
+            .handle()
             .block_on(
                 self.sdk
                     .receive_payment(breez_sdk_core::ReceivePaymentRequest {
@@ -421,7 +459,7 @@ impl LightningNode {
         &self,
         invoice: String,
     ) -> std::result::Result<InvoiceDetails, DecodeInvoiceError> {
-        match self.rt.block_on(parse(&invoice)) {
+        match self.rt.handle().block_on(parse(&invoice)) {
             Ok(InputType::Bolt11 {invoice}) => Ok(InvoiceDetails::from_ln_invoice(invoice, &self.get_exchange_rate())),
             Ok(_) => Err(DecodeInvoiceError::SemanticError {
                 msg: "Failed to decode invoice - provided string was recognized but not as a Bolt11 invoice".to_string(),
@@ -437,7 +475,11 @@ impl LightningNode {
     }
 
     pub fn pay_invoice(&self, invoice: String, _metadata: String) -> PayResult<()> {
-        match self.rt.block_on(self.sdk.send_payment(invoice, None)) {
+        match self
+            .rt
+            .handle()
+            .block_on(self.sdk.send_payment(invoice, None))
+        {
             Ok(_) => Ok(()),
             // TODO: properly handle errors (requires changing either ours or the SDK's error model)
             Err(e) => Err(RuntimeError {
@@ -456,6 +498,7 @@ impl LightningNode {
     ) -> PayResult<()> {
         match self
             .rt
+            .handle()
             .block_on(self.sdk.send_payment(invoice, Some(amount_sat)))
         {
             Ok(_) => Ok(()),
@@ -489,12 +532,17 @@ impl LightningNode {
     }
 
     pub fn list_currency_codes(&self) -> Vec<String> {
-        todo!()
+        let rates = self.task_manager.lock().unwrap().get_exchange_rates();
+        rates.iter().map(|r| r.currency_code.clone()).collect()
     }
 
     pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
-        // TODO implement get exchange rate
-        None
+        let rates = self.task_manager.lock().unwrap().get_exchange_rates();
+        let currency_code = self.user_preferences.lock().unwrap().fiat_currency.clone();
+        rates
+            .iter()
+            .find(|r| r.currency_code == currency_code)
+            .cloned()
     }
 
     pub fn change_fiat_currency(&self, fiat_currency: String) {
@@ -552,12 +600,13 @@ impl LightningNode {
     }
 
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
-        let lnurlw_data = match self.rt.block_on(parse(&offer.lnurlw)) {
+        let lnurlw_data = match self.rt.handle().block_on(parse(&offer.lnurlw)) {
             Ok(InputType::LnUrlWithdraw { data }) => data,
             _ => return Err(permanent_failure("Invalid LNURLw in offer")),
         };
         match self
             .rt
+            .handle()
             .block_on(
                 self.sdk
                     .lnurl_withdraw(lnurlw_data, offer.amount.sats, None),
