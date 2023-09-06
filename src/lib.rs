@@ -170,6 +170,7 @@ pub struct OfferInfo {
     pub status: OfferStatus,
 }
 
+#[derive(Clone)]
 pub(crate) struct UserPreferences {
     fiat_currency: String,
     timezone_config: TzConfig,
@@ -178,7 +179,7 @@ pub(crate) struct UserPreferences {
 // TODO remove dead code after breez sdk implementation
 #[allow(dead_code)]
 pub struct LightningNode {
-    user_preferences: Arc<Mutex<UserPreferences>>,
+    user_preferences: Mutex<UserPreferences>,
     sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
     fiat_topup_client: PocketClient,
@@ -307,14 +308,13 @@ impl LightningNode {
         let offer_manager = OfferManager::new(environment.backend_url, Arc::clone(&auth));
 
         let db_path = format!("{}/db2.db3", config.local_persistence_path);
-        let user_preferences = Arc::new(Mutex::new(UserPreferences {
+
+        let user_preferences = Mutex::new(UserPreferences {
             fiat_currency: config.fiat_currency,
             timezone_config: config.timezone_config,
-        }));
-        let data_store = Arc::new(Mutex::new(DataStore::new(
-            &db_path,
-            Arc::clone(&user_preferences),
-        )?));
+        });
+
+        let data_store = Arc::new(Mutex::new(DataStore::new(&db_path)?));
 
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),
@@ -449,7 +449,19 @@ impl LightningNode {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to create an invoice",
             )?;
-        // TODO: store info about this payment in local db (metadata, exchange rates, offerkind, lsp fee, etc)
+
+        let user_preferences = self.user_preferences.lock().unwrap().clone();
+        self.data_store
+            .lock()
+            .unwrap()
+            .store_payment_info(
+                response.ln_invoice.payment_hash.clone(),
+                user_preferences,
+                Vec::new(),
+                None,
+            )
+            .map_to_permanent_failure("Failed to persist payment info")?;
+
         Ok(InvoiceDetails::from_ln_invoice(
             response.ln_invoice,
             &self.get_exchange_rate(),
@@ -476,6 +488,18 @@ impl LightningNode {
     }
 
     pub fn pay_invoice(&self, invoice: String, _metadata: String) -> PayResult<()> {
+        match self.rt.handle().block_on(parse(&invoice)) {
+            Ok(InputType::Bolt11 { invoice }) => {
+                let user_preferences = self.user_preferences.lock().unwrap().clone();
+                self.data_store
+                    .lock()
+                    .unwrap()
+                    .store_payment_info(invoice.payment_hash, user_preferences, Vec::new(), None)
+                    .map_to_permanent_failure("Failed to persist payment info")
+            }
+            _ => Err(invalid_input("Invalid invoice")),
+        }?;
+
         match self
             .rt
             .handle()
@@ -488,7 +512,6 @@ impl LightningNode {
                 msg: format!("Failed to start paying invoice: {e}"),
             }),
         }
-        // TODO: persist information about this payment in local db
     }
 
     pub fn pay_open_invoice(
@@ -497,6 +520,18 @@ impl LightningNode {
         amount_sat: u64,
         _metadata: String,
     ) -> PayResult<()> {
+        match self.rt.handle().block_on(parse(&invoice)) {
+            Ok(InputType::Bolt11 { invoice }) => {
+                let user_preferences = self.user_preferences.lock().unwrap().clone();
+                self.data_store
+                    .lock()
+                    .unwrap()
+                    .store_payment_info(invoice.payment_hash, user_preferences, Vec::new(), None)
+                    .map_to_permanent_failure("Failed to persist payment info")
+            }
+            _ => Err(invalid_input("Invalid invoice")),
+        }?;
+
         match self
             .rt
             .handle()
@@ -509,7 +544,6 @@ impl LightningNode {
                 msg: format!("Failed to start paying invoice: {e}"),
             }),
         }
-        // TODO: persist information about this payment in local db
     }
 
     // TODO remove unused_variables after breez sdk implementation

@@ -1,30 +1,53 @@
 use crate::errors::Result;
 use crate::migrations::migrate;
-use crate::UserPreferences;
-use chrono::{DateTime, Utc};
-use std::time::SystemTime;
+use crate::{ExchangeRate, OfferKind, UserPreferences};
 
-use crate::ExchangeRate;
+use chrono::{DateTime, Utc};
 use perro::MapToError;
 use rusqlite::Connection;
 use rusqlite::Row;
-use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 pub(crate) struct DataStore {
-    #[allow(dead_code)]
-    user_preferences: Arc<Mutex<UserPreferences>>,
-    #[allow(dead_code)]
     conn: Connection,
 }
 
 impl DataStore {
-    pub fn new(db_path: &str, user_preferences: Arc<Mutex<UserPreferences>>) -> Result<Self> {
+    pub fn new(db_path: &str) -> Result<Self> {
         let mut conn = Connection::open(db_path).map_to_invalid_input("Invalid db path")?;
         migrate(&mut conn)?;
-        Ok(DataStore {
-            user_preferences,
-            conn,
-        })
+        Ok(DataStore { conn })
+    }
+
+    pub fn store_payment_info(
+        &mut self,
+        payment_hash: String,
+        user_preferences: UserPreferences,
+        _exchange_rates: Vec<ExchangeRate>,
+        _offer: Option<OfferKind>,
+    ) -> Result<()> {
+        let tx = self
+            .conn
+            .transaction()
+            .map_to_permanent_failure("Failed to begin SQL transaction")?;
+        tx.execute(
+            "\
+			INSERT INTO payments (hash, timezone_id, timezone_utc_offset_secs, fiat_currency)\
+			VALUES (?1, ?2, ?3, ?4)",
+            (
+                payment_hash,
+                user_preferences.timezone_config.timezone_id,
+                user_preferences.timezone_config.timezone_utc_offset_secs,
+                user_preferences.fiat_currency,
+            ),
+        )
+        .map_to_permanent_failure("Failed to add payment info to db")?;
+
+        // TODO: Store exchange rates.
+        // TODO: Store offer.
+
+        tx.commit()
+            .map_to_permanent_failure("Failed to commit the db transaction")
     }
 
     pub fn update_exchange_rate(
@@ -88,32 +111,44 @@ mod tests {
 
     use crate::UserPreferences;
     use std::fs;
-    use std::sync::{Arc, Mutex};
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
 
     const TEST_DB_PATH: &str = ".3l_local_test";
-    const TEST_TZ_ID: &str = "test_timezone_id";
-    const TEST_TZ_OFFSET: i32 = -1352;
 
-    fn reset_db(db_name: &str) {
-        let _ = fs::create_dir(TEST_DB_PATH);
-        let _ = fs::remove_file(format!("{TEST_DB_PATH}/{db_name}"));
+    #[test]
+    fn test_store_payment_info() {
+        let db_name = String::from("db.db3");
+        reset_db(&db_name);
+        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+
+        let user_preferences = UserPreferences {
+            fiat_currency: "EUR".to_string(),
+            timezone_config: TzConfig {
+                timezone_id: "Bern".to_string(),
+                timezone_utc_offset_secs: -1234,
+            },
+        };
+        data_store
+            .store_payment_info(
+                "hash".to_string(),
+                user_preferences.clone(),
+                Vec::new(),
+                None,
+            )
+            .unwrap();
+
+        // The second call will not fail.
+        data_store
+            .store_payment_info("hash".to_string(), user_preferences, Vec::new(), None)
+            .unwrap();
     }
 
     #[test]
     fn test_exchange_rate_storage() {
         let db_name = String::from("rates.db3");
         reset_db(&db_name);
-        let user_preferences = Arc::new(Mutex::new(UserPreferences {
-            fiat_currency: "CHF".to_string(),
-            timezone_config: TzConfig {
-                timezone_id: String::from(TEST_TZ_ID),
-                timezone_utc_offset_secs: TEST_TZ_OFFSET,
-            },
-        }));
-        let data_store =
-            DataStore::new(&format!("{TEST_DB_PATH}/{db_name}"), user_preferences).unwrap();
+        let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
 
         assert!(data_store.get_all_exchange_rates().unwrap().is_empty());
 
@@ -177,5 +212,10 @@ mod tests {
             eur_rate.updated_at,
             SystemTime::UNIX_EPOCH + Duration::from_secs(20)
         );
+    }
+
+    fn reset_db(db_name: &str) {
+        let _ = fs::create_dir(TEST_DB_PATH);
+        let _ = fs::remove_file(format!("{TEST_DB_PATH}/{db_name}"));
     }
 }
