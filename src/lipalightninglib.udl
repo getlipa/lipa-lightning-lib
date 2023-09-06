@@ -153,7 +153,7 @@ interface LightningNode {
 
     // Get a list of currently available fund offers
     [Throws=LnError]
-    sequence<OfferInfo> query_available_offers();
+    sequence<OfferInfo> query_uncompleted_offers();
 
     // Request to collect the offer.
     // A payment hash will be returned to track incoming payment.
@@ -442,7 +442,8 @@ interface OfferKind {
 
 enum OfferStatus {
     "READY",
-    "FAILED",
+    "FAILED", // Claiming the offer failed, but it can be retried.
+    "REFUNDED", // The offer was not claimed in time, so the user got refunded (Pocket: Refund happened over the Fiat rails).
     "SETTLED",
 };
 
