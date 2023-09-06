@@ -40,8 +40,8 @@ use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{
-    parse, BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, InputType, NodeConfig,
-    NodeState, PaymentDetails,
+    parse, BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, InputType,
+    LnUrlCallbackStatus, NodeConfig, NodeState, PaymentDetails,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupInfo, TopupStatus};
@@ -54,7 +54,7 @@ use log::trace;
 use logger::init_logger_once;
 use num_enum::TryFromPrimitive;
 use perro::Error::RuntimeError;
-use perro::{invalid_input, MapToError, ResultTrait};
+use perro::{invalid_input, permanent_failure, runtime_error, MapToError, ResultTrait};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -495,10 +495,28 @@ impl LightningNode {
             .collect())
     }
 
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
-        todo!()
+        let lnurlw_data = match self.rt.block_on(parse(&offer.lnurlw)) {
+            Ok(InputType::LnUrlWithdraw { data }) => data,
+            _ => return Err(permanent_failure("Invalid LNURLw in offer")),
+        };
+        match self
+            .rt
+            .block_on(
+                self.sdk
+                    .lnurl_withdraw(lnurlw_data, offer.amount.sats, None),
+            )
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to withdraw offer",
+            )? {
+            LnUrlCallbackStatus::Ok => Ok(String::from("dummy payment hash")), // TODO: get payment hash from the SDK: https://github.com/breez/breez-sdk/issues/427
+            LnUrlCallbackStatus::ErrorStatus { data } => Err(runtime_error(
+                RuntimeErrorCode::OfferServiceUnavailable,
+                format!("Failed to withdraw offer due to: {}", data.reason),
+            )),
+        }
+        // TODO: persist information about this offer collection in local db
     }
 
     pub fn register_notification_token(
