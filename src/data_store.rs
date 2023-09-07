@@ -21,30 +21,65 @@ impl DataStore {
 
     pub fn store_payment_info(
         &mut self,
-        payment_hash: String,
+        payment_hash: &str,
         user_preferences: UserPreferences,
-        _exchange_rates: Vec<ExchangeRate>,
-        _offer: Option<OfferKind>,
+        exchange_rates: Vec<ExchangeRate>,
+        offer: Option<OfferKind>,
     ) -> Result<()> {
         let tx = self
             .conn
             .transaction()
             .map_to_permanent_failure("Failed to begin SQL transaction")?;
+
+        let snapshot_id = insert_snapshot(&tx, exchange_rates)?;
+
         tx.execute(
             "\
-			INSERT INTO payments (hash, timezone_id, timezone_utc_offset_secs, fiat_currency)\
-			VALUES (?1, ?2, ?3, ?4)",
+            INSERT INTO payments (hash, timezone_id, timezone_utc_offset_secs, fiat_currency, exchange_rates_history_snaphot_id)\
+            VALUES (?1, ?2, ?3, ?4, ?5)\
+            ",
             (
                 payment_hash,
-                user_preferences.timezone_config.timezone_id,
+                &user_preferences.timezone_config.timezone_id,
                 user_preferences.timezone_config.timezone_utc_offset_secs,
                 user_preferences.fiat_currency,
+                snapshot_id,
             ),
         )
         .map_to_permanent_failure("Failed to add payment info to db")?;
 
-        // TODO: Store exchange rates.
-        // TODO: Store offer.
+        if let Some(OfferKind::Pocket {
+            id: pocket_id,
+            exchange_rate:
+                ExchangeRate {
+                    currency_code,
+                    rate,
+                    updated_at,
+                },
+            topup_value_minor_units,
+            exchange_fee_minor_units,
+            exchange_fee_rate_permyriad,
+        }) = offer
+        {
+            let exchanged_at: DateTime<Utc> = updated_at.into();
+            tx.execute(
+            "\
+                INSERT INTO offers (payment_hash, pocket_id, fiat_currency, rate, exchanged_at, topup_value_minor_units, exchange_fee_minor_units, exchange_fee_rate_permyriad)\
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)\
+                ",
+        (
+                    payment_hash,
+                    &pocket_id,
+                    &currency_code,
+                    &rate,
+                    &exchanged_at,
+                    topup_value_minor_units,
+                    exchange_fee_minor_units,
+                    exchange_fee_rate_permyriad
+                ),
+            )
+            .map_to_invalid_input("Failed to add new incoming pocket offer to offers db")?;
+        };
 
         tx.commit()
             .map_to_permanent_failure("Failed to commit the db transaction")
@@ -93,6 +128,39 @@ impl DataStore {
     }
 }
 
+// Store all provided exchange rates.
+// For every row it takes ~13 bytes (4 + 3 + 2 + 4), if we have 100 fiat currencies it adds 1300 bytes.
+// For 1000 payments it will add ~1 MB.
+fn insert_snapshot(
+    connection: &Connection,
+    exchange_rates: Vec<ExchangeRate>,
+) -> Result<Option<u64>> {
+    if exchange_rates.is_empty() {
+        return Ok(None);
+    }
+    let snapshot_id = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_to_permanent_failure("TODO")?
+        .as_secs();
+    for exchange_rate in exchange_rates {
+        let updated_at: DateTime<Utc> = exchange_rate.updated_at.into();
+        connection
+            .execute(
+                "\
+                INSERT INTO exchange_rates_history (snapshot_id, fiat_currency, rate, updated_at) \
+                VALUES (?1, ?2, ?3, ?4)",
+                (
+                    snapshot_id,
+                    exchange_rate.currency_code,
+                    exchange_rate.rate,
+                    updated_at,
+                ),
+            )
+            .map_to_invalid_input("Failed to insert exchange rate history in db")?;
+    }
+    Ok(Some(snapshot_id))
+}
+
 fn exchange_rate_from_row(row: &Row) -> rusqlite::Result<ExchangeRate> {
     let fiat_currency: String = row.get(0)?;
     let rate: u32 = row.get(1)?;
@@ -109,7 +177,7 @@ mod tests {
     use crate::config::TzConfig;
     use crate::data_store::DataStore;
 
-    use crate::UserPreferences;
+    use crate::{ExchangeRate, OfferKind, UserPreferences};
     use std::fs;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
@@ -129,18 +197,38 @@ mod tests {
                 timezone_utc_offset_secs: -1234,
             },
         };
+
+        let exchange_rates = vec![
+            ExchangeRate {
+                currency_code: "EUR".to_string(),
+                rate: 4123,
+                updated_at: SystemTime::now(),
+            },
+            ExchangeRate {
+                currency_code: "USD".to_string(),
+                rate: 3950,
+                updated_at: SystemTime::now(),
+            },
+        ];
+        let offer_kind = OfferKind::Pocket {
+            id: "id".to_string(),
+            exchange_rate: ExchangeRate {
+                currency_code: "EUR".to_string(),
+                rate: 5123,
+                updated_at: SystemTime::now(),
+            },
+            topup_value_minor_units: 51245,
+            exchange_fee_minor_units: 123,
+            exchange_fee_rate_permyriad: 50,
+        };
+
         data_store
-            .store_payment_info(
-                "hash".to_string(),
-                user_preferences.clone(),
-                Vec::new(),
-                None,
-            )
+            .store_payment_info("hash", user_preferences.clone(), Vec::new(), None)
             .unwrap();
 
         // The second call will not fail.
         data_store
-            .store_payment_info("hash".to_string(), user_preferences, Vec::new(), None)
+            .store_payment_info("hash", user_preferences, exchange_rates, Some(offer_kind))
             .unwrap();
     }
 

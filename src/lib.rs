@@ -451,13 +451,14 @@ impl LightningNode {
             )?;
 
         let user_preferences = self.user_preferences.lock().unwrap().clone();
+        let exchange_rates = self.task_manager.lock().unwrap().get_exchange_rates();
         self.data_store
             .lock()
             .unwrap()
             .store_payment_info(
-                response.ln_invoice.payment_hash.clone(),
+                &response.ln_invoice.payment_hash,
                 user_preferences,
-                Vec::new(),
+                exchange_rates,
                 None,
             )
             .map_to_permanent_failure("Failed to persist payment info")?;
@@ -491,10 +492,16 @@ impl LightningNode {
         match self.rt.handle().block_on(parse(&invoice)) {
             Ok(InputType::Bolt11 { invoice }) => {
                 let user_preferences = self.user_preferences.lock().unwrap().clone();
+                let exchange_rates = self.task_manager.lock().unwrap().get_exchange_rates();
                 self.data_store
                     .lock()
                     .unwrap()
-                    .store_payment_info(invoice.payment_hash, user_preferences, Vec::new(), None)
+                    .store_payment_info(
+                        &invoice.payment_hash,
+                        user_preferences,
+                        exchange_rates,
+                        None,
+                    )
                     .map_to_permanent_failure("Failed to persist payment info")
             }
             _ => Err(invalid_input("Invalid invoice")),
@@ -523,10 +530,16 @@ impl LightningNode {
         match self.rt.handle().block_on(parse(&invoice)) {
             Ok(InputType::Bolt11 { invoice }) => {
                 let user_preferences = self.user_preferences.lock().unwrap().clone();
+                let exchange_rates = self.task_manager.lock().unwrap().get_exchange_rates();
                 self.data_store
                     .lock()
                     .unwrap()
-                    .store_payment_info(invoice.payment_hash, user_preferences, Vec::new(), None)
+                    .store_payment_info(
+                        &invoice.payment_hash,
+                        user_preferences,
+                        exchange_rates,
+                        None,
+                    )
                     .map_to_permanent_failure("Failed to persist payment info")
             }
             _ => Err(invalid_input("Invalid invoice")),
@@ -639,7 +652,7 @@ impl LightningNode {
             Ok(InputType::LnUrlWithdraw { data }) => data,
             _ => return Err(permanent_failure("Invalid LNURLw in offer")),
         };
-        match self
+        let hash = match self
             .rt
             .handle()
             .block_on(
@@ -650,13 +663,29 @@ impl LightningNode {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to withdraw offer",
             )? {
-            LnUrlCallbackStatus::Ok => Ok(String::from("dummy payment hash")), // TODO: get payment hash from the SDK: https://github.com/breez/breez-sdk/issues/427
-            LnUrlCallbackStatus::ErrorStatus { data } => Err(runtime_error(
-                RuntimeErrorCode::OfferServiceUnavailable,
-                format!("Failed to withdraw offer due to: {}", data.reason),
-            )),
-        }
-        // TODO: persist information about this offer collection in local db
+            LnUrlCallbackStatus::Ok => String::from("dummy payment hash"), // TODO: get payment hash from the SDK: https://github.com/breez/breez-sdk/issues/427
+            LnUrlCallbackStatus::ErrorStatus { data } => {
+                return Err(runtime_error(
+                    RuntimeErrorCode::OfferServiceUnavailable,
+                    format!("Failed to withdraw offer due to: {}", data.reason),
+                ))
+            }
+        };
+
+        let user_preferences = self.user_preferences.lock().unwrap().clone();
+        let exchange_rates = self.task_manager.lock().unwrap().get_exchange_rates();
+        self.data_store
+            .lock()
+            .unwrap()
+            .store_payment_info(
+                &hash,
+                user_preferences,
+                exchange_rates,
+                Some(offer.offer_kind),
+            )
+            .map_to_permanent_failure("Failed to persist payment info")?;
+
+        Ok(hash)
     }
 
     pub fn register_notification_token(
