@@ -303,7 +303,8 @@ impl LightningNode {
             Arc::clone(&auth),
         ));
 
-        let fiat_topup_client = PocketClient::new(environment.pocket_url, Arc::clone(&sdk))?;
+        let fiat_topup_client =
+            PocketClient::new(environment.pocket_url, Arc::clone(&sdk), rt.handle())?;
         let offer_manager = OfferManager::new(environment.backend_url, Arc::clone(&auth));
 
         let db_path = format!("{}/db2.db3", config.local_persistence_path);
