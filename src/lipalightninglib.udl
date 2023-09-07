@@ -152,7 +152,7 @@ interface LightningNode {
 
     // Get a list of currently available fund offers
     [Throws=LnError]
-    sequence<OfferInfo> query_available_offers();
+    sequence<OfferInfo> query_uncompleted_offers();
 
     // Request to collect the offer.
     // A payment hash will be returned to track incoming payment.
@@ -437,7 +437,11 @@ interface OfferKind {
 
 enum OfferStatus {
     "READY",
-    "FAILED",
+    "FAILED", // Claiming the offer failed, but it can be retried.
+    "REFUNDED", // The offer could not be claimed, so the user got refunded
+                // Specific info for Pocket offers:
+                // - The Refund happened over the Fiat rails
+                // - Reasons for why the offer was refunded: https://pocketbitcoin.com/developers/docs/rest/v1/webhooks#refund-reasons
     "SETTLED",
 };
 
