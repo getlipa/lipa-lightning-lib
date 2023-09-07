@@ -556,7 +556,7 @@ fn register_topup(
 }
 
 fn list_offers(node: &LightningNode) -> Result<(), String> {
-    let offers = match node.query_available_offers() {
+    let offers = match node.query_uncompleted_offers() {
         Ok(p) => p,
         Err(e) => return Err(e.to_string()),
     };

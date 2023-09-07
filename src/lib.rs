@@ -143,6 +143,7 @@ pub enum MaxRoutingFeeMode {
 pub enum OfferStatus {
     READY,
     FAILED,
+    REFUNDED,
     SETTLED,
 }
 
@@ -539,10 +540,10 @@ impl LightningNode {
             .register_pocket_fiat_topup(&user_iban, user_currency)
     }
 
-    pub fn query_available_offers(&self) -> Result<Vec<OfferInfo>> {
+    pub fn query_uncompleted_offers(&self) -> Result<Vec<OfferInfo>> {
         let topup_infos = self
             .offer_manager
-            .query_available_topups()
+            .query_uncompleted_topups()
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
         let rate = self.get_exchange_rate();
         Ok(topup_infos
@@ -610,6 +611,7 @@ fn to_offer(topup_info: TopupInfo, current_rate: &Option<ExchangeRate>) -> Offer
     let status = match topup_info.status {
         TopupStatus::READY => OfferStatus::READY,
         TopupStatus::FAILED => OfferStatus::FAILED,
+        TopupStatus::REFUNDED => OfferStatus::REFUNDED,
         TopupStatus::SETTLED => OfferStatus::SETTLED,
     };
 
