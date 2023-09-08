@@ -574,12 +574,13 @@ impl LightningNode {
         &self,
         breez_payment: breez_sdk_core::Payment,
     ) -> Result<Payment> {
-        let payment_details = if let PaymentDetails::Ln { data } = breez_payment.details {
-            data
-        } else {
-            return Err(permanent_failure(
-                "Current interface doesn't support PaymentDetails::ClosedChannel",
-            ));
+        let payment_details = match breez_payment.details {
+            PaymentDetails::Ln { data } => data,
+            _ => {
+                return Err(permanent_failure(
+                    "Current interface doesn't support PaymentDetails::ClosedChannel",
+                ))
+            }
         };
 
         let local_payment_data = self
