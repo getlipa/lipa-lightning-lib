@@ -1,30 +1,88 @@
 use crate::errors::Result;
 use crate::migrations::migrate;
-use crate::UserPreferences;
-use chrono::{DateTime, Utc};
-use std::time::SystemTime;
+use crate::{ExchangeRate, OfferKind, UserPreferences};
 
-use crate::ExchangeRate;
+use chrono::{DateTime, Utc};
 use perro::MapToError;
 use rusqlite::Connection;
 use rusqlite::Row;
-use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 pub(crate) struct DataStore {
-    #[allow(dead_code)]
-    user_preferences: Arc<Mutex<UserPreferences>>,
-    #[allow(dead_code)]
     conn: Connection,
 }
 
 impl DataStore {
-    pub fn new(db_path: &str, user_preferences: Arc<Mutex<UserPreferences>>) -> Result<Self> {
+    pub fn new(db_path: &str) -> Result<Self> {
         let mut conn = Connection::open(db_path).map_to_invalid_input("Invalid db path")?;
         migrate(&mut conn)?;
-        Ok(DataStore {
-            user_preferences,
-            conn,
-        })
+        Ok(DataStore { conn })
+    }
+
+    pub fn store_payment_info(
+        &mut self,
+        payment_hash: &str,
+        user_preferences: UserPreferences,
+        exchange_rates: Vec<ExchangeRate>,
+        offer: Option<OfferKind>,
+    ) -> Result<()> {
+        let tx = self
+            .conn
+            .transaction()
+            .map_to_permanent_failure("Failed to begin SQL transaction")?;
+
+        let snapshot_id = insert_exchange_rate_snapshot(&tx, exchange_rates)?;
+
+        tx.execute(
+            "\
+            INSERT INTO payments (hash, timezone_id, timezone_utc_offset_secs, fiat_currency, exchange_rates_history_snaphot_id)\
+            VALUES (?1, ?2, ?3, ?4, ?5)\
+            ",
+            (
+                payment_hash,
+                &user_preferences.timezone_config.timezone_id,
+                user_preferences.timezone_config.timezone_utc_offset_secs,
+                user_preferences.fiat_currency,
+                snapshot_id,
+            ),
+        )
+        .map_to_permanent_failure("Failed to add payment info to db")?;
+
+        if let Some(OfferKind::Pocket {
+            id: pocket_id,
+            exchange_rate:
+                ExchangeRate {
+                    currency_code,
+                    rate,
+                    updated_at,
+                },
+            topup_value_minor_units,
+            exchange_fee_minor_units,
+            exchange_fee_rate_permyriad,
+        }) = offer
+        {
+            let exchanged_at: DateTime<Utc> = updated_at.into();
+            tx.execute(
+            "\
+                INSERT INTO offers (payment_hash, pocket_id, fiat_currency, rate, exchanged_at, topup_value_minor_units, exchange_fee_minor_units, exchange_fee_rate_permyriad)\
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)\
+                ",
+        (
+                    payment_hash,
+                    &pocket_id,
+                    &currency_code,
+                    &rate,
+                    &exchanged_at,
+                    topup_value_minor_units,
+                    exchange_fee_minor_units,
+                    exchange_fee_rate_permyriad
+                ),
+            )
+            .map_to_invalid_input("Failed to add new incoming pocket offer to offers db")?;
+        };
+
+        tx.commit()
+            .map_to_permanent_failure("Failed to commit the db transaction")
     }
 
     pub fn update_exchange_rate(
@@ -70,6 +128,39 @@ impl DataStore {
     }
 }
 
+// Store all provided exchange rates.
+// For every row it takes ~13 bytes (4 + 3 + 2 + 4), if we have 100 fiat currencies it adds 1300 bytes.
+// For 1000 payments it will add ~1 MB.
+fn insert_exchange_rate_snapshot(
+    connection: &Connection,
+    exchange_rates: Vec<ExchangeRate>,
+) -> Result<Option<u64>> {
+    if exchange_rates.is_empty() {
+        return Ok(None);
+    }
+    let snapshot_id = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_to_permanent_failure("TODO")?
+        .as_secs();
+    for exchange_rate in exchange_rates {
+        let updated_at: DateTime<Utc> = exchange_rate.updated_at.into();
+        connection
+            .execute(
+                "\
+                INSERT INTO exchange_rates_history (snapshot_id, fiat_currency, rate, updated_at) \
+                VALUES (?1, ?2, ?3, ?4)",
+                (
+                    snapshot_id,
+                    exchange_rate.currency_code,
+                    exchange_rate.rate,
+                    updated_at,
+                ),
+            )
+            .map_to_invalid_input("Failed to insert exchange rate history in db")?;
+    }
+    Ok(Some(snapshot_id))
+}
+
 fn exchange_rate_from_row(row: &Row) -> rusqlite::Result<ExchangeRate> {
     let fiat_currency: String = row.get(0)?;
     let rate: u32 = row.get(1)?;
@@ -86,34 +177,66 @@ mod tests {
     use crate::config::TzConfig;
     use crate::data_store::DataStore;
 
-    use crate::UserPreferences;
+    use crate::{ExchangeRate, OfferKind, UserPreferences};
     use std::fs;
-    use std::sync::{Arc, Mutex};
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
 
     const TEST_DB_PATH: &str = ".3l_local_test";
-    const TEST_TZ_ID: &str = "test_timezone_id";
-    const TEST_TZ_OFFSET: i32 = -1352;
 
-    fn reset_db(db_name: &str) {
-        let _ = fs::create_dir(TEST_DB_PATH);
-        let _ = fs::remove_file(format!("{TEST_DB_PATH}/{db_name}"));
+    #[test]
+    fn test_store_payment_info() {
+        let db_name = String::from("db.db3");
+        reset_db(&db_name);
+        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+
+        let user_preferences = UserPreferences {
+            fiat_currency: "EUR".to_string(),
+            timezone_config: TzConfig {
+                timezone_id: "Bern".to_string(),
+                timezone_utc_offset_secs: -1234,
+            },
+        };
+
+        let exchange_rates = vec![
+            ExchangeRate {
+                currency_code: "EUR".to_string(),
+                rate: 4123,
+                updated_at: SystemTime::now(),
+            },
+            ExchangeRate {
+                currency_code: "USD".to_string(),
+                rate: 3950,
+                updated_at: SystemTime::now(),
+            },
+        ];
+        let offer_kind = OfferKind::Pocket {
+            id: "id".to_string(),
+            exchange_rate: ExchangeRate {
+                currency_code: "EUR".to_string(),
+                rate: 5123,
+                updated_at: SystemTime::now(),
+            },
+            topup_value_minor_units: 51245,
+            exchange_fee_minor_units: 123,
+            exchange_fee_rate_permyriad: 50,
+        };
+
+        data_store
+            .store_payment_info("hash", user_preferences.clone(), Vec::new(), None)
+            .unwrap();
+
+        // The second call will not fail.
+        data_store
+            .store_payment_info("hash", user_preferences, exchange_rates, Some(offer_kind))
+            .unwrap();
     }
 
     #[test]
     fn test_exchange_rate_storage() {
         let db_name = String::from("rates.db3");
         reset_db(&db_name);
-        let user_preferences = Arc::new(Mutex::new(UserPreferences {
-            fiat_currency: "CHF".to_string(),
-            timezone_config: TzConfig {
-                timezone_id: String::from(TEST_TZ_ID),
-                timezone_utc_offset_secs: TEST_TZ_OFFSET,
-            },
-        }));
-        let data_store =
-            DataStore::new(&format!("{TEST_DB_PATH}/{db_name}"), user_preferences).unwrap();
+        let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
 
         assert!(data_store.get_all_exchange_rates().unwrap().is_empty());
 
@@ -177,5 +300,10 @@ mod tests {
             eur_rate.updated_at,
             SystemTime::UNIX_EPOCH + Duration::from_secs(20)
         );
+    }
+
+    fn reset_db(db_name: &str) {
+        let _ = fs::create_dir(TEST_DB_PATH);
+        let _ = fs::remove_file(format!("{TEST_DB_PATH}/{db_name}"));
     }
 }

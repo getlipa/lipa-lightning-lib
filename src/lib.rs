@@ -170,6 +170,7 @@ pub struct OfferInfo {
     pub status: OfferStatus,
 }
 
+#[derive(Clone)]
 pub(crate) struct UserPreferences {
     fiat_currency: String,
     timezone_config: TzConfig,
@@ -178,7 +179,7 @@ pub(crate) struct UserPreferences {
 // TODO remove dead code after breez sdk implementation
 #[allow(dead_code)]
 pub struct LightningNode {
-    user_preferences: Arc<Mutex<UserPreferences>>,
+    user_preferences: Mutex<UserPreferences>,
     sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
     fiat_topup_client: PocketClient,
@@ -308,14 +309,13 @@ impl LightningNode {
         let offer_manager = OfferManager::new(environment.backend_url, Arc::clone(&auth));
 
         let db_path = format!("{}/db2.db3", config.local_persistence_path);
-        let user_preferences = Arc::new(Mutex::new(UserPreferences {
+
+        let user_preferences = Mutex::new(UserPreferences {
             fiat_currency: config.fiat_currency,
             timezone_config: config.timezone_config,
-        }));
-        let data_store = Arc::new(Mutex::new(DataStore::new(
-            &db_path,
-            Arc::clone(&user_preferences),
-        )?));
+        });
+
+        let data_store = Arc::new(Mutex::new(DataStore::new(&db_path)?));
 
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),
@@ -452,7 +452,10 @@ impl LightningNode {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to create an invoice",
             )?;
-        // TODO: store info about this payment in local db (metadata, exchange rates, offerkind, lsp fee, etc)
+
+        self.store_payment_info(&response.ln_invoice.payment_hash, None)
+            .map_to_permanent_failure("Failed to persist payment info")?;
+
         Ok(InvoiceDetails::from_ln_invoice(
             response.ln_invoice,
             &self.get_exchange_rate(),
@@ -479,6 +482,13 @@ impl LightningNode {
     }
 
     pub fn pay_invoice(&self, invoice: String, _metadata: String) -> PayResult<()> {
+        match self.rt.handle().block_on(parse(&invoice)) {
+            Ok(InputType::Bolt11 { invoice }) => self
+                .store_payment_info(&invoice.payment_hash, None)
+                .map_to_permanent_failure("Failed to persist payment info"),
+            _ => Err(invalid_input("Invalid invoice")),
+        }?;
+
         match self
             .rt
             .handle()
@@ -491,7 +501,6 @@ impl LightningNode {
                 msg: format!("Failed to start paying invoice: {e}"),
             }),
         }
-        // TODO: persist information about this payment in local db
     }
 
     pub fn pay_open_invoice(
@@ -500,6 +509,13 @@ impl LightningNode {
         amount_sat: u64,
         _metadata: String,
     ) -> PayResult<()> {
+        match self.rt.handle().block_on(parse(&invoice)) {
+            Ok(InputType::Bolt11 { invoice }) => self
+                .store_payment_info(&invoice.payment_hash, None)
+                .map_to_permanent_failure("Failed to persist payment info"),
+            _ => Err(invalid_input("Invalid invoice")),
+        }?;
+
         match self
             .rt
             .handle()
@@ -512,7 +528,6 @@ impl LightningNode {
                 msg: format!("Failed to start paying invoice: {e}"),
             }),
         }
-        // TODO: persist information about this payment in local db
     }
 
     // TODO remove unused_variables after breez sdk implementation
@@ -608,7 +623,7 @@ impl LightningNode {
             Ok(InputType::LnUrlWithdraw { data }) => data,
             _ => return Err(permanent_failure("Invalid LNURLw in offer")),
         };
-        match self
+        let hash = match self
             .rt
             .handle()
             .block_on(
@@ -619,13 +634,18 @@ impl LightningNode {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to withdraw offer",
             )? {
-            LnUrlCallbackStatus::Ok => Ok(String::from("dummy payment hash")), // TODO: get payment hash from the SDK: https://github.com/breez/breez-sdk/issues/427
-            LnUrlCallbackStatus::ErrorStatus { data } => Err(runtime_error(
-                RuntimeErrorCode::OfferServiceUnavailable,
-                format!("Failed to withdraw offer due to: {}", data.reason),
-            )),
-        }
-        // TODO: persist information about this offer collection in local db
+            LnUrlCallbackStatus::Ok => String::from("dummy payment hash"), // TODO: get payment hash from the SDK: https://github.com/breez/breez-sdk/issues/427
+            LnUrlCallbackStatus::ErrorStatus { data } => {
+                return Err(runtime_error(
+                    RuntimeErrorCode::OfferServiceUnavailable,
+                    format!("Failed to withdraw offer due to: {}", data.reason),
+                ))
+            }
+        };
+
+        self.store_payment_info(&hash, Some(offer.offer_kind))?;
+
+        Ok(hash)
     }
 
     pub fn register_notification_token(
@@ -650,6 +670,16 @@ impl LightningNode {
 
     pub fn get_payment_uuid(&self, payment_hash: String) -> Result<String> {
         get_payment_uuid(payment_hash)
+    }
+
+    fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) -> Result<()> {
+        let user_preferences = self.user_preferences.lock().unwrap().clone();
+        let exchange_rates = self.task_manager.lock().unwrap().get_exchange_rates();
+        self.data_store
+            .lock()
+            .unwrap()
+            .store_payment_info(hash, user_preferences, exchange_rates, offer)
+            .map_to_permanent_failure("Failed to persist payment info")
     }
 }
 

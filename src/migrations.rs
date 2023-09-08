@@ -6,9 +6,9 @@ use rusqlite_migration::{Migrations, M};
 
 const MIGRATION_01_INIT: &str = "
     CREATE TABLE payments (
-        hash TEXT NOT NULL PRIMARY KEY,
+        hash TEXT NOT NULL PRIMARY KEY ON CONFLICT REPLACE,
         timezone_id TEXT NOT NULL,
-        timezone_utc_offset_mins INTEGER NOT NULL,
+        timezone_utc_offset_secs INTEGER NOT NULL,
         fiat_currency TEXT NOT NULL,
         exchange_rates_history_snaphot_id INTEGER NULL
     );
@@ -23,7 +23,7 @@ const MIGRATION_01_INIT: &str = "
     );
 
     CREATE TABLE offers (
-        payment_hash TEXT NOT NULL PRIMARY KEY,
+        payment_hash TEXT NOT NULL PRIMARY KEY ON CONFLICT REPLACE,
 
         pocket_id TEXT NULL,
         fiat_currency TEXT NULL,
