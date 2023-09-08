@@ -257,7 +257,7 @@ impl LightningNode {
             NodeConfig::Greenlight {
                 config: GreenlightNodeConfig {
                     partner_credentials: None,
-                    invite_code: None,
+                    invite_code: config.invite_code.clone(),
                 },
             },
         );
