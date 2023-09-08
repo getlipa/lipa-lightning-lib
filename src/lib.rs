@@ -179,8 +179,6 @@ pub(crate) struct UserPreferences {
     timezone_config: TzConfig,
 }
 
-// TODO remove dead code after breez sdk implementation
-#[allow(dead_code)]
 pub struct LightningNode {
     user_preferences: Mutex<UserPreferences>,
     sdk: Arc<BreezServices>,
