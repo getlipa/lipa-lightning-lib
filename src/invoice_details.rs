@@ -1,5 +1,6 @@
 use crate::amount::{Amount, ToAmount};
 
+use crate::util::unix_timestamp_to_system_time;
 use crate::ExchangeRate;
 use breez_sdk_core::LNInvoice;
 use std::time::{Duration, SystemTime};
@@ -35,9 +36,4 @@ impl InvoiceDetails {
             ),
         }
     }
-}
-
-fn unix_timestamp_to_system_time(timestamp: u64) -> SystemTime {
-    let duration = Duration::from_secs(timestamp);
-    SystemTime::UNIX_EPOCH + duration
 }

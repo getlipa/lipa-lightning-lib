@@ -1,12 +1,18 @@
 use crate::errors::Result;
 use crate::migrations::migrate;
-use crate::{ExchangeRate, OfferKind, UserPreferences};
+use crate::{ExchangeRate, OfferKind, TzConfig, UserPreferences};
 
 use chrono::{DateTime, Utc};
 use perro::MapToError;
 use rusqlite::Connection;
 use rusqlite::Row;
 use std::time::SystemTime;
+
+pub(crate) struct LocalPaymentData {
+    pub user_preferences: UserPreferences,
+    pub exchange_rate: ExchangeRate,
+    pub offer: Option<OfferKind>,
+}
 
 pub(crate) struct DataStore {
     conn: Connection,
@@ -83,6 +89,33 @@ impl DataStore {
 
         tx.commit()
             .map_to_permanent_failure("Failed to commit the db transaction")
+    }
+
+    pub fn retrieve_payment_info(&self, payment_hash: &str) -> Result<Option<LocalPaymentData>> {
+        let mut statement = self
+            .conn
+            .prepare(
+                " \
+            SELECT timezone_id, timezone_utc_offset_secs, payments.fiat_currency, h.rate, h.updated_at,  \
+            o.pocket_id, o.fiat_currency, o.rate, o.exchanged_at, o.topup_value_minor_units, \
+			o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad \
+            FROM payments \
+            LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snaphot_id=h.snapshot_id \
+                AND payments.fiat_currency=h.fiat_currency \
+            LEFT JOIN offers o ON o.payment_hash=payments.hash \
+            WHERE hash=? \
+            ",
+            )
+            .map_to_permanent_failure("Failed to prepare SQL query")?;
+
+        let mut payment_iter = statement
+            .query_map([payment_hash], local_payment_data_from_row)
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
+
+        match payment_iter.next() {
+            None => Ok(None),
+            Some(p) => Ok(Some(p.map_to_permanent_failure("Corrupted db")?)),
+        }
     }
 
     pub fn update_exchange_rate(
@@ -172,6 +205,61 @@ fn exchange_rate_from_row(row: &Row) -> rusqlite::Result<ExchangeRate> {
     })
 }
 
+fn offer_kind_from_row(row: &Row) -> rusqlite::Result<Option<OfferKind>> {
+    let pocket_id: Option<String> = row.get(5)?;
+    match pocket_id {
+        Some(pocket_id) => {
+            let fiat_currency: String = row.get(6)?;
+            let rate: u32 = row.get(7)?;
+            let exchanged_at: chrono::DateTime<chrono::Utc> = row.get(8)?;
+            let exchanged_at = SystemTime::from(exchanged_at);
+            let topup_value_minor_units: u64 = row.get(9)?;
+            let exchange_fee_minor_units: u64 = row.get(10)?;
+            let exchange_fee_rate_permyriad: u16 = row.get(11)?;
+
+            let exchange_rate = ExchangeRate {
+                currency_code: fiat_currency,
+                rate,
+                updated_at: exchanged_at,
+            };
+
+            Ok(Some(OfferKind::Pocket {
+                id: pocket_id,
+                exchange_rate,
+                topup_value_minor_units,
+                exchange_fee_minor_units,
+                exchange_fee_rate_permyriad,
+            }))
+        }
+        None => Ok(None),
+    }
+}
+
+fn local_payment_data_from_row(row: &Row) -> rusqlite::Result<LocalPaymentData> {
+    let timezone_id: String = row.get(0)?;
+    let timezone_utc_offset_secs: i32 = row.get(1)?;
+    let fiat_currency: String = row.get(2)?;
+    let rate: u32 = row.get(3)?;
+    let updated_at: chrono::DateTime<chrono::Utc> = row.get(4)?;
+    let offer = offer_kind_from_row(row)?;
+
+    Ok(LocalPaymentData {
+        user_preferences: UserPreferences {
+            fiat_currency: fiat_currency.clone(),
+            timezone_config: TzConfig {
+                timezone_id,
+                timezone_utc_offset_secs,
+            },
+        },
+        exchange_rate: ExchangeRate {
+            currency_code: fiat_currency,
+            rate,
+            updated_at: SystemTime::from(updated_at),
+        },
+        offer,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use crate::config::TzConfig;
@@ -228,8 +316,54 @@ mod tests {
 
         // The second call will not fail.
         data_store
-            .store_payment_info("hash", user_preferences, exchange_rates, Some(offer_kind))
+            .store_payment_info(
+                "hash",
+                user_preferences.clone(),
+                exchange_rates.clone(),
+                Some(offer_kind.clone()),
+            )
             .unwrap();
+
+        data_store
+            .store_payment_info(
+                "hash - no offer",
+                user_preferences.clone(),
+                exchange_rates,
+                None,
+            )
+            .unwrap();
+
+        assert!(data_store
+            .retrieve_payment_info("non existent hash")
+            .unwrap()
+            .is_none());
+
+        let local_payment_data = data_store.retrieve_payment_info("hash").unwrap().unwrap();
+        assert_eq!(local_payment_data.offer.unwrap(), offer_kind);
+        assert_eq!(
+            local_payment_data.user_preferences,
+            user_preferences.clone()
+        );
+        assert_eq!(
+            local_payment_data.exchange_rate.currency_code,
+            user_preferences.fiat_currency
+        );
+        assert_eq!(local_payment_data.exchange_rate.rate, 4123);
+
+        let local_payment_data = data_store
+            .retrieve_payment_info("hash - no offer")
+            .unwrap()
+            .unwrap();
+        assert!(local_payment_data.offer.is_none());
+        assert_eq!(
+            local_payment_data.user_preferences,
+            user_preferences.clone()
+        );
+        assert_eq!(
+            local_payment_data.exchange_rate.currency_code,
+            user_preferences.fiat_currency
+        );
+        assert_eq!(local_payment_data.exchange_rate.rate, 4123);
     }
 
     #[test]

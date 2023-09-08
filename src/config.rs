@@ -12,7 +12,7 @@ pub struct Config {
     pub enable_file_logging: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TzConfig {
     pub timezone_id: String,
     pub timezone_utc_offset_secs: i32,

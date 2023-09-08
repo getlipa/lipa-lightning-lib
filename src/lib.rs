@@ -20,6 +20,7 @@ mod recovery;
 mod sanitize_input;
 mod secret;
 mod task_manager;
+mod util;
 
 use crate::amount::ToAmount;
 pub use crate::amount::{Amount, FiatValue};
@@ -40,6 +41,7 @@ use crate::secret::Secret;
 use crate::async_runtime::AsyncRuntime;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 use crate::task_manager::{TaskManager, TaskPeriods};
+use crate::util::unix_timestamp_to_system_time;
 use bip39::{Language, Mnemonic};
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
@@ -48,6 +50,7 @@ use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, InputType,
     LnUrlCallbackStatus, NodeConfig, NodeState, OpenChannelFeeRequest, PaymentDetails,
+    PaymentTypeFilter,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupInfo, TopupStatus};
@@ -170,7 +173,7 @@ pub struct OfferInfo {
     pub status: OfferStatus,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub(crate) struct UserPreferences {
     fiat_currency: String,
     timezone_config: TzConfig,
@@ -456,6 +459,7 @@ impl LightningNode {
 
         self.store_payment_info(&response.ln_invoice.payment_hash, None)
             .map_to_permanent_failure("Failed to persist payment info")?;
+        // TODO: persist metadata
 
         Ok(InvoiceDetails::from_ln_invoice(
             response.ln_invoice,
@@ -489,6 +493,7 @@ impl LightningNode {
                 .map_to_permanent_failure("Failed to persist payment info"),
             _ => Err(invalid_input("Invalid invoice")),
         }?;
+        // TODO: persist metadata
 
         match self
             .rt
@@ -516,6 +521,7 @@ impl LightningNode {
                 .map_to_permanent_failure("Failed to persist payment info"),
             _ => Err(invalid_input("Invalid invoice")),
         }?;
+        // TODO: persist metadata
 
         match self
             .rt
@@ -531,16 +537,138 @@ impl LightningNode {
         }
     }
 
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
-    pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
-        todo!()
+    pub fn get_latest_payments(&self, _number_of_payments: u32) -> Result<Vec<Payment>> {
+        let breez_payments = self
+            .rt
+            .handle()
+            .block_on(self.sdk.list_payments(PaymentTypeFilter::All, None, None))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to get payment by hash",
+            )?;
+
+        let mut payments = Vec::new();
+
+        for breez_payment in breez_payments {
+            if breez_payment.payment_type == breez_sdk_core::PaymentType::ClosedChannel {
+                continue;
+            }
+            let payment = self.payment_from_breez_payment(breez_payment)?;
+            payments.push(payment);
+        }
+
+        Ok(payments)
     }
 
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
-        todo!()
+        let breez_payment = self
+            .rt
+            .handle()
+            .block_on(self.sdk.payment_by_hash(hash))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to get payment by hash",
+            )?
+            .ok_or_invalid_input("Invalid hash: no payment with provided hash was found")?;
+
+        self.payment_from_breez_payment(breez_payment)
+    }
+
+    fn payment_from_breez_payment(
+        &self,
+        breez_payment: breez_sdk_core::Payment,
+    ) -> Result<Payment> {
+        let payment_details = match breez_payment.details {
+            PaymentDetails::Ln { data } => data,
+            _ => {
+                return Err(permanent_failure(
+                    "Current interface doesn't support PaymentDetails::ClosedChannel",
+                ))
+            }
+        };
+
+        let local_payment_data = self
+            .data_store
+            .lock()
+            .unwrap()
+            .retrieve_payment_info(&payment_details.payment_hash)?;
+
+        let (exchange_rate, time, offer) = match local_payment_data {
+            None => {
+                let exchange_rate = self.get_exchange_rate();
+                let user_preferences = self.user_preferences.lock().unwrap();
+                let time = TzTime {
+                    time: unix_timestamp_to_system_time(breez_payment.payment_time as u64),
+                    timezone_id: user_preferences.timezone_config.timezone_id.clone(),
+                    timezone_utc_offset_secs: user_preferences
+                        .timezone_config
+                        .timezone_utc_offset_secs,
+                };
+                let offer = None;
+                (exchange_rate, time, offer)
+            } // TODO: change interface to accommodate for local payment data being non-existent
+            Some(d) => {
+                let exchange_rate = Some(d.exchange_rate);
+                let time = TzTime {
+                    time: unix_timestamp_to_system_time(breez_payment.payment_time as u64),
+                    timezone_id: d.user_preferences.timezone_config.timezone_id,
+                    timezone_utc_offset_secs: d
+                        .user_preferences
+                        .timezone_config
+                        .timezone_utc_offset_secs,
+                };
+                let offer = d.offer;
+                (exchange_rate, time, offer)
+            }
+        };
+
+        let (payment_type, amount, network_fees, lsp_fees) = match breez_payment.payment_type {
+            breez_sdk_core::PaymentType::Sent => (
+                PaymentType::Sending,
+                breez_payment.amount_msat.to_amount_up(&exchange_rate),
+                Some(breez_payment.fee_msat.to_amount_up(&exchange_rate)),
+                None,
+            ),
+            breez_sdk_core::PaymentType::Received => (
+                PaymentType::Receiving,
+                breez_payment.amount_msat.to_amount_down(&exchange_rate),
+                None,
+                Some(breez_payment.fee_msat.to_amount_up(&exchange_rate)),
+            ),
+            breez_sdk_core::PaymentType::ClosedChannel => {
+                return Err(permanent_failure(
+                    "Current interface doesn't support PaymentDetails::ClosedChannel",
+                ))
+            }
+        };
+
+        let payment_state = match breez_payment.pending {
+            true => PaymentState::Created,
+            false => PaymentState::Succeeded,
+        };
+
+        let invoice_details = self
+            .decode_invoice(payment_details.bolt11)
+            .map_to_permanent_failure("Invalid invoice provided by the Breez SDK")?;
+
+        let description = invoice_details.description.clone();
+
+        Ok(Payment {
+            payment_type,
+            payment_state,
+            fail_reason: None, // TODO: Request SDK to store and provide failed payment attempts
+            hash: payment_details.payment_hash,
+            amount,
+            invoice_details,
+            created_at: time.clone(),
+            latest_state_change_at: time, // TODO: remove this field from interface
+            description,
+            preimage: Some(payment_details.payment_preimage),
+            network_fees,
+            lsp_fees,
+            offer,
+            metadata: String::new(), // TODO: retrieve metadata from local db
+        })
     }
 
     pub fn foreground(&self) {

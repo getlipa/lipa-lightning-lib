@@ -24,7 +24,6 @@ const MIGRATION_01_INIT: &str = "
 
     CREATE TABLE offers (
         payment_hash TEXT NOT NULL PRIMARY KEY ON CONFLICT REPLACE,
-
         pocket_id TEXT NULL,
         fiat_currency TEXT NULL,
         rate INTEGER NULL,
