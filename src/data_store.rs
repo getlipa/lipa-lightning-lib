@@ -31,7 +31,7 @@ impl DataStore {
             .transaction()
             .map_to_permanent_failure("Failed to begin SQL transaction")?;
 
-        let snapshot_id = insert_snapshot(&tx, exchange_rates)?;
+        let snapshot_id = insert_exchange_rate_snapshot(&tx, exchange_rates)?;
 
         tx.execute(
             "\
@@ -131,7 +131,7 @@ impl DataStore {
 // Store all provided exchange rates.
 // For every row it takes ~13 bytes (4 + 3 + 2 + 4), if we have 100 fiat currencies it adds 1300 bytes.
 // For 1000 payments it will add ~1 MB.
-fn insert_snapshot(
+fn insert_exchange_rate_snapshot(
     connection: &Connection,
     exchange_rates: Vec<ExchangeRate>,
 ) -> Result<Option<u64>> {
