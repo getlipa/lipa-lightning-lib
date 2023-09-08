@@ -443,7 +443,10 @@ interface OfferKind {
 enum OfferStatus {
     "READY",
     "FAILED", // Claiming the offer failed, but it can be retried.
-    "REFUNDED", // The offer was not claimed in time, so the user got refunded (Pocket: Refund happened over the Fiat rails).
+    "REFUNDED", // The offer could not be claimed, so the user got refunded
+                // Specific info for Pocket offers:
+                // - The Refund happened over the Fiat rails
+                // - Reasons for why the offer was refunded: https://pocketbitcoin.com/developers/docs/rest/v1/webhooks#refund-reasons
     "SETTLED",
 };
 
