@@ -198,7 +198,6 @@ interface LightningNode {
 dictionary Config {
     EnvironmentCode environment;
     bytes seed;
-    string? invite_code; // needs to be provided only for the initial node setup
     string fiat_currency;
     string local_persistence_path;
     TzConfig timezone_config;
