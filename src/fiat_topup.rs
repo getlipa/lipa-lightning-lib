@@ -1,7 +1,9 @@
+use crate::async_runtime::Handle;
 use crate::errors::{Result, RuntimeErrorCode};
-use breez_sdk_core::BreezServices;
+use breez_sdk_core::{BreezServices, SignMessageRequest};
 use chrono::{DateTime, Utc};
 use log::error;
+use perro::Error::RuntimeError;
 use perro::{runtime_error, MapToError};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -119,16 +121,15 @@ pub struct CreateOrderResponse {
     payout_method: PayoutMethod,
 }
 
-// TODO remove dead code after breez sdk implementation
-#[allow(dead_code)]
 pub(crate) struct PocketClient {
     pocket_url: String,
     client: reqwest::blocking::Client,
     sdk: Arc<BreezServices>,
+    rt_handle: Handle,
 }
 
 impl PocketClient {
-    pub fn new(pocket_url: String, sdk: Arc<BreezServices>) -> Result<Self> {
+    pub fn new(pocket_url: String, sdk: Arc<BreezServices>, rt_handle: Handle) -> Result<Self> {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(20))
             .build()
@@ -137,6 +138,7 @@ impl PocketClient {
             pocket_url,
             client,
             sdk,
+            rt_handle,
         })
     }
 
@@ -183,8 +185,6 @@ impl PocketClient {
             )
     }
 
-    // TODO remove unused_variables after breez sdk implementation
-    #[allow(unused_variables)]
     fn create_order(
         &self,
         challenge_response: ChallengeResponse,
@@ -195,13 +195,16 @@ impl PocketClient {
             "I confirm my bitcoin wallet. [{}]",
             challenge_response.token
         );
-        todo!();
-        /*
-        let signature = self
+
+        let signature = self.sign_message(message.clone())?;
+        let node_pubkey = self
             .sdk
-            .sign_message(&message)
-            .map_runtime_error_using(RuntimeErrorCode::from_eel_runtime_error_code)?;
-        let node_pubkey = self.core_node.get_node_info().node_pubkey.to_string();
+            .node_info()
+            .map_err(|e| RuntimeError {
+                code: RuntimeErrorCode::NodeUnavailable,
+                msg: e.to_string(),
+            })?
+            .id;
 
         let user_currency = match user_currency {
             TopupCurrency::EUR => "eur",
@@ -248,6 +251,13 @@ impl PocketClient {
                 RuntimeErrorCode::OfferServiceUnavailable,
                 "Failed to parse CreateOrderResponse",
             )
-        */
+    }
+
+    fn sign_message(&self, message: String) -> Result<String> {
+        Ok(self
+            .rt_handle
+            .block_on(self.sdk.sign_message(SignMessageRequest { message }))
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Couldn't sign message")?
+            .signature)
     }
 }
