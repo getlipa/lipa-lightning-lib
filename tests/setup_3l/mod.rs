@@ -58,6 +58,7 @@ impl NodeHandle {
             config: Config {
                 environment: uniffi_lipalightninglib::EnvironmentCode::Local,
                 seed: mnemonic_to_secret(mnemonic, "".to_string()).unwrap().seed,
+                invite_code: None,
                 fiat_currency: "EUR".to_string(),
                 local_persistence_path: LOCAL_PERSISTENCE_PATH.to_string(),
                 timezone_config: TzConfig {

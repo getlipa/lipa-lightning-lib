@@ -5,6 +5,7 @@ use std::time::SystemTime;
 pub struct Config {
     pub environment: EnvironmentCode,
     pub seed: Vec<u8>,
+    pub invite_code: Option<String>,
     pub fiat_currency: String,
     pub local_persistence_path: String,
     pub timezone_config: TzConfig,
