@@ -2,16 +2,20 @@ use crate::async_runtime::{Handle, RepeatingTaskHandle};
 use crate::errors::Result;
 pub use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProviderImpl};
 
+use crate::amount::ToAmount;
 use crate::data_store::DataStore;
 use crate::exchange_rate_provider::ExchangeRateProvider;
-use breez_sdk_core::BreezServices;
+use crate::{LspFee, RuntimeErrorCode};
+use breez_sdk_core::{BreezServices, OpeningFeeParams};
 use log::{error, trace};
+use perro::Error::RuntimeError;
 use std::sync::{Arc, Mutex};
 use tokio::time::Duration;
 
 pub(crate) struct TaskPeriods {
     pub update_exchange_rates: Option<Duration>,
     pub sync_breez: Option<Duration>,
+    pub update_lsp_fee: Option<Duration>,
 }
 
 pub(crate) struct TaskManager {
@@ -20,6 +24,7 @@ pub(crate) struct TaskManager {
     exchange_rates: Arc<Mutex<Vec<ExchangeRate>>>,
     data_store: Arc<Mutex<DataStore>>,
     sdk: Arc<BreezServices>,
+    lsp_fee: Arc<Mutex<Option<OpeningFeeParams>>>,
 
     task_handles: Vec<RepeatingTaskHandle>,
 }
@@ -39,12 +44,29 @@ impl TaskManager {
             exchange_rates: Arc::new(Mutex::new(exchange_rates)),
             data_store,
             sdk,
+            lsp_fee: Arc::new(Mutex::new(None)),
             task_handles: Vec::new(),
         })
     }
 
     pub fn get_exchange_rates(&self) -> Vec<ExchangeRate> {
         (*self.exchange_rates.lock().unwrap()).clone()
+    }
+
+    pub fn get_lsp_fee(&self, exchange_rate: &Option<ExchangeRate>) -> Result<LspFee> {
+        let mut lsp_fee = self.lsp_fee.lock().unwrap();
+        let lsp_fee = match &mut *lsp_fee {
+            Some(l) => Ok(l),
+            None => Err(RuntimeError {
+                code: RuntimeErrorCode::LspServiceUnavailable,
+                msg: "Cached LSP fee isn't available".to_string(),
+            }),
+        }?;
+
+        Ok(LspFee {
+            channel_minimum_fee: lsp_fee.min_msat.to_amount_up(exchange_rate),
+            channel_fee_permyriad: lsp_fee.proportional as u64 / 100,
+        })
     }
 
     pub fn request_shutdown_all(&mut self) {
@@ -65,6 +87,11 @@ impl TaskManager {
         // Sync breez sdk.
         if let Some(period) = periods.sync_breez {
             self.task_handles.push(self.start_breez_sync(period));
+        }
+
+        // Update lsp fee.
+        if let Some(period) = periods.update_lsp_fee {
+            self.task_handles.push(self.start_lsp_fee_update(period));
         }
     }
 
@@ -105,6 +132,37 @@ impl TaskManager {
                     }
                     Err(e) => {
                         error!("Update exchange rates task panicked: {e}");
+                    }
+                }
+            }
+        })
+    }
+
+    fn start_lsp_fee_update(&self, period: Duration) -> RepeatingTaskHandle {
+        let sdk = Arc::clone(&self.sdk);
+        let lsp_fee = Arc::clone(&self.lsp_fee);
+        self.runtime_handle.spawn_repeating_task(period, move || {
+            let sdk = Arc::clone(&sdk);
+            let lsp_fee = Arc::clone(&lsp_fee);
+
+            async move {
+                trace!("Starting lsp fee update task");
+                match sdk.lsp_info().await {
+                    Ok(lsp_information) => {
+                        match lsp_information
+                            .opening_fee_params_list
+                            .get_cheapest_opening_fee_params()
+                        {
+                            Ok(opening_fee_params) => {
+                                *lsp_fee.lock().unwrap() = Some(opening_fee_params);
+                            }
+                            Err(e) => {
+                                error!("Failed to retrieve cheapest opening fee params: {e}");
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        error!("Failed to update lsp fee: {e}");
                     }
                 }
             }

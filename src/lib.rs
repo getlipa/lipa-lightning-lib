@@ -228,6 +228,7 @@ const EXEMPT_FEE_MSAT: u64 = 20_000;
 const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_exchange_rates: Some(Duration::from_secs(10 * 60)),
     sync_breez: Some(Duration::from_secs(10 * 60)),
+    update_lsp_fee: Some(Duration::from_secs(10 * 60)),
 };
 
 impl LightningNode {
@@ -354,6 +355,7 @@ impl LightningNode {
                 TaskPeriods {
                     update_exchange_rates: Some(period),
                     sync_breez: Some(period),
+                    update_lsp_fee: Some(period),
                 }
             }
             Err(_) => FOREGROUND_PERIODS,
@@ -382,24 +384,16 @@ impl LightningNode {
     }
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        let lsp_information = self
-            .rt
-            .handle()
-            .block_on(self.sdk.lsp_info())
+        let exchange_rate = self.get_exchange_rate();
+
+        self.task_manager
+            .lock()
+            .unwrap()
+            .get_lsp_fee(&exchange_rate)
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to fetch lsp info",
-            )?;
-        let cheapest_opening_fee = lsp_information
-            .opening_fee_params_list
-            .get_cheapest_opening_fee_params()
-            .map_to_permanent_failure("Failed to get cheapest opening fee params")?;
-        Ok(LspFee {
-            channel_minimum_fee: cheapest_opening_fee
-                .min_msat
-                .to_amount_up(&self.get_exchange_rate()),
-            channel_fee_permyriad: cheapest_opening_fee.proportional as u64 / 100,
-        })
+            )
     }
 
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<Amount> {
