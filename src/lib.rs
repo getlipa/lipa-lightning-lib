@@ -231,6 +231,12 @@ const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_lsp_fee: Some(Duration::from_secs(10 * 60)),
 };
 
+const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
+    update_exchange_rates: None,
+    sync_breez: Some(Duration::from_secs(30 * 60)),
+    update_lsp_fee: None,
+};
+
 impl LightningNode {
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         enable_backtrace();
@@ -666,11 +672,17 @@ impl LightningNode {
     }
 
     pub fn foreground(&self) {
-        // TODO: implement if/when we have a task manager, otherwise remove this method
+        self.task_manager
+            .lock()
+            .unwrap()
+            .restart(FOREGROUND_PERIODS);
     }
 
     pub fn background(&self) {
-        // TODO: implement if/when we have a task manager, otherwise remove this method
+        self.task_manager
+            .lock()
+            .unwrap()
+            .restart(BACKGROUND_PERIODS);
     }
 
     pub fn list_currency_codes(&self) -> Vec<String> {
