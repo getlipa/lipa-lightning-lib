@@ -25,7 +25,7 @@ jobs:
         run: cargo install cargo-audit
       - uses: actions/checkout@v3
       - name: Run security audit
-        run: cargo audit --ignore RUSTSEC-2020-0071 # ignore deprecetaded time 1.x being imported by breez SDK
+        run: cargo audit
   fmt_check:
     name: Check code formatting
     runs-on: ubuntu-latest
