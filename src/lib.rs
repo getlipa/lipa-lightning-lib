@@ -11,6 +11,7 @@ mod environment;
 mod errors;
 mod exchange_rate_provider;
 mod fiat_topup;
+mod fund_migration;
 mod invoice_details;
 mod limits;
 mod logger;
@@ -24,6 +25,7 @@ mod util;
 
 use crate::amount::ToAmount;
 pub use crate::amount::{Amount, FiatValue};
+use crate::async_runtime::AsyncRuntime;
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
 use crate::environment::Environment;
@@ -35,13 +37,12 @@ pub use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProviderImpl};
 pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 pub use crate::invoice_details::InvoiceDetails;
+pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
-
-use crate::async_runtime::AsyncRuntime;
-pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
+
 use bip39::{Language, Mnemonic};
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
