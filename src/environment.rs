@@ -32,7 +32,7 @@ impl Environment {
         match environment {
             EnvironmentCode::Local => Self {
                 network: Network::Bitcoin,
-                environment_type: EnvironmentType::Staging,
+                environment_type: EnvironmentType::Production,
                 backend_url,
                 backend_health_url,
                 lsp_url: env!("LSP_URL_LOCAL").to_string(),
@@ -43,7 +43,7 @@ impl Environment {
             },
             EnvironmentCode::Dev => Self {
                 network: Network::Bitcoin,
-                environment_type: EnvironmentType::Staging,
+                environment_type: EnvironmentType::Production,
                 backend_url,
                 backend_health_url,
                 lsp_url: env!("LSP_URL_DEV").to_string(),
@@ -54,7 +54,7 @@ impl Environment {
             },
             EnvironmentCode::Stage => Self {
                 network: Network::Bitcoin,
-                environment_type: EnvironmentType::Staging,
+                environment_type: EnvironmentType::Production,
                 backend_url,
                 backend_health_url,
                 lsp_url: env!("LSP_URL_STAGE").to_string(),
