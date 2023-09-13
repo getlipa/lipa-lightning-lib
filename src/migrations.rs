@@ -40,6 +40,16 @@ const MIGRATION_01_INIT: &str = "
     );
 ";
 
+const MIGRATION_02_FUNDS_MIGRATION_STATUS: &str = "
+    CREATE TABLE funds_migration_status (
+        id INTEGER NOT NULL PRIMARY KEY,
+        status INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    INSERT INTO funds_migration_status (status)
+    VALUES (0);
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -47,7 +57,10 @@ pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
 }
 
 fn migrations() -> Migrations<'static> {
-    Migrations::new(vec![M::up(MIGRATION_01_INIT)])
+    Migrations::new(vec![
+        M::up(MIGRATION_01_INIT),
+        M::up(MIGRATION_02_FUNDS_MIGRATION_STATUS),
+    ])
 }
 
 #[cfg(test)]
@@ -55,7 +68,7 @@ mod tests {
     use super::migrations;
 
     #[test]
-    fn migrations_test() {
+    fn db_migrations_test() {
         assert!(migrations().validate().is_ok());
     }
 }

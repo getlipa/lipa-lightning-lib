@@ -5,7 +5,18 @@ use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::{Message, PublicKey, SECP256K1};
 use bitcoin::util::bip32::{ChildNumber, ExtendedPrivKey};
 use bitcoin::Network;
+use num_enum::TryFromPrimitive;
 use perro::MapToError;
+
+#[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
+#[repr(u8)]
+pub enum MigrationStatus {
+    Unknown,
+    Pending,
+    Failed,
+    Completed,
+    NotNeeded,
+}
 
 #[allow(dead_code)]
 fn sign_with_ldk_key(seed: [u8; 64], message: &str) -> Result<(String, String)> {
