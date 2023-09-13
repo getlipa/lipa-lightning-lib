@@ -536,8 +536,7 @@ impl LightningNode {
         }
     }
 
-    // TODO: restrict returned payments according to `number_of_payments` parameter
-    pub fn get_latest_payments(&self, _number_of_payments: u32) -> Result<Vec<Payment>> {
+    pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
         self.rt
             .handle()
             .block_on(self.sdk.list_payments(PaymentTypeFilter::All, None, None))
@@ -547,6 +546,7 @@ impl LightningNode {
             )?
             .into_iter()
             .filter(|p| p.payment_type != breez_sdk_core::PaymentType::ClosedChannel)
+            .take(number_of_payments as usize)
             .map(|p| self.payment_from_breez_payment(p))
             .collect::<Result<Vec<Payment>>>()
     }
