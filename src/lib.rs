@@ -536,6 +536,7 @@ impl LightningNode {
         }
     }
 
+    // TODO: restrict returned payments according to `number_of_payments` parameter
     pub fn get_latest_payments(&self, _number_of_payments: u32) -> Result<Vec<Payment>> {
         let breez_payments = self
             .rt
