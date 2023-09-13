@@ -1,4 +1,5 @@
 use crate::errors::Result;
+use crate::fund_migration::MigrationStatus;
 use crate::migrations::migrate;
 use crate::{ExchangeRate, OfferKind, TzConfig, UserPreferences};
 
@@ -159,6 +160,38 @@ impl DataStore {
         }
         Ok(rates)
     }
+
+    #[allow(dead_code)]
+    pub fn append_funds_migration_status(&self, status: MigrationStatus) -> Result<()> {
+        self.conn
+            .execute(
+                "INSERT INTO funds_migration_status (status) VALUES (?1)",
+                (status as u8,),
+            )
+            .map_to_permanent_failure("Failed to add funds migration ststus to db")?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn retrive_funds_migration_status(&self) -> Result<MigrationStatus> {
+        let status_from_row = |row: &Row| {
+            let status: u8 = row.get(0)?;
+            MigrationStatus::try_from(status).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    1,
+                    rusqlite::types::Type::Integer,
+                    Box::new(e),
+                )
+            })
+        };
+        self.conn
+            .query_row(
+                "SELECT status, updated_at FROM funds_migration_status ORDER BY id DESC LIMIT 1",
+                (),
+                status_from_row,
+            )
+            .map_to_permanent_failure("Failed to query funds migration status")
+    }
 }
 
 // Store all provided exchange rates.
@@ -264,8 +297,9 @@ fn local_payment_data_from_row(row: &Row) -> rusqlite::Result<LocalPaymentData> 
 mod tests {
     use crate::config::TzConfig;
     use crate::data_store::DataStore;
-
+    use crate::fund_migration::MigrationStatus;
     use crate::{ExchangeRate, OfferKind, UserPreferences};
+
     use std::fs;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
@@ -433,6 +467,34 @@ mod tests {
         assert_eq!(
             eur_rate.updated_at,
             SystemTime::UNIX_EPOCH + Duration::from_secs(20)
+        );
+    }
+
+    #[test]
+    fn test_persisting_funds_migration_status() {
+        let db_name = String::from("funds_migration.db3");
+        reset_db(&db_name);
+        let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+
+        assert_eq!(
+            data_store.retrive_funds_migration_status().unwrap(),
+            MigrationStatus::Unknown
+        );
+
+        data_store
+            .append_funds_migration_status(MigrationStatus::Pending)
+            .unwrap();
+        assert_eq!(
+            data_store.retrive_funds_migration_status().unwrap(),
+            MigrationStatus::Pending
+        );
+
+        data_store
+            .append_funds_migration_status(MigrationStatus::Completed)
+            .unwrap();
+        assert_eq!(
+            data_store.retrive_funds_migration_status().unwrap(),
+            MigrationStatus::Completed
         );
     }
 
