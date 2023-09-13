@@ -538,26 +538,17 @@ impl LightningNode {
 
     // TODO: restrict returned payments according to `number_of_payments` parameter
     pub fn get_latest_payments(&self, _number_of_payments: u32) -> Result<Vec<Payment>> {
-        let breez_payments = self
-            .rt
+        self.rt
             .handle()
             .block_on(self.sdk.list_payments(PaymentTypeFilter::All, None, None))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to get payment by hash",
-            )?;
-
-        let mut payments = Vec::new();
-
-        for breez_payment in breez_payments {
-            if breez_payment.payment_type == breez_sdk_core::PaymentType::ClosedChannel {
-                continue;
-            }
-            let payment = self.payment_from_breez_payment(breez_payment)?;
-            payments.push(payment);
-        }
-
-        Ok(payments)
+            )?
+            .into_iter()
+            .filter(|p| p.payment_type != breez_sdk_core::PaymentType::ClosedChannel)
+            .map(|p| self.payment_from_breez_payment(p))
+            .collect::<Result<Vec<Payment>>>()
     }
 
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
