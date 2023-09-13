@@ -540,10 +540,7 @@ impl LightningNode {
         self.rt
             .handle()
             .block_on(self.sdk.list_payments(PaymentTypeFilter::All, None, None))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to get payment by hash",
-            )?
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
             .into_iter()
             .filter(|p| p.payment_type != breez_sdk_core::PaymentType::ClosedChannel)
             .take(number_of_payments as usize)
