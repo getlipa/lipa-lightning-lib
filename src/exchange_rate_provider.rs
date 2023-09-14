@@ -1,7 +1,5 @@
-use crate::errors::Result;
-use crate::RuntimeErrorCode;
+use crate::errors::SimpleError;
 use honey_badger::Auth;
-use perro::ResultTrait;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -13,7 +11,7 @@ pub struct ExchangeRate {
 }
 
 pub trait ExchangeRateProvider: Send + Sync {
-    fn query_all_exchange_rates(&self) -> Result<Vec<ExchangeRate>>;
+    fn query_all_exchange_rates(&self) -> Result<Vec<ExchangeRate>, SimpleError>;
 }
 
 pub struct ExchangeRateProviderImpl {
@@ -28,11 +26,13 @@ impl ExchangeRateProviderImpl {
 }
 
 impl ExchangeRateProvider for ExchangeRateProviderImpl {
-    fn query_all_exchange_rates(&self) -> Result<Vec<ExchangeRate>> {
+    fn query_all_exchange_rates(&self) -> Result<Vec<ExchangeRate>, SimpleError> {
         Ok(self
             .provider
             .query_all_exchange_rates()
-            .map_runtime_error_to(RuntimeErrorCode::ExchangeRateProviderUnavailable)?
+            .map_err(|e| SimpleError::Simple {
+                msg: format!("Failed to query exchange rates: {e}"),
+            })?
             .into_iter()
             .map(|r| ExchangeRate {
                 currency_code: r.currency_code,

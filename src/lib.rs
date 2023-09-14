@@ -30,7 +30,7 @@ pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
-use crate::errors::{to_mnemonic_error, Error};
+use crate::errors::{to_mnemonic_error, Error, SimpleError};
 pub use crate::errors::{DecodeInvoiceError, MnemonicError, PayError, PayErrorCode, PayResult};
 pub use crate::errors::{Error as LnError, Result, RuntimeErrorCode};
 pub use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProviderImpl};
@@ -78,12 +78,6 @@ const LOG_LEVEL: log::Level = log::Level::Trace;
 const LOGS_DIR: &str = "logs";
 
 const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
-
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
-pub enum SimpleError {
-    #[error("SimpleError: {msg}")]
-    Simple { msg: String },
-}
 
 pub struct LspFee {
     pub channel_minimum_fee: Amount,
@@ -395,10 +389,6 @@ impl LightningNode {
             .lock()
             .unwrap()
             .get_lsp_fee(&exchange_rate)
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to fetch lsp info",
-            )
     }
 
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<Amount> {

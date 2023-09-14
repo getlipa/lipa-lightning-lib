@@ -7,14 +7,7 @@ pub enum RuntimeErrorCode {
     // 3L runtime errors
     AuthServiceUnavailable,
     OfferServiceUnavailable,
-    ExchangeRateProviderUnavailable,
-
-    // Eel runtime errors
-    EsploraServiceUnavailable,
     LspServiceUnavailable,
-    RemoteStorageError,
-    NonExistingWallet,
-
     // Breez runtime errors
     NodeUnavailable,
 }
@@ -86,4 +79,10 @@ pub fn to_mnemonic_error(e: bip39::Error) -> MnemonicError {
         bip39::Error::InvalidChecksum => MnemonicError::InvalidChecksum,
         bip39::Error::AmbiguousLanguages(_) => MnemonicError::AmbiguousLanguages,
     }
+}
+
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum SimpleError {
+    #[error("SimpleError: {msg}")]
+    Simple { msg: String },
 }
