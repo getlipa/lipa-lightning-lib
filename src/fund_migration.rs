@@ -64,7 +64,7 @@ pub(crate) async fn migrate_funds(
         .opening_fee_params_list
         .get_cheapest_opening_fee_params()
         .map_to_permanent_failure("Failed to get LSP fees")?;
-    let amout_to_request = add_lsp_fees(balance, &lsp_fee);
+    let amout_to_request = add_lsp_fees(balance, &lsp_fee) * 1_000;
 
     let invoice = sdk
         .receive_payment(breez_sdk_core::ReceivePaymentRequest {
@@ -107,11 +107,21 @@ fn fetch_balance(_public_key: String) -> Result<u64> {
 }
 
 fn add_lsp_fees(amount_msat: u64, lsp_fee: &OpeningFeeParams) -> u64 {
-    // TODO: Implement.
-    let lsp_fee_msat = amount_msat * lsp_fee.proportional as u64 / 1_000_000;
-    let lsp_fee_msat_rounded_to_sat = lsp_fee_msat / 1000 * 1000;
-    let fee = std::cmp::max(lsp_fee_msat_rounded_to_sat, lsp_fee.min_msat);
-    amount_msat + fee
+    const MILLION: u64 = 1_000_000;
+
+    const MIN_REQUEST_MSAT: u64 = 1_000;
+    if amount_msat < MIN_REQUEST_MSAT {
+        return lsp_fee.min_msat + MIN_REQUEST_MSAT;
+    }
+
+    let one_minus_proportional = MILLION - lsp_fee.proportional as u64;
+
+    if amount_msat * lsp_fee.proportional as u64 / one_minus_proportional < lsp_fee.min_msat {
+        amount_msat + lsp_fee.min_msat
+    } else {
+        let result = amount_msat * MILLION / one_minus_proportional;
+        result / 1_000 * 1_000
+    }
 }
 
 fn derive_ldk_keys(seed: &[u8; 64]) -> Result<(SecretKey, PublicKey)> {
@@ -152,5 +162,44 @@ mod tests {
         let message = "I want to payout my funds to invoice".as_bytes();
         let message = Message::from_hashed_data::<sha256::Hash>(message);
         signature.verify(&message, &public_key).unwrap();
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_lsp_fee() {
+        let lsp_fee = OpeningFeeParams {
+            min_msat: 2_000_000,
+            proportional: 10_000,
+            valid_until: String::new(),
+            max_idle_time: 0,
+            max_client_to_self_delay: 0,
+            promise: String::new(),
+        };
+
+		assert_eq!(add_lsp_fees(      1_000, &lsp_fee),   2_001_000);
+		assert_eq!(add_lsp_fees(  1_000_000, &lsp_fee),   3_000_000);
+		assert_eq!(add_lsp_fees( 11_000_000, &lsp_fee),  13_000_000);
+		assert_eq!(add_lsp_fees(811_000_000, &lsp_fee), 819_191_000);
+
+        assert_calculation(&lsp_fee,         1_000);
+        assert_calculation(&lsp_fee,        11_000);
+        assert_calculation(&lsp_fee,       111_000);
+        assert_calculation(&lsp_fee,     1_111_000);
+        assert_calculation(&lsp_fee,    11_111_000);
+        assert_calculation(&lsp_fee,   111_111_000);
+        assert_calculation(&lsp_fee, 1_111_111_000);
+    }
+
+    fn assert_calculation(lsp_fee: &OpeningFeeParams, amount_msats: u64) {
+        let amount_with_fees = add_lsp_fees(amount_msats, lsp_fee);
+        let receive = what_receive_for(lsp_fee, amount_with_fees);
+        assert_eq!(amount_msats, receive);
+    }
+
+    fn what_receive_for(lsp_fee: &OpeningFeeParams, amount_msats: u64) -> u64 {
+        let lsp_fee_msat = amount_msats * lsp_fee.proportional as u64 / 1_000_000;
+        let lsp_fee_msat_rounded_to_sat = lsp_fee_msat / 1000 * 1000;
+        let final_fee = std::cmp::max(lsp_fee_msat_rounded_to_sat, lsp_fee.min_msat);
+        amount_msats - final_fee
     }
 }
