@@ -57,6 +57,7 @@ use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupInfo, TopupStatus};
 use data_store::DataStore;
 use email_address::EmailAddress;
+//use fund_migration::migrate_funds;
 use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
 use iban::Iban;
@@ -331,6 +332,10 @@ impl LightningNode {
             .lock()
             .unwrap()
             .restart(Self::get_foreground_periods());
+
+        // let data_store_clone = Arc::clone(&data_store);
+        // rt.handle()
+        //     .block_on(async { migrate_funds(&strong_typed_seed, data_store_clone, &sdk).await })?;
 
         Ok(LightningNode {
             user_preferences,
