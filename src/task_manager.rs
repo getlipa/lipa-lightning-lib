@@ -1,14 +1,13 @@
-use crate::async_runtime::{Handle, RepeatingTaskHandle};
-use crate::errors::Result;
-pub use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProviderImpl};
-
 use crate::amount::ToAmount;
+use crate::async_runtime::{Handle, RepeatingTaskHandle};
 use crate::data_store::DataStore;
-use crate::exchange_rate_provider::ExchangeRateProvider;
+use crate::errors::Result;
+use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProvider};
 use crate::{LspFee, RuntimeErrorCode};
+
 use breez_sdk_core::{BreezServices, OpeningFeeParams};
 use log::{error, trace};
-use perro::Error::RuntimeError;
+use perro::OptionToError;
 use std::sync::{Arc, Mutex};
 use tokio::time::Duration;
 
@@ -54,15 +53,11 @@ impl TaskManager {
     }
 
     pub fn get_lsp_fee(&self, exchange_rate: &Option<ExchangeRate>) -> Result<LspFee> {
-        let mut lsp_fee = self.lsp_fee.lock().unwrap();
-        let lsp_fee = match &mut *lsp_fee {
-            Some(l) => Ok(l),
-            None => Err(RuntimeError {
-                code: RuntimeErrorCode::LspServiceUnavailable,
-                msg: "Cached LSP fee isn't available".to_string(),
-            }),
-        }?;
-
+        let lsp_fee = self.lsp_fee.lock().unwrap();
+        let lsp_fee = lsp_fee.as_ref().ok_or_runtime_error(
+            RuntimeErrorCode::LspServiceUnavailable,
+            "Cached LSP fee isn't available",
+        )?;
         Ok(LspFee {
             channel_minimum_fee: lsp_fee.min_msat.to_amount_up(exchange_rate),
             channel_fee_permyriad: lsp_fee.proportional as u64 / 100,
