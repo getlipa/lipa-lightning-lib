@@ -42,7 +42,7 @@ pub(crate) async fn migrate_funds(
     let (private_key, public_key) = derive_ldk_keys(seed)?;
     let public_key = public_key.serialize().to_hex();
 
-    let balance = fetch_balance(public_key.clone())?;
+    let balance = fetch_legacy_balance(public_key.clone())?;
     if balance == 0 {
         data_store
             .lock()
@@ -64,11 +64,11 @@ pub(crate) async fn migrate_funds(
         .opening_fee_params_list
         .get_cheapest_opening_fee_params()
         .map_to_permanent_failure("Failed to get LSP fees")?;
-    let amout_to_request = add_lsp_fees(balance, &lsp_fee) * 1_000;
+    let amount_to_request = add_lsp_fees(balance, &lsp_fee) * 1_000;
 
     let invoice = sdk
         .receive_payment(breez_sdk_core::ReceivePaymentRequest {
-            amount_sats: amout_to_request,
+            amount_sats: amount_to_request,
             description: MIGRATION_DESCRIPTION.to_string(),
             preimage: None,
             opening_fee_params: Some(lsp_fee),
@@ -101,7 +101,7 @@ fn payout(_public_key: String, _invoice: String, _signature: String) -> Result<(
     Ok(())
 }
 
-fn fetch_balance(_public_key: String) -> Result<u64> {
+fn fetch_legacy_balance(_public_key: String) -> Result<u64> {
     // TODO: Implement.
     Ok(0)
 }
@@ -109,6 +109,8 @@ fn fetch_balance(_public_key: String) -> Result<u64> {
 fn add_lsp_fees(amount_msat: u64, lsp_fee: &OpeningFeeParams) -> u64 {
     const MILLION: u64 = 1_000_000;
 
+    // As in receive_payment()
+    // https://github.com/breez/breez-sdk/blob/main/libs/sdk-core/src/breez_services.rs#L1634
     const MIN_REQUEST_MSAT: u64 = 1_000;
     if amount_msat < MIN_REQUEST_MSAT {
         return lsp_fee.min_msat + MIN_REQUEST_MSAT;
