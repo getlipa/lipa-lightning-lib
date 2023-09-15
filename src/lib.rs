@@ -316,7 +316,7 @@ impl LightningNode {
 
         let fiat_topup_client =
             PocketClient::new(environment.pocket_url, Arc::clone(&sdk), rt.handle())?;
-        let offer_manager = OfferManager::new(environment.backend_url, Arc::clone(&auth));
+        let offer_manager = OfferManager::new(environment.backend_url.clone(), Arc::clone(&auth));
 
         let db_path = format!("{}/db2.db3", config.local_persistence_path);
 
@@ -339,8 +339,17 @@ impl LightningNode {
             .restart(Self::get_foreground_periods());
 
         // let data_store_clone = Arc::clone(&data_store);
-        // rt.handle()
-        //     .block_on(async { migrate_funds(&strong_typed_seed, data_store_clone, &sdk).await })?;
+        // let auth_clone = Arc::clone(&auth);
+        // rt.handle().block_on(async {
+        //     migrate_funds(
+        //         &strong_typed_seed,
+        //         data_store_clone,
+        //         &sdk,
+        //         auth_clone,
+        //         &environment.backend_url,
+        //     )
+        //     .await
+        // })?;
 
         Ok(LightningNode {
             user_preferences,

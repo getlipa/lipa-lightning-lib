@@ -15,6 +15,7 @@ chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.10.1" }
 crow = { git = "https://github.com/getlipa/wild", tag = "v1.10.1" }
 honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.10.1" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
+graphql = { git = "https://github.com/getlipa/wild", branch = "feature/add-funds-migrations-operations" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.3" }
 # Pinning some problematic dependencies.
