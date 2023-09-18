@@ -1,6 +1,7 @@
 use crate::data_store::DataStore;
 use crate::errors::{Result, RuntimeErrorCode};
 
+use crate::async_runtime::Handle;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::{Message, PublicKey, SecretKey, SECP256K1};
@@ -28,7 +29,8 @@ pub(crate) enum MigrationStatus {
 }
 
 #[allow(dead_code)]
-pub(crate) async fn migrate_funds(
+pub(crate) fn migrate_funds(
+    rt: Handle,
     seed: &[u8; 64],
     data_store: Arc<Mutex<DataStore>>,
     sdk: &BreezServices,
@@ -68,7 +70,7 @@ pub(crate) async fn migrate_funds(
         .unwrap()
         .append_funds_migration_status(MigrationStatus::Pending)?;
 
-    let lsp_info = sdk.lsp_info().await.map_to_runtime_error(
+    let lsp_info = rt.block_on(sdk.lsp_info()).map_to_runtime_error(
         RuntimeErrorCode::LspServiceUnavailable,
         "Failed to get LSP info",
     )?;
@@ -78,8 +80,8 @@ pub(crate) async fn migrate_funds(
         .map_to_permanent_failure("Failed to get LSP fees")?;
     let amount_to_request = add_lsp_fees(balance, &lsp_fee) * 1_000;
 
-    let invoice = sdk
-        .receive_payment(breez_sdk_core::ReceivePaymentRequest {
+    let invoice = rt
+        .block_on(sdk.receive_payment(breez_sdk_core::ReceivePaymentRequest {
             amount_sats: amount_to_request,
             description: MIGRATION_DESCRIPTION.to_string(),
             preimage: None,
@@ -87,8 +89,7 @@ pub(crate) async fn migrate_funds(
             use_description_hash: None,
             expiry: None,
             cltv: None,
-        })
-        .await
+        }))
         .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to issue invoice")?;
     let invoice = invoice.ln_invoice.bolt11;
     let signature = sign_message(&private_key, &invoice);
