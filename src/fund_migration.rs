@@ -135,8 +135,8 @@ fn payout(
 ) -> Result<()> {
     let variables = migrate_funds::Variables {
         invoice: Some(invoice),
-        base16_invoice_signature: Some(format!("\\x{signature}")),
-        ldk_node_pub_key: Some(format!("\\x{public_key}")),
+        base16_invoice_signature: Some(signature),
+        ldk_node_pub_key: Some(public_key),
     };
     let _ = post_blocking::<MigrateFunds>(client, backend_url, variables)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
