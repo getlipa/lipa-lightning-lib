@@ -268,8 +268,8 @@ fn calculate_lsp_fee(
     let amount: u64 = amount
         .parse()
         .map_err(|_| "Error: amount should be an integer number".to_string())?;
-    let fee = node.calculate_lsp_fee(amount).unwrap();
-    println!(" LSP fee: {} SAT", amount_to_string(fee));
+    let response = node.calculate_lsp_fee(amount).unwrap();
+    println!(" LSP fee: {} SAT", amount_to_string(response.lsp_fee));
     Ok(())
 }
 
@@ -411,7 +411,7 @@ fn create_invoice(
         .map_err(|_| "Error: amount should be an integer number".to_string())?;
     let description = words.collect::<Vec<_>>().join(" ");
     let invoice_details = node
-        .create_invoice(amount, description, String::new())
+        .create_invoice(amount, None, description, String::new())
         .map_err(|e| e.to_string())?;
     println!("{}", invoice_details.invoice);
     Ok(())
