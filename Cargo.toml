@@ -26,7 +26,7 @@ txoo = "=0.4.2"
 
 bip39 = "2.0.0"
 bitcoin = "0.29.2"
-chrono = { version = "0.4.30", default-features = false, features = ["serde"] }
+chrono = { version = "0.4.31", default-features = false, features = ["serde"] }
 cipher = "0.4.4"
 email_address = "0.2.4"
 file-rotate = "0.7.5"
