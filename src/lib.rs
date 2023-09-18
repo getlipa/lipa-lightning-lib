@@ -50,8 +50,8 @@ use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, InputType,
-    LnUrlCallbackStatus, NodeConfig, NodeState, OpenChannelFeeRequest, PaymentDetails,
-    PaymentTypeFilter,
+    LnUrlCallbackStatus, NodeConfig, NodeState, OpenChannelFeeRequest, OpeningFeeParams,
+    PaymentDetails, PaymentTypeFilter,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupInfo, TopupStatus};
@@ -83,6 +83,11 @@ const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 pub struct LspFee {
     pub channel_minimum_fee: Amount,
     pub channel_fee_permyriad: u64,
+}
+
+pub struct CalculateLspFeeResponse {
+    pub lsp_fee: Amount,
+    pub lsp_fee_params: Option<OpeningFeeParams>,
 }
 
 pub struct NodeInfo {
@@ -396,7 +401,7 @@ impl LightningNode {
             .get_lsp_fee(&exchange_rate)
     }
 
-    pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<Amount> {
+    pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
         let req = OpenChannelFeeRequest {
             amount_msat: amount_sat * 1_000,
             expiry: None,
@@ -409,9 +414,10 @@ impl LightningNode {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to compute opening channel fee",
             )?;
-        // TODO: use the returned res.used_fee_params when creating an invoice to make sure the
-        //      lsp fee estimated here is actually the one charged
-        Ok(res.fee_msat.to_amount_up(&self.get_exchange_rate()))
+        Ok(CalculateLspFeeResponse {
+            lsp_fee: res.fee_msat.to_amount_up(&self.get_exchange_rate()),
+            lsp_fee_params: res.used_fee_params,
+        })
     }
 
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
@@ -428,6 +434,7 @@ impl LightningNode {
     pub fn create_invoice(
         &self,
         amount_sat: u64,
+        lsp_fee_params: Option<OpeningFeeParams>,
         description: String,
         _metadata: String,
     ) -> Result<InvoiceDetails> {
@@ -440,7 +447,7 @@ impl LightningNode {
                         amount_sats: amount_sat,
                         description,
                         preimage: None,
-                        opening_fee_params: None,
+                        opening_fee_params: lsp_fee_params,
                         use_description_hash: None,
                         expiry: None,
                         cltv: None,

@@ -48,18 +48,21 @@ interface LightningNode {
     PaymentAmountLimits get_payment_amount_limits();
 
     // Calculate the actual LSP fee for the given amount of an incoming payment.
-    // If the already exisitng inbound capacity is enough, no new channel is required: The method returns 0.
+    // If the already existing inbound capacity is enough, no new channel is required.
+    // Parameters:
     //    - amount_sat - amount in sats to compute LSP fee for
+    // For the returned fees to be guaranteed to be accurate, the returned lsp_fee_params must be provided to `create_invoice()`
     [Throws=LnError]
-    Amount calculate_lsp_fee(u64 amount_sat);
+    CalculateLspFeeResponse calculate_lsp_fee(u64 amount_sat);
 
     // Create an invoice to receive a payment with:
     //    - amount_sat - the smallest amount of sats required for the node to accept the incoming payment (sender will have to pay fees on top of that amount)
+    //    - lsp_fee_params - the params that will be used to determine the lsp fee. Can be obtained from `calculate_lsp_fee` to guarantee fees predicted in `calculate_lsp_fee()` are the ones charged.
     //    - description - a description to be embedded into the created invoice
     //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
     //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
     [Throws=LnError]
-    InvoiceDetails create_invoice(u64 amount_sat, string description, string metadata);
+    InvoiceDetails create_invoice(u64 amount_sat, OpeningFeeParams? lsp_fee_params, string description, string metadata);
 
     // Decodes an invoice returning detailed information
     //    - invoice - a BOLT-11 invoice (Mainnet invoices start with "lnbc")
@@ -299,6 +302,22 @@ dictionary LspFee {
 dictionary PaymentAmountLimits {
     Amount max_receive; // Hard limit: The maximum amount a user is allowed to receive per payment
     LiquidityLimit liquidity_limit;
+};
+
+// Params for the lsp fee paid when a new channel needs to be opened
+dictionary OpeningFeeParams {
+        u64 min_msat;
+        u32 proportional;
+        string valid_until;
+        u32 max_idle_time;
+        u32 max_client_to_self_delay;
+        string promise;
+};
+
+// Returned by LightningNode::calculate_lsp_fee
+dictionary CalculateLspFeeResponse {
+    Amount lsp_fee; // Indicates the amount that will be charged
+    OpeningFeeParams? lsp_fee_params; // Should be passed in to `create_invoice()`
 };
 
 [Enum]
