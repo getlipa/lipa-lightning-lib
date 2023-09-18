@@ -694,9 +694,9 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.10.1#54eaa6bb1eef12d73690fc8fb3b244bec6a4d42d"
+source = "git+https://github.com/getlipa/wild?tag=v1.11.0#32b82d80641981d0591ceef754a174961ecdca66"
 dependencies = [
- "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.10.1)",
+ "graphql",
  "honey-badger",
 ]
 
@@ -864,9 +864,9 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.10.1#54eaa6bb1eef12d73690fc8fb3b244bec6a4d42d"
+source = "git+https://github.com/getlipa/wild?tag=v1.11.0#32b82d80641981d0591ceef754a174961ecdca66"
 dependencies = [
- "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.10.1)",
+ "graphql",
  "honey-badger",
  "isocountry",
  "isolanguage-1",
@@ -1494,20 +1494,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.10.1#54eaa6bb1eef12d73690fc8fb3b244bec6a4d42d"
-dependencies = [
- "chrono",
- "graphql_client",
- "log",
- "perro",
- "reqwest",
- "serde",
-]
-
-[[package]]
-name = "graphql"
-version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?branch=feature/add-funds-migrations-operations#f3c68ee9457a303baf437a2420a04aa32d161664"
+source = "git+https://github.com/getlipa/wild?tag=v1.11.0#32b82d80641981d0591ceef754a174961ecdca66"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1714,11 +1701,11 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.10.1#54eaa6bb1eef12d73690fc8fb3b244bec6a4d42d"
+source = "git+https://github.com/getlipa/wild?tag=v1.11.0#32b82d80641981d0591ceef754a174961ecdca66"
 dependencies = [
  "base64 0.21.4",
  "bdk",
- "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.10.1)",
+ "graphql",
  "log",
  "rand",
  "secp256k1 0.24.3",
@@ -2107,7 +2094,7 @@ dependencies = [
  "email_address",
  "file-rotate",
  "flutter_rust_bridge",
- "graphql 0.1.0 (git+https://github.com/getlipa/wild?branch=feature/add-funds-migrations-operations)",
+ "graphql",
  "hex",
  "honey-badger",
  "iban_validate",
