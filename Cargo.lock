@@ -694,7 +694,7 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.10.1#54eaa6bb1eef12d73690fc8fb3b244bec6a4d42d"
+source = "git+https://github.com/getlipa/wild?tag=v1.11.0#32b82d80641981d0591ceef754a174961ecdca66"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -864,7 +864,7 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.10.1#54eaa6bb1eef12d73690fc8fb3b244bec6a4d42d"
+source = "git+https://github.com/getlipa/wild?tag=v1.11.0#32b82d80641981d0591ceef754a174961ecdca66"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -1494,7 +1494,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.10.1#54eaa6bb1eef12d73690fc8fb3b244bec6a4d42d"
+source = "git+https://github.com/getlipa/wild?tag=v1.11.0#32b82d80641981d0591ceef754a174961ecdca66"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1701,7 +1701,7 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.10.1#54eaa6bb1eef12d73690fc8fb3b244bec6a4d42d"
+source = "git+https://github.com/getlipa/wild?tag=v1.11.0#32b82d80641981d0591ceef754a174961ecdca66"
 dependencies = [
  "base64 0.21.4",
  "bdk",
@@ -2094,6 +2094,7 @@ dependencies = [
  "email_address",
  "file-rotate",
  "flutter_rust_bridge",
+ "graphql",
  "hex",
  "honey-badger",
  "iban_validate",

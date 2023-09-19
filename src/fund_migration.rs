@@ -1,16 +1,22 @@
 use crate::data_store::DataStore;
 use crate::errors::{Result, RuntimeErrorCode};
 
+use crate::async_runtime::Handle;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::{Message, PublicKey, SecretKey, SECP256K1};
 use bitcoin::util::bip32::{ChildNumber, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{BreezServices, OpeningFeeParams};
+use graphql::schema::{migrate_funds, migration_balance, MigrateFunds, MigrationBalance};
+use graphql::{build_client, post_blocking};
+use honey_badger::Auth;
 use num_enum::TryFromPrimitive;
-use perro::MapToError;
+use perro::{MapToError, OptionToError, ResultTrait};
+use reqwest::blocking::Client;
 use std::sync::{Arc, Mutex};
 
+// TODO: update description to include info url
 const MIGRATION_DESCRIPTION: &str = "Funds migration from the legacy wallet version";
 
 #[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
@@ -24,10 +30,13 @@ pub(crate) enum MigrationStatus {
 }
 
 #[allow(dead_code)]
-pub(crate) async fn migrate_funds(
+pub(crate) fn migrate_funds(
+    rt: Handle,
     seed: &[u8; 64],
     data_store: Arc<Mutex<DataStore>>,
     sdk: &BreezServices,
+    auth: Arc<Auth>,
+    backend_url: &String,
 ) -> Result<()> {
     if matches!(
         data_store
@@ -42,7 +51,13 @@ pub(crate) async fn migrate_funds(
     let (private_key, public_key) = derive_ldk_keys(seed)?;
     let public_key = public_key.serialize().to_hex();
 
-    let balance = fetch_legacy_balance(public_key.clone())?;
+    let token = auth
+        .query_token()
+        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
+    let client = build_client(Some(&token))
+        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
+
+    let balance = fetch_legacy_balance(&client, backend_url, public_key.clone())?;
     if balance == 0 {
         data_store
             .lock()
@@ -56,7 +71,7 @@ pub(crate) async fn migrate_funds(
         .unwrap()
         .append_funds_migration_status(MigrationStatus::Pending)?;
 
-    let lsp_info = sdk.lsp_info().await.map_to_runtime_error(
+    let lsp_info = rt.block_on(sdk.lsp_info()).map_to_runtime_error(
         RuntimeErrorCode::LspServiceUnavailable,
         "Failed to get LSP info",
     )?;
@@ -66,8 +81,8 @@ pub(crate) async fn migrate_funds(
         .map_to_permanent_failure("Failed to get LSP fees")?;
     let amount_to_request = add_lsp_fees(balance, &lsp_fee) * 1_000;
 
-    let invoice = sdk
-        .receive_payment(breez_sdk_core::ReceivePaymentRequest {
+    let invoice = rt
+        .block_on(sdk.receive_payment(breez_sdk_core::ReceivePaymentRequest {
             amount_sats: amount_to_request,
             description: MIGRATION_DESCRIPTION.to_string(),
             preimage: None,
@@ -75,13 +90,12 @@ pub(crate) async fn migrate_funds(
             use_description_hash: None,
             expiry: None,
             cltv: None,
-        })
-        .await
+        }))
         .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to issue invoice")?;
     let invoice = invoice.ln_invoice.bolt11;
     let signature = sign_message(&private_key, &invoice);
 
-    match payout(public_key, invoice, signature) {
+    match payout(&client, backend_url, public_key, invoice, signature) {
         Ok(()) => data_store
             .lock()
             .unwrap()
@@ -96,14 +110,37 @@ pub(crate) async fn migrate_funds(
     }
 }
 
-fn payout(_public_key: String, _invoice: String, _signature: String) -> Result<()> {
-    // TODO: Implement.
-    Ok(())
+fn fetch_legacy_balance(client: &Client, backend_url: &String, public_key: String) -> Result<u64> {
+    let variables = migration_balance::Variables {
+        node_pub_key: Some(public_key),
+    };
+    let data = post_blocking::<MigrationBalance>(client, backend_url, variables)
+        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
+    let balance_sat = data
+        .migration_balance
+        .ok_or_runtime_error(
+            RuntimeErrorCode::AuthServiceUnavailable,
+            "Empty balance field",
+        )?
+        .balance_amount_sat;
+    Ok(balance_sat)
 }
 
-fn fetch_legacy_balance(_public_key: String) -> Result<u64> {
-    // TODO: Implement.
-    Ok(0)
+fn payout(
+    client: &Client,
+    backend_url: &String,
+    public_key: String,
+    invoice: String,
+    signature: String,
+) -> Result<()> {
+    let variables = migrate_funds::Variables {
+        invoice: Some(invoice),
+        base16_invoice_signature: Some(signature),
+        ldk_node_pub_key: Some(public_key),
+    };
+    let _ = post_blocking::<MigrateFunds>(client, backend_url, variables)
+        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
+    Ok(())
 }
 
 fn add_lsp_fees(amount_msat: u64, lsp_fee: &OpeningFeeParams) -> u64 {
