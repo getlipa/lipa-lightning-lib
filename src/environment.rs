@@ -16,10 +16,6 @@ pub(crate) struct Environment {
     pub environment_type: EnvironmentType,
     pub backend_url: String,
     pub backend_health_url: String,
-    pub lsp_url: String,
-    pub lsp_token: String,
-    pub esplora_url: String,
-    pub rgs_url: String,
     pub pocket_url: String,
 }
 
@@ -35,10 +31,6 @@ impl Environment {
                 environment_type: EnvironmentType::Production,
                 backend_url,
                 backend_health_url,
-                lsp_url: env!("LSP_URL_LOCAL").to_string(),
-                lsp_token: env!("LSP_TOKEN_LOCAL").to_string(),
-                esplora_url: env!("ESPLORA_URL_LOCAL").to_string(),
-                rgs_url: env!("RGS_URL_LOCAL").to_string(),
                 pocket_url: env!("POCKET_URL_LOCAL").to_string(),
             },
             EnvironmentCode::Dev => Self {
@@ -46,10 +38,6 @@ impl Environment {
                 environment_type: EnvironmentType::Production,
                 backend_url,
                 backend_health_url,
-                lsp_url: env!("LSP_URL_DEV").to_string(),
-                lsp_token: env!("LSP_TOKEN_DEV").to_string(),
-                esplora_url: env!("ESPLORA_URL_DEV").to_string(),
-                rgs_url: env!("RGS_URL_DEV").to_string(),
                 pocket_url: env!("POCKET_URL_DEV").to_string(),
             },
             EnvironmentCode::Stage => Self {
@@ -57,10 +45,6 @@ impl Environment {
                 environment_type: EnvironmentType::Production,
                 backend_url,
                 backend_health_url,
-                lsp_url: env!("LSP_URL_STAGE").to_string(),
-                lsp_token: env!("LSP_TOKEN_STAGE").to_string(),
-                esplora_url: env!("ESPLORA_URL_STAGE").to_string(),
-                rgs_url: env!("RGS_URL_STAGE").to_string(),
                 pocket_url: env!("POCKET_URL_STAGE").to_string(),
             },
             EnvironmentCode::Prod => Self {
@@ -68,10 +52,6 @@ impl Environment {
                 environment_type: EnvironmentType::Production,
                 backend_url,
                 backend_health_url,
-                lsp_url: env!("LSP_URL_PROD").to_string(),
-                lsp_token: env!("LSP_TOKEN_PROD").to_string(),
-                esplora_url: env!("ESPLORA_URL_PROD").to_string(),
-                rgs_url: env!("RGS_URL_PROD").to_string(),
                 pocket_url: env!("POCKET_URL_PROD").to_string(),
             },
         }
