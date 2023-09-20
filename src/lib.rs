@@ -401,11 +401,11 @@ impl LightningNode {
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
         let exchange_rate = self.get_exchange_rate();
-
-        self.task_manager
-            .lock()
-            .unwrap()
-            .get_lsp_fee(&exchange_rate)
+        let lsp_fee = self.task_manager.lock().unwrap().get_lsp_fee()?;
+        Ok(LspFee {
+            channel_minimum_fee: lsp_fee.min_msat.to_amount_up(&exchange_rate),
+            channel_fee_permyriad: lsp_fee.proportional as u64 / 100,
+        })
     }
 
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
