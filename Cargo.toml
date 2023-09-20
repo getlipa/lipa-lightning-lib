@@ -20,7 +20,7 @@ graphql = { git = "https://github.com/getlipa/wild", tag = "v1.11.0" }
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.3" }
 # Pinning some problematic dependencies.
 ecies = { version = "=0.2.4", default-features = false, features = ["pure"] }
-flutter_rust_bridge = "=1.75.2"
+flutter_rust_bridge = "=1.82.1"
 lightning = { version = "=0.0.115", features = ["max_level_trace"] }
 lightning-invoice = "=0.23.0"
 txoo = "=0.4.2"
