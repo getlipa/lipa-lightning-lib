@@ -1,15 +1,14 @@
 use crate::print_events_handler::PrintEventsHandler;
+use crate::wait_for;
 
 use uniffi_lipalightninglib::{mnemonic_to_secret, recover_lightning_node, Config, TzConfig};
 use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
 
-use crate::wait_for;
 use std::fs;
 use std::string::ToString;
 
 type Result<T> = std::result::Result<T, perro::Error<RuntimeErrorCode>>;
 
-#[allow(dead_code)]
 pub struct NodeHandle {
     config: Config,
 }
