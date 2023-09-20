@@ -15,11 +15,6 @@ A Rust library that implements the main lightning logic of the lipa wallet app.
 ***
 # Development environment
 
-## Prerequisites
-
-* [docker](https://docs.docker.com/get-docker/) with [docker-compose](https://docs.docker.com/compose/install/)
-* [nigiri](https://nigiri.vulpem.com/)
-
 ## Getting started
 
 ### Configure the environments
@@ -31,31 +26,6 @@ Create `.cargo/config.toml` file with desired values (see `.cargo/config.toml.sa
 This repository requires git submodules, to clone the project and the required submodules, run:
 ```sh
 git clone --recursive git@github.com:getlipa/lipa-lightning-lib.git
-```
-To pull the submodules separately, run:
-```sh
-git submodule update --init
-```
-
-If running for the first time or after a change to the development environment, run:
-```sh
-make build-dev-env
-```
-
-To start a fresh development environment, run:
-```sh
-make start-dev-env
-```
-This will start:
-* nigiri with 2 LN nodes (LND and CLN)
-* an instance of [LSPD](https://github.com/breez/lspd) with an LND node
-* an instance of [RGS server](https://github.com/lightningdevkit/rapid-gossip-sync-server)
-
-### Clean the environment
-
-Once finished, to stop these services, run:
-```sh
-make stop-dev-env
 ```
 
 ***
