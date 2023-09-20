@@ -566,6 +566,7 @@ enum RuntimeErrorCode {
     "OfferServiceUnavailable",
     "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
     "NodeUnavailable", // Information about the remote node isn't cached and couldn't be accessed. Could be a network error.
+    "FailedFundMigration", // Migration of funds from legacy LDK wallet failed. Retry is recommended.
 };
 
 [Error]

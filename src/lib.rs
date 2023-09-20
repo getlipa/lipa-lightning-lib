@@ -348,7 +348,8 @@ impl LightningNode {
         //     &sdk,
         //     auth_clone,
         //     &environment.backend_url,
-        // )?;
+        // )
+        // .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
 
         Ok(LightningNode {
             user_preferences,

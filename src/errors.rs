@@ -10,6 +10,8 @@ pub enum RuntimeErrorCode {
     LspServiceUnavailable,
     // Breez runtime errors
     NodeUnavailable,
+    // Temporary migration error
+    FailedFundMigration,
 }
 
 impl Display for RuntimeErrorCode {
