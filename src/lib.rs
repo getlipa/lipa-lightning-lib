@@ -14,6 +14,7 @@ mod fiat_topup;
 mod fund_migration;
 mod invoice_details;
 mod limits;
+mod locker;
 mod logger;
 mod migrations;
 mod random;
@@ -38,6 +39,7 @@ pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
+use crate::locker::Locker;
 pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
 use crate::task_manager::{TaskManager, TaskPeriods};
@@ -333,8 +335,7 @@ impl LightningNode {
             Arc::clone(&sdk),
         )?));
         task_manager
-            .lock()
-            .unwrap()
+            .lock_unwrap()
             .restart(Self::get_foreground_periods());
 
         // TODO: uncomment when ready to ship fund migration
@@ -401,7 +402,7 @@ impl LightningNode {
 
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
         let exchange_rate = self.get_exchange_rate();
-        let lsp_fee = self.task_manager.lock().unwrap().get_lsp_fee()?;
+        let lsp_fee = self.task_manager.lock_unwrap().get_lsp_fee()?;
         Ok(LspFee {
             channel_minimum_fee: lsp_fee.min_msat.to_amount_up(&exchange_rate),
             channel_fee_permyriad: lsp_fee.proportional as u64 / 100,
@@ -586,14 +587,13 @@ impl LightningNode {
 
         let local_payment_data = self
             .data_store
-            .lock()
-            .unwrap()
+            .lock_unwrap()
             .retrieve_payment_info(&payment_details.payment_hash)?;
 
         let (exchange_rate, time, offer) = match local_payment_data {
             None => {
                 let exchange_rate = self.get_exchange_rate();
-                let user_preferences = self.user_preferences.lock().unwrap();
+                let user_preferences = self.user_preferences.lock_unwrap();
                 let time = TzTime {
                     time: unix_timestamp_to_system_time(breez_payment.payment_time as u64),
                     timezone_id: user_preferences.timezone_config.timezone_id.clone(),
@@ -670,26 +670,22 @@ impl LightningNode {
 
     pub fn foreground(&self) {
         self.task_manager
-            .lock()
-            .unwrap()
+            .lock_unwrap()
             .restart(Self::get_foreground_periods());
     }
 
     pub fn background(&self) {
-        self.task_manager
-            .lock()
-            .unwrap()
-            .restart(BACKGROUND_PERIODS);
+        self.task_manager.lock_unwrap().restart(BACKGROUND_PERIODS);
     }
 
     pub fn list_currency_codes(&self) -> Vec<String> {
-        let rates = self.task_manager.lock().unwrap().get_exchange_rates();
+        let rates = self.task_manager.lock_unwrap().get_exchange_rates();
         rates.iter().map(|r| r.currency_code.clone()).collect()
     }
 
     pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
-        let rates = self.task_manager.lock().unwrap().get_exchange_rates();
-        let currency_code = self.user_preferences.lock().unwrap().fiat_currency.clone();
+        let rates = self.task_manager.lock_unwrap().get_exchange_rates();
+        let currency_code = self.user_preferences.lock_unwrap().fiat_currency.clone();
         rates
             .iter()
             .find(|r| r.currency_code == currency_code)
@@ -697,11 +693,11 @@ impl LightningNode {
     }
 
     pub fn change_fiat_currency(&self, fiat_currency: String) {
-        self.user_preferences.lock().unwrap().fiat_currency = fiat_currency;
+        self.user_preferences.lock_unwrap().fiat_currency = fiat_currency;
     }
 
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
-        self.user_preferences.lock().unwrap().timezone_config = timezone_config;
+        self.user_preferences.lock_unwrap().timezone_config = timezone_config;
     }
 
     pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
@@ -805,11 +801,10 @@ impl LightningNode {
     }
 
     fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) -> Result<()> {
-        let user_preferences = self.user_preferences.lock().unwrap().clone();
-        let exchange_rates = self.task_manager.lock().unwrap().get_exchange_rates();
+        let user_preferences = self.user_preferences.lock_unwrap().clone();
+        let exchange_rates = self.task_manager.lock_unwrap().get_exchange_rates();
         self.data_store
-            .lock()
-            .unwrap()
+            .lock_unwrap()
             .store_payment_info(hash, user_preferences, exchange_rates, offer)
             .map_to_permanent_failure("Failed to persist payment info")
     }

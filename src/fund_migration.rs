@@ -1,7 +1,8 @@
+use crate::async_runtime::Handle;
 use crate::data_store::DataStore;
 use crate::errors::{Result, RuntimeErrorCode};
+use crate::locker::Locker;
 
-use crate::async_runtime::Handle;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::{Message, PublicKey, SecretKey, SECP256K1};
@@ -39,10 +40,7 @@ pub(crate) fn migrate_funds(
     backend_url: &String,
 ) -> Result<()> {
     if matches!(
-        data_store
-            .lock()
-            .unwrap()
-            .retrive_funds_migration_status()?,
+        data_store.lock_unwrap().retrive_funds_migration_status()?,
         MigrationStatus::Completed | MigrationStatus::NotNeeded
     ) {
         return Ok(());
@@ -60,15 +58,13 @@ pub(crate) fn migrate_funds(
     let balance = fetch_legacy_balance(&client, backend_url, public_key.clone())?;
     if balance == 0 {
         data_store
-            .lock()
-            .unwrap()
+            .lock_unwrap()
             .append_funds_migration_status(MigrationStatus::NotNeeded)?;
         return Ok(());
     }
 
     data_store
-        .lock()
-        .unwrap()
+        .lock_unwrap()
         .append_funds_migration_status(MigrationStatus::Pending)?;
 
     let lsp_info = rt.block_on(sdk.lsp_info()).map_to_runtime_error(
@@ -97,13 +93,11 @@ pub(crate) fn migrate_funds(
 
     match payout(&client, backend_url, public_key, invoice, signature) {
         Ok(()) => data_store
-            .lock()
-            .unwrap()
+            .lock_unwrap()
             .append_funds_migration_status(MigrationStatus::Completed),
         Err(e) => {
             let _ = data_store
-                .lock()
-                .unwrap()
+                .lock_unwrap()
                 .append_funds_migration_status(MigrationStatus::Failed);
             Err(e)
         }
