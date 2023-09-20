@@ -672,7 +672,7 @@ impl LightningNode {
         self.task_manager
             .lock()
             .unwrap()
-            .restart(FOREGROUND_PERIODS);
+            .restart(Self::get_foreground_periods());
     }
 
     pub fn background(&self) {
