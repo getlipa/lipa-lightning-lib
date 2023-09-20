@@ -2,6 +2,7 @@ use crate::async_runtime::{Handle, RepeatingTaskHandle};
 use crate::data_store::DataStore;
 use crate::errors::Result;
 use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProvider};
+use crate::locker::Locker;
 use crate::RuntimeErrorCode;
 
 use breez_sdk_core::{BreezServices, OpeningFeeParams};
@@ -34,7 +35,7 @@ impl TaskManager {
         data_store: Arc<Mutex<DataStore>>,
         sdk: Arc<BreezServices>,
     ) -> Result<Self> {
-        let exchange_rates = data_store.lock().unwrap().get_all_exchange_rates()?;
+        let exchange_rates = data_store.lock_unwrap().get_all_exchange_rates()?;
 
         Ok(Self {
             runtime_handle,
@@ -48,11 +49,11 @@ impl TaskManager {
     }
 
     pub fn get_exchange_rates(&self) -> Vec<ExchangeRate> {
-        (*self.exchange_rates.lock().unwrap()).clone()
+        self.exchange_rates.lock_unwrap().clone()
     }
 
     pub fn get_lsp_fee(&self) -> Result<OpeningFeeParams> {
-        self.lsp_fee.lock().unwrap().clone().ok_or_runtime_error(
+        self.lsp_fee.lock_unwrap().clone().ok_or_runtime_error(
             RuntimeErrorCode::LspServiceUnavailable,
             "Cached LSP fee isn't available",
         )
@@ -114,7 +115,7 @@ impl TaskManager {
                 {
                     Ok(Ok(rates)) => {
                         persist_exchange_rates(&data_store, &rates);
-                        *exchange_rates.lock().unwrap() = rates;
+                        *exchange_rates.lock_unwrap() = rates;
                     }
                     Ok(Err(e)) => {
                         error!("Failed to update exchange rates: {e}");
@@ -143,7 +144,7 @@ impl TaskManager {
                             .get_cheapest_opening_fee_params()
                         {
                             Ok(opening_fee_params) => {
-                                *lsp_fee.lock().unwrap() = Some(opening_fee_params);
+                                *lsp_fee.lock_unwrap() = Some(opening_fee_params);
                             }
                             Err(e) => {
                                 error!("Failed to retrieve cheapest opening fee params: {e}");
@@ -160,7 +161,7 @@ impl TaskManager {
 }
 
 fn persist_exchange_rates(data_store: &Arc<Mutex<DataStore>>, rates: &[ExchangeRate]) {
-    let data_store = data_store.lock().unwrap();
+    let data_store = data_store.lock_unwrap();
     for rate in rates {
         match data_store.update_exchange_rate(&rate.currency_code, rate.rate, rate.updated_at) {
             Ok(_) => {}
