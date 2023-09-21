@@ -4,6 +4,7 @@ use uniffi_lipalightninglib::{
     Amount, FiatValue, MaxRoutingFeeMode, OfferKind, PaymentState, TopupCurrency,
 };
 
+use bitcoin::hashes::hex::ToHex;
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Local, Utc};
 use colored::Colorize;
@@ -132,6 +133,27 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     Ok(uuid) => println!("{uuid}"),
                     Err(message) => eprintln!("{}", message.red()),
                 },
+                "drain" => {
+                    let vec: Vec<u8> = vec![0; 64];
+                    println!("{}", vec.to_hex());
+                    let address = words
+                        .next()
+                        .ok_or_else(|| "Address is required".to_string());
+                    if let Err(e) = address {
+                        println!("{}", e.red());
+                        return;
+                    }
+
+                    let address = address.unwrap().to_string();
+                    match drain(node, address.clone()) {
+                        Ok(txid) => {
+                            println!();
+                            println!("Transaction Id: {}", txid.to_hex());
+                            println!("Payout address: {}", address)
+                        }
+                        Err(e) => println!("{}", e.red()),
+                    }
+                }
                 "foreground" => {
                     node.foreground();
                 }
@@ -205,6 +227,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "paymentuuid <payment hash>",
         "paymentuuid",
     ));
+    hints.insert(CommandHint::new("drain <address>", "drain"));
     hints.insert(CommandHint::new("foreground", "foreground"));
     hints.insert(CommandHint::new("background", "background"));
     hints.insert(CommandHint::new("stop", "stop"));
@@ -239,6 +262,8 @@ fn help() {
     println!();
     println!("  listpayments");
     println!("  paymentuuid <payment hash>");
+    println!();
+    println!("  drain <address>");
     println!();
     println!("  foreground");
     println!("  background");
@@ -314,6 +339,10 @@ fn node_info(node: &LightningNode) {
 
     println!("Node PubKey: {}", node_info.node_pubkey);
     println!("Connected peer(s): {}", peers_list.join(", "));
+    println!(
+        "On-Chain balance: {}",
+        amount_to_string(node_info.onchain_balance)
+    );
     println!(
         "       Number of channels: {}",
         node_info.channels_info.num_channels
@@ -675,6 +704,13 @@ fn payment_uuid(
         Ok(uuid) => return Ok(uuid),
         Err(e) => return Err(e.to_string()),
     };
+}
+
+fn drain(node: &LightningNode, address: String) -> Result<Vec<u8>, String> {
+    let fee_rate = node.query_onchain_fee().map_err(|e| e.to_string())?;
+
+    node.drain(address.to_string(), fee_rate)
+        .map_err(|e| e.to_string())
 }
 
 fn offer_to_string(offer: Option<OfferKind>) -> String {

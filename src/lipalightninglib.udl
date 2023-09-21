@@ -163,6 +163,21 @@ interface LightningNode {
     // The payment hash must be in the hex representation.
     [Throws=LnError]
     string get_payment_uuid(string payment_hash);
+
+    // Query the current recommended onchain fee rate
+    [Throws=LnError]
+    u64 query_onchain_fee();
+
+    // TODO: Currently doesn't return the correct txid until exposed by breez sdk https://github.com/breez/breez-sdk/issues/476
+    //
+    // Drain all onchain funds to a specified address
+    //
+    // Drains all available onchain funds on the specified onchain address.
+    //      - address - the funds will be drained to this address
+    //      - onchain_fee - the fees that should be applied for the transaction
+    // Returns the txid of the draining transaction.
+    [Throws=LnError]
+    sequence<u8> drain(string address, u64 onchain_fee);
 };
 
 // An object that holds all configuration needed to start a LightningNode instance.
@@ -248,6 +263,7 @@ callback interface EventsCallback {
 dictionary NodeInfo {
     string node_pubkey; // Lightning network public key of the node (also known as node id)
     sequence<string> peers; // List of node ids of all the peers the node is connected to
+    Amount onchain_balance; // Amount of onchain balance the node has
     ChannelsInfo channels_info; // Information about the channels of the node
 };
 
