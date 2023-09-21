@@ -29,6 +29,10 @@ integrationtests: TEST = ''
 integrationtests:
 	cargo test --workspace --test '$(FILE)' -- $(TEST)
 
+.PHONY: testregisternode
+testregisternode:
+	cargo test --test register_node_test -- --ignored --nocapture
+
 .PHONY: testall
 testall: test integrationtests
 

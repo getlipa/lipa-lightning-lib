@@ -51,8 +51,8 @@ use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{
-    parse, BreezEvent, BreezServices, EventListener, GreenlightNodeConfig, InputType,
-    LnUrlCallbackStatus, NodeConfig, NodeState, OpenChannelFeeRequest, OpeningFeeParams,
+    parse, BreezEvent, BreezServices, EventListener, GreenlightCredentials, GreenlightNodeConfig,
+    InputType, LnUrlCallbackStatus, NodeConfig, NodeState, OpenChannelFeeRequest, OpeningFeeParams,
     PaymentDetails, PaymentTypeFilter,
 };
 use cipher::generic_array::typenum::U32;
@@ -261,13 +261,20 @@ impl LightningNode {
             environment.backend_url.clone(),
         )?);
 
+        let device_cert = env!("BREEZ_SDK_PARTNER_CERTIFICATE").as_bytes().to_vec();
+        let device_key = env!("BREEZ_SDK_PARTNER_KEY").as_bytes().to_vec();
+        let partner_credentials = GreenlightCredentials {
+            device_cert,
+            device_key,
+        };
+
         let mut breez_config = BreezServices::default_config(
             environment.environment_type,
             env!("BREEZ_SDK_API_KEY").to_string(),
             NodeConfig::Greenlight {
                 config: GreenlightNodeConfig {
-                    partner_credentials: None,
-                    invite_code: config.invite_code.clone(),
+                    partner_credentials: Some(partner_credentials),
+                    invite_code: None,
                 },
             },
         );

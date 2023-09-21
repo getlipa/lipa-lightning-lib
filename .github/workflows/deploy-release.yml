@@ -22,9 +22,9 @@ jobs:
         with:
           submodules: true
       - name: Config cargo
-        run: echo -e "$CARGO_CONFIG_TOML" > .cargo/config.toml
+        run: echo -e "$CARGO_CONFIG_TOML_BREEZ" > .cargo/config.toml
         env:
-          CARGO_CONFIG_TOML: ${{ secrets.CARGO_CONFIG_TOML }}
+          CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -70,9 +70,9 @@ jobs:
         with:
           submodules: true
       - name: Config cargo
-        run: echo -e "$CARGO_CONFIG_TOML" > .cargo/config.toml
+        run: echo -e "$CARGO_CONFIG_TOML_BREEZ" > .cargo/config.toml
         env:
-          CARGO_CONFIG_TOML: ${{ secrets.CARGO_CONFIG_TOML }}
+          CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
