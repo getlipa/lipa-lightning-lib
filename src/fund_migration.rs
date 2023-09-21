@@ -55,8 +55,8 @@ pub(crate) fn migrate_funds(
     let client = build_client(Some(&token))
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
 
-    let balance = fetch_legacy_balance(&client, backend_url, public_key.clone())?;
-    if balance == 0 {
+    let balance_msat = fetch_legacy_balance(&client, backend_url, public_key.clone())? * 1_000;
+    if balance_msat == 0 {
         data_store
             .lock_unwrap()
             .append_funds_migration_status(MigrationStatus::NotNeeded)?;
@@ -75,7 +75,7 @@ pub(crate) fn migrate_funds(
         .opening_fee_params_list
         .get_cheapest_opening_fee_params()
         .map_to_permanent_failure("Failed to get LSP fees")?;
-    let amount_to_request = add_lsp_fees(balance, &lsp_fee) * 1_000;
+    let amount_to_request = add_lsp_fees(balance_msat, &lsp_fee) / 1_000;
 
     let invoice = rt
         .block_on(sdk.receive_payment(breez_sdk_core::ReceivePaymentRequest {
