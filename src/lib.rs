@@ -52,8 +52,8 @@ use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightCredentials, GreenlightNodeConfig,
-    InputType, LnUrlCallbackStatus, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
-    PaymentDetails, PaymentTypeFilter,
+    InputType, ListPaymentsRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest,
+    OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupInfo, TopupStatus};
@@ -223,7 +223,7 @@ impl EventListener for LipaEventListener {
 }
 
 const MAX_FEE_PERMYRIAD: u16 = 50;
-const EXEMPT_FEE_MSAT: u64 = 20_000;
+const EXEMPT_FEE_MSAT: u64 = 21_000;
 
 const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_exchange_rates: Some(Duration::from_secs(10 * 60)),
@@ -280,7 +280,7 @@ impl LightningNode {
         );
 
         breez_config.working_dir = config.local_persistence_path.clone();
-        // TODO configure `exemptfee` when exposed by Breez
+        breez_config.exemptfee_msat = EXEMPT_FEE_MSAT;
         breez_config.maxfee_percent = MAX_FEE_PERMYRIAD as f64 / 100_f64;
 
         let sdk = rt
@@ -560,9 +560,15 @@ impl LightningNode {
     }
 
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
+        let list_payments_request = ListPaymentsRequest {
+            filter: PaymentTypeFilter::All,
+            from_timestamp: None,
+            to_timestamp: None,
+            include_failures: Some(true),
+        };
         self.rt
             .handle()
-            .block_on(self.sdk.list_payments(PaymentTypeFilter::All, None, None))
+            .block_on(self.sdk.list_payments(list_payments_request))
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
             .into_iter()
             .filter(|p| p.payment_type != breez_sdk_core::PaymentType::ClosedChannel)
@@ -652,9 +658,10 @@ impl LightningNode {
             }
         };
 
-        let payment_state = match breez_payment.pending {
-            true => PaymentState::Created,
-            false => PaymentState::Succeeded,
+        let payment_state = match breez_payment.status {
+            PaymentStatus::Pending => PaymentState::Created,
+            PaymentStatus::Complete => PaymentState::Succeeded,
+            PaymentStatus::Failed => PaymentState::Failed,
         };
 
         let invoice_details = self
@@ -775,8 +782,8 @@ impl LightningNode {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to withdraw offer",
             )? {
-            LnUrlCallbackStatus::Ok => String::from("dummy payment hash"), // TODO: get payment hash from the SDK: https://github.com/breez/breez-sdk/issues/427
-            LnUrlCallbackStatus::ErrorStatus { data } => {
+            LnUrlWithdrawResult::Ok { data } => data.invoice.payment_hash,
+            LnUrlWithdrawResult::ErrorStatus { data } => {
                 return Err(runtime_error(
                     RuntimeErrorCode::OfferServiceUnavailable,
                     format!("Failed to withdraw offer due to: {}", data.reason),
@@ -1041,7 +1048,10 @@ mod tests {
 
     #[test]
     fn test_get_payment_max_routing_fee_mode_relative() {
-        let max_routing_mode = get_payment_max_routing_fee_mode(4_000, &None);
+        let max_routing_mode = get_payment_max_routing_fee_mode(
+            EXEMPT_FEE_MSAT / ((MAX_FEE_PERMYRIAD as u64) / 10),
+            &None,
+        );
 
         match max_routing_mode {
             MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
