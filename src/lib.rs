@@ -290,7 +290,10 @@ impl LightningNode {
                 config.seed.clone(),
                 Box::new(LipaEventListener { events_callback }),
             ))
-            .map_to_permanent_failure("Failed to initialize a breez sdk instance")?;
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to initialize a breez sdk instance",
+            )?;
 
         rt.handle().block_on(async {
             if sdk
