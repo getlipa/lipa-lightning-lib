@@ -1,10 +1,5 @@
 use crate::hinter::{CommandHint, CommandHinter};
 
-use uniffi_lipalightninglib::{
-    Amount, FiatValue, MaxRoutingFeeMode, OfferKind, PaymentState, TopupCurrency,
-};
-
-use bitcoin::hashes::hex::ToHex;
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Local, Utc};
 use colored::Colorize;
@@ -15,6 +10,9 @@ use rustyline::Editor;
 use std::collections::HashSet;
 use std::path::Path;
 use uniffi_lipalightninglib::LiquidityLimit;
+use uniffi_lipalightninglib::{
+    Amount, FiatValue, MaxRoutingFeeMode, OfferKind, PaymentState, TopupCurrency,
+};
 
 use crate::LightningNode;
 use crate::TzConfig;
@@ -133,22 +131,22 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     Ok(uuid) => println!("{uuid}"),
                     Err(message) => eprintln!("{}", message.red()),
                 },
-                "drain" => {
-                    let vec: Vec<u8> = vec![0; 64];
-                    println!("{}", vec.to_hex());
+                "sweep" => {
                     let address = words
                         .next()
                         .ok_or_else(|| "Address is required".to_string());
-                    if let Err(e) = address {
-                        println!("{}", e.red());
-                        return;
-                    }
 
-                    let address = address.unwrap().to_string();
-                    match drain(node, address.clone()) {
+                    let address = match address {
+                        Ok(a) => a.to_string(),
+                        Err(e) => {
+                            println!("{}", e.red());
+                            return;
+                        }
+                    };
+                    match sweep(node, address.clone()) {
                         Ok(txid) => {
                             println!();
-                            println!("Transaction Id: {}", txid.to_hex());
+                            println!("Transaction Id: {}", txid);
                             println!("Payout address: {}", address)
                         }
                         Err(e) => println!("{}", e.red()),
@@ -227,7 +225,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "paymentuuid <payment hash>",
         "paymentuuid",
     ));
-    hints.insert(CommandHint::new("drain <address>", "drain"));
+    hints.insert(CommandHint::new("sweep <address>", "sweep"));
     hints.insert(CommandHint::new("foreground", "foreground"));
     hints.insert(CommandHint::new("background", "background"));
     hints.insert(CommandHint::new("stop", "stop"));
@@ -263,7 +261,7 @@ fn help() {
     println!("  listpayments");
     println!("  paymentuuid <payment hash>");
     println!();
-    println!("  drain <address>");
+    println!("  sweep <address>");
     println!();
     println!("  foreground");
     println!("  background");
@@ -706,10 +704,10 @@ fn payment_uuid(
     };
 }
 
-fn drain(node: &LightningNode, address: String) -> Result<Vec<u8>, String> {
+fn sweep(node: &LightningNode, address: String) -> Result<String, String> {
     let fee_rate = node.query_onchain_fee().map_err(|e| e.to_string())?;
 
-    node.drain(address.to_string(), fee_rate)
+    node.sweep(address.to_string(), fee_rate)
         .map_err(|e| e.to_string())
 }
 

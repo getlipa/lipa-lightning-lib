@@ -843,13 +843,14 @@ impl LightningNode {
     }
 
     // TODO return txid when exposed by breez sdk https://github.com/breez/breez-sdk/issues/476
-    pub fn drain(&self, address: String, onchain_fee: u64) -> Result<Vec<u8>> {
+    pub fn sweep(&self, address: String, onchain_fee: u64) -> Result<String> {
         self.rt
             .handle()
             .block_on(self.sdk.sweep(address, onchain_fee))
             .map_to_runtime_error(NodeUnavailable, "Failed to drain funds")?;
 
-        Ok(vec![0; 64])
+        let txid: Vec<u8> = vec![0; 64];
+        Ok(txid.to_hex())
     }
 }
 

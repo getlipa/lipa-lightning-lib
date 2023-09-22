@@ -170,14 +170,12 @@ interface LightningNode {
 
     // TODO: Currently doesn't return the correct txid until exposed by breez sdk https://github.com/breez/breez-sdk/issues/476
     //
-    // Drain all onchain funds to a specified address
-    //
-    // Drains all available onchain funds on the specified onchain address.
+    // Sweeps all available onchain funds on the specified onchain address.
     //      - address - the funds will be drained to this address
     //      - onchain_fee - the fees that should be applied for the transaction
-    // Returns the txid of the draining transaction.
+    // Returns the txid of the sweeping transaction.
     [Throws=LnError]
-    sequence<u8> drain(string address, u64 onchain_fee);
+    string sweep(string address, u64 onchain_fee);
 };
 
 // An object that holds all configuration needed to start a LightningNode instance.
