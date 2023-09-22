@@ -1,7 +1,7 @@
 mod print_events_handler;
 mod setup;
 
-use crate::setup::NodeHandle;
+use crate::setup::start_alice;
 
 use bitcoin::secp256k1::PublicKey;
 use serial_test::file_serial;
@@ -10,7 +10,7 @@ use std::str::FromStr;
 #[test]
 #[file_serial(key, "/tmp/3l-int-tests-lock")]
 fn test_get_node_info() {
-    let node = NodeHandle::new().start().unwrap();
+    let node = start_alice().unwrap();
     let node_info = node.get_node_info().unwrap();
 
     assert!(
