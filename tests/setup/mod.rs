@@ -1,17 +1,13 @@
 use crate::print_events_handler::PrintEventsHandler;
 use crate::wait_for;
 
-use uniffi_lipalightninglib::{mnemonic_to_secret, recover_lightning_node, Config, TzConfig};
+use uniffi_lipalightninglib::{mnemonic_to_secret, Config, TzConfig};
 use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
 
 use std::fs;
 use std::string::ToString;
 
 type Result<T> = std::result::Result<T, perro::Error<RuntimeErrorCode>>;
-
-pub struct NodeHandle {
-    config: Config,
-}
 
 const LOCAL_PERSISTENCE_PATH: &str = ".3l_local_test";
 
@@ -44,51 +40,44 @@ macro_rules! wait_for {
 }
 
 #[allow(dead_code)]
-impl NodeHandle {
-    pub fn new() -> Self {
-        std::env::set_var("TESTING_TASK_PERIODS", "5");
+pub fn start_alice() -> Result<LightningNode> {
+    start_node("ALICE")
+}
 
-        Self::reset_state();
+#[allow(dead_code)]
+pub fn start_bob() -> Result<LightningNode> {
+    start_node("BOB")
+}
 
-        let mnemonic = std::env::var("BREEZ_SDK_MNEMONIC").unwrap();
-        let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
+fn start_node(node_name: &str) -> Result<LightningNode> {
+    std::env::set_var("TESTING_TASK_PERIODS", "5");
 
-        NodeHandle {
-            config: Config {
-                environment: uniffi_lipalightninglib::EnvironmentCode::Local,
-                seed: mnemonic_to_secret(mnemonic, "".to_string()).unwrap().seed,
-                fiat_currency: "EUR".to_string(),
-                local_persistence_path: LOCAL_PERSISTENCE_PATH.to_string(),
-                timezone_config: TzConfig {
-                    timezone_id: String::from("int_test_timezone_id"),
-                    timezone_utc_offset_secs: 1234,
-                },
-                enable_file_logging: false,
-            },
-        }
-    }
+    let local_persistence_path = format!("{LOCAL_PERSISTENCE_PATH}/{node_name}");
+    let _ = fs::remove_dir_all(local_persistence_path.clone());
+    fs::create_dir_all(local_persistence_path.clone()).unwrap();
 
-    pub fn start(&self) -> Result<LightningNode> {
-        let events_handler = PrintEventsHandler {};
-        let node = LightningNode::new(self.config.clone(), Box::new(events_handler))?;
+    let mnemonic_key = format!("BREEZ_SDK_MNEMONIC_{node_name}");
+    let mnemonic = std::env::var(mnemonic_key).unwrap();
+    let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
+    let seed = mnemonic_to_secret(mnemonic, "".to_string()).unwrap().seed;
 
-        // Wait for the the P2P background task to connect to the LSP
-        wait_for!(!node.get_node_info().unwrap().peers.is_empty());
+    let config = Config {
+        environment: uniffi_lipalightninglib::EnvironmentCode::Local,
+        seed,
+        fiat_currency: "EUR".to_string(),
+        local_persistence_path,
+        timezone_config: TzConfig {
+            timezone_id: String::from("int_test_timezone_id"),
+            timezone_utc_offset_secs: 1234,
+        },
+        enable_file_logging: false,
+    };
 
-        Ok(node)
-    }
+    let events_handler = PrintEventsHandler {};
+    let node = LightningNode::new(config, Box::new(events_handler))?;
 
-    pub fn reset_state() {
-        let _ = fs::remove_dir_all(LOCAL_PERSISTENCE_PATH);
-        fs::create_dir(LOCAL_PERSISTENCE_PATH).unwrap();
-    }
+    // Wait for the the P2P background task to connect to the LSP
+    wait_for!(!node.get_node_info().unwrap().peers.is_empty());
 
-    pub fn recover(&self) -> Result<()> {
-        recover_lightning_node(
-            self.config.environment,
-            self.config.seed.to_vec(),
-            self.config.local_persistence_path.clone(),
-            false,
-        )
-    }
+    Ok(node)
 }
