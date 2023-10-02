@@ -17,8 +17,7 @@ use perro::{MapToError, OptionToError, ResultTrait};
 use reqwest::blocking::Client;
 use std::sync::{Arc, Mutex};
 
-// TODO: update description to include info url
-const MIGRATION_DESCRIPTION: &str = "Funds migration from the legacy wallet version";
+const MIGRATION_DESCRIPTION: &str = "Migration refund. Read more on lipa.swiss/en/migration";
 
 #[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
