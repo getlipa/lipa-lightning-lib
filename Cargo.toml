@@ -67,7 +67,7 @@ rusqlite = { version = "0.28.0", features = [
 
 [dev-dependencies]
 colored = "2.0.4"
-ctor = "0.2.4"
+ctor = "0.2.5"
 rustyline = { version = "12.0.0", features = ["derive"] }
 serial_test = { version =  "2.0.0", features = ["file_locks"] }
 strip-ansi-escapes = "0.2.0"
