@@ -28,8 +28,8 @@ fn test_invoice() {
     //     })
     // ));
 
-    let bitcoi_address = "1DTHjgRiPnCYhgy7PcKxEEWAyFi4VoJpqi".to_string();
-    let result = node.decode_invoice(bitcoi_address);
+    let bitcoin_address = "1DTHjgRiPnCYhgy7PcKxEEWAyFi4VoJpqi".to_string();
+    let result = node.decode_invoice(bitcoin_address);
     assert!(matches!(
         result,
         Err(DecodeInvoiceError::SemanticError { .. })
