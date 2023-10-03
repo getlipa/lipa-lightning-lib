@@ -281,7 +281,7 @@ impl LightningNode {
 
         breez_config.working_dir = config.local_persistence_path.clone();
         // TODO configure `exemptfee` when exposed by Breez
-        breez_config.maxfee_percent = (MAX_FEE_PERMYRIAD / 100).into();
+        breez_config.maxfee_percent = MAX_FEE_PERMYRIAD as f64 / 100_f64;
 
         let sdk = rt
             .handle()
