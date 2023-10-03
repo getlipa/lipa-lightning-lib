@@ -52,7 +52,7 @@ use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightCredentials, GreenlightNodeConfig,
-    InputType, LnUrlCallbackStatus, NodeConfig, NodeState, OpenChannelFeeRequest, OpeningFeeParams,
+    InputType, LnUrlCallbackStatus, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
     PaymentDetails, PaymentTypeFilter,
 };
 use cipher::generic_array::typenum::U32;
@@ -391,10 +391,10 @@ impl LightningNode {
     }
 
     pub fn get_node_info(&self) -> Result<NodeInfo> {
-        let node_state: NodeState = self.sdk.node_info().map_err(|e| RuntimeError {
-            code: RuntimeErrorCode::NodeUnavailable,
-            msg: e.to_string(),
-        })?;
+        let node_state = self.sdk.node_info().map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to read node info",
+        )?;
         let rate = self.get_exchange_rate();
 
         Ok(NodeInfo {
@@ -491,8 +491,10 @@ impl LightningNode {
         &self,
         invoice: String,
     ) -> std::result::Result<InvoiceDetails, DecodeInvoiceError> {
-        match self.rt.handle().block_on(parse(&invoice)) {
-            Ok(InputType::Bolt11 {invoice}) => Ok(InvoiceDetails::from_ln_invoice(invoice, &self.get_exchange_rate())),
+        match self.rt
+            .handle()
+            .block_on(parse(&invoice)) {
+            Ok(InputType::Bolt11 { invoice }) => Ok(InvoiceDetails::from_ln_invoice(invoice, &self.get_exchange_rate())),
             Ok(_) => Err(DecodeInvoiceError::SemanticError {
                 msg: "Failed to decode invoice - provided string was recognized but not as a Bolt11 invoice".to_string(),
             }),
