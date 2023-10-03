@@ -757,6 +757,12 @@ impl LightningNode {
         Ok(topup_info)
     }
 
+    pub fn hide_topup(&self, id: String) -> Result<()> {
+        self.offer_manager
+            .hide_topup(id)
+            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)
+    }
+
     pub fn query_uncompleted_offers(&self) -> Result<Vec<OfferInfo>> {
         let topup_infos = self
             .offer_manager
