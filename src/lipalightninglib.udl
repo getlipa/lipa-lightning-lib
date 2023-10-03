@@ -538,12 +538,9 @@ interface MnemonicError {
 
 [Error]
 interface DecodeInvoiceError {
-    PermanentFailure(string msg);
     ParseError(string msg);
     SemanticError(string msg);
     NetworkMismatch(Network expected, Network found);
-    PayingToSelf();
-    InvoiceExpired();
 };
 
 [Error]

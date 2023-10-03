@@ -47,18 +47,12 @@ pub type PayResult<T> = std::result::Result<T, PayError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DecodeInvoiceError {
-    #[error("Permanent failure: {msg}")]
-    PermanentFailure { msg: String },
     #[error("Parse error: {msg}")]
     ParseError { msg: String },
     #[error("Semantic error: {msg}")]
     SemanticError { msg: String },
     #[error("Network mismatch (expected {expected}, found {found})")]
     NetworkMismatch { expected: Network, found: Network },
-    #[error("Paying to self is not supported")]
-    PayingToSelf,
-    #[error("Invoice has already expired")]
-    InvoiceExpired,
 }
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]

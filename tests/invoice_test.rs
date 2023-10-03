@@ -35,15 +35,7 @@ fn test_invoice() {
         Err(DecodeInvoiceError::SemanticError { .. })
     ));
 
-    let own_invoice = node
-        .create_invoice(100_000, None, String::new(), String::new())
-        .unwrap();
-    let result = node.decode_invoice(own_invoice.invoice);
-    assert!(matches!(result, Err(DecodeInvoiceError::PayingToSelf)));
-
-    let expired_invoice = "lnbc1pjs6m8ppp5krf0wqz805p6v2f2ducge75lxg5v9dk34t3vdamz4j0h9ycstp6sdqu2askcmr9wssx7e3q2dshgmmndp5scqzzsxqyz5vqsp5hymglgtm35e7hy6w7c4wswmcs77xg0hu8ns83wmkfskq9p34w8ds9qyyssq389370f0wm48ecajj9nz5vnx2nuru2cwmkdz93qywy45uvf5f7sjp9wjuv3gyvtr8emm6w56s7x94fpxqkgfpgeqq38xz85k9clnkqcq3rw49n".to_string();
-    let result = node.decode_invoice(expired_invoice);
-    assert!(matches!(result, Err(DecodeInvoiceError::InvoiceExpired)));
-
-    // TODO: Generate a valid invoice from another node and check it.
+    let valid_invoice = "lnbc1pjs6m8ppp5krf0wqz805p6v2f2ducge75lxg5v9dk34t3vdamz4j0h9ycstp6sdqu2askcmr9wssx7e3q2dshgmmndp5scqzzsxqyz5vqsp5hymglgtm35e7hy6w7c4wswmcs77xg0hu8ns83wmkfskq9p34w8ds9qyyssq389370f0wm48ecajj9nz5vnx2nuru2cwmkdz93qywy45uvf5f7sjp9wjuv3gyvtr8emm6w56s7x94fpxqkgfpgeqq38xz85k9clnkqcq3rw49n".to_string();
+    let invoice = node.decode_invoice(valid_invoice).unwrap();
+    assert_eq!(invoice.description, "Wallet of Satoshi");
 }

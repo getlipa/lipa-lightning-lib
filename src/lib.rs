@@ -391,10 +391,10 @@ impl LightningNode {
     }
 
     pub fn get_node_info(&self) -> Result<NodeInfo> {
-        let node_state = self
-            .sdk
-            .node_info()
-            .map_to_permanent_failure("Failed to read node info")?;
+        let node_state = self.sdk.node_info().map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to read node info",
+        )?;
         let rate = self.get_exchange_rate();
 
         Ok(NodeInfo {
@@ -491,41 +491,17 @@ impl LightningNode {
         &self,
         invoice: String,
     ) -> std::result::Result<InvoiceDetails, DecodeInvoiceError> {
-        let invoice = match self.rt
+        match self.rt
             .handle()
-            .block_on(parse(&invoice)){
-            Ok(InputType::Bolt11 {invoice}) => Ok(invoice),
+            .block_on(parse(&invoice)) {
+            Ok(InputType::Bolt11 { invoice }) => Ok(InvoiceDetails::from_ln_invoice(invoice, &self.get_exchange_rate())),
             Ok(_) => Err(DecodeInvoiceError::SemanticError {
                 msg: "Failed to decode invoice - provided string was recognized but not as a Bolt11 invoice".to_string(),
             }),
             Err(e) => Err(DecodeInvoiceError::ParseError {
                 msg: format!("Failed to parse invoice: {e}"),
             }),
-        }?;
-        let node_id = self
-            .sdk
-            .node_info()
-            .map_err(|e| DecodeInvoiceError::PermanentFailure {
-                msg: format!("Failed to read node info: {e}"),
-            })?
-            .id;
-        if invoice.payee_pubkey == node_id {
-            return Err(DecodeInvoiceError::PayingToSelf);
         }
-
-        let expiry = unix_timestamp_to_system_time(invoice.timestamp)
-            .checked_add(Duration::from_secs(invoice.expiry))
-            .ok_or(DecodeInvoiceError::SemanticError {
-                msg: "Invalid expire date of the invoice".to_string(),
-            })?;
-        if expiry < SystemTime::now() {
-            return Err(DecodeInvoiceError::InvoiceExpired);
-        }
-
-        Ok(InvoiceDetails::from_ln_invoice(
-            invoice,
-            &self.get_exchange_rate(),
-        ))
     }
 
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
