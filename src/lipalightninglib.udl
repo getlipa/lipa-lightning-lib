@@ -175,6 +175,10 @@ interface LightningNode {
     [Throws=LnError]
     string sweep(string address, u32 onchain_fee);
 
+    // Hides the topup with the given id.
+    [Throws=LnError]
+    void hide_topup(string id);
+
     // Prints additional debug information to the logs.
     //
     // Throws an error in case that the necessary information can't be received.
