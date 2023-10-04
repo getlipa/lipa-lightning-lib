@@ -555,7 +555,7 @@ dependencies = [
  "gl-client",
  "hex",
  "lazy_static",
- "lightning",
+ "lightning 0.0.117",
  "lightning-invoice",
  "log",
  "miniz_oxide",
@@ -2057,6 +2057,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightning"
+version = "0.0.117"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb0cb32c79c42444453bfabed7bd4f4ef64dfdd2e35e191fa8f3b9099ad2a186"
+dependencies = [
+ "bitcoin 0.29.2",
+]
+
+[[package]]
 name = "lightning-invoice"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2065,7 +2074,7 @@ dependencies = [
  "bech32",
  "bitcoin 0.29.2",
  "bitcoin_hashes 0.11.0",
- "lightning",
+ "lightning 0.0.115",
  "num-traits",
  "secp256k1 0.24.3",
 ]
@@ -2098,7 +2107,7 @@ dependencies = [
  "hex",
  "honey-badger",
  "iban_validate",
- "lightning",
+ "lightning 0.0.117",
  "lightning-invoice",
  "log",
  "num_enum",
@@ -4129,7 +4138,7 @@ dependencies = [
  "hashbrown 0.8.2",
  "hex",
  "itertools",
- "lightning",
+ "lightning 0.0.115",
  "lightning-invoice",
  "log",
  "scopeguard",
