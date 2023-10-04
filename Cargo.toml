@@ -11,11 +11,11 @@ name = "uniffi_lipalightninglib"
 nigiri = []
 
 [dependencies]
-chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.11.0" }
-crow = { git = "https://github.com/getlipa/wild", tag = "v1.11.0" }
-honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.11.0" }
+chameleon = { git = "https://github.com/getlipa/wild", branch = "feature/implement-register-topup" }
+crow = { git = "https://github.com/getlipa/wild", branch = "feature/implement-register-topup" }
+honey-badger = { git = "https://github.com/getlipa/wild", branch = "feature/implement-register-topup" }
+graphql = { git = "https://github.com/getlipa/wild", branch = "feature/implement-register-topup" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
-graphql = { git = "https://github.com/getlipa/wild", tag = "v1.11.0" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.5" }
 

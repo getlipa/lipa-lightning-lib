@@ -19,6 +19,7 @@ pub enum TopupCurrency {
 
 #[derive(Debug)]
 pub struct FiatTopupInfo {
+    pub order_id: String,
     pub debitor_iban: String,
     pub creditor_reference: String,
     pub creditor_iban: String,
@@ -38,6 +39,7 @@ pub struct FiatTopupInfo {
 impl FiatTopupInfo {
     fn from_pocket_create_order_response(create_order_response: CreateOrderResponse) -> Self {
         FiatTopupInfo {
+            order_id: create_order_response.id,
             debitor_iban: create_order_response.payment_method.debitor_iban,
             creditor_reference: create_order_response.payment_method.creditor_reference,
             creditor_iban: create_order_response.payment_method.creditor_iban,

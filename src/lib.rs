@@ -740,21 +740,25 @@ impl LightningNode {
             return Err(invalid_input(format!("Invalid user_iban: {}", e)));
         }
 
-        if let Some(email) = email {
+        if let Some(email) = email.clone() {
             if let Err(e) = EmailAddress::from_str(&email) {
                 return Err(invalid_input(format!("Invalid email: {}", e)));
             }
-            self.offer_manager
-                .register_email(email)
-                .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
         }
 
+        let topup_info = self
+            .fiat_topup_client
+            .register_pocket_fiat_topup(&user_iban, user_currency)?;
+
         self.offer_manager
-            .register_node(self.get_node_info()?.node_pubkey)
+            .register_topup(
+                topup_info.order_id.clone(),
+                self.get_node_info()?.node_pubkey,
+                email,
+            )
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
 
-        self.fiat_topup_client
-            .register_pocket_fiat_topup(&user_iban, user_currency)
+        Ok(topup_info)
     }
 
     pub fn query_uncompleted_offers(&self) -> Result<Vec<OfferInfo>> {

@@ -419,6 +419,7 @@ enum TopupCurrency {
 
 // Information about a fiat top-up registration
 dictionary FiatTopupInfo {
+    string order_id;
     string debitor_iban; // The user should transfer fiat from this IBAN
     string creditor_reference; // This reference should be included in the fiat transfer reference
     string creditor_iban; // The user should transfer fiat to this IBAN
