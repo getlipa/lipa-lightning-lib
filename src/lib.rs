@@ -54,7 +54,7 @@ use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightCredentials, GreenlightNodeConfig,
     InputType, ListPaymentsRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest,
-    OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter,
+    OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupInfo, TopupStatus};
@@ -832,25 +832,27 @@ impl LightningNode {
             .map_to_permanent_failure("Failed to persist payment info")
     }
 
-    pub fn query_onchain_fee(&self) -> Result<u64> {
+    pub fn query_onchain_fee(&self) -> Result<u32> {
         let recommended_fees = self
             .rt
             .handle()
             .block_on(self.sdk.recommended_fees())
             .map_to_runtime_error(NodeUnavailable, "Couldn't fetch recommended fees")?;
 
-        Ok(recommended_fees.half_hour_fee)
+        Ok(recommended_fees.half_hour_fee as u32)
     }
 
-    // TODO return txid when exposed by breez sdk https://github.com/breez/breez-sdk/issues/476
-    pub fn sweep(&self, address: String, onchain_fee: u64) -> Result<String> {
-        self.rt
+    pub fn sweep(&self, address: String, onchain_fee: u32) -> Result<String> {
+        Ok(self
+            .rt
             .handle()
-            .block_on(self.sdk.sweep(address, onchain_fee))
-            .map_to_runtime_error(NodeUnavailable, "Failed to drain funds")?;
-
-        let txid: Vec<u8> = vec![0; 64];
-        Ok(txid.to_hex())
+            .block_on(self.sdk.sweep(SweepRequest {
+                to_address: address,
+                fee_rate_sats_per_vbyte: onchain_fee,
+            }))
+            .map_to_runtime_error(NodeUnavailable, "Failed to drain funds")?
+            .txid
+            .to_hex())
     }
 }
 

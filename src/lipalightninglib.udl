@@ -166,16 +166,14 @@ interface LightningNode {
 
     // Query the current recommended onchain fee rate
     [Throws=LnError]
-    u64 query_onchain_fee();
+    u32 query_onchain_fee();
 
-    // TODO: Currently doesn't return the correct txid until exposed by breez sdk https://github.com/breez/breez-sdk/issues/476
-    //
     // Sweeps all available onchain funds on the specified onchain address.
     //      - address - the funds will be drained to this address
     //      - onchain_fee - the fees that should be applied for the transaction
     // Returns the txid of the sweeping transaction.
     [Throws=LnError]
-    string sweep(string address, u64 onchain_fee);
+    string sweep(string address, u32 onchain_fee);
 };
 
 // An object that holds all configuration needed to start a LightningNode instance.
