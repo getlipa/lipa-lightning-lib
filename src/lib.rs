@@ -736,14 +736,12 @@ impl LightningNode {
         user_currency: TopupCurrency,
     ) -> Result<FiatTopupInfo> {
         trace!("register_fiat_topup() - called with - email: {email:?} - user_iban: {user_iban} - user_currency: {user_currency:?}");
-        if let Err(e) = user_iban.parse::<Iban>() {
-            return Err(invalid_input(format!("Invalid user_iban: {}", e)));
-        }
+        user_iban
+            .parse::<Iban>()
+            .map_to_invalid_input("Invalid user_iban")?;
 
-        if let Some(email) = email.clone() {
-            if let Err(e) = EmailAddress::from_str(&email) {
-                return Err(invalid_input(format!("Invalid email: {}", e)));
-            }
+        if let Some(email) = email.as_ref() {
+            EmailAddress::from_str(email).map_to_invalid_input("Invalid email")?;
         }
 
         let topup_info = self
