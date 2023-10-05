@@ -23,6 +23,10 @@ fn test_get_node_info() {
     );
     assert!(
         node_info.channels_info.local_balance.sats < 21_000_000 * 100_000_000,
-        "Node must not hold more than 21 million BTC"
+        "Node must not hold more than 21 million BTC on lightning"
+    );
+    assert!(
+        node_info.onchain_balance.sats < 21_000_000 * 100_000_000,
+        "Node must not hold more than 21 million BTC on-chain"
     );
 }

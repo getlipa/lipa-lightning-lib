@@ -1,9 +1,5 @@
 use crate::hinter::{CommandHint, CommandHinter};
 
-use uniffi_lipalightninglib::{
-    Amount, FiatValue, MaxRoutingFeeMode, OfferKind, PaymentState, TopupCurrency,
-};
-
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Local, Utc};
 use colored::Colorize;
@@ -14,6 +10,9 @@ use rustyline::Editor;
 use std::collections::HashSet;
 use std::path::Path;
 use uniffi_lipalightninglib::LiquidityLimit;
+use uniffi_lipalightninglib::{
+    Amount, FiatValue, MaxRoutingFeeMode, OfferKind, PaymentState, TopupCurrency,
+};
 
 use crate::LightningNode;
 use crate::TzConfig;
@@ -132,6 +131,27 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     Ok(uuid) => println!("{uuid}"),
                     Err(message) => eprintln!("{}", message.red()),
                 },
+                "sweep" => {
+                    let address = words
+                        .next()
+                        .ok_or_else(|| "Address is required".to_string());
+
+                    let address = match address {
+                        Ok(a) => a.to_string(),
+                        Err(e) => {
+                            println!("{}", e.red());
+                            return;
+                        }
+                    };
+                    match sweep(node, address.clone()) {
+                        Ok(txid) => {
+                            println!();
+                            println!("Transaction Id: {}", txid);
+                            println!("Payout address: {}", address)
+                        }
+                        Err(e) => println!("{}", e.red()),
+                    }
+                }
                 "foreground" => {
                     node.foreground();
                 }
@@ -205,6 +225,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "paymentuuid <payment hash>",
         "paymentuuid",
     ));
+    hints.insert(CommandHint::new("sweep <address>", "sweep"));
     hints.insert(CommandHint::new("foreground", "foreground"));
     hints.insert(CommandHint::new("background", "background"));
     hints.insert(CommandHint::new("stop", "stop"));
@@ -239,6 +260,8 @@ fn help() {
     println!();
     println!("  listpayments");
     println!("  paymentuuid <payment hash>");
+    println!();
+    println!("  sweep <address>");
     println!();
     println!("  foreground");
     println!("  background");
@@ -314,6 +337,10 @@ fn node_info(node: &LightningNode) {
 
     println!("Node PubKey: {}", node_info.node_pubkey);
     println!("Connected peer(s): {}", peers_list.join(", "));
+    println!(
+        "On-Chain balance: {}",
+        amount_to_string(node_info.onchain_balance)
+    );
     println!(
         "       Number of channels: {}",
         node_info.channels_info.num_channels
@@ -675,6 +702,13 @@ fn payment_uuid(
         Ok(uuid) => return Ok(uuid),
         Err(e) => return Err(e.to_string()),
     };
+}
+
+fn sweep(node: &LightningNode, address: String) -> Result<String, String> {
+    let fee_rate = node.query_onchain_fee().map_err(|e| e.to_string())?;
+
+    node.sweep(address.to_string(), fee_rate)
+        .map_err(|e| e.to_string())
 }
 
 fn offer_to_string(offer: Option<OfferKind>) -> String {

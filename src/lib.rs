@@ -45,6 +45,7 @@ use crate::secret::Secret;
 use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
 
+use crate::RuntimeErrorCode::NodeUnavailable;
 use bip39::{Language, Mnemonic};
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
@@ -53,7 +54,7 @@ use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightCredentials, GreenlightNodeConfig,
     InputType, ListPaymentsRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest,
-    OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter,
+    OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupInfo, TopupStatus};
@@ -94,6 +95,7 @@ pub struct CalculateLspFeeResponse {
 pub struct NodeInfo {
     pub node_pubkey: String,
     pub peers: Vec<String>,
+    pub onchain_balance: Amount,
     pub channels_info: ChannelsInfo,
 }
 
@@ -400,6 +402,7 @@ impl LightningNode {
         Ok(NodeInfo {
             node_pubkey: node_state.id,
             peers: node_state.connected_peers,
+            onchain_balance: node_state.onchain_balance_msat.to_amount_down(&rate),
             channels_info: ChannelsInfo {
                 num_channels: 0,
                 num_usable_channels: 0,
@@ -827,6 +830,29 @@ impl LightningNode {
             .lock_unwrap()
             .store_payment_info(hash, user_preferences, exchange_rates, offer)
             .map_to_permanent_failure("Failed to persist payment info")
+    }
+
+    pub fn query_onchain_fee(&self) -> Result<u32> {
+        let recommended_fees = self
+            .rt
+            .handle()
+            .block_on(self.sdk.recommended_fees())
+            .map_to_runtime_error(NodeUnavailable, "Couldn't fetch recommended fees")?;
+
+        Ok(recommended_fees.half_hour_fee as u32)
+    }
+
+    pub fn sweep(&self, address: String, onchain_fee: u32) -> Result<String> {
+        Ok(self
+            .rt
+            .handle()
+            .block_on(self.sdk.sweep(SweepRequest {
+                to_address: address,
+                fee_rate_sats_per_vbyte: onchain_fee,
+            }))
+            .map_to_runtime_error(NodeUnavailable, "Failed to drain funds")?
+            .txid
+            .to_hex())
     }
 }
 
