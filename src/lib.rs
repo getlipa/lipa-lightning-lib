@@ -63,7 +63,7 @@ use email_address::EmailAddress;
 use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
 use iban::Iban;
-use log::trace;
+use log::{info, trace};
 use logger::init_logger_once;
 use num_enum::TryFromPrimitive;
 use perro::Error::RuntimeError;
@@ -853,6 +853,31 @@ impl LightningNode {
             .map_to_runtime_error(NodeUnavailable, "Failed to drain funds")?
             .txid
             .to_hex())
+    }
+
+    pub fn log_debug_info(&self) -> Result<()> {
+        let peers = self
+            .rt
+            .handle()
+            .block_on(self.sdk.execute_dev_command("listpeers".to_string()))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Couldn't execute `listpeers` command",
+            )?;
+
+        let peer_channels = self
+            .rt
+            .handle()
+            .block_on(self.sdk.execute_dev_command("listpeerchannels".to_string()))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Couldn't execute `listpeerchannels` command",
+            )?;
+
+        info!("List of peers:\n{}", peers);
+        info!("List of peer channels:\n{}", peer_channels);
+
+        Ok(())
     }
 }
 

@@ -152,6 +152,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         Err(e) => println!("{}", e.red()),
                     }
                 }
+                "logdebug" => {
+                    if let Err(e) = node.log_debug_info() {
+                        println!("{}", e.to_string().red());
+                    }
+                }
                 "foreground" => {
                     node.foreground();
                 }
@@ -226,6 +231,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "paymentuuid",
     ));
     hints.insert(CommandHint::new("sweep <address>", "sweep"));
+    hints.insert(CommandHint::new("logdebug", "logdebug"));
     hints.insert(CommandHint::new("foreground", "foreground"));
     hints.insert(CommandHint::new("background", "background"));
     hints.insert(CommandHint::new("stop", "stop"));
@@ -262,6 +268,8 @@ fn help() {
     println!("  paymentuuid <payment hash>");
     println!();
     println!("  sweep <address>");
+    println!();
+    println!("  logdebug");
     println!();
     println!("  foreground");
     println!("  background");
