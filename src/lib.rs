@@ -736,25 +736,23 @@ impl LightningNode {
         user_currency: TopupCurrency,
     ) -> Result<FiatTopupInfo> {
         trace!("register_fiat_topup() - called with - email: {email:?} - user_iban: {user_iban} - user_currency: {user_currency:?}");
-        if let Err(e) = user_iban.parse::<Iban>() {
-            return Err(invalid_input(format!("Invalid user_iban: {}", e)));
+        user_iban
+            .parse::<Iban>()
+            .map_to_invalid_input("Invalid user_iban")?;
+
+        if let Some(email) = email.as_ref() {
+            EmailAddress::from_str(email).map_to_invalid_input("Invalid email")?;
         }
 
-        if let Some(email) = email {
-            if let Err(e) = EmailAddress::from_str(&email) {
-                return Err(invalid_input(format!("Invalid email: {}", e)));
-            }
-            self.offer_manager
-                .register_email(email)
-                .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
-        }
+        let topup_info = self
+            .fiat_topup_client
+            .register_pocket_fiat_topup(&user_iban, user_currency)?;
 
         self.offer_manager
-            .register_node(self.get_node_info()?.node_pubkey)
+            .register_topup(topup_info.order_id.clone(), email)
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
 
-        self.fiat_topup_client
-            .register_pocket_fiat_topup(&user_iban, user_currency)
+        Ok(topup_info)
     }
 
     pub fn query_uncompleted_offers(&self) -> Result<Vec<OfferInfo>> {
