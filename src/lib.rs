@@ -751,11 +751,7 @@ impl LightningNode {
             .register_pocket_fiat_topup(&user_iban, user_currency)?;
 
         self.offer_manager
-            .register_topup(
-                topup_info.order_id.clone(),
-                self.get_node_info()?.node_pubkey,
-                email,
-            )
+            .register_topup(topup_info.order_id.clone(), email)
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
 
         Ok(topup_info)
