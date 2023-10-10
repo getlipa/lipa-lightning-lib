@@ -675,7 +675,7 @@ impl LightningNode {
         Ok(Payment {
             payment_type,
             payment_state,
-            fail_reason: None, // TODO: Request SDK to store and provide failed payment attempts
+            fail_reason: None, // TODO: Request SDK to store and provide reason for failed payments
             hash: payment_details.payment_hash,
             amount,
             invoice_details,
