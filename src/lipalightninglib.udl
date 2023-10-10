@@ -358,12 +358,11 @@ interface MaxRoutingFeeMode {
 dictionary Payment {
     PaymentType payment_type;
     PaymentState payment_state;
-    PayErrorCode? fail_reason;
+    PayErrorCode? fail_reason; // For now, will always be empty
     string hash; // Hex representation of payment hash
     Amount amount; // Nominal amount specified in the invoice
     InvoiceDetails invoice_details;
     TzTime created_at;
-    TzTime latest_state_change_at;
     string description; // The description embedded in the invoice. Given the length limit of this data,
         // it is possible that a hex hash of the description is provided instead, but that is uncommon.
     string? preimage; // Hex representation of the preimage. Will only be present on successful payments.
