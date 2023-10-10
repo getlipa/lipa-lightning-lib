@@ -344,18 +344,17 @@ impl LightningNode {
             .lock_unwrap()
             .restart(Self::get_foreground_periods());
 
-        // TODO: uncomment when ready to ship fund migration
-        // let data_store_clone = Arc::clone(&data_store);
-        // let auth_clone = Arc::clone(&auth);
-        // fund_migration::migrate_funds(
-        //     rt.handle(),
-        //     &strong_typed_seed,
-        //     data_store_clone,
-        //     &sdk,
-        //     auth_clone,
-        //     &environment.backend_url,
-        // )
-        // .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
+        let data_store_clone = Arc::clone(&data_store);
+        let auth_clone = Arc::clone(&auth);
+        fund_migration::migrate_funds(
+            rt.handle(),
+            &strong_typed_seed,
+            data_store_clone,
+            &sdk,
+            auth_clone,
+            &environment.backend_url,
+        )
+        .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
 
         Ok(LightningNode {
             user_preferences,
