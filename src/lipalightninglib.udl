@@ -358,7 +358,7 @@ interface MaxRoutingFeeMode {
 dictionary Payment {
     PaymentType payment_type;
     PaymentState payment_state;
-    PayErrorCode? fail_reason;
+    PayErrorCode? fail_reason; // For now, will always be empty
     string hash; // Hex representation of payment hash
     Amount amount; // Nominal amount specified in the invoice
     InvoiceDetails invoice_details;
