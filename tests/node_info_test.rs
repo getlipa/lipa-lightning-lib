@@ -18,10 +18,6 @@ fn test_get_node_info() {
         "Node public key is not valid"
     );
     assert!(
-        node_info.channels_info.num_channels >= node_info.channels_info.num_usable_channels,
-        "Number of channels must be greater or equal to number of usable channels"
-    );
-    assert!(
         node_info.channels_info.local_balance.sats < 21_000_000 * 100_000_000,
         "Node must not hold more than 21 million BTC on lightning"
     );

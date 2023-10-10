@@ -350,14 +350,6 @@ fn node_info(node: &LightningNode) {
         amount_to_string(node_info.onchain_balance)
     );
     println!(
-        "       Number of channels: {}",
-        node_info.channels_info.num_channels
-    );
-    println!(
-        "Number of usable channels: {}",
-        node_info.channels_info.num_usable_channels
-    );
-    println!(
         "            Local balance: {}",
         amount_to_string(node_info.channels_info.local_balance)
     );
@@ -368,10 +360,6 @@ fn node_info(node: &LightningNode) {
     println!(
         "        Outbound capacity: {}",
         amount_to_string(node_info.channels_info.outbound_capacity)
-    );
-    println!(
-        " Capacity of all channels: {}",
-        amount_to_string(node_info.channels_info.total_channel_capacities)
     );
 }
 

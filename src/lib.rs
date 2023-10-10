@@ -100,14 +100,9 @@ pub struct NodeInfo {
 }
 
 pub struct ChannelsInfo {
-    // This field will currently always be 0 until Breez SDK exposes more detailed channel information https://github.com/breez/breez-sdk/issues/421
-    pub num_channels: u16,
-    // This field will currently always be 0 until Breez SDK exposes more detailed channel information https://github.com/breez/breez-sdk/issues/421
-    pub num_usable_channels: u16,
     pub local_balance: Amount,
     pub inbound_capacity: Amount,
     pub outbound_capacity: Amount,
-    pub total_channel_capacities: Amount,
 }
 
 #[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
@@ -403,12 +398,9 @@ impl LightningNode {
             peers: node_state.connected_peers,
             onchain_balance: node_state.onchain_balance_msat.to_amount_down(&rate),
             channels_info: ChannelsInfo {
-                num_channels: 0,
-                num_usable_channels: 0,
                 local_balance: node_state.channels_balance_msat.to_amount_down(&rate),
                 inbound_capacity: node_state.inbound_liquidity_msats.to_amount_down(&rate),
                 outbound_capacity: node_state.max_payable_msat.to_amount_down(&rate),
-                total_channel_capacities: 0.to_amount_down(&rate),
             },
         })
     }
