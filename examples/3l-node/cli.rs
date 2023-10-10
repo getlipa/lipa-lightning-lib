@@ -662,18 +662,10 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
         let timezone = FixedOffset::east_opt(payment.created_at.timezone_utc_offset_secs).unwrap();
         let created_at = created_at.with_timezone(&timezone);
 
-        let latest_change_at: DateTime<Utc> = payment.latest_state_change_at.time.into();
-        let timezone =
-            FixedOffset::east_opt(payment.latest_state_change_at.timezone_utc_offset_secs).unwrap();
-        let latest_change_at = latest_change_at.with_timezone(&timezone);
         println!(
             "{} payment created at {created_at} {}",
             payment_type.bold(),
             payment.created_at.timezone_id
-        );
-        println!(
-            "and with latest state change at {latest_change_at} {}",
-            payment.latest_state_change_at.timezone_id
         );
         println!("      State:        {:?}", payment.payment_state);
         if payment.payment_state == PaymentState::Failed {

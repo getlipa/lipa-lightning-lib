@@ -135,7 +135,6 @@ pub struct Payment {
     pub amount: Amount,
     pub invoice_details: InvoiceDetails,
     pub created_at: TzTime,
-    pub latest_state_change_at: TzTime,
     pub description: String,
     pub preimage: Option<String>,
     pub network_fees: Option<Amount>,
@@ -681,7 +680,6 @@ impl LightningNode {
             amount,
             invoice_details,
             created_at: time.clone(),
-            latest_state_change_at: time, // TODO: remove this field from interface
             description,
             preimage: Some(payment_details.payment_preimage),
             network_fees,
