@@ -26,7 +26,7 @@ impl InvoiceDetails {
             amount: ln_invoice
                 .amount_msat
                 .map(|a| a.to_amount_down(exchange_rate)),
-            description: ln_invoice.description.unwrap_or(String::new()),
+            description: ln_invoice.description.unwrap_or_default(),
             payment_hash: ln_invoice.payment_hash,
             payee_pub_key: ln_invoice.payee_pubkey,
             creation_timestamp: unix_timestamp_to_system_time(ln_invoice.timestamp),
