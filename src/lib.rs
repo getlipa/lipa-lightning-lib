@@ -225,6 +225,7 @@ pub enum OfferKind {
 }
 
 /// Information on a funds offer that can be claimed using LNURL-w.
+#[derive(Debug)]
 pub struct OfferInfo {
     pub offer_kind: OfferKind,
     /// Amount available for withdrawal
