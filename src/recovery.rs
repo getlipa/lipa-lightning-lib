@@ -1,6 +1,9 @@
 use crate::errors::Result;
 use crate::EnvironmentCode;
 
+/// Performs a recovery procedure by fetching necessary data from remote storage.
+/// It should and can only be called on a fresh install of the app, if the user wants to recover a previously created wallet.
+/// If no existing wallet is found, returns an error.
 // TODO remove unused_variables after breez sdk implementation
 #[allow(unused_variables)]
 pub fn recover_lightning_node(

@@ -1,3 +1,9 @@
+//! # lipa-lightning-lib (aka 3L)
+//!
+//! This crate implement all the main business logic of the lipa wallet.
+//!
+//! Most functionality can be accessed by creating an instance of [`LightningNode`] and using its methods.
+
 #![allow(clippy::let_unit_value)]
 
 extern crate core;
@@ -34,7 +40,8 @@ pub use crate::environment::EnvironmentCode;
 use crate::errors::{to_mnemonic_error, Error, SimpleError};
 pub use crate::errors::{DecodeInvoiceError, MnemonicError, PayError, PayErrorCode, PayResult};
 pub use crate::errors::{Error as LnError, Result, RuntimeErrorCode};
-pub use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProviderImpl};
+pub use crate::exchange_rate_provider::ExchangeRate;
+use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 pub use crate::invoice_details::InvoiceDetails;
@@ -45,7 +52,6 @@ use crate::secret::Secret;
 use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
 
-use crate::RuntimeErrorCode::NodeUnavailable;
 use bip39::{Language, Mnemonic};
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
@@ -82,26 +88,44 @@ const LOGS_DIR: &str = "logs";
 
 const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 
+/// The fee charged by the Lightning Service Provider (LSP) for opening a channel with the node.
+/// This fee is being charged at the time of the channel creation.
+/// The LSP simply subtracts this fee from an incoming payment (if this incoming payment leads to a channel creation).
 pub struct LspFee {
     pub channel_minimum_fee: Amount,
+    /// Parts per myriad (aka basis points) -> 100 is 1%
     pub channel_fee_permyriad: u64,
 }
 
+/// The type returned by [`LightningNode::calculate_lsp_fee()`]
 pub struct CalculateLspFeeResponse {
+    /// Indicates the amount that will be charged
     pub lsp_fee: Amount,
+    /// Should be passed in to [`LightningNode::create_invoice()`]
     pub lsp_fee_params: Option<OpeningFeeParams>,
 }
 
+/// Information about the Lightning node running in the background
 pub struct NodeInfo {
+    /// Lightning network public key of the node (also known as node id)
     pub node_pubkey: String,
+    /// List of node ids of all the peers the node is connected to
     pub peers: Vec<String>,
+    /// Amount of onchain balance the node has
     pub onchain_balance: Amount,
+    /// Information about the channels of the node
     pub channels_info: ChannelsInfo,
 }
 
+/// Information about the channels of the node
 pub struct ChannelsInfo {
+    /// The balance of the local node
     pub local_balance: Amount,
+    /// Capacity the node can actually receive.
+    /// It excludes non usable channels, pending HTLCs, channels reserves, etc.
     pub inbound_capacity: Amount,
+    /// Capacity the node can actually send.
+    /// It excludes non usable channels, pending HTLCs, channels reserves, etc.
     pub outbound_capacity: Amount,
 }
 
@@ -115,55 +139,95 @@ pub enum PaymentType {
 #[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
 pub enum PaymentState {
+    /// The payment was created and is in progress.
     Created,
+    /// The payment succeeded.
     Succeeded,
+    /// The payment failed. If it is a [`PaymentType::Sending`] payment, it can be retried.
     Failed,
+    /// A payment retrial is in progress.
     Retried,
+    /// The invoice associated with this payment has expired.
     InvoiceExpired,
 }
 
+/// Information about an incoming or outgoing payment
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,
+    /// For now, will always be empty
     pub fail_reason: Option<PayErrorCode>,
+    /// Hex representation of payment hash
     pub hash: String,
+    /// Nominal amount specified in the invoice
     pub amount: Amount,
     pub invoice_details: InvoiceDetails,
     pub created_at: TzTime,
+    /// The description embedded in the invoice. Given the length limit of this data,
+    /// it is possible that a hex hash of the description is provided instead, but that is uncommon.
     pub description: String,
+    /// Hex representation of the preimage. Will only be present on successful payments.
     pub preimage: Option<String>,
+    /// Routing fees paid in a [`PaymentType::Sending`] payment. Will only be present if the payment
+    /// was successful.
+    /// The cost of sending a payment is `amount` + `network_fees`.
     pub network_fees: Option<Amount>,
+    /// LSP fees paid in a [`PaymentType::Receiving`] payment. Will never be present for
+    /// [`PaymentType::Sending`] payments but might be 0 for [`PaymentType::Receiving`] payments.
+    /// The amount is only paid if successful.
+    /// The value that is received in practice is given by `amount` - `lsp_fees`.
     pub lsp_fees: Option<Amount>,
+    /// An offer a [`PaymentType::Receiving`] payment came from if any.
     pub offer: Option<OfferKind>,
     pub metadata: String,
 }
 
+/// Indicates the max routing fee mode used to restrict fees of a payment of a given size
 pub enum MaxRoutingFeeMode {
-    Relative { max_fee_permyriad: u16 },
-    Absolute { max_fee_amount: Amount },
+    /// `max_fee_permyriad` Parts per myriad (aka basis points) -> 100 is 1%
+    Relative {
+        max_fee_permyriad: u16,
+    },
+    Absolute {
+        max_fee_amount: Amount,
+    },
 }
 
 #[derive(Debug)]
 pub enum OfferStatus {
     READY,
+    /// Claiming the offer failed, but it can be retried.
     FAILED,
+    /// The offer could not be claimed, so the user got refunded.
+    /// Specific info for Pocket offers:
+    /// - The Refund happened over the Fiat rails
+    /// - Reasons for why the offer was refunded: <https://pocketbitcoin.com/developers/docs/rest/v1/webhooks#refund-reasons>
     REFUNDED,
     SETTLED,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum OfferKind {
+    /// An offer related to a topup using the Pocket exchange
+    /// Values are denominated in the fiat currency the user sent to the exchange.
+    /// The currency code can be found in `exchange_rate`.
     Pocket {
         id: String,
+        /// The exchange rate used by the exchange to exchange fiat to sats
         exchange_rate: ExchangeRate,
+        /// The original fiat amount sent to the exchange
         topup_value_minor_units: u64,
+        /// The fee paid to perform the exchange from fiat to sats
         exchange_fee_minor_units: u64,
+        /// The rate of the fee expressed in permyriad (e.g. 1.5% would be 150)
         exchange_fee_rate_permyriad: u16,
     },
 }
 
+/// Information on a funds offer that can be claimed using LNURL-w.
 pub struct OfferInfo {
     pub offer_kind: OfferKind,
+    /// Amount available for withdrawal
     pub amount: Amount,
     pub lnurlw: String,
     pub created_at: SystemTime,
@@ -175,17 +239,6 @@ pub struct OfferInfo {
 pub(crate) struct UserPreferences {
     fiat_currency: String,
     timezone_config: TzConfig,
-}
-
-pub struct LightningNode {
-    user_preferences: Mutex<UserPreferences>,
-    sdk: Arc<BreezServices>,
-    auth: Arc<Auth>,
-    fiat_topup_client: PocketClient,
-    offer_manager: OfferManager,
-    rt: AsyncRuntime,
-    data_store: Arc<Mutex<DataStore>>,
-    task_manager: Arc<Mutex<TaskManager>>,
 }
 
 struct LipaEventListener {
@@ -232,6 +285,20 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
     sync_breez: Some(Duration::from_secs(30 * 60)),
     update_lsp_fee: None,
 };
+
+/// The main class/struct of this library. Constructing an instance will initiate the Lightning node and
+/// run it in the background. As long as an instance of `LightningNode` is held, the node will continue to run
+/// in the background. Dropping the instance will start a deinit process.  
+pub struct LightningNode {
+    user_preferences: Mutex<UserPreferences>,
+    sdk: Arc<BreezServices>,
+    auth: Arc<Auth>,
+    fiat_topup_client: PocketClient,
+    offer_manager: OfferManager,
+    rt: AsyncRuntime,
+    data_store: Arc<Mutex<DataStore>>,
+    task_manager: Arc<Mutex<TaskManager>>,
+}
 
 impl LightningNode {
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
@@ -385,6 +452,7 @@ impl LightningNode {
         }
     }
 
+    /// Request some basic info about the node
     pub fn get_node_info(&self) -> Result<NodeInfo> {
         let node_state = self.sdk.node_info().map_to_runtime_error(
             RuntimeErrorCode::NodeUnavailable,
@@ -404,6 +472,11 @@ impl LightningNode {
         })
     }
 
+    /// When *receiving* payments, a new channel MAY be required. A fee will be charged to the user.
+    /// This does NOT impact *sending* payments.
+    /// Get information about the fee charged by the LSP for opening new channels
+    /// Please keep in mind that this method doesn't make any network calls. It simply retrieves
+    /// previously fetched values that are frequently updated by a background task.
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
         let exchange_rate = self.get_exchange_rate();
         let lsp_fee = self.task_manager.lock_unwrap().get_lsp_fee()?;
@@ -413,6 +486,14 @@ impl LightningNode {
         })
     }
 
+    /// Calculate the actual LSP fee for the given amount of an incoming payment.
+    /// If the already existing inbound capacity is enough, no new channel is required.
+    ///
+    /// Parameters:
+    ///    - `amount_sat` - amount in sats to compute LSP fee for
+    ///
+    /// For the returned fees to be guaranteed to be accurate, the returned lsp_fee_params must be
+    /// provided to [`LightningNode::create_invoice()`]
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
         let req = OpenChannelFeeRequest {
             amount_msat: amount_sat * 1_000,
@@ -432,6 +513,12 @@ impl LightningNode {
         })
     }
 
+    /// Get the current limits for the amount that can be transferred in a single payment.
+    /// Currently there are only limits for receiving payments.
+    /// The limits (partly) depend on the channel situation of the node, so it should be called
+    /// again every time the user is about to receive a payment.
+    /// The limits stay the same regardless of what amount wants to receive (= no changes while
+    /// he's typing the amount)
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
         // TODO: try to move this logic inside the SDK
         let lsp_min_fee_amount = self.query_lsp_fee()?.channel_minimum_fee;
@@ -443,6 +530,16 @@ impl LightningNode {
         ))
     }
 
+    /// Create an invoice to receive a payment with:
+    ///    - `amount_sat` - the smallest amount of sats required for the node to accept the incoming
+    /// payment (sender will have to pay fees on top of that amount)
+    ///    - `lsp_fee_params` - the params that will be used to determine the lsp fee.
+    /// Can be obtained from [`LightningNode::calculate_lsp_fee()`] to guarantee predicted fees
+    /// are the ones charged.
+    ///    - `description` - a description to be embedded into the created invoice
+    ///    - `metadata` - a metadata string that gets tied up to this payment. It can be used by
+    /// the user of this library to store data that is relevant to this payment. It is provided
+    /// together with the respective payment in [`LightningNode::get_latest_payments()`]
     pub fn create_invoice(
         &self,
         amount_sat: u64,
@@ -480,6 +577,10 @@ impl LightningNode {
         ))
     }
 
+    /// Decodes an invoice returning detailed information
+    ///
+    /// Parameters:
+    ///    - `invoice` - a BOLT-11 invoice (Mainnet invoices start with "lnbc")
     pub fn decode_invoice(
         &self,
         invoice: String,
@@ -497,10 +598,22 @@ impl LightningNode {
         }
     }
 
+    /// Get the max routing fee mode that will be employed to restrict the fees for paying a given amount in sats
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
         get_payment_max_routing_fee_mode(amount_sat, &self.get_exchange_rate())
     }
 
+    /// Start an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.
+    /// If successful, it doesn't mean that the payment itself was successful (funds received by the payee).
+    /// After this method returns, the consumer of this library will learn about a successful/failed payment through the
+    /// callbacks [`EventsCallback::payment_sent()`] and [`EventsCallback::payment_failed()`].
+    ///
+    /// Parameters:
+    ///    - `invoice` - a BOLT-11 invoice (normally starts with lnbc). The invoice must:
+    ///         - use the same network as the one this node operates on
+    ///         - have not expired
+    ///    - `metadata` - a metadata string that gets tied up to this payment. It can be used by the user of this library
+    ///  to store data that is relevant to this payment. It is provided together with the respective payment in [`LightningNode::get_latest_payments()`].
     pub fn pay_invoice(&self, invoice: String, _metadata: String) -> PayResult<()> {
         match self.rt.handle().block_on(parse(&invoice)) {
             Ok(InputType::Bolt11 { invoice }) => self
@@ -524,6 +637,12 @@ impl LightningNode {
         }
     }
 
+    /// Similar to [`LightningNode::pay_invoice`] with the difference that the passed in invoice
+    /// does not have any payment amount specified, and allows the caller of the method to
+    /// specify an amount instead.
+    ///
+    /// Additional Parameters:
+    ///    - `amount_sat` - amount in sats to be paid
     pub fn pay_open_invoice(
         &self,
         invoice: String,
@@ -552,6 +671,10 @@ impl LightningNode {
         }
     }
 
+    /// Get a list of the latest payments
+    ///
+    /// Parameters:
+    ///    - `number_of_payments` - the maximum number of payments that will be returned
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
         let list_payments_request = ListPaymentsRequest {
             filter: PaymentTypeFilter::All,
@@ -570,6 +693,10 @@ impl LightningNode {
             .collect::<Result<Vec<Payment>>>()
     }
 
+    /// Get a payment given its payment hash
+    ///
+    /// Parameters:
+    ///    - `hash` - hex representation of payment hash
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
         let breez_payment = self
             .rt
@@ -680,21 +807,43 @@ impl LightningNode {
         })
     }
 
+    /// Call the method when the app goes to foreground, such that the user can interact with it.
+    /// The library starts running the background tasks more frequently to improve user experience.
     pub fn foreground(&self) {
         self.task_manager
             .lock_unwrap()
             .restart(Self::get_foreground_periods());
     }
 
+    /// Call the method when the app goes to background, such that the user can not interact with it.
+    /// The library stops running some unnecessary tasks and runs necessary tasks less frequently.
+    /// It should save battery and internet traffic.
     pub fn background(&self) {
         self.task_manager.lock_unwrap().restart(BACKGROUND_PERIODS);
     }
 
+    /// List codes of supported fiat currencies.
+    /// Please keep in mind that this method doesn't make any network calls. It simply retrieves
+    /// previously fetched values that are frequently updated by a background task.
+    ///
+    /// The fetched list will be persisted across restarts to alleviate the consequences of a
+    /// slow or unresponsive exchange rate service.
+    /// The method will return an empty list if there is nothing persisted yet and
+    /// the values are not yet fetched from the service.
     pub fn list_currency_codes(&self) -> Vec<String> {
         let rates = self.task_manager.lock_unwrap().get_exchange_rates();
         rates.iter().map(|r| r.currency_code.clone()).collect()
     }
 
+    /// Get exchange rate on the BTC/default currency pair
+    /// Please keep in mind that this method doesn't make any network calls. It simply retrieves
+    /// previously fetched values that are frequently updated by a background task.
+    ///
+    /// The fetched exchange rates will be persisted across restarts to alleviate the consequences of a
+    /// slow or unresponsive exchange rate service.
+    ///
+    /// The return value is an optional to deal with the possibility
+    /// of no exchange rate values being known.
     pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
         let rates = self.task_manager.lock_unwrap().get_exchange_rates();
         let currency_code = self.user_preferences.lock_unwrap().fiat_currency.clone();
@@ -704,10 +853,16 @@ impl LightningNode {
             .cloned()
     }
 
+    /// Change the fiat currency (ISO 4217 currency code) - not all are supported
+    /// The method [`LightningNode::list_currency_codes()`] can used to list supported codes.
     pub fn change_fiat_currency(&self, fiat_currency: String) {
         self.user_preferences.lock_unwrap().fiat_currency = fiat_currency;
     }
 
+    /// Change the timezone config.
+    ///
+    /// Parameters:
+    ///    - `timezone_config` - the user's current timezone
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
         self.user_preferences.lock_unwrap().timezone_config = timezone_config;
     }
@@ -718,6 +873,14 @@ impl LightningNode {
             .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
     }
 
+    /// Register for fiat topups. Returns information that can be used by the user to transfer fiat
+    /// to the 3rd party exchange service. Once the 3rd party exchange receives funds, the user will
+    /// be able to withdraw sats using LNURL-w.
+    ///
+    /// Parameters:
+    ///      - `email` - this email will be used to send status information about different topups
+    ///      - `user_iban` - the user will send fiat from this iban
+    ///      - `user_currency` - the fiat currency that will be sent for exchange
     pub fn register_fiat_topup(
         &self,
         email: Option<String>,
@@ -744,12 +907,15 @@ impl LightningNode {
         Ok(topup_info)
     }
 
+    /// Hides the topup with the given id. Can be called on expired topups so that they stop being returned
+    /// by [`LightningNode::query_uncompleted_offers()`].
     pub fn hide_topup(&self, id: String) -> Result<()> {
         self.offer_manager
             .hide_topup(id)
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)
     }
 
+    /// Get a list of unclaimed fund offers
     pub fn query_uncompleted_offers(&self) -> Result<Vec<OfferInfo>> {
         let topup_infos = self
             .offer_manager
@@ -762,6 +928,11 @@ impl LightningNode {
             .collect())
     }
 
+    /// Request to collect the offer (e.g. a Pocket topup).
+    /// A payment hash will be returned to track incoming payment.
+    /// The offer collection might be considered successful once
+    /// [`EventsCallback::payment_received()`] is called,
+    /// or the [`PaymentState`] of the respective payment becomes [`PaymentState::Succeeded`].
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
         let lnurlw_data = match self.rt.handle().block_on(parse(&offer.lnurlw)) {
             Ok(InputType::LnUrlWithdraw { data }) => data,
@@ -792,6 +963,7 @@ impl LightningNode {
         Ok(hash)
     }
 
+    /// Registers a new notification token. If a token has already been registered, it will be updated.
     pub fn register_notification_token(
         &self,
         notification_token: String,
@@ -808,10 +980,24 @@ impl LightningNode {
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)
     }
 
+    /// Get the wallet UUID v5 from the wallet pubkey
+    ///
+    /// Returns an optional value. If the auth flow has never succeeded in this Auth instance,
+    /// the wallet UUID v5 is unknown and None is returned. Otherwise, this method will always
+    /// return the wallet UUID v5.
+    ///
+    /// This method does not require network access
     pub fn get_wallet_pubkey_id(&self) -> Option<String> {
         self.auth.get_wallet_pubkey_id()
     }
 
+    /// Get the payment UUID v5 from the payment hash
+    ///
+    /// Returns a UUID v5 derived from the payment hash. This will always return the same output
+    /// given the same input.
+    ///
+    /// Parameters:
+    ///     - `payment_hash` - a payment hash represented in hex
     pub fn get_payment_uuid(&self, payment_hash: String) -> Result<String> {
         get_payment_uuid(payment_hash)
     }
@@ -825,16 +1011,28 @@ impl LightningNode {
             .map_to_permanent_failure("Failed to persist payment info")
     }
 
+    /// Query the current recommended onchain fee rate
+    /// This is useful to obtain a fee rate to be used for [`LightningNode::sweep()`]
     pub fn query_onchain_fee(&self) -> Result<u32> {
         let recommended_fees = self
             .rt
             .handle()
             .block_on(self.sdk.recommended_fees())
-            .map_to_runtime_error(NodeUnavailable, "Couldn't fetch recommended fees")?;
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Couldn't fetch recommended fees",
+            )?;
 
         Ok(recommended_fees.half_hour_fee as u32)
     }
 
+    /// Sweeps all available onchain funds on the specified onchain address.
+    ///
+    /// Parameters:
+    ///      - `address` - the funds will be drained to this address
+    ///      - `onchain_fee` - the fees that should be applied for the transaction. The recommended on-chain fee can be queried using [`LightningNode::query_onchain_fee()`]
+    ///
+    /// Returns the txid of the sweeping transaction.
     pub fn sweep(&self, address: String, onchain_fee: u32) -> Result<String> {
         Ok(self
             .rt
@@ -843,11 +1041,14 @@ impl LightningNode {
                 to_address: address,
                 fee_rate_sats_per_vbyte: onchain_fee,
             }))
-            .map_to_runtime_error(NodeUnavailable, "Failed to drain funds")?
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to drain funds")?
             .txid
             .to_hex())
     }
 
+    /// Prints additional debug information to the logs.
+    ///
+    /// Throws an error in case that the necessary information can't be received.
     pub fn log_debug_info(&self) -> Result<()> {
         let peers = self
             .rt
@@ -904,6 +1105,8 @@ fn to_offer(topup_info: TopupInfo, current_rate: &Option<ExchangeRate>) -> Offer
     }
 }
 
+/// Accept lipa's terms and conditions. Should be called before instantiating a [`LightningNode`]
+/// for the first time.
 pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) -> Result<()> {
     enable_backtrace();
     let environment = Environment::load(environment);
@@ -924,6 +1127,7 @@ fn derive_secret_from_mnemonic(mnemonic: Mnemonic, passphrase: String) -> Secret
     }
 }
 
+/// Generate a new mnemonic with an optional passphrase. Provide an empty string to use no passphrase.
 pub fn generate_secret(passphrase: String) -> std::result::Result<Secret, SimpleError> {
     let entropy = random::generate_random_bytes::<U32>().map_err(|e| SimpleError::Simple {
         msg: format!("Failed to generate random bytes: {e}"),
@@ -935,6 +1139,7 @@ pub fn generate_secret(passphrase: String) -> std::result::Result<Secret, Simple
     Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
 }
 
+/// Generate a Secret object (containing the seed). Provide an empty string to use no passphrase.
 pub fn mnemonic_to_secret(
     mnemonic_string: Vec<String>,
     passphrase: String,
@@ -943,6 +1148,8 @@ pub fn mnemonic_to_secret(
     Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
 }
 
+/// Return a list of valid BIP-39 English words starting with the prefix.
+/// Calling this function with empty prefix will return the full list of BIP-39 words.
 pub fn words_by_prefix(prefix: String) -> Vec<String> {
     Language::English
         .words_by_prefix(&prefix)
@@ -968,7 +1175,7 @@ fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
     .map_to_permanent_failure("Failed to build auth client")
 }
 
-pub fn derive_key_pair_hex(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair> {
+fn derive_key_pair_hex(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair> {
     let master_xpriv = ExtendedPrivKey::new_master(Network::Bitcoin, seed)
         .map_to_invalid_input("Failed to get xpriv from from seed")?;
 
