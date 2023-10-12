@@ -541,7 +541,7 @@ dependencies = [
 [[package]]
 name = "breez-sdk-core"
 version = "0.2.3"
-source = "git+https://github.com/breez/breez-sdk?tag=0.2.5#5dce7720ec66d3140ad015c0fc99ee439e5d97bc"
+source = "git+https://github.com/breez/breez-sdk?branch=savage-error-codes#0f6b4fb6bd0f3a46a3f1e7fb511fe10b0778c200"
 dependencies = [
  "aes",
  "anyhow",
@@ -566,6 +566,7 @@ dependencies = [
  "prost",
  "querystring",
  "rand",
+ "regex",
  "reqwest",
  "ripemd",
  "rusqlite",

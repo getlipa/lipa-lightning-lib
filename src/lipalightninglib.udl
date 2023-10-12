@@ -26,10 +26,10 @@ interface LightningNode {
 
     MaxRoutingFeeMode get_payment_max_routing_fee_mode(u64 amount_sat);
 
-    [Throws=PayError]
+    [Throws=LnError]
     void pay_invoice(string invoice, string metadata);
 
-    [Throws=PayError]
+    [Throws=LnError]
     void pay_open_invoice(string invoice, u64 amount_sat, string metadata);
 
     [Throws=LnError]
@@ -337,23 +337,16 @@ interface DecodeInvoiceError {
 [Error]
 interface LnError {
     InvalidInput(string msg);
-    RuntimeError(RuntimeErrorCode code, string msg);
+    RuntimeError(ErrorCode code, string msg);
     PermanentFailure(string msg);
 };
 
-enum RuntimeErrorCode {
+enum ServiceErrorCode {
     "AuthServiceUnavailable",
     "OfferServiceUnavailable",
     "LspServiceUnavailable",
     "NodeUnavailable",
     "FailedFundMigration",
-};
-
-[Error]
-interface PayError {
-    InvalidInput(string msg);
-    RuntimeError(PayErrorCode code, string msg);
-    PermanentFailure(string msg);
 };
 
 enum PayErrorCode {
@@ -365,4 +358,10 @@ enum PayErrorCode {
     "RetriesExhausted",
     "NoMoreRoutes",
     "UnexpectedError",
+};
+
+[Enum]
+interface ErrorCode {
+    Pay(PayErrorCode code);
+    Service(ServiceErrorCode code);
 };

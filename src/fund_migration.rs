@@ -1,6 +1,6 @@
 use crate::async_runtime::Handle;
 use crate::data_store::DataStore;
-use crate::errors::{Result, RuntimeErrorCode};
+use crate::errors::{ErrorCode, Result, ServiceErrorCode};
 use crate::locker::Locker;
 
 use bitcoin::hashes::hex::ToHex;
@@ -50,9 +50,9 @@ pub(crate) fn migrate_funds(
 
     let token = auth
         .query_token()
-        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
+        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))?;
     let client = build_client(Some(&token))
-        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
+        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))?;
 
     let balance_msat = fetch_legacy_balance(&client, backend_url, public_key.clone())? * 1_000;
     if balance_msat == 0 {
@@ -67,7 +67,7 @@ pub(crate) fn migrate_funds(
         .append_funds_migration_status(MigrationStatus::Pending)?;
 
     let lsp_info = rt.block_on(sdk.lsp_info()).map_to_runtime_error(
-        RuntimeErrorCode::LspServiceUnavailable,
+        ErrorCode::from(ServiceErrorCode::LspServiceUnavailable),
         "Failed to get LSP info",
     )?;
     let lsp_fee = lsp_info
@@ -86,7 +86,10 @@ pub(crate) fn migrate_funds(
             expiry: None,
             cltv: None,
         }))
-        .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to issue invoice")?;
+        .map_to_runtime_error(
+            ErrorCode::from(ServiceErrorCode::NodeUnavailable),
+            "Failed to issue invoice",
+        )?;
     let invoice = invoice.ln_invoice.bolt11;
     let signature = sign_message(&private_key, &invoice);
 
@@ -108,11 +111,11 @@ fn fetch_legacy_balance(client: &Client, backend_url: &String, public_key: Strin
         node_pub_key: Some(public_key),
     };
     let data = post_blocking::<MigrationBalance>(client, backend_url, variables)
-        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
+        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))?;
     let balance_sat = data
         .migration_balance
         .ok_or_runtime_error(
-            RuntimeErrorCode::AuthServiceUnavailable,
+            ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable),
             "Empty balance field",
         )?
         .balance_amount_sat;
@@ -132,7 +135,7 @@ fn payout(
         ldk_node_pub_key: Some(public_key),
     };
     let _ = post_blocking::<MigrateFunds>(client, backend_url, variables)
-        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
+        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))?;
     Ok(())
 }
 

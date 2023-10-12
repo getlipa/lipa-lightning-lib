@@ -17,7 +17,7 @@ honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.12.0" }
 graphql = { git = "https://github.com/getlipa/wild", tag = "v1.12.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
 
-breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.5" }
+breez-sdk-core = { git = "https://github.com/breez/breez-sdk", branch = "savage-error-codes" }
 
 bip39 = "2.0.0"
 bitcoin = "0.29.2"

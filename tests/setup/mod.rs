@@ -2,12 +2,12 @@ use crate::print_events_handler::PrintEventsHandler;
 use crate::wait_for;
 
 use uniffi_lipalightninglib::{mnemonic_to_secret, Config, TzConfig};
-use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
+use uniffi_lipalightninglib::{ErrorCode, LightningNode};
 
 use std::fs;
 use std::string::ToString;
 
-type Result<T> = std::result::Result<T, perro::Error<RuntimeErrorCode>>;
+type Result<T> = std::result::Result<T, perro::Error<ErrorCode>>;
 
 const LOCAL_PERSISTENCE_PATH: &str = ".3l_local_test";
 

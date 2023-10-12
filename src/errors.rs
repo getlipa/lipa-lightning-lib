@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 
 /// A code that specifies the RuntimeError that occurred
 #[derive(Debug, PartialEq, Eq)]
-pub enum RuntimeErrorCode {
+pub enum ServiceErrorCode {
     // 3L runtime errors
     /// The backend auth service is unavailable.
     AuthServiceUnavailable,
@@ -20,13 +20,13 @@ pub enum RuntimeErrorCode {
     FailedFundMigration,
 }
 
-impl Display for RuntimeErrorCode {
+impl Display for ServiceErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
     }
 }
 
-pub type Error = perro::Error<RuntimeErrorCode>;
+pub type Error = perro::Error<ErrorCode>;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// A code that specifies the PayError that occurred.
@@ -67,8 +67,36 @@ impl Display for PayErrorCode {
     }
 }
 
-pub type PayError = perro::Error<PayErrorCode>;
-pub type PayResult<T> = std::result::Result<T, PayError>;
+#[derive(Debug, PartialEq)]
+pub enum ErrorCode {
+    Pay { code: PayErrorCode },
+    Service { code: ServiceErrorCode },
+}
+
+impl From<PayErrorCode> for ErrorCode {
+    fn from(code: PayErrorCode) -> ErrorCode {
+        ErrorCode::Pay { code }
+    }
+}
+
+impl From<ServiceErrorCode> for ErrorCode {
+    fn from(code: ServiceErrorCode) -> ErrorCode {
+        ErrorCode::Service { code }
+    }
+}
+
+impl Display for ErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ErrorCode::Pay { code } => {
+                write!(f, "PayError({code})")
+            }
+            ErrorCode::Service { code } => {
+                write!(f, "ServiceError({code})")
+            }
+        }
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum DecodeInvoiceError {

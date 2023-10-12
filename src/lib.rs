@@ -38,8 +38,8 @@ pub use crate::config::{Config, TzConfig, TzTime};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 use crate::errors::{to_mnemonic_error, Error, SimpleError};
-pub use crate::errors::{DecodeInvoiceError, MnemonicError, PayError, PayErrorCode, PayResult};
-pub use crate::errors::{Error as LnError, Result, RuntimeErrorCode};
+pub use crate::errors::{DecodeInvoiceError, ErrorCode, MnemonicError, PayErrorCode};
+pub use crate::errors::{Error as LnError, Result, ServiceErrorCode};
 pub use crate::exchange_rate_provider::ExchangeRate;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::fiat_topup::TopupCurrency;
@@ -72,7 +72,6 @@ use iban::Iban;
 use log::{info, trace};
 use logger::init_logger_once;
 use num_enum::TryFromPrimitive;
-use perro::Error::RuntimeError;
 use perro::{
     invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
@@ -354,7 +353,7 @@ impl LightningNode {
                 Box::new(LipaEventListener { events_callback }),
             ))
             .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
+                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
                 "Failed to initialize a breez sdk instance",
             )?;
 
@@ -363,20 +362,21 @@ impl LightningNode {
                 .lsp_id()
                 .await
                 .map_to_runtime_error(
-                    RuntimeErrorCode::NodeUnavailable,
+                    ErrorCode::from(ServiceErrorCode::NodeUnavailable),
                     "Failed to get current lsp id",
                 )?
                 .is_none()
             {
                 let lsps = sdk.list_lsps().await.map_to_runtime_error(
-                    RuntimeErrorCode::NodeUnavailable,
+                    ErrorCode::from(ServiceErrorCode::NodeUnavailable),
                     "Failed to list lsps",
                 )?;
-                let lsp = lsps
-                    .first()
-                    .ok_or_runtime_error(RuntimeErrorCode::NodeUnavailable, "No lsp available")?;
+                let lsp = lsps.first().ok_or_runtime_error(
+                    ErrorCode::from(ServiceErrorCode::NodeUnavailable),
+                    "No lsp available",
+                )?;
                 sdk.connect_lsp(lsp.id.clone()).await.map_to_runtime_error(
-                    RuntimeErrorCode::NodeUnavailable,
+                    ErrorCode::from(ServiceErrorCode::NodeUnavailable),
                     "Failed to connect to lsp",
                 )?;
             }
@@ -421,7 +421,7 @@ impl LightningNode {
             auth_clone,
             &environment.backend_url,
         )
-        .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
+        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::FailedFundMigration))?;
 
         Ok(LightningNode {
             user_preferences,
@@ -455,7 +455,7 @@ impl LightningNode {
     /// Request some basic info about the node
     pub fn get_node_info(&self) -> Result<NodeInfo> {
         let node_state = self.sdk.node_info().map_to_runtime_error(
-            RuntimeErrorCode::NodeUnavailable,
+            ErrorCode::from(ServiceErrorCode::NodeUnavailable),
             "Failed to read node info",
         )?;
         let rate = self.get_exchange_rate();
@@ -504,7 +504,7 @@ impl LightningNode {
             .handle()
             .block_on(self.sdk.open_channel_fee(req))
             .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
+                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
                 "Failed to compute opening channel fee",
             )?;
         Ok(CalculateLspFeeResponse {
@@ -563,7 +563,7 @@ impl LightningNode {
                     }),
             )
             .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
+                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
                 "Failed to create an invoice",
             )?;
 
@@ -614,7 +614,7 @@ impl LightningNode {
     ///         - have not expired
     ///    - `metadata` - a metadata string that gets tied up to this payment. It can be used by the user of this library
     ///  to store data that is relevant to this payment. It is provided together with the respective payment in [`LightningNode::get_latest_payments()`].
-    pub fn pay_invoice(&self, invoice: String, _metadata: String) -> PayResult<()> {
+    pub fn pay_invoice(&self, invoice: String, _metadata: String) -> Result<()> {
         match self.rt.handle().block_on(parse(&invoice)) {
             Ok(InputType::Bolt11 { invoice }) => self
                 .store_payment_info(&invoice.payment_hash, None)
@@ -630,10 +630,12 @@ impl LightningNode {
         {
             Ok(_) => Ok(()),
             // TODO: properly handle errors (requires changing either ours or the SDK's error model)
-            Err(e) => Err(RuntimeError {
-                code: PayErrorCode::UnexpectedError,
-                msg: format!("Failed to start paying invoice: {e}"),
-            }),
+            Err(e) => Err(runtime_error(
+                ErrorCode::Pay {
+                    code: PayErrorCode::UnexpectedError,
+                },
+                format!("Failed to start paying invoice: {e}"),
+            )),
         }
     }
 
@@ -648,7 +650,7 @@ impl LightningNode {
         invoice: String,
         amount_sat: u64,
         _metadata: String,
-    ) -> PayResult<()> {
+    ) -> Result<()> {
         match self.rt.handle().block_on(parse(&invoice)) {
             Ok(InputType::Bolt11 { invoice }) => self
                 .store_payment_info(&invoice.payment_hash, None)
@@ -664,10 +666,12 @@ impl LightningNode {
         {
             Ok(_) => Ok(()),
             // TODO: properly handle errors (requires changing either ours or the SDK's error model)
-            Err(e) => Err(RuntimeError {
-                code: PayErrorCode::UnexpectedError,
-                msg: format!("Failed to start paying invoice: {e}"),
-            }),
+            Err(e) => Err(runtime_error(
+                ErrorCode::Pay {
+                    code: PayErrorCode::UnexpectedError,
+                },
+                format!("Failed to start paying invoice: {e}"),
+            )),
         }
     }
 
@@ -685,7 +689,10 @@ impl LightningNode {
         self.rt
             .handle()
             .block_on(self.sdk.list_payments(list_payments_request))
-            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
+            .map_to_runtime_error(
+                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
+                "Failed to list payments",
+            )?
             .into_iter()
             .filter(|p| p.payment_type != breez_sdk_core::PaymentType::ClosedChannel)
             .take(number_of_payments as usize)
@@ -703,7 +710,7 @@ impl LightningNode {
             .handle()
             .block_on(self.sdk.payment_by_hash(hash))
             .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
+                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
                 "Failed to get payment by hash",
             )?
             .ok_or_invalid_input("Invalid hash: no payment with provided hash was found")?;
@@ -870,7 +877,7 @@ impl LightningNode {
     pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
         self.auth
             .accept_custom_terms_and_conditions(CustomTermsAndConditions::Pocket)
-            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
+            .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))
     }
 
     /// Register for fiat topups. Returns information that can be used by the user to transfer fiat
@@ -902,7 +909,7 @@ impl LightningNode {
 
         self.offer_manager
             .register_topup(topup_info.order_id.clone(), email)
-            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
+            .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable))?;
 
         Ok(topup_info)
     }
@@ -912,7 +919,7 @@ impl LightningNode {
     pub fn hide_topup(&self, id: String) -> Result<()> {
         self.offer_manager
             .hide_topup(id)
-            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)
+            .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable))
     }
 
     /// Get a list of unclaimed fund offers
@@ -920,7 +927,7 @@ impl LightningNode {
         let topup_infos = self
             .offer_manager
             .query_uncompleted_topups()
-            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
+            .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable))?;
         let rate = self.get_exchange_rate();
         Ok(topup_infos
             .into_iter()
@@ -946,13 +953,13 @@ impl LightningNode {
                     .lnurl_withdraw(lnurlw_data, offer.amount.sats, None),
             )
             .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
+                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
                 "Failed to withdraw offer",
             )? {
             LnUrlWithdrawResult::Ok { data } => data.invoice.payment_hash,
             LnUrlWithdrawResult::ErrorStatus { data } => {
                 return Err(runtime_error(
-                    RuntimeErrorCode::OfferServiceUnavailable,
+                    ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable),
                     format!("Failed to withdraw offer due to: {}", data.reason),
                 ))
             }
@@ -977,7 +984,7 @@ impl LightningNode {
 
         self.offer_manager
             .register_notification_token(notification_token, language, country)
-            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)
+            .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable))
     }
 
     /// Get the wallet UUID v5 from the wallet pubkey
@@ -1019,7 +1026,7 @@ impl LightningNode {
             .handle()
             .block_on(self.sdk.recommended_fees())
             .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
+                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
                 "Couldn't fetch recommended fees",
             )?;
 
@@ -1041,7 +1048,10 @@ impl LightningNode {
                 to_address: address,
                 fee_rate_sats_per_vbyte: onchain_fee,
             }))
-            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to drain funds")?
+            .map_to_runtime_error(
+                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
+                "Failed to drain funds",
+            )?
             .txid
             .to_hex())
     }
@@ -1055,7 +1065,7 @@ impl LightningNode {
             .handle()
             .block_on(self.sdk.execute_dev_command("listpeers".to_string()))
             .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
+                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
                 "Couldn't execute `listpeers` command",
             )?;
 
@@ -1064,7 +1074,7 @@ impl LightningNode {
             .handle()
             .block_on(self.sdk.execute_dev_command("listpeerchannels".to_string()))
             .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
+                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
                 "Couldn't execute `listpeerchannels` command",
             )?;
 
@@ -1113,7 +1123,7 @@ pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) 
     let seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions()
-        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
+        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))
 }
 
 fn derive_secret_from_mnemonic(mnemonic: Mnemonic, passphrase: String) -> Secret {
@@ -1161,7 +1171,7 @@ pub fn words_by_prefix(prefix: String) -> Vec<String> {
 fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
     let auth_keys = derive_key_pair_hex(seed, BACKEND_AUTH_DERIVATION_PATH)
         .lift_invalid_input()
-        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
+        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))?;
     let auth_keys = KeyPair {
         secret_key: auth_keys.secret_key,
         public_key: auth_keys.public_key,

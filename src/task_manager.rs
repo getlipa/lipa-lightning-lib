@@ -1,9 +1,9 @@
 use crate::async_runtime::{Handle, RepeatingTaskHandle};
 use crate::data_store::DataStore;
-use crate::errors::Result;
+use crate::errors::{ErrorCode, Result};
 use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProvider};
 use crate::locker::Locker;
-use crate::RuntimeErrorCode;
+use crate::ServiceErrorCode;
 
 use breez_sdk_core::{BreezServices, OpeningFeeParams};
 use log::{error, trace};
@@ -54,7 +54,7 @@ impl TaskManager {
 
     pub fn get_lsp_fee(&self) -> Result<OpeningFeeParams> {
         self.lsp_fee.lock_unwrap().clone().ok_or_runtime_error(
-            RuntimeErrorCode::LspServiceUnavailable,
+            ErrorCode::from(ServiceErrorCode::LspServiceUnavailable),
             "Cached LSP fee isn't available",
         )
     }
