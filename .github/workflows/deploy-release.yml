@@ -343,3 +343,56 @@ jobs:
       - name: Trigger JitPack build
         run: |
           curl -s -m 30 https://jitpack.io/com/github/getlipa/lipa-lightning-lib-android/${{ env.RELEASE_VERSION }} || true
+
+  build-docs:
+    name: build-docs
+    needs:
+      - deploy-ios
+      - deploy-android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Config cargo
+        run: echo -e "$CARGO_CONFIG_TOML_BREEZ" > .cargo/config.toml
+        env:
+          CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.67.0
+          profile: minimal
+          override: true
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Docs
+        run: cargo doc --no-deps
+      # Set the right file permissions, based on https://github.com/actions/upload-pages-artifact#file-permissions
+      - name: Fix file permissions
+        shell: sh
+        run: |
+          chmod -c -R +rX "./libs/target/doc/" | while read line; do
+            echo "::warning title=Invalid file permissions automatically fixed::$line"
+          done
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: './target/doc'
+
+  deploy-docs:
+    name: deploy-docs
+    needs: build-docs
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
