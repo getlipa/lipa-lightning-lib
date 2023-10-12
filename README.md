@@ -50,8 +50,8 @@ To start a fresh node, delete the `.3l_node_{ENVIRONMENT_CODE}` directory.
 
 ***
 # Interface documentation
-The consumer interface is most aptly documented in the interface file
-[`src/lipalightninglib.udl`](src/lipalightninglib.udl).
+The rust interface of the latest released version is documented [here](https://getlipa.github.io/lipa-lightning-lib/uniffi_lipalightninglib/).
+
 For the language-specific calls, refer to the respective language bindings:
  - [Kotlin](https://github.com/getlipa/lipa-lightning-lib-android)
  - [Swift](https://github.com/getlipa/lipa-lightning-lib-swift)
