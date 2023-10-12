@@ -1,8 +1,10 @@
 use crate::Network;
+use breez_sdk_core::error::{LspErrorCode, PaymentErrorCode, SdkError, SdkResult};
 use num_enum::TryFromPrimitive;
+use perro::{invalid_input, permanent_failure, runtime_error};
 use std::fmt::{Display, Formatter};
 
-/// A code that specifies the RuntimeError that occurred
+/// A code that specifies a service-related runtime error that occurred
 #[derive(Debug, PartialEq, Eq)]
 pub enum ServiceErrorCode {
     // 3L runtime errors
@@ -29,7 +31,76 @@ impl Display for ServiceErrorCode {
 pub type Error = perro::Error<ErrorCode>;
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// A code that specifies the PayError that occurred.
+pub(crate) trait MapTo3lError<T> {
+    fn map_to_3l_error<M: ToString>(self, msg: M) -> Result<T>;
+}
+
+impl<T> MapTo3lError<T> for SdkResult<T> {
+    fn map_to_3l_error<M: ToString>(self, msg: M) -> Result<T> {
+        self.map_err(|e| match e {
+            SdkError::LspError { code, err } => match code {
+                LspErrorCode::ChannelOpeningNotAvailable => runtime_error(
+                    ErrorCode::from(ServiceErrorCode::LspServiceUnavailable),
+                    format!("{}: {}", msg.to_string(), err),
+                ),
+                LspErrorCode::ConnectionFailed => runtime_error(
+                    ErrorCode::from(ServiceErrorCode::LspServiceUnavailable),
+                    format!("{}: {}", msg.to_string(), err),
+                ),
+                LspErrorCode::LspNotFound => runtime_error(
+                    ErrorCode::from(ServiceErrorCode::LspServiceUnavailable),
+                    format!("{}: {}", msg.to_string(), err),
+                ),
+            },
+            SdkError::OnchainError { err, .. } =>
+            // TODO: map onchain errors. As soon as `sweep()` starts getting used, these errors will need to be mapped
+            {
+                permanent_failure(format!(
+                    "Onchain error when no onchain funcionality was used: {}",
+                    err
+                ))
+            }
+            SdkError::PaymentError { code, err } => match code {
+                PaymentErrorCode::AlreadyPaid => runtime_error(
+                    ErrorCode::from(PayErrorCode::AlreadyUsedInvoice),
+                    format!("{}: {}", msg.to_string(), err),
+                ),
+                PaymentErrorCode::InvalidAmount => {
+                    invalid_input(format!("{}: {}", msg.to_string(), err))
+                }
+                PaymentErrorCode::InvoiceExpired => runtime_error(
+                    ErrorCode::from(PayErrorCode::InvoiceExpired),
+                    format!("{}: {}", msg.to_string(), err),
+                ),
+                PaymentErrorCode::PaymentFailed => runtime_error(
+                    ErrorCode::from(PayErrorCode::UnexpectedError),
+                    format!("{}: {}", msg.to_string(), err),
+                ),
+                PaymentErrorCode::PaymentTimeout => runtime_error(
+                    ErrorCode::from(PayErrorCode::RetriesExhausted),
+                    format!("{}: {}", msg.to_string(), err),
+                ),
+                PaymentErrorCode::RouteNotFound => runtime_error(
+                    ErrorCode::from(PayErrorCode::NoRouteFound),
+                    format!("{}: {}", msg.to_string(), err),
+                ),
+                PaymentErrorCode::RouteTooExpensive => runtime_error(
+                    ErrorCode::from(PayErrorCode::RouteTooExpensive),
+                    format!("{}: {}", msg.to_string(), err),
+                ),
+            },
+            SdkError::ServiceError { err, .. } => runtime_error(
+                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
+                format!("{}: {}", msg.to_string(), err),
+            ),
+            SdkError::ValueError { err, .. } => {
+                invalid_input(format!("{}: {}", msg.to_string(), err))
+            }
+        })
+    }
+}
+
+/// A code that specifies the payment-related runtime error that occurred.
 #[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
 pub enum PayErrorCode {
@@ -39,9 +110,6 @@ pub enum PayErrorCode {
     /// An already recognized invoice tried to be paid. Either a payment attempt is in progress or the invoice has already been paid.
     /// There's no point in retrying this payment
     AlreadyUsedInvoice,
-    /// A locally issued invoice tried to be paid. Self-payments are not supported.
-    /// There's no point in retrying this payment
-    PayingToSelf,
     /// Not a single route was found.
     /// There's no point in retrying this payment
     NoRouteFound,
@@ -54,10 +122,15 @@ pub enum PayErrorCode {
     /// All possible routes failed.
     /// It might make sense to retry the payment.
     NoMoreRoutes,
-    /// An unexpected error occurred. This likely is a result of a bug within 3L/LDK and should be reported to lipa.
+    /// Indicates there is at least one available route but
+    /// it wasn't tried due to the routing fees being above the configured limit
     ///
-    /// *WARNING* At the moment, all payment failures will return this code. Once Breez SDK reworks their error model, we'll
-    /// be able to provide much more specific error codes, such as the other ones that are part of this enum.
+    /// *WARNING*: At the moment, this should be treated in the same way as
+    /// [`PayErrorCode::NoMoreRoutes`] because there's no way for the user to
+    /// change the max routing fees. Later, when that feature is available,
+    /// showing a recommendation to increase the max fees is advised.
+    RouteTooExpensive,
+    /// The payment failed for an unknown reason
     UnexpectedError,
 }
 
@@ -67,6 +140,7 @@ impl Display for PayErrorCode {
     }
 }
 
+/// A code that specifies the runtime error that occurred
 #[derive(Debug, PartialEq)]
 pub enum ErrorCode {
     Pay { code: PayErrorCode },

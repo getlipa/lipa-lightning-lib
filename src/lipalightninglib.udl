@@ -352,11 +352,11 @@ enum ServiceErrorCode {
 enum PayErrorCode {
     "InvoiceExpired",
     "AlreadyUsedInvoice",
-    "PayingToSelf",
     "NoRouteFound",
     "RecipientRejected",
     "RetriesExhausted",
     "NoMoreRoutes",
+    "RouteTooExpensive",
     "UnexpectedError",
 };
 

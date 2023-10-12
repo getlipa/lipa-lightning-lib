@@ -37,7 +37,7 @@ pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
-use crate::errors::{to_mnemonic_error, Error, SimpleError};
+use crate::errors::{to_mnemonic_error, Error, MapTo3lError, SimpleError};
 pub use crate::errors::{DecodeInvoiceError, ErrorCode, MnemonicError, PayErrorCode};
 pub use crate::errors::{Error as LnError, Result, ServiceErrorCode};
 pub use crate::exchange_rate_provider::ExchangeRate;
@@ -352,33 +352,26 @@ impl LightningNode {
                 config.seed.clone(),
                 Box::new(LipaEventListener { events_callback }),
             ))
-            .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                "Failed to initialize a breez sdk instance",
-            )?;
+            .map_to_3l_error("Failed to initialize a breez sdk instance")?;
 
         rt.handle().block_on(async {
             if sdk
                 .lsp_id()
                 .await
-                .map_to_runtime_error(
-                    ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                    "Failed to get current lsp id",
-                )?
+                .map_to_3l_error("Failed to get current lsp id")?
                 .is_none()
             {
-                let lsps = sdk.list_lsps().await.map_to_runtime_error(
-                    ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                    "Failed to list lsps",
-                )?;
+                let lsps = sdk
+                    .list_lsps()
+                    .await
+                    .map_to_3l_error("Failed to list lsps")?;
                 let lsp = lsps.first().ok_or_runtime_error(
-                    ErrorCode::from(ServiceErrorCode::NodeUnavailable),
+                    ErrorCode::from(ServiceErrorCode::LspServiceUnavailable),
                     "No lsp available",
                 )?;
-                sdk.connect_lsp(lsp.id.clone()).await.map_to_runtime_error(
-                    ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                    "Failed to connect to lsp",
-                )?;
+                sdk.connect_lsp(lsp.id.clone())
+                    .await
+                    .map_to_3l_error("Failed to connect to lsp")?;
             }
             Ok::<(), Error>(())
         })?;
@@ -454,10 +447,10 @@ impl LightningNode {
 
     /// Request some basic info about the node
     pub fn get_node_info(&self) -> Result<NodeInfo> {
-        let node_state = self.sdk.node_info().map_to_runtime_error(
-            ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-            "Failed to read node info",
-        )?;
+        let node_state = self
+            .sdk
+            .node_info()
+            .map_to_3l_error("Failed to read node info")?;
         let rate = self.get_exchange_rate();
 
         Ok(NodeInfo {
@@ -503,10 +496,7 @@ impl LightningNode {
             .rt
             .handle()
             .block_on(self.sdk.open_channel_fee(req))
-            .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                "Failed to compute opening channel fee",
-            )?;
+            .map_to_3l_error("Failed to compute opening channel fee")?;
         Ok(CalculateLspFeeResponse {
             lsp_fee: res.fee_msat.to_amount_up(&self.get_exchange_rate()),
             lsp_fee_params: res.used_fee_params,
@@ -562,10 +552,7 @@ impl LightningNode {
                         cltv: None,
                     }),
             )
-            .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                "Failed to create an invoice",
-            )?;
+            .map_to_3l_error("Failed to create an invoice")?;
 
         self.store_payment_info(&response.ln_invoice.payment_hash, None)
             .map_to_permanent_failure("Failed to persist payment info")?;
@@ -623,20 +610,11 @@ impl LightningNode {
         }?;
         // TODO: persist metadata
 
-        match self
-            .rt
+        self.rt
             .handle()
             .block_on(self.sdk.send_payment(invoice, None))
-        {
-            Ok(_) => Ok(()),
-            // TODO: properly handle errors (requires changing either ours or the SDK's error model)
-            Err(e) => Err(runtime_error(
-                ErrorCode::Pay {
-                    code: PayErrorCode::UnexpectedError,
-                },
-                format!("Failed to start paying invoice: {e}"),
-            )),
-        }
+            .map_to_3l_error("Failed to start paying invoice")?;
+        Ok(())
     }
 
     /// Similar to [`LightningNode::pay_invoice`] with the difference that the passed in invoice
@@ -659,20 +637,11 @@ impl LightningNode {
         }?;
         // TODO: persist metadata
 
-        match self
-            .rt
+        self.rt
             .handle()
             .block_on(self.sdk.send_payment(invoice, Some(amount_sat)))
-        {
-            Ok(_) => Ok(()),
-            // TODO: properly handle errors (requires changing either ours or the SDK's error model)
-            Err(e) => Err(runtime_error(
-                ErrorCode::Pay {
-                    code: PayErrorCode::UnexpectedError,
-                },
-                format!("Failed to start paying invoice: {e}"),
-            )),
-        }
+            .map_to_3l_error("Failed to start paying invoice")?;
+        Ok(())
     }
 
     /// Get a list of the latest payments
@@ -689,10 +658,7 @@ impl LightningNode {
         self.rt
             .handle()
             .block_on(self.sdk.list_payments(list_payments_request))
-            .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                "Failed to list payments",
-            )?
+            .map_to_3l_error("Failed to list payments")?
             .into_iter()
             .filter(|p| p.payment_type != breez_sdk_core::PaymentType::ClosedChannel)
             .take(number_of_payments as usize)
@@ -709,10 +675,7 @@ impl LightningNode {
             .rt
             .handle()
             .block_on(self.sdk.payment_by_hash(hash))
-            .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                "Failed to get payment by hash",
-            )?
+            .map_to_3l_error("Failed to get payment by hash")?
             .ok_or_invalid_input("Invalid hash: no payment with provided hash was found")?;
 
         self.payment_from_breez_payment(breez_payment)
@@ -952,10 +915,8 @@ impl LightningNode {
                 self.sdk
                     .lnurl_withdraw(lnurlw_data, offer.amount.sats, None),
             )
-            .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                "Failed to withdraw offer",
-            )? {
+            .map_to_3l_error("Failed to withdraw offer")?
+        {
             LnUrlWithdrawResult::Ok { data } => data.invoice.payment_hash,
             LnUrlWithdrawResult::ErrorStatus { data } => {
                 return Err(runtime_error(
@@ -1025,10 +986,7 @@ impl LightningNode {
             .rt
             .handle()
             .block_on(self.sdk.recommended_fees())
-            .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                "Couldn't fetch recommended fees",
-            )?;
+            .map_to_3l_error("Couldn't fetch recommended fees")?;
 
         Ok(recommended_fees.half_hour_fee as u32)
     }
@@ -1048,10 +1006,7 @@ impl LightningNode {
                 to_address: address,
                 fee_rate_sats_per_vbyte: onchain_fee,
             }))
-            .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                "Failed to drain funds",
-            )?
+            .map_to_3l_error("Failed to drain funds")?
             .txid
             .to_hex())
     }
@@ -1064,19 +1019,13 @@ impl LightningNode {
             .rt
             .handle()
             .block_on(self.sdk.execute_dev_command("listpeers".to_string()))
-            .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                "Couldn't execute `listpeers` command",
-            )?;
+            .map_to_3l_error("Couldn't execute `listpeers` command")?;
 
         let peer_channels = self
             .rt
             .handle()
             .block_on(self.sdk.execute_dev_command("listpeerchannels".to_string()))
-            .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                "Couldn't execute `listpeerchannels` command",
-            )?;
+            .map_to_3l_error("Couldn't execute `listpeerchannels` command")?;
 
         info!("List of peers:\n{}", peers);
         info!("List of peer channels:\n{}", peer_channels);

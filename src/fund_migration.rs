@@ -1,6 +1,6 @@
 use crate::async_runtime::Handle;
 use crate::data_store::DataStore;
-use crate::errors::{ErrorCode, Result, ServiceErrorCode};
+use crate::errors::{ErrorCode, MapTo3lError, Result, ServiceErrorCode};
 use crate::locker::Locker;
 
 use bitcoin::hashes::hex::ToHex;
@@ -66,10 +66,9 @@ pub(crate) fn migrate_funds(
         .lock_unwrap()
         .append_funds_migration_status(MigrationStatus::Pending)?;
 
-    let lsp_info = rt.block_on(sdk.lsp_info()).map_to_runtime_error(
-        ErrorCode::from(ServiceErrorCode::LspServiceUnavailable),
-        "Failed to get LSP info",
-    )?;
+    let lsp_info = rt
+        .block_on(sdk.lsp_info())
+        .map_to_3l_error("Failed to get LSP info")?;
     let lsp_fee = lsp_info
         .opening_fee_params_list
         .get_cheapest_opening_fee_params()
@@ -86,10 +85,7 @@ pub(crate) fn migrate_funds(
             expiry: None,
             cltv: None,
         }))
-        .map_to_runtime_error(
-            ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-            "Failed to issue invoice",
-        )?;
+        .map_to_3l_error("Failed to issue invoice")?;
     let invoice = invoice.ln_invoice.bolt11;
     let signature = sign_message(&private_key, &invoice);
 
