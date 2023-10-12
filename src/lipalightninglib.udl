@@ -2,203 +2,87 @@
 // ----------------------------- LN NODE INTERFACE + RELATED DEFINITIONS -----------------------------
 //
 
-// The main class/struct of this library. Constructing an instance will initiate the Lightning node and
-// run it in the background. As long as an instance of `LightningNode` is held, the node will continue to run
-// in the background. Dropping the instance will start a deinit process.
 interface LightningNode {
-    // Construct an instance of `LightningNode`
     [Throws=LnError]
     constructor(Config config, EventsCallback events_callback);
 
-    // Request some basic info about the node
     [Throws=LnError]
     NodeInfo get_node_info();
 
-    // When *receiving* payments, a new channel MAY be required. A fee will be charged to the user. This does NOT impact *sending* payments.
-    // Get information about the fee charged by the LSP for opening new channels
-    // Please keep in mind that this method doesn't make any network calls. It simply retrieves
-    // previously fetched values that are frequently updated by a background task.
     [Throws=LnError]
     LspFee query_lsp_fee();
 
-    // Get the current limits for the amount that can be transferred in a single payment. Currently there are only limits for receiving payments.
-    // The limits (partly) depend on the channel situation of the node, so it should be called again every time the user is about to receive a payment.
-    // The limits stay the same regardless of what amount wants to receive (= no changes while he's typing the amount)
     [Throws=LnError]
     PaymentAmountLimits get_payment_amount_limits();
 
-    // Calculate the actual LSP fee for the given amount of an incoming payment.
-    // If the already existing inbound capacity is enough, no new channel is required.
-    // Parameters:
-    //    - amount_sat - amount in sats to compute LSP fee for
-    // For the returned fees to be guaranteed to be accurate, the returned lsp_fee_params must be provided to `create_invoice()`
     [Throws=LnError]
     CalculateLspFeeResponse calculate_lsp_fee(u64 amount_sat);
 
-    // Create an invoice to receive a payment with:
-    //    - amount_sat - the smallest amount of sats required for the node to accept the incoming payment (sender will have to pay fees on top of that amount)
-    //    - lsp_fee_params - the params that will be used to determine the lsp fee. Can be obtained from `calculate_lsp_fee` to guarantee fees predicted in `calculate_lsp_fee()` are the ones charged.
-    //    - description - a description to be embedded into the created invoice
-    //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
-    //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
     [Throws=LnError]
     InvoiceDetails create_invoice(u64 amount_sat, OpeningFeeParams? lsp_fee_params, string description, string metadata);
 
-    // Decodes an invoice returning detailed information
-    //    - invoice - a BOLT-11 invoice (Mainnet invoices start with "lnbc")
     [Throws=DecodeInvoiceError]
     InvoiceDetails decode_invoice(string invoice);
 
-    // Get the max routing fee mode that will be employed to restrict the fees for paying a given amount in sats
     MaxRoutingFeeMode get_payment_max_routing_fee_mode(u64 amount_sat);
 
-    // Start an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.
-    // If successful, it doesn't mean that the payment itself was successful (funds received by the payee).
-    // After this method returns, the consumer of this library will learn about a successful/failed payment through the
-    // callbacks `payment_sent()` and `payment_failed()` in `EventsCallback`.
-    //
-    // Parameters:
-    //    - invoice - a BOLT-11 invoice (normally starts with lnbc). The invoice must:
-    //          * use the same network as the one this node operates on
-    //          * have not expired
-    //    - metadata - a metadata string that gets tied up to this payment. It can be used by the user of this library
-    //  to store data that is relevant to this payment. It is provided together with the respective payment in `get_latest_payments()`
     [Throws=PayError]
     void pay_invoice(string invoice, string metadata);
 
-    // Differs from pay_invoice(string invoice, string metadata) in that the passed in invoice does not have any payment amount specified,
-    // and allows the caller of the method to specify an amount instead.
-    //
-    // Additional Parameters:
-    //    - amount_sat - amount in sats to be paid
     [Throws=PayError]
     void pay_open_invoice(string invoice, u64 amount_sat, string metadata);
 
-    // Get a list of the latest payments
-    //    - number_of_payments - the maximum number of payments that will be returned
     [Throws=LnError]
     sequence<Payment> get_latest_payments(u32 number_of_payments);
 
-    // Get a payment given its payment hash
-    //    - hash - hex representation of payment hash
     [Throws=LnError]
     Payment get_payment(string hash);
 
-    // Call the method when the app goes to foreground, such that the user can interact with it.
-    // The library starts running the background tasks more frequently to improve user experience.
     void foreground();
 
-    // Call the method when the app goes to background, such that the user can not interact with it.
-    // The library stops running some unnecessary tasks and runs necessary tasks less frequently.
-    // It should save battery and internet traffic.
     void background();
 
-    // List codes of supported fiat currencies.
-    // Please keep in mind that this method doesn't make any network calls. It simply retrieves
-    // previously fetched values that are frequently updated by a background task.
-    //
-    // The fetched list will be persisted across restarts to alleviate the consequences of a
-    // slow or unresponsive exchange rate service.
-    // The method will return an empty list if there is nothing persisted yet and
-    // the values are not yet fetched from the service.
     sequence<string> list_currency_codes();
 
-    // Get exchange rate on the BTC/<default currency> pair
-    // Please keep in mind that this method doesn't make any network calls. It simply retrieves
-    // previously fetched values that are frequently updated by a background task.
-    //
-    // The fetched exchange rates will be persisted across restarts to alleviate the consequences of a
-    // slow or unresponsive exchange rate service.
-    //
-    // The return value is an optional to deal with the possibility
-    // of no exchange rate values being known.
     ExchangeRate? get_exchange_rate();
 
-    // Change the fiat currency (ISO 4217 currency code) - not all are supported
-    //      The method `list_currency_codes()` can used to list supported codes.
     void change_fiat_currency(string fiat_currency);
 
-    // Change the timezone config.
-    //    - timezone_config - the user's current timezone
     void change_timezone_config(TzConfig timezone_config);
 
     [Throws=LnError]
     void accept_pocket_terms_and_conditions();
 
-    // Register for fiat topups. Returns information that can be used by the user to transfer fiat
-    // to the 3rd party exchange service. Once the 3rd party exchange receives funds, the user will
-    // be able to withdraw sats using LNURL-w.
-    //      - email - this email will be used to send status information about different topups
-    //      - user_iban - the user will send fiat from this iban
-    //      - user_currency - the fiat currency that will be sent for exchange
     [Throws=LnError]
     FiatTopupInfo register_fiat_topup(string? email, string user_iban, TopupCurrency user_currency);
 
-    // Get a list of currently available fund offers
     [Throws=LnError]
     sequence<OfferInfo> query_uncompleted_offers();
 
-    // Request to collect the offer.
-    // A payment hash will be returned to track incoming payment.
-    // The offer collection might be considered successfull once payment_received() is called,
-    // or status of the payment becomes Succeeded.
     [Throws=LnError]
     string request_offer_collection(OfferInfo offer);
 
-    // Registers a new notification token. If a token has already been registered, it will be updated.
     [Throws=LnError]
     void register_notification_token(string notification_token, string language_iso_639_1, string country_iso_3166_1_alpha_2);
 
-    // Get the wallet UUID v5 from the wallet pubkey
-    //
-    // Returns an optional value. If the auth flow has never succeeded in this Auth instance, the wallet UUID v5
-    // is unknown and None is returned. Otherwise, this method will always return the wallet UUID v5.
-    //
-    // This method does not access the internet
     string? get_wallet_pubkey_id();
 
-    // Get the payment UUID v5 from the payment hash
-    //
-    // Returns a UUID v5 derived from the payment hash. This will always return the same output given the same input.
-    // The payment hash must be in the hex representation.
     [Throws=LnError]
     string get_payment_uuid(string payment_hash);
 
-    // Query the current recommended onchain fee rate
     [Throws=LnError]
     u32 query_onchain_fee();
 
-    // Sweeps all available onchain funds on the specified onchain address.
-    //      - address - the funds will be drained to this address
-    //      - onchain_fee - the fees that should be applied for the transaction
-    // Returns the txid of the sweeping transaction.
     [Throws=LnError]
     string sweep(string address, u32 onchain_fee);
 
-    // Hides the topup with the given id.
     [Throws=LnError]
     void hide_topup(string id);
 
-    // Prints additional debug information to the logs.
-    //
-    // Throws an error in case that the necessary information can't be received.
     [Throws=LnError]
     void log_debug_info();
 };
 
-// An object that holds all configuration needed to start a LightningNode instance.
-//
-// Fields:
-// * environment - a code of the environment to run the node.
-// * seed - the seed derived from the mnemonic optionally including a pass phrase
-// * fiat_currency - ISO 4217 currency code. The backend does not support all of them,
-//     but supports at least USD and EUR, so it is safe to default to one of them.
-//     Providing an invalid code will result in missing fiat values for payments.
-// * local_persistence_path - a path on the local filesystem where this library will directly persist data.
-//      Only the current instance of the app should have access to the provided directory.
-//      On app uninstall/deletion, the directory should be purged.
-// * timezone_config - a timezone configuration object
-// * enable_file_logging - if set to true, logs will be created in the provided local_persistence_path
 dictionary Config {
     EnvironmentCode environment;
     bytes seed;
@@ -208,7 +92,6 @@ dictionary Config {
     boolean enable_file_logging;
 };
 
-// A code of the environment for the node to run.
 enum EnvironmentCode {
     "Local",
     "Dev",
@@ -223,83 +106,41 @@ enum Network {
     "Regtest",
 };
 
-// An object that holds timezone configuration values necessary for 3L to do timestamp annotation. These values get tied
-// together with every timestamp persisted in the local payment database.
 dictionary TzConfig {
-    string timezone_id; // string identifier whose format is completely arbitrary and can be chosen by the user
-    i32 timezone_utc_offset_secs; // offset from the UTC timezone in seconds
+    string timezone_id;
+    i32 timezone_utc_offset_secs;
 };
 
-// Asynchronous events that the consumer of this library might be interested in handling are delivered through this interface.
-// These callbacks will only be called once per event.
 callback interface EventsCallback {
-    // This callback will be called when a payment has been received.
-    //
-    // Parameters:
-    // * payment_hash - can be used cross-reference this claimed payment with a previously issued invoice.
     void payment_received(string payment_hash);
-
-    // This callback will be called when a payment has been successfully sent (the payee received the funds)
-    //
-    // Parameters:
-    // * payment_hash - the hash of the payment can be used to cross-reference this event to the payment that has succeeded
-    // * payment_preimage - the preimage of the payment can be used as proof of payment
     void payment_sent(string payment_hash, string payment_preimage);
-
-    // This callback will be called when a payment has failed and no further attempts will be pursued.
-    //
-    // Parameters:
-    // * payment_hash - the hash of the payment can be used to cross-reference this event to the payment that has failed
     void payment_failed(string payment_hash);
-
-    // This callback will be called when a channel has started closing
-    // This will currently not be called as the BreezSDK doesn't support channel closed events.
-    //
-    // On the MVP version of lipa wallet, this event is unexpected and is likely to result in funds moving
-    // on-chain, thus becoming unavailable. If this happens, the user should be informed of the problem and that he
-    // should contact lipa.
-    //
-    // Parameters:
-    // * channel_id - Channel ID encoded in hexadecimal.
-    // * reason - provides a reason for the close
     void channel_closed(string channel_id, string reason);
 };
 
-// Information about the Lightning node running in the background
 dictionary NodeInfo {
-    string node_pubkey; // Lightning network public key of the node (also known as node id)
-    sequence<string> peers; // List of node ids of all the peers the node is connected to
-    Amount onchain_balance; // Amount of onchain balance the node has
-    ChannelsInfo channels_info; // Information about the channels of the node
+    string node_pubkey;
+    sequence<string> peers;
+    Amount onchain_balance;
+    ChannelsInfo channels_info;
 };
 
 dictionary ChannelsInfo {
-    // The balance of the local node
     Amount local_balance;
-
-    // Capacity the node can actually receive.
-    // It excludes non usable channels, pending HTLCs, channels reserves, etc.
     Amount inbound_capacity;
-
-    // Capacity the node can actually send.
-    // It excludes non usable channels, pending HTLCs, channels reserves, etc.
     Amount outbound_capacity;
 };
 
-// The fee charged by the Lightning Service Provider (LSP) for opening a channel with the node.
-// This fee is being charged at the time of the channel creation.
-// The LSP simply subtracts this fee from an incoming payment (if this incoming payment leads to a channel creation).
 dictionary LspFee {
     Amount channel_minimum_fee;
-    u64 channel_fee_permyriad; // Parts per myriad (aka basis points) -> 100 is 1%
+    u64 channel_fee_permyriad;
 };
 
 dictionary PaymentAmountLimits {
-    Amount max_receive; // Hard limit: The maximum amount a user is allowed to receive per payment
+    Amount max_receive;
     LiquidityLimit liquidity_limit;
 };
 
-// Params for the lsp fee paid when a new channel needs to be opened
 dictionary OpeningFeeParams {
         u64 min_msat;
         u32 proportional;
@@ -309,63 +150,48 @@ dictionary OpeningFeeParams {
         string promise;
 };
 
-// Returned by LightningNode::calculate_lsp_fee
 dictionary CalculateLspFeeResponse {
-    Amount lsp_fee; // Indicates the amount that will be charged
-    OpeningFeeParams? lsp_fee_params; // Should be passed in to `create_invoice()`
+    Amount lsp_fee;
+    OpeningFeeParams? lsp_fee_params;
 };
 
 [Enum]
 interface LiquidityLimit {
-    None(); // inbound capacity >= max_receive
-    MaxFreeReceive(Amount amount); // Soft limit: The maximum amount a user can receive without being charged a setup fee
-    MinReceive(Amount amount); // Hard limit: The minimum amount a user must receive with the next payment
-        // If this limit is provided, that means a setup fee will be charged for the incoming payment
+    None();
+    MaxFreeReceive(Amount amount);
+    MinReceive(Amount amount);
 };
 
-// Information embedded in an invoice
 dictionary InvoiceDetails {
-    string invoice; // The BOLT11 invoice.
-    // Payment amount, if specified. If not available, invoice is an open-amount invoice
-    // and the user should be promted for how much they want to pay.
-    // The fiat value is calculated base on the "natural" exchange rate:
-    //  - for a new invoice current exchange rate is used
-    //  - for old invoices historic values are used
+    string invoice;
     Amount? amount;
     string description;
     string payment_hash;
-    string payee_pub_key; // The pubkey (aka node id) of the invoice issuer. Please keep in mind that this doesn't necessarily
-        // identify the payee due to the proliferation of custodial wallet (multiple users will share a node id).
-    timestamp creation_timestamp; // The moment an invoice was created (UTC)
-    duration expiry_interval; // The interval after which the invoice expires (creation_timestamp + expiry_interval = expiry_timestamp)
-    timestamp expiry_timestamp; // The moment an invoice expires (UTC)
+    string payee_pub_key;
+    timestamp creation_timestamp;
+    duration expiry_interval;
+    timestamp expiry_timestamp;
 };
 
-// Indicates the max routing fee mode used to restrict fees of a payment of a given size
 [Enum]
 interface MaxRoutingFeeMode {
-    Relative(u16 max_fee_permyriad); // `max_fee_permyriad` Parts per myriad (aka basis points) -> 100 is 1%
+    Relative(u16 max_fee_permyriad);
     Absolute(Amount max_fee_amount);
 };
 
-// Information about an incoming or outgoing payment
 dictionary Payment {
     PaymentType payment_type;
     PaymentState payment_state;
-    PayErrorCode? fail_reason; // For now, will always be empty
-    string hash; // Hex representation of payment hash
-    Amount amount; // Nominal amount specified in the invoice
+    PayErrorCode? fail_reason;
+    string hash;
+    Amount amount;
     InvoiceDetails invoice_details;
     TzTime created_at;
-    string description; // The description embedded in the invoice. Given the length limit of this data,
-        // it is possible that a hex hash of the description is provided instead, but that is uncommon.
-    string? preimage; // Hex representation of the preimage. Will only be present on successful payments.
-    Amount? network_fees; // Routing fees paid in an `Sending` payment. Will only be present if payment was successful.
-        // The cost of sending a payment is `amount` + `network_fees`
-    Amount? lsp_fees; // LSP fees paid in a `Receiving` payment. Will never be present for `Sending` payments but might be 0 for `Receiving` payments.
-        // The amount is only paid if successful.
-        // The value that is received in practice is given by `amount` - `lsp_fees`
-    OfferKind? offer; // An offer the incoming payment came from if any
+    string description;
+    string? preimage;
+    Amount? network_fees;
+    Amount? lsp_fees;
+    OfferKind? offer;
     string metadata;
 };
 
@@ -375,14 +201,13 @@ enum PaymentType {
 };
 
 enum PaymentState {
-    "Created", // The payment was created and is in progress.
-    "Succeeded", // The payment succeeded.
-    "Failed", // The payment failed. If it is a `Sending` payment, it can be retried.
-    "Retried", // A payment retrial is in progress.
-    "InvoiceExpired", // The invoice associated with this payment has expired.
+    "Created",
+    "Succeeded",
+    "Failed",
+    "Retried",
+    "InvoiceExpired",
 };
 
-// A UTC timestamp accompanied by the ID of the timezone on which it was recorded and the respective UTC offset.
 dictionary TzTime {
     timestamp time;
     string timezone_id;
@@ -390,13 +215,12 @@ dictionary TzTime {
 };
 
 dictionary FiatValue {
-    u64 minor_units; // Fiat amount denominated in the currencies' minor units. For most fiat currencies, the minor unit is the cent.
+    u64 minor_units;
     string currency_code;
-    u32 rate; // sats per major unit
+    u32 rate;
     timestamp converted_at;
 };
 
-// Exchange rate as sats per major unit.
 dictionary ExchangeRate {
     string currency_code;
     u32 rate;
@@ -414,12 +238,11 @@ enum TopupCurrency {
     "GBP",
 };
 
-// Information about a fiat top-up registration
 dictionary FiatTopupInfo {
     string order_id;
-    string debitor_iban; // The user should transfer fiat from this IBAN
-    string creditor_reference; // This reference should be included in the fiat transfer reference
-    string creditor_iban; // The user should transfer fiat to this IBAN
+    string debitor_iban;
+    string creditor_reference;
+    string creditor_iban;
     string creditor_bank_name;
     string creditor_bank_street;
     string creditor_bank_postal_code;
@@ -433,10 +256,9 @@ dictionary FiatTopupInfo {
     string creditor_country;
 };
 
-// Information on a funds offer that can be claimed using LNURL-w.
 dictionary OfferInfo {
     OfferKind offer_kind;
-    Amount amount; // Amount available for withdrawal
+    Amount amount;
     string lnurlw;
     timestamp created_at;
     timestamp expires_at;
@@ -447,21 +269,17 @@ dictionary OfferInfo {
 interface OfferKind {
     Pocket(
         string id,
-        // Fiat currency is the currency the user sent to the exchange.
-        ExchangeRate exchange_rate, // The exchange rate used by the exchange to exchange fiat to sats
-        u64 topup_value_minor_units, // The original fiat amount sent to the exchange
-        u64 exchange_fee_minor_units, // The fee paid to perform the exchange from fiat to sats
-        u16 exchange_fee_rate_permyriad // The rate of the fee expressed in permyriad (e.g. 1.5% would be 150)
+        ExchangeRate exchange_rate,
+        u64 topup_value_minor_units,
+        u64 exchange_fee_minor_units,
+        u16 exchange_fee_rate_permyriad
     );
 };
 
 enum OfferStatus {
     "READY",
-    "FAILED", // Claiming the offer failed, but it can be retried.
-    "REFUNDED", // The offer could not be claimed, so the user got refunded
-                // Specific info for Pocket offers:
-                // - The Refund happened over the Fiat rails
-                // - Reasons for why the offer was refunded: https://pocketbitcoin.com/developers/docs/rest/v1/webhooks#refund-reasons
+    "FAILED",
+    "REFUNDED",
     "SETTLED",
 };
 
@@ -470,42 +288,24 @@ enum OfferStatus {
 //
 
 namespace lipalightninglib {
-    // Generate a new mnemonic with an optional passphrase. Provide an empty string to use no passphrase.
     [Throws=SimpleError]
     Secret generate_secret(string passphrase);
 
-    // Generate a Secret object (containing the seed). Provide an empty string to use no passphrase.
     [Throws=MnemonicError]
     Secret mnemonic_to_secret(sequence<string> mnemonic_string, string passphrase);
 
-    // Return a list of valid BIP-39 English words starting with the prefix.
-    // Calling this function with empty prefix will return the full list of BIP-39 words.
     sequence<string> words_by_prefix(string prefix);
 
     [Throws=LnError]
     void accept_terms_and_conditions(EnvironmentCode environment, bytes seed);
 
-    // Performs a recovery procedure by fetching necessary data from remote storage.
-    // It should and can only be called on a fresh install of the app, if the user wants to recover a previously created wallet.
-    // If no existing wallet is found, returns an error.
     [Throws=LnError]
     void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path, boolean enable_file_logging);
 };
 
-// An object that holds necessary secrets. Should be dealt with carefully and never be logged.
-//
-// The consumer of the library *must* persist `mnemonic` and `passphrase`
-// *securely* on the device,
-// The consumer of the library *must* never use or share it except to display it to
-// the end user for backup or for recovering a wallet.
-// The consumer of the library may want to *securely* persist `seed` or derive it
-// every time `seed` is needed, but it will have performance implications.
 dictionary Secret {
-    // The 24 words used to derive the node's private key
     sequence<string> mnemonic;
-    // Optional passphrase. If not provided, it is an empty string.
     string passphrase;
-    // The seed derived from the mnemonic and the passphrase
     bytes seed;
 };
 
@@ -520,15 +320,10 @@ interface SimpleError {
 
 [Error]
 interface MnemonicError {
-    // Mnemonic has a word count that is not a multiple of 6.
     BadWordCount(u64 count);
-    // Mnemonic contains an unknown word at the pointed index.
     UnknownWord(u64 index);
-    // Entropy was not a multiple of 32 bits or between 128-256n bits in length.
     BadEntropyBitCount();
-    // The mnemonic has an invalid checksum.
     InvalidChecksum();
-    // The mnemonic can be interpreted as multiple languages.
     AmbiguousLanguages();
 };
 
@@ -541,50 +336,33 @@ interface DecodeInvoiceError {
 
 [Error]
 interface LnError {
-    // Invalid input.
-    // Consider fixing the input and retrying the request.
     InvalidInput(string msg);
-
-    // Recoverable problem (e.g. network issue, problem with en external service).
-    // Consider retrying the request.
     RuntimeError(RuntimeErrorCode code, string msg);
-
-    // Unrecoverable problem (e.g. internal invariant broken).
-    // Consider suggesting the user to report the issue to the developers.
     PermanentFailure(string msg);
 };
 
-// A code that specifies the RuntimeError that occurred
 enum RuntimeErrorCode {
-    // CONNECTIVITY ERRORS
-    "AuthServiceUnavailable", // The backend auth service is unavailable.
+    "AuthServiceUnavailable",
     "OfferServiceUnavailable",
-    "LspServiceUnavailable", // The lsp service is unavailable. Could there be a loss of internet connection?
-    "NodeUnavailable", // Information about the remote node isn't cached and couldn't be accessed. Could be a network error.
-    "FailedFundMigration", // Migration of funds from legacy LDK wallet failed. Retry is recommended.
+    "LspServiceUnavailable",
+    "NodeUnavailable",
+    "FailedFundMigration",
 };
 
 [Error]
-// As documented for LnError
 interface PayError {
     InvalidInput(string msg);
     RuntimeError(PayErrorCode code, string msg);
     PermanentFailure(string msg);
 };
 
-// A code that specifies the PayError that occurred.
 enum PayErrorCode {
-    "InvoiceExpired", // The invoice has already expired.
-
-    // NO ROUTING ATTEMPT WAS MADE
-    "AlreadyUsedInvoice", // An already recognized invoice tried to be paid. Either a payment attempt is in progress or the invoice has already been paid.
-    "PayingToSelf", // A locally issued invoice tried to be paid. Self-payments are not supported.
-    "NoRouteFound", // Not a single route was found.
-
-    // A ROUTING ATTEMPT WAS MADE. It might make sense to retry the payment.
-    "RecipientRejected", // The recipient has rejected the payment.
-    "RetriesExhausted", // Retry attempts or timeout was reached.
-    "NoMoreRoutes", // All possible routes failed.
-
-    "UnexpectedError", // An unexpected error occurred. This likely is a result of a bug within 3L/LDK and should be reported to lipa.
+    "InvoiceExpired",
+    "AlreadyUsedInvoice",
+    "PayingToSelf",
+    "NoRouteFound",
+    "RecipientRejected",
+    "RetriesExhausted",
+    "NoMoreRoutes",
+    "UnexpectedError",
 };

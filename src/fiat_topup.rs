@@ -17,11 +17,15 @@ pub enum TopupCurrency {
     GBP,
 }
 
+/// Information about a fiat top-up registration
 #[derive(Debug)]
 pub struct FiatTopupInfo {
     pub order_id: String,
+    /// The user should transfer fiat from this IBAN
     pub debitor_iban: String,
+    /// This reference should be included in the fiat transfer reference
     pub creditor_reference: String,
+    /// The user should transfer fiat to this IBAN
     pub creditor_iban: String,
     pub creditor_bank_name: String,
     pub creditor_bank_street: String,

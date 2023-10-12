@@ -4,14 +4,20 @@ use crate::{Amount, ExchangeRate};
 const MAX_RECEIVE_AMOUNT_BETA_SAT: u64 = 1_000_000;
 const MIN_RECEIVE_MULTIPLIER: u64 = 2; // Minimum receive = mutliple of setup fees
 
+/// Information on the limits imposed on the next receiving payment
 pub struct PaymentAmountLimits {
+    /// Hard limit: The maximum amount a user is allowed to receive per payment
     pub max_receive: Amount,
     pub liquidity_limit: LiquidityLimit,
 }
 
 pub enum LiquidityLimit {
+    /// inbound capacity >= max_receive
     None,
+    /// Soft limit: The maximum amount a user can receive without being charged a setup fee
     MaxFreeReceive { amount: Amount },
+    /// Hard limit: The minimum amount a user must receive with the next payment
+    /// If this limit is provided, that means a setup fee will be charged for the incoming payment
     MinReceive { amount: Amount },
 }
 

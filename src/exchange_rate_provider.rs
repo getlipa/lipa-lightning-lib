@@ -3,6 +3,7 @@ use honey_badger::Auth;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+/// Exchange rate as sats per major unit accompanied by the specific currency code and time the rate was updated at.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct ExchangeRate {
     pub currency_code: String,
@@ -14,7 +15,7 @@ pub trait ExchangeRateProvider: Send + Sync {
     fn query_all_exchange_rates(&self) -> Result<Vec<ExchangeRate>, SimpleError>;
 }
 
-pub struct ExchangeRateProviderImpl {
+pub(crate) struct ExchangeRateProviderImpl {
     provider: chameleon::ExchangeRateProvider,
 }
 

@@ -2,15 +2,21 @@ use crate::Network;
 use num_enum::TryFromPrimitive;
 use std::fmt::{Display, Formatter};
 
+/// A code that specifies the RuntimeError that occurred
 #[derive(Debug, PartialEq, Eq)]
 pub enum RuntimeErrorCode {
     // 3L runtime errors
+    /// The backend auth service is unavailable.
     AuthServiceUnavailable,
     OfferServiceUnavailable,
+    /// The lsp service is unavailable. Could there be a loss of internet connection?
     LspServiceUnavailable,
+
     // Breez runtime errors
+    /// Information about the remote node isn't cached and couldn't be accessed. Could be a network error.
     NodeUnavailable,
     // Temporary migration error
+    /// Migration of funds from legacy LDK wallet failed. Retry is recommended.
     FailedFundMigration,
 }
 
@@ -23,16 +29,35 @@ impl Display for RuntimeErrorCode {
 pub type Error = perro::Error<RuntimeErrorCode>;
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// A code that specifies the PayError that occurred.
 #[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
 pub enum PayErrorCode {
+    /// The invoice has already expired.
+    /// There's no point in retrying this payment
     InvoiceExpired,
+    /// An already recognized invoice tried to be paid. Either a payment attempt is in progress or the invoice has already been paid.
+    /// There's no point in retrying this payment
     AlreadyUsedInvoice,
+    /// A locally issued invoice tried to be paid. Self-payments are not supported.
+    /// There's no point in retrying this payment
     PayingToSelf,
+    /// Not a single route was found.
+    /// There's no point in retrying this payment
     NoRouteFound,
+    /// The recipient has rejected the payment.
+    /// It might make sense to retry the payment.
     RecipientRejected,
+    /// Retry attempts or timeout was reached.
+    /// It might make sense to retry the payment.
     RetriesExhausted,
+    /// All possible routes failed.
+    /// It might make sense to retry the payment.
     NoMoreRoutes,
+    /// An unexpected error occurred. This likely is a result of a bug within 3L/LDK and should be reported to lipa.
+    ///
+    /// *WARNING* At the moment, all payment failures will return this code. Once Breez SDK reworks their error model, we'll
+    /// be able to provide much more specific error codes, such as the other ones that are part of this enum.
     UnexpectedError,
 }
 
@@ -57,14 +82,19 @@ pub enum DecodeInvoiceError {
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum MnemonicError {
+    /// Mnemonic has a word count that is not a multiple of 6.
     #[error("BadWordCount with count: {count}")]
     BadWordCount { count: u64 },
+    /// Mnemonic contains an unknown word at the pointed index.
     #[error("UnknownWord at index: {index}")]
     UnknownWord { index: u64 },
+    /// Entropy was not a multiple of 32 bits or between 128-256n bits in length.
     #[error("BadEntropyBitCount")]
     BadEntropyBitCount,
+    /// The mnemonic has an invalid checksum.
     #[error("InvalidChecksum")]
     InvalidChecksum,
+    /// The mnemonic can be interpreted as multiple languages.
     #[error("AmbiguousLanguages")]
     AmbiguousLanguages,
 }

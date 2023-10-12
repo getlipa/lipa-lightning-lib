@@ -1,6 +1,7 @@
 use crate::Network;
 use breez_sdk_core::EnvironmentType;
 
+/// A code of the environment for the node to run.
 #[derive(Clone, Copy, Debug)]
 pub enum EnvironmentCode {
     Local,
