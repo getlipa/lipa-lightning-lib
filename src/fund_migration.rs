@@ -1,6 +1,6 @@
 use crate::async_runtime::Handle;
 use crate::data_store::DataStore;
-use crate::errors::{ErrorCode, MapTo3lError, Result, ServiceErrorCode};
+use crate::errors::{MapTo3lError, Result, ServiceErrorCode};
 use crate::locker::Locker;
 
 use bitcoin::hashes::hex::ToHex;
@@ -50,9 +50,9 @@ pub(crate) fn migrate_funds(
 
     let token = auth
         .query_token()
-        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))?;
+        .map_runtime_error_to(ServiceErrorCode::AuthServiceUnavailable.into())?;
     let client = build_client(Some(&token))
-        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))?;
+        .map_runtime_error_to(ServiceErrorCode::AuthServiceUnavailable.into())?;
 
     let balance_msat = fetch_legacy_balance(&client, backend_url, public_key.clone())? * 1_000;
     if balance_msat == 0 {
@@ -107,11 +107,11 @@ fn fetch_legacy_balance(client: &Client, backend_url: &String, public_key: Strin
         node_pub_key: Some(public_key),
     };
     let data = post_blocking::<MigrationBalance>(client, backend_url, variables)
-        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))?;
+        .map_runtime_error_to(ServiceErrorCode::AuthServiceUnavailable.into())?;
     let balance_sat = data
         .migration_balance
         .ok_or_runtime_error(
-            ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable),
+            ServiceErrorCode::AuthServiceUnavailable.into(),
             "Empty balance field",
         )?
         .balance_amount_sat;
@@ -131,7 +131,7 @@ fn payout(
         ldk_node_pub_key: Some(public_key),
     };
     let _ = post_blocking::<MigrateFunds>(client, backend_url, variables)
-        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))?;
+        .map_runtime_error_to(ServiceErrorCode::AuthServiceUnavailable.into())?;
     Ok(())
 }
 

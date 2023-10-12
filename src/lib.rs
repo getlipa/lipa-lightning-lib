@@ -366,7 +366,7 @@ impl LightningNode {
                     .await
                     .map_to_3l_error("Failed to list lsps")?;
                 let lsp = lsps.first().ok_or_runtime_error(
-                    ErrorCode::from(ServiceErrorCode::LspServiceUnavailable),
+                    ServiceErrorCode::LspServiceUnavailable.into(),
                     "No lsp available",
                 )?;
                 sdk.connect_lsp(lsp.id.clone())
@@ -414,7 +414,7 @@ impl LightningNode {
             auth_clone,
             &environment.backend_url,
         )
-        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::FailedFundMigration))?;
+        .map_runtime_error_to(ServiceErrorCode::FailedFundMigration.into())?;
 
         Ok(LightningNode {
             user_preferences,
@@ -840,7 +840,7 @@ impl LightningNode {
     pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
         self.auth
             .accept_custom_terms_and_conditions(CustomTermsAndConditions::Pocket)
-            .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))
+            .map_runtime_error_to(ServiceErrorCode::AuthServiceUnavailable.into())
     }
 
     /// Register for fiat topups. Returns information that can be used by the user to transfer fiat
@@ -872,7 +872,7 @@ impl LightningNode {
 
         self.offer_manager
             .register_topup(topup_info.order_id.clone(), email)
-            .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable))?;
+            .map_runtime_error_to(ServiceErrorCode::OfferServiceUnavailable.into())?;
 
         Ok(topup_info)
     }
@@ -882,7 +882,7 @@ impl LightningNode {
     pub fn hide_topup(&self, id: String) -> Result<()> {
         self.offer_manager
             .hide_topup(id)
-            .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable))
+            .map_runtime_error_to(ServiceErrorCode::OfferServiceUnavailable.into())
     }
 
     /// Get a list of unclaimed fund offers
@@ -890,7 +890,7 @@ impl LightningNode {
         let topup_infos = self
             .offer_manager
             .query_uncompleted_topups()
-            .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable))?;
+            .map_runtime_error_to(ServiceErrorCode::OfferServiceUnavailable.into())?;
         let rate = self.get_exchange_rate();
         Ok(topup_infos
             .into_iter()
@@ -920,7 +920,7 @@ impl LightningNode {
             LnUrlWithdrawResult::Ok { data } => data.invoice.payment_hash,
             LnUrlWithdrawResult::ErrorStatus { data } => {
                 return Err(runtime_error(
-                    ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable),
+                    ServiceErrorCode::OfferServiceUnavailable.into(),
                     format!("Failed to withdraw offer due to: {}", data.reason),
                 ))
             }
@@ -945,7 +945,7 @@ impl LightningNode {
 
         self.offer_manager
             .register_notification_token(notification_token, language, country)
-            .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable))
+            .map_runtime_error_to(ServiceErrorCode::OfferServiceUnavailable.into())
     }
 
     /// Get the wallet UUID v5 from the wallet pubkey
@@ -1072,7 +1072,7 @@ pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) 
     let seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions()
-        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))
+        .map_runtime_error_to(ServiceErrorCode::AuthServiceUnavailable.into())
 }
 
 fn derive_secret_from_mnemonic(mnemonic: Mnemonic, passphrase: String) -> Secret {
@@ -1120,7 +1120,7 @@ pub fn words_by_prefix(prefix: String) -> Vec<String> {
 fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
     let auth_keys = derive_key_pair_hex(seed, BACKEND_AUTH_DERIVATION_PATH)
         .lift_invalid_input()
-        .map_runtime_error_to(ErrorCode::from(ServiceErrorCode::AuthServiceUnavailable))?;
+        .map_runtime_error_to(ServiceErrorCode::AuthServiceUnavailable.into())?;
     let auth_keys = KeyPair {
         secret_key: auth_keys.secret_key,
         public_key: auth_keys.public_key,

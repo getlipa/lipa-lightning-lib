@@ -1,5 +1,5 @@
 use crate::async_runtime::Handle;
-use crate::errors::{ErrorCode, Result, ServiceErrorCode};
+use crate::errors::{Result, ServiceErrorCode};
 use breez_sdk_core::{BreezServices, SignMessageRequest};
 use chrono::{DateTime, Utc};
 use log::error;
@@ -168,7 +168,7 @@ impl PocketClient {
             .post(format!("{}/v1/challenges", self.pocket_url))
             .send()
             .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable),
+                ServiceErrorCode::OfferServiceUnavailable.into(),
                 "Failed to get a response from the Pocket API",
             )?;
 
@@ -177,7 +177,7 @@ impl PocketClient {
                 "Got unexpected response to Pocket challenge request: Pocket API returned status {}", raw_response.status()
             );
             return Err(runtime_error(
-                ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable),
+                ServiceErrorCode::OfferServiceUnavailable.into(),
                 format!("Got unexpected response to Pocket challenge request: Pocket API returned status {}", raw_response.status()),
             ));
         }
@@ -185,7 +185,7 @@ impl PocketClient {
         raw_response
             .json::<ChallengeResponse>()
             .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable),
+                ServiceErrorCode::OfferServiceUnavailable.into(),
                 "Failed to parse ChallengeResponse",
             )
     }
@@ -205,12 +205,7 @@ impl PocketClient {
         let node_pubkey = self
             .sdk
             .node_info()
-            .map_err(|e| {
-                runtime_error(
-                    ErrorCode::from(ServiceErrorCode::NodeUnavailable),
-                    e.to_string(),
-                )
-            })?
+            .map_err(|e| runtime_error(ServiceErrorCode::NodeUnavailable.into(), e.to_string()))?
             .id;
 
         let user_currency = match user_currency {
@@ -238,7 +233,7 @@ impl PocketClient {
             .json(&create_order_request)
             .send()
             .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable),
+                ServiceErrorCode::OfferServiceUnavailable.into(),
                 "Failed to get a response from the Pocket API",
             )?;
 
@@ -247,7 +242,7 @@ impl PocketClient {
                 "Got unexpected response to Pocket order creation request: Pocket API returned status {}", raw_response.status()
             );
             return Err(runtime_error(
-                ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable),
+                ServiceErrorCode::OfferServiceUnavailable.into(),
                 format!("Got unexpected response to Pocket order creation request: Pocket API returned status {}", raw_response.status()),
             ));
         }
@@ -255,7 +250,7 @@ impl PocketClient {
         raw_response
             .json::<CreateOrderResponse>()
             .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::OfferServiceUnavailable),
+                ServiceErrorCode::OfferServiceUnavailable.into(),
                 "Failed to parse CreateOrderResponse",
             )
     }
@@ -265,7 +260,7 @@ impl PocketClient {
             .rt_handle
             .block_on(self.sdk.sign_message(SignMessageRequest { message }))
             .map_to_runtime_error(
-                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
+                ServiceErrorCode::NodeUnavailable.into(),
                 "Couldn't sign message",
             )?
             .signature)

@@ -40,15 +40,15 @@ impl<T> MapTo3lError<T> for SdkResult<T> {
         self.map_err(|e| match e {
             SdkError::LspError { code, err } => match code {
                 LspErrorCode::ChannelOpeningNotAvailable => runtime_error(
-                    ErrorCode::from(ServiceErrorCode::LspServiceUnavailable),
+                    ServiceErrorCode::LspServiceUnavailable.into(),
                     format!("{}: {}", msg.to_string(), err),
                 ),
                 LspErrorCode::ConnectionFailed => runtime_error(
-                    ErrorCode::from(ServiceErrorCode::LspServiceUnavailable),
+                    ServiceErrorCode::LspServiceUnavailable.into(),
                     format!("{}: {}", msg.to_string(), err),
                 ),
                 LspErrorCode::LspNotFound => runtime_error(
-                    ErrorCode::from(ServiceErrorCode::LspServiceUnavailable),
+                    ServiceErrorCode::LspServiceUnavailable.into(),
                     format!("{}: {}", msg.to_string(), err),
                 ),
             },
@@ -62,35 +62,35 @@ impl<T> MapTo3lError<T> for SdkResult<T> {
             }
             SdkError::PaymentError { code, err } => match code {
                 PaymentErrorCode::AlreadyPaid => runtime_error(
-                    ErrorCode::from(PayErrorCode::AlreadyUsedInvoice),
+                    PayErrorCode::AlreadyUsedInvoice.into(),
                     format!("{}: {}", msg.to_string(), err),
                 ),
                 PaymentErrorCode::InvalidAmount => {
                     invalid_input(format!("{}: {}", msg.to_string(), err))
                 }
                 PaymentErrorCode::InvoiceExpired => runtime_error(
-                    ErrorCode::from(PayErrorCode::InvoiceExpired),
+                    PayErrorCode::InvoiceExpired.into(),
                     format!("{}: {}", msg.to_string(), err),
                 ),
                 PaymentErrorCode::PaymentFailed => runtime_error(
-                    ErrorCode::from(PayErrorCode::UnexpectedError),
+                    PayErrorCode::UnexpectedError.into(),
                     format!("{}: {}", msg.to_string(), err),
                 ),
                 PaymentErrorCode::PaymentTimeout => runtime_error(
-                    ErrorCode::from(PayErrorCode::RetriesExhausted),
+                    PayErrorCode::RetriesExhausted.into(),
                     format!("{}: {}", msg.to_string(), err),
                 ),
                 PaymentErrorCode::RouteNotFound => runtime_error(
-                    ErrorCode::from(PayErrorCode::NoRouteFound),
+                    PayErrorCode::NoRouteFound.into(),
                     format!("{}: {}", msg.to_string(), err),
                 ),
                 PaymentErrorCode::RouteTooExpensive => runtime_error(
-                    ErrorCode::from(PayErrorCode::RouteTooExpensive),
+                    PayErrorCode::RouteTooExpensive.into(),
                     format!("{}: {}", msg.to_string(), err),
                 ),
             },
             SdkError::ServiceError { err, .. } => runtime_error(
-                ErrorCode::from(ServiceErrorCode::NodeUnavailable),
+                ServiceErrorCode::NodeUnavailable.into(),
                 format!("{}: {}", msg.to_string(), err),
             ),
             SdkError::ValueError { err, .. } => {
