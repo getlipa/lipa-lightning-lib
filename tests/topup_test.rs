@@ -48,7 +48,7 @@ fn test_topup() {
     );
     assert!(matches!(result, Err(InvalidInput { .. })));
 
-    let mut expected_offer_count = node.query_uncompleted_offers().unwrap().len() + 1;
+    let expected_offer_count = node.query_uncompleted_offers().unwrap().len() + 1;
 
     // `DK1125112511251125` triggers a new topup ready to be collected
     node.register_fiat_topup(None, "DK1125112511251125".to_string(), TopupCurrency::EUR)
@@ -75,7 +75,7 @@ fn test_topup() {
         }
     ));
 
-    expected_offer_count = uncompleted_offers.len() + 1;
+    let expected_offer_count = uncompleted_offers.len() + 1;
 
     // `DK2225222522252225` triggers a new topup that is directly refunded
     node.register_fiat_topup(None, "DK2225222522252225".to_string(), TopupCurrency::EUR)
