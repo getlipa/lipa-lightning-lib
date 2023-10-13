@@ -51,6 +51,7 @@ pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
 use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
+pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 
 use bip39::{Language, Mnemonic};
 use bitcoin::hashes::hex::ToHex;
@@ -63,7 +64,7 @@ use breez_sdk_core::{
     OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
-use crow::{CountryCode, LanguageCode, OfferManager, TopupInfo, TopupStatus};
+use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo, TopupStatus};
 use data_store::DataStore;
 use email_address::EmailAddress;
 use honey_badger::secrets::{generate_keypair, KeyPair};
@@ -206,6 +207,8 @@ pub enum OfferStatus {
     SETTLED,
 }
 
+pub type PocketOfferError = TopupError;
+
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum OfferKind {
     /// An offer related to a topup using the Pocket exchange
@@ -221,6 +224,8 @@ pub enum OfferKind {
         exchange_fee_minor_units: u64,
         /// The rate of the fee expressed in permyriad (e.g. 1.5% would be 150)
         exchange_fee_rate_permyriad: u16,
+        /// The optional error that might occurred in the offer process
+        error: Option<PocketOfferError>,
     },
 }
 
@@ -1104,6 +1109,7 @@ fn to_offer(topup_info: TopupInfo, current_rate: &Option<ExchangeRate>) -> Offer
             topup_value_minor_units: topup_info.topup_value_minor_units,
             exchange_fee_minor_units: topup_info.exchange_fee_minor_units,
             exchange_fee_rate_permyriad: topup_info.exchange_fee_rate_permyriad,
+            error: topup_info.error,
         },
         amount: (topup_info.amount_sat * 1000).to_amount_down(current_rate),
         lnurlw: topup_info.lnurlw,
