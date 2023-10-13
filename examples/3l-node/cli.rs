@@ -607,6 +607,7 @@ fn list_offers(node: &LightningNode) -> Result<(), String> {
                 topup_value_minor_units,
                 exchange_fee_minor_units,
                 exchange_fee_rate_permyriad,
+                error,
             } => {
                 println!("                   ID:    {id}");
                 println!(
@@ -628,6 +629,10 @@ fn list_offers(node: &LightningNode) -> Result<(), String> {
                     "             Exchange at: {}",
                     exchanged_at.format("%d/%m/%Y %T UTC"),
                 );
+
+                if let Some(e) = error {
+                    println!("             Failure reason: {:?}", e);
+                }
             }
         }
         println!("      Status:             {:?}", offer.status);
@@ -709,6 +714,7 @@ fn offer_to_string(offer: Option<OfferKind>) -> String {
             topup_value_minor_units,
             exchange_fee_minor_units,
             exchange_fee_rate_permyriad,
+            ..
         }) => {
             let updated_at: DateTime<Utc> = updated_at.into();
             format!(
@@ -716,7 +722,7 @@ fn offer_to_string(offer: Option<OfferKind>) -> String {
 				topup_value_minor_units as f64 / 100f64,
 				updated_at.format("%d/%m/%Y %T UTC"),
 				exchange_fee_rate_permyriad as f64 / 100f64,
-				exchange_fee_minor_units as f64 / 100f64
+				exchange_fee_minor_units as f64 / 100f64,
 			)
         }
         None => "None".to_string(),
