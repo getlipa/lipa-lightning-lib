@@ -70,14 +70,10 @@ strip-ansi-escapes = "0.2.0"
 camino = "1.1.6"
 uniffi_bindgen = "0.24.0"
 
-# Enable debug symbols for our and Breez crates, but not others.
+# Use some of the binary size reduction strategies from https://github.com/johnthagen/min-sized-rust
 [profile.release]
-debug = 1
-[profile.release.package."*"]
-debug = 0
-[profile.release.package.chameleon]
-debug = 1
-[profile.release.package.honey-badger]
-debug = 1
-[profile.release.package.breez-sdk-core]
-debug = 1
+strip = true
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
