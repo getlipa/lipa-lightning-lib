@@ -61,9 +61,13 @@ check-mod-test:
 check-udl:
 	! grep $$'\t' src/lipalightninglib.udl
 
+.PHONY: doc
+doc:
+	cargo doc --no-deps
+
 # Quick tests to run before creating a PR.
 .PHONY: pr
-pr: fmt buildall test clippy check-mod-test check-udl
+pr: fmt buildall test clippy check-mod-test check-udl doc
 
 .PHONY: run-3l
 run-3l: ARGS =
