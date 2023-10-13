@@ -206,7 +206,7 @@ fn insert_exchange_rate_snapshot(
     }
     let snapshot_id = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map_to_permanent_failure("TODO")?
+        .map_to_permanent_failure("Failed to obtain duration since unix epoch")?
         .as_secs();
     for exchange_rate in exchange_rates {
         let updated_at: DateTime<Utc> = exchange_rate.updated_at.into();
