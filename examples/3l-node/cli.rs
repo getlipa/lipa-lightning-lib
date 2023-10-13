@@ -29,7 +29,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
 
     let prompt = "3L ϟ ".bold().blue().to_string();
     let history_path = Path::new(".3l_cli_history");
-    let mut rl = setup_editor(&history_path);
+    let mut rl = setup_editor(history_path);
     loop {
         let line = match rl.readline(&prompt) {
             Ok(line) => line,
@@ -685,11 +685,8 @@ fn payment_uuid(
     let payment_hash = words
         .next()
         .ok_or_else(|| "Payment Hash is required".to_string())?;
-
-    match node.get_payment_uuid(payment_hash.to_string()) {
-        Ok(uuid) => return Ok(uuid),
-        Err(e) => return Err(e.to_string()),
-    };
+    node.get_payment_uuid(payment_hash.to_string())
+        .map_err(|e| e.to_string())
 }
 
 fn sweep(node: &LightningNode, address: String) -> Result<String, String> {

@@ -14,7 +14,7 @@ fn test_get_node_info() {
     let node_info = node.get_node_info().unwrap();
 
     assert!(
-        PublicKey::from_str(&*node_info.node_pubkey).is_ok(),
+        PublicKey::from_str(&node_info.node_pubkey).is_ok(),
         "Node public key is not valid"
     );
     assert!(
