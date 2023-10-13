@@ -17,7 +17,8 @@ honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.12.0" }
 graphql = { git = "https://github.com/getlipa/wild", tag = "v1.12.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
 
-breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.5" }
+# TODO update when https://github.com/breez/breez-sdk/pull/517 & https://github.com/breez/breez-sdk/pull/521 is released
+breez-sdk-core = { git = "https://github.com/dleutenegger/breez-sdk", rev = "4241811" }
 
 bip39 = "2.0.0"
 bitcoin = "0.29.2"

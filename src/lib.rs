@@ -677,18 +677,18 @@ impl LightningNode {
     ///    - `number_of_payments` - the maximum number of payments that will be returned
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
         let list_payments_request = ListPaymentsRequest {
-            filter: PaymentTypeFilter::All,
+            filters: vec![PaymentTypeFilter::Sent, PaymentTypeFilter::Received],
             from_timestamp: None,
             to_timestamp: None,
             include_failures: Some(true),
+            limit: Some(number_of_payments),
+            offset: None,
         };
         self.rt
             .handle()
             .block_on(self.sdk.list_payments(list_payments_request))
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
             .into_iter()
-            .filter(|p| p.payment_type != breez_sdk_core::PaymentType::ClosedChannel)
-            .take(number_of_payments as usize)
             .map(|p| self.payment_from_breez_payment(p))
             .collect::<Result<Vec<Payment>>>()
     }
