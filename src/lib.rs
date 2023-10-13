@@ -1,6 +1,6 @@
 //! # lipa-lightning-lib (aka 3L)
 //!
-//! This crate implement all the main business logic of the lipa wallet.
+//! This crate implements all the main business logic of the lipa wallet.
 //!
 //! Most functionality can be accessed by creating an instance of [`LightningNode`] and using its methods.
 
@@ -492,7 +492,7 @@ impl LightningNode {
     /// Parameters:
     ///    - `amount_sat` - amount in sats to compute LSP fee for
     ///
-    /// For the returned fees to be guaranteed to be accurate, the returned lsp_fee_params must be
+    /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
     /// provided to [`LightningNode::create_invoice()`]
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
         let req = OpenChannelFeeRequest {
@@ -1011,7 +1011,8 @@ impl LightningNode {
             .map_to_permanent_failure("Failed to persist payment info")
     }
 
-    /// Query the current recommended onchain fee rate
+    /// Query the current recommended onchain fee rate.
+    ///
     /// This is useful to obtain a fee rate to be used for [`LightningNode::sweep()`]
     pub fn query_onchain_fee(&self) -> Result<u32> {
         let recommended_fees = self
@@ -1048,7 +1049,7 @@ impl LightningNode {
 
     /// Prints additional debug information to the logs.
     ///
-    /// Throws an error in case that the necessary information can't be received.
+    /// Throws an error in case that the necessary information can't be retrieved.
     pub fn log_debug_info(&self) -> Result<()> {
         let peers = self
             .rt
