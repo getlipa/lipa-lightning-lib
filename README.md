@@ -21,13 +21,6 @@ A Rust library that implements the main lightning logic of the lipa wallet app.
 
 Create `.cargo/config.toml` file with desired values (see `.cargo/config.toml.sample` as an example).
 
-### Set up the local environment
-
-This repository requires git submodules, to clone the project and the required submodules, run:
-```sh
-git clone --recursive git@github.com:getlipa/lipa-lightning-lib.git
-```
-
 ***
 # Example 3L node
 
