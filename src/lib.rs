@@ -207,6 +207,11 @@ pub enum OfferStatus {
     SETTLED,
 }
 
+/// An error associated with a specific PocketOffer. Can be temporary, indicating there was an issue
+/// with a previous withdrawal attempt and it can be retried, or it can be permanent.
+///
+/// More information on each specific error can be found on
+/// [Pocket's Documentation Page](<https://pocketbitcoin.com/developers/docs/rest/v1/webhooks>).
 pub type PocketOfferError = TopupError;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
