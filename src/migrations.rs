@@ -51,7 +51,9 @@ const MIGRATION_02_FUNDS_MIGRATION_STATUS: &str = "
 ";
 
 const MIGRATION_03_OFFER_ERROR_MESSAGE: &str = "
-    ALTER TABLE offers ADD COLUMN error TEXT NULL;
+    ALTER TABLE offers ADD COLUMN error_type TEXT NULL;
+    ALTER TABLE offers ADD COLUMN error_code TEXT NULL;
+    ALTER TABLE offers ADD COLUMN error_message TEXT NULL;
 ";
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
