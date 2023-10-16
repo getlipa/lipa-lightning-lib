@@ -224,7 +224,7 @@ pub enum OfferKind {
         exchange_fee_minor_units: u64,
         /// The rate of the fee expressed in permyriad (e.g. 1.5% would be 150)
         exchange_fee_rate_permyriad: u16,
-        /// The optional error that might occurred in the offer process
+        /// The optional error that might have occurred in the offer withdrawal process
         error: Option<PocketOfferError>,
     },
 }
