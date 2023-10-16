@@ -700,7 +700,7 @@ name = "chameleon"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.12.0#abb5de0c58487955ce13d1d5446cc11fe2d9e91e"
 dependencies = [
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.12.0)",
  "honey-badger",
 ]
 
@@ -870,7 +870,7 @@ name = "crow"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.12.0#abb5de0c58487955ce13d1d5446cc11fe2d9e91e"
 dependencies = [
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.12.0)",
  "honey-badger",
  "isocountry",
  "isolanguage-1",
@@ -1551,6 +1551,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql"
+version = "0.1.0"
+source = "git+https://github.com/getlipa/wild?tag=v1.13.0#0f4c10d3874fd19f27fa2c2e4c4240447fdc532a"
+dependencies = [
+ "chrono",
+ "graphql_client",
+ "log",
+ "perro",
+ "reqwest",
+ "serde",
+]
+
+[[package]]
 name = "graphql-introspection-query"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1745,7 +1758,7 @@ source = "git+https://github.com/getlipa/wild?tag=v1.12.0#abb5de0c58487955ce13d1
 dependencies = [
  "base64 0.21.4",
  "bdk",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.12.0)",
  "log",
  "rand",
  "secp256k1 0.24.3",
@@ -2142,7 +2155,7 @@ dependencies = [
  "ctor",
  "email_address",
  "file-rotate",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.13.0)",
  "hex",
  "honey-badger",
  "iban_validate",
