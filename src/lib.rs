@@ -909,6 +909,8 @@ impl LightningNode {
 
     /// Hides the topup with the given id. Can be called on expired topups so that they stop being returned
     /// by [`LightningNode::query_uncompleted_offers()`].
+    ///
+    /// Topup id can be obtained from [`OfferKind::Pocket`].
     pub fn hide_topup(&self, id: String) -> Result<()> {
         self.offer_manager
             .hide_topup(id)
