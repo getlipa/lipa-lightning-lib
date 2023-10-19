@@ -19,6 +19,7 @@ fn main() {
         Vec::from([TargetLanguage::Swift]),
         Some(Utf8Path::new("bindings/swift")),
         None,
+        None,
         false,
     )
     .unwrap();
@@ -28,6 +29,7 @@ fn main() {
         None,
         Vec::from([TargetLanguage::Kotlin]),
         Some(Utf8Path::new("bindings/kotlin")),
+        None,
         None,
         false,
     )
