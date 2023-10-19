@@ -71,7 +71,7 @@ fn start_node(node_name: &str) -> Result<LightningNode> {
     let seed = mnemonic_to_secret(mnemonic, "".to_string()).unwrap().seed;
 
     let config = Config {
-        environment: uniffi_lipalightninglib::EnvironmentCode::Local,
+        environment: uniffi_lipalightninglib::EnvironmentCode::Dev,
         seed,
         fiat_currency: "EUR".to_string(),
         local_persistence_path,
