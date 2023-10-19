@@ -230,9 +230,9 @@ pub struct OfferInfo {
     pub offer_kind: OfferKind,
     /// Amount available for withdrawal
     pub amount: Amount,
-    pub lnurlw: String,
+    pub lnurlw: Option<String>,
     pub created_at: SystemTime,
-    pub expires_at: SystemTime,
+    pub expires_at: Option<SystemTime>,
     pub status: OfferStatus,
 }
 
@@ -937,7 +937,11 @@ impl LightningNode {
     /// [`EventsCallback::payment_received()`] is called,
     /// or the [`PaymentState`] of the respective payment becomes [`PaymentState::Succeeded`].
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
-        let lnurlw_data = match self.rt.handle().block_on(parse(&offer.lnurlw)) {
+        let lnurlw_data = match self.rt.handle().block_on(parse(
+            &offer
+                .lnurlw
+                .ok_or_invalid_input("The provided offer didn't include an lnurlw")?,
+        )) {
             Ok(InputType::LnUrlWithdraw { data }) => data,
             _ => return Err(permanent_failure("Invalid LNURLw in offer")),
         };

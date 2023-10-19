@@ -102,14 +102,14 @@ fn test_topup() {
         }
     ));
 
-    let refunded_topup_id = match uncompleted_offers.get(0).unwrap() {
+    let refunded_topup_id = match &uncompleted_offers.get(0).unwrap().offer_kind {
         OfferKind::Pocket { id, .. } => id.to_string(),
     };
 
     node.hide_topup(refunded_topup_id.clone()).unwrap();
 
     let uncompleted_offers = node.query_uncompleted_offers().unwrap();
-    uncompleted_offers.iter().find(|&&o| match o {
+    uncompleted_offers.iter().find(|o| match &o.offer_kind {
         OfferKind::Pocket { id, .. } => id.to_string(),
     } == refunded_topup_id);
 }
