@@ -117,6 +117,16 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", message.red());
                     }
                 }
+                "listfailedswaps" => {
+                    if let Err(message) = list_failed_swaps(node) {
+                        println!("{}", message.red());
+                    }
+                }
+                "refundfailedswap" => {
+                    if let Err(message) = refund_failed_swap(node, &mut words) {
+                        println!("{}", message.red());
+                    }
+                }
                 "registertopup" => {
                     if let Err(message) = register_topup(node, &mut words) {
                         println!("{}", message.red());
@@ -225,6 +235,11 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
 
     hints.insert(CommandHint::new("getswapaddress", "getswapaddress"));
+    hints.insert(CommandHint::new("listfailedswaps>", "listfailedswaps "));
+    hints.insert(CommandHint::new(
+        "refundfailedswap <swap address> <to address>",
+        "refundfailedswap ",
+    ));
 
     hints.insert(CommandHint::new(
         "registertopup <IBAN> <currency> [email]",
@@ -269,6 +284,8 @@ fn help() {
     println!("  payopeninvoice <invoice> <amount in SAT>");
     println!();
     println!("  getswapaddress");
+    println!("  listfailedswaps");
+    println!("  refundfailedswap <swap address> <to address>");
     println!();
     println!("  registertopup <IBAN> <currency> [email]");
     println!("  listoffers");
@@ -573,6 +590,52 @@ fn get_swap_address(node: &LightningNode) -> Result<(), String> {
         "  Maximum deposit     {}",
         amount_to_string(swap_address_info.max_deposit)
     );
+
+    Ok(())
+}
+
+fn list_failed_swaps(node: &LightningNode) -> Result<(), String> {
+    let failed_swaps = match node.get_unresolved_failed_swaps() {
+        Ok(s) => s,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    println!(
+        "Total of {} failed swaps\n",
+        failed_swaps.len().to_string().bold()
+    );
+    for swap in failed_swaps {
+        let created_at: DateTime<Local> = swap.created_at.into();
+        println!("Failed swap created at {created_at}:");
+        println!("      Address         {}", swap.address);
+        println!("      Amount:         {}", amount_to_string(swap.amount));
+    }
+
+    Ok(())
+}
+
+fn refund_failed_swap(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<(), String> {
+    let swap_address = words
+        .next()
+        .ok_or_else(|| "swap address is required".to_string())?;
+    let to_address = words
+        .next()
+        .ok_or_else(|| "to address is required".to_string())?;
+
+    let fee_rate = match node.query_onchain_fee_rate() {
+        Ok(r) => r,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    match node.refund_failed_swap(swap_address.into(), to_address.into(), fee_rate) {
+        Ok(txid) => {
+            println!("Successfully broadcasted refund transaction - txid: {txid}")
+        }
+        Err(e) => return Err(e.to_string()),
+    }
 
     Ok(())
 }
