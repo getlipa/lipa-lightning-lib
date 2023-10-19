@@ -298,26 +298,23 @@ fn local_payment_data_from_row(row: &Row) -> rusqlite::Result<LocalPaymentData> 
 }
 
 pub fn from_offer_error(error: Option<PocketOfferError>) -> Option<String> {
-    error.map(|e| {
-        match e {
-            PocketOfferError::TemporaryFailure { code } => match code {
-                TemporaryFailureCode::NoRoute => "no_route".to_string(),
-                TemporaryFailureCode::InvoiceExpired => "invoice_expired".to_string(),
-                TemporaryFailureCode::Unexpected => "error".to_string(),
-                TemporaryFailureCode::Unknown { msg } => msg,
-            },
-            PocketOfferError::PermanentFailure { code } => match code {
-                PermanentFailureCode::ThresholdExceeded => "threshold_exceeded".to_string(),
-                PermanentFailureCode::OrderInactive => "order_inactive".to_string(),
-                PermanentFailureCode::CompaniesUnsupported => "companies_unsupported".to_string(),
-                PermanentFailureCode::CountryUnsupported => "country_unsupported".to_string(),
-                PermanentFailureCode::OtherRiskDetected => "other_risk_detected".to_string(),
-                PermanentFailureCode::CustomerRequested => "customer_requested".to_string(),
-                PermanentFailureCode::AccountNotMatching => "account_not_matching".to_string(),
-                PermanentFailureCode::PayoutExpired => "payout_expired".to_string(),
-            },
-        }
-        .to_string()
+    error.map(|e| match e {
+        PocketOfferError::TemporaryFailure { code } => match code {
+            TemporaryFailureCode::NoRoute => "no_route".to_string(),
+            TemporaryFailureCode::InvoiceExpired => "invoice_expired".to_string(),
+            TemporaryFailureCode::Unexpected => "error".to_string(),
+            TemporaryFailureCode::Unknown { msg } => msg,
+        },
+        PocketOfferError::PermanentFailure { code } => match code {
+            PermanentFailureCode::ThresholdExceeded => "threshold_exceeded".to_string(),
+            PermanentFailureCode::OrderInactive => "order_inactive".to_string(),
+            PermanentFailureCode::CompaniesUnsupported => "companies_unsupported".to_string(),
+            PermanentFailureCode::CountryUnsupported => "country_unsupported".to_string(),
+            PermanentFailureCode::OtherRiskDetected => "other_risk_detected".to_string(),
+            PermanentFailureCode::CustomerRequested => "customer_requested".to_string(),
+            PermanentFailureCode::AccountNotMatching => "account_not_matching".to_string(),
+            PermanentFailureCode::PayoutExpired => "payout_expired".to_string(),
+        },
     })
 }
 
