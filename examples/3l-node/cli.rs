@@ -591,10 +591,10 @@ fn list_offers(node: &LightningNode) -> Result<(), String> {
         };
 
         let created_at: DateTime<Local> = offer.created_at.into();
-        let expires_at: DateTime<Local> = offer.expires_at.into();
+        let expires_at: Option<DateTime<Local>> = offer.expires_at.map(|e| e.into());
 
         println!("{kind} offer created at {created_at}:");
-        println!("      Expires at:         {}", expires_at);
+        println!("      Expires at:         {:?}", expires_at);
         println!(
             "      Amount:             {}",
             amount_to_string(offer.amount)

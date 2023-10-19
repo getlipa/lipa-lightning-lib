@@ -2,6 +2,7 @@ use crate::ExchangeRate;
 use std::time::SystemTime;
 
 /// A fiat value accompanied by the exchange rate that was used to get it.
+#[derive(Debug)]
 pub struct FiatValue {
     /// Fiat amount denominated in the currencies' minor units. For most fiat currencies, the minor unit is the cent.
     pub minor_units: u64,
@@ -12,6 +13,7 @@ pub struct FiatValue {
 }
 
 /// A sat amount accompanied by its fiat value in a specific fiat currency
+#[derive(Debug)]
 pub struct Amount {
     pub sats: u64,
     pub fiat: Option<FiatValue>,

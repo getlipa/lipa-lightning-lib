@@ -259,9 +259,9 @@ dictionary FiatTopupInfo {
 dictionary OfferInfo {
     OfferKind offer_kind;
     Amount amount;
-    string lnurlw;
+    string? lnurlw;
     timestamp created_at;
-    timestamp expires_at;
+    timestamp? expires_at;
     OfferStatus status;
 };
 

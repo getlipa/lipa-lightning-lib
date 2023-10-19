@@ -13,20 +13,29 @@ const LOCAL_PERSISTENCE_PATH: &str = ".3l_local_test";
 
 #[macro_export]
 macro_rules! wait_for_condition {
-    ($cond:expr, $message_if_not_satisfied:expr) => {
+    ($cond:expr, $message_if_not_satisfied:expr, $attempts:expr, $sleep_duration:expr) => {
         (|| {
-            let attempts = 1100;
-            let sleep_duration = std::time::Duration::from_millis(100);
-            for _ in 0..attempts {
+            for _ in 0..$attempts {
                 if $cond {
                     return;
                 }
 
-                std::thread::sleep(sleep_duration);
+                std::thread::sleep($sleep_duration);
             }
 
-            let total_duration = sleep_duration * attempts;
+            let total_duration = $sleep_duration * $attempts;
             panic!("{} [after {total_duration:?}]", $message_if_not_satisfied);
+        })()
+    };
+}
+
+#[macro_export]
+macro_rules! wait_for_condition_default {
+    ($cond:expr, $message_if_not_satisfied:expr) => {
+        (|| {
+            let attempts = 1100;
+            let sleep_duration = std::time::Duration::from_millis(100);
+            wait_for_condition!($cond, $message_if_not_satisfied, attempts, sleep_duration)
         })();
     };
 }
@@ -35,7 +44,7 @@ macro_rules! wait_for_condition {
 macro_rules! wait_for {
     ($cond:expr) => {
         let message_if_not_satisfied = format!("Failed to wait for `{}`", stringify!($cond));
-        wait_for_condition!($cond, message_if_not_satisfied);
+        wait_for_condition_default!($cond, message_if_not_satisfied);
     };
 }
 
@@ -62,7 +71,7 @@ fn start_node(node_name: &str) -> Result<LightningNode> {
     let seed = mnemonic_to_secret(mnemonic, "".to_string()).unwrap().seed;
 
     let config = Config {
-        environment: uniffi_lipalightninglib::EnvironmentCode::Local,
+        environment: uniffi_lipalightninglib::EnvironmentCode::Dev,
         seed,
         fiat_currency: "EUR".to_string(),
         local_persistence_path,
