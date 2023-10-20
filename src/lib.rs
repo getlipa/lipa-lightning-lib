@@ -234,14 +234,19 @@ pub enum OfferKind {
     },
 }
 
-/// Information on a funds offer that can be claimed using LNURL-w.
+/// Information on a funds offer that can be claimed
+/// using [`LightningNode::request_offer_collection`].
 #[derive(Debug)]
 pub struct OfferInfo {
     pub offer_kind: OfferKind,
     /// Amount available for withdrawal
     pub amount: Amount,
+    /// The lnurlw string that will be used to withdraw this offer. Can be empty if the offer isn't
+    /// available anymore (i.e `status` is [`OfferStatus::REFUNDED`])
     pub lnurlw: Option<String>,
     pub created_at: SystemTime,
+    /// The time this offer expires at. Can be empty if the offer isn't available anymore
+    /// (i.e `status` is [`OfferStatus::REFUNDED`]).
     pub expires_at: Option<SystemTime>,
     pub status: OfferStatus,
 }
@@ -946,6 +951,10 @@ impl LightningNode {
     /// The offer collection might be considered successful once
     /// [`EventsCallback::payment_received()`] is called,
     /// or the [`PaymentState`] of the respective payment becomes [`PaymentState::Succeeded`].
+    ///
+    /// Parameters:
+    /// * `offer` - An offer that is still valid for collection. Must have its `lnurlw` field
+    /// filled in.
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
         let lnurlw_data = match self.rt.handle().block_on(parse(
             &offer
