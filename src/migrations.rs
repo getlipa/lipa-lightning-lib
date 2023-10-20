@@ -50,6 +50,9 @@ const MIGRATION_02_FUNDS_MIGRATION_STATUS: &str = "
     VALUES (0);
 ";
 
+const MIGRATION_03_OFFER_ERROR_MESSAGE: &str = "
+    ALTER TABLE offers ADD COLUMN error TEXT NULL;
+";
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -60,6 +63,7 @@ fn migrations() -> Migrations<'static> {
     Migrations::new(vec![
         M::up(MIGRATION_01_INIT),
         M::up(MIGRATION_02_FUNDS_MIGRATION_STATUS),
+        M::up(MIGRATION_03_OFFER_ERROR_MESSAGE),
     ])
 }
 

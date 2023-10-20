@@ -1,9 +1,10 @@
 use crate::errors::Result;
 use crate::fund_migration::MigrationStatus;
 use crate::migrations::migrate;
-use crate::{ExchangeRate, OfferKind, TzConfig, UserPreferences};
+use crate::{ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
 
 use chrono::{DateTime, Utc};
+use crow::{PermanentFailureCode, TemporaryFailureCode};
 use perro::MapToError;
 use rusqlite::Connection;
 use rusqlite::Row;
@@ -66,13 +67,14 @@ impl DataStore {
             topup_value_minor_units,
             exchange_fee_minor_units,
             exchange_fee_rate_permyriad,
+            error,
         }) = offer
         {
             let exchanged_at: DateTime<Utc> = updated_at.into();
             tx.execute(
             "\
-                INSERT INTO offers (payment_hash, pocket_id, fiat_currency, rate, exchanged_at, topup_value_minor_units, exchange_fee_minor_units, exchange_fee_rate_permyriad)\
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)\
+                INSERT INTO offers (payment_hash, pocket_id, fiat_currency, rate, exchanged_at, topup_value_minor_units, exchange_fee_minor_units, exchange_fee_rate_permyriad, error)\
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)\
                 ",
         (
                     payment_hash,
@@ -82,7 +84,8 @@ impl DataStore {
                     &exchanged_at,
                     topup_value_minor_units,
                     exchange_fee_minor_units,
-                    exchange_fee_rate_permyriad
+                    exchange_fee_rate_permyriad,
+                    from_offer_error(error)
                 ),
             )
             .map_to_invalid_input("Failed to add new incoming pocket offer to offers db")?;
@@ -99,7 +102,7 @@ impl DataStore {
                 " \
             SELECT timezone_id, timezone_utc_offset_secs, payments.fiat_currency, h.rate, h.updated_at,  \
             o.pocket_id, o.fiat_currency, o.rate, o.exchanged_at, o.topup_value_minor_units, \
-			o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad \
+			o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad, o.error \
             FROM payments \
             LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snaphot_id=h.snapshot_id \
                 AND payments.fiat_currency=h.fiat_currency \
@@ -262,6 +265,7 @@ fn offer_kind_from_row(row: &Row) -> rusqlite::Result<Option<OfferKind>> {
                 topup_value_minor_units,
                 exchange_fee_minor_units,
                 exchange_fee_rate_permyriad,
+                error: to_offer_error(row.get(12)?),
             }))
         }
         None => Ok(None),
@@ -293,13 +297,77 @@ fn local_payment_data_from_row(row: &Row) -> rusqlite::Result<LocalPaymentData> 
     })
 }
 
+pub fn from_offer_error(error: Option<PocketOfferError>) -> Option<String> {
+    error.map(|e| match e {
+        PocketOfferError::TemporaryFailure { code } => match code {
+            TemporaryFailureCode::NoRoute => "no_route".to_string(),
+            TemporaryFailureCode::InvoiceExpired => "invoice_expired".to_string(),
+            TemporaryFailureCode::Unexpected => "error".to_string(),
+            TemporaryFailureCode::Unknown { msg } => msg,
+        },
+        PocketOfferError::PermanentFailure { code } => match code {
+            PermanentFailureCode::ThresholdExceeded => "threshold_exceeded".to_string(),
+            PermanentFailureCode::OrderInactive => "order_inactive".to_string(),
+            PermanentFailureCode::CompaniesUnsupported => "companies_unsupported".to_string(),
+            PermanentFailureCode::CountryUnsupported => "country_unsupported".to_string(),
+            PermanentFailureCode::OtherRiskDetected => "other_risk_detected".to_string(),
+            PermanentFailureCode::CustomerRequested => "customer_requested".to_string(),
+            PermanentFailureCode::AccountNotMatching => "account_not_matching".to_string(),
+            PermanentFailureCode::PayoutExpired => "payout_expired".to_string(),
+        },
+    })
+}
+
+pub fn to_offer_error(code: Option<String>) -> Option<PocketOfferError> {
+    code.map(|c| match &*c {
+        "no_route" => PocketOfferError::TemporaryFailure {
+            code: TemporaryFailureCode::NoRoute,
+        },
+        "invoice_expired" => PocketOfferError::TemporaryFailure {
+            code: TemporaryFailureCode::InvoiceExpired,
+        },
+        "error" => PocketOfferError::TemporaryFailure {
+            code: TemporaryFailureCode::Unexpected,
+        },
+        "threshold_exceeded" => PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::ThresholdExceeded,
+        },
+        "order_inactive" => PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::OrderInactive,
+        },
+        "companies_unsupported" => PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::CompaniesUnsupported,
+        },
+        "country_unsupported" => PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::CountryUnsupported,
+        },
+        "other_risk_detected" => PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::OtherRiskDetected,
+        },
+        "customer_requested" => PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::CustomerRequested,
+        },
+        "account_not_matching" => PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::AccountNotMatching,
+        },
+        "payout_expired" => PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::PayoutExpired,
+        },
+        e => PocketOfferError::TemporaryFailure {
+            code: TemporaryFailureCode::Unknown { msg: e.to_string() },
+        },
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use crate::config::TzConfig;
     use crate::data_store::DataStore;
     use crate::fund_migration::MigrationStatus;
-    use crate::{ExchangeRate, OfferKind, UserPreferences};
+    use crate::{ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
 
+    use crow::TopupError::TemporaryFailure;
+    use crow::{PermanentFailureCode, TemporaryFailureCode};
     use std::fs;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
@@ -342,6 +410,22 @@ mod tests {
             topup_value_minor_units: 51245,
             exchange_fee_minor_units: 123,
             exchange_fee_rate_permyriad: 50,
+            error: Some(TemporaryFailure {
+                code: TemporaryFailureCode::NoRoute,
+            }),
+        };
+
+        let offer_kind_no_error = OfferKind::Pocket {
+            id: "id".to_string(),
+            exchange_rate: ExchangeRate {
+                currency_code: "EUR".to_string(),
+                rate: 5123,
+                updated_at: SystemTime::now(),
+            },
+            topup_value_minor_units: 51245,
+            exchange_fee_minor_units: 123,
+            exchange_fee_rate_permyriad: 50,
+            error: None,
         };
 
         data_store
@@ -362,8 +446,17 @@ mod tests {
             .store_payment_info(
                 "hash - no offer",
                 user_preferences.clone(),
-                exchange_rates,
+                exchange_rates.clone(),
                 None,
+            )
+            .unwrap();
+
+        data_store
+            .store_payment_info(
+                "hash - no error",
+                user_preferences.clone(),
+                exchange_rates,
+                Some(offer_kind_no_error.clone()),
             )
             .unwrap();
 
@@ -398,6 +491,195 @@ mod tests {
             user_preferences.fiat_currency
         );
         assert_eq!(local_payment_data.exchange_rate.rate, 4123);
+
+        let local_payment_data = data_store
+            .retrieve_payment_info("hash - no error")
+            .unwrap()
+            .unwrap();
+        assert_eq!(local_payment_data.offer.unwrap(), offer_kind_no_error);
+    }
+    #[test]
+    fn test_offer_storage() {
+        let db_name = String::from("offers.db3");
+        reset_db(&db_name);
+        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+
+        // Temporary failures
+        let offer_kind_no_route = build_offer_kind_with_error(PocketOfferError::TemporaryFailure {
+            code: TemporaryFailureCode::NoRoute,
+        });
+        store_payment_with_offer_and_test(
+            offer_kind_no_route,
+            &mut data_store,
+            "offer_kind_no_route",
+        );
+
+        let offer_kind_invoice_expired =
+            build_offer_kind_with_error(PocketOfferError::TemporaryFailure {
+                code: TemporaryFailureCode::InvoiceExpired,
+            });
+        store_payment_with_offer_and_test(
+            offer_kind_invoice_expired,
+            &mut data_store,
+            "offer_kind_invoice_expired",
+        );
+
+        let offer_kind_unexpected =
+            build_offer_kind_with_error(PocketOfferError::TemporaryFailure {
+                code: TemporaryFailureCode::Unexpected,
+            });
+        store_payment_with_offer_and_test(
+            offer_kind_unexpected,
+            &mut data_store,
+            "offer_kind_unexpected",
+        );
+
+        let offer_kind_unknown = build_offer_kind_with_error(PocketOfferError::TemporaryFailure {
+            code: TemporaryFailureCode::Unknown { msg: "Test".into() },
+        });
+        store_payment_with_offer_and_test(
+            offer_kind_unknown,
+            &mut data_store,
+            "offer_kind_unknown",
+        );
+
+        // Permanent failures
+        let offer_kind_threshold_exceeded =
+            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
+                code: PermanentFailureCode::ThresholdExceeded,
+            });
+        store_payment_with_offer_and_test(
+            offer_kind_threshold_exceeded,
+            &mut data_store,
+            "offer_kind_threshold_exceeded",
+        );
+
+        let offer_kind_order_inactive =
+            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
+                code: PermanentFailureCode::OrderInactive,
+            });
+        store_payment_with_offer_and_test(
+            offer_kind_order_inactive.clone(),
+            &mut data_store,
+            "offer_kind_order_inactive",
+        );
+
+        let offer_kind_companies_unsupported =
+            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
+                code: PermanentFailureCode::CompaniesUnsupported,
+            });
+        store_payment_with_offer_and_test(
+            offer_kind_companies_unsupported,
+            &mut data_store,
+            "offer_kind_companies_unsupported",
+        );
+
+        let offer_kind_country_unsuported =
+            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
+                code: PermanentFailureCode::CountryUnsupported,
+            });
+        store_payment_with_offer_and_test(
+            offer_kind_country_unsuported,
+            &mut data_store,
+            "offer_kind_country_unsuported",
+        );
+
+        let offer_kind_other_risk_detected =
+            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
+                code: PermanentFailureCode::OtherRiskDetected,
+            });
+        store_payment_with_offer_and_test(
+            offer_kind_other_risk_detected,
+            &mut data_store,
+            "offer_kind_other_risk_detected",
+        );
+
+        let offer_kind_customer_requested =
+            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
+                code: PermanentFailureCode::CustomerRequested,
+            });
+        store_payment_with_offer_and_test(
+            offer_kind_customer_requested,
+            &mut data_store,
+            "offer_kind_customer_requested",
+        );
+
+        let offer_kind_account_not_matching =
+            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
+                code: PermanentFailureCode::AccountNotMatching,
+            });
+        store_payment_with_offer_and_test(
+            offer_kind_account_not_matching,
+            &mut data_store,
+            "offer_kind_account_not_matching",
+        );
+
+        let offer_kind_payout_expired =
+            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
+                code: PermanentFailureCode::PayoutExpired,
+            });
+        store_payment_with_offer_and_test(
+            offer_kind_payout_expired,
+            &mut data_store,
+            "offer_kind_payout_expired",
+        );
+    }
+
+    fn build_offer_kind_with_error(error: PocketOfferError) -> OfferKind {
+        OfferKind::Pocket {
+            id: "id".to_string(),
+            exchange_rate: ExchangeRate {
+                currency_code: "EUR".to_string(),
+                rate: 5123,
+                updated_at: SystemTime::now(),
+            },
+            topup_value_minor_units: 51245,
+            exchange_fee_minor_units: 123,
+            exchange_fee_rate_permyriad: 50,
+            error: Some(error),
+        }
+    }
+
+    fn store_payment_with_offer_and_test(offer: OfferKind, data_store: &mut DataStore, hash: &str) {
+        let user_preferences = UserPreferences {
+            fiat_currency: "EUR".to_string(),
+            timezone_config: TzConfig {
+                timezone_id: "Bern".to_string(),
+                timezone_utc_offset_secs: -1234,
+            },
+        };
+
+        let exchange_rates = vec![
+            ExchangeRate {
+                currency_code: "EUR".to_string(),
+                rate: 123,
+                updated_at: SystemTime::now(),
+            },
+            ExchangeRate {
+                currency_code: "USD".to_string(),
+                rate: 234,
+                updated_at: SystemTime::now(),
+            },
+        ];
+
+        data_store
+            .store_payment_info(
+                hash,
+                user_preferences.clone(),
+                exchange_rates,
+                Some(offer.clone()),
+            )
+            .unwrap();
+
+        assert_eq!(
+            data_store
+                .retrieve_payment_info(hash)
+                .unwrap()
+                .unwrap()
+                .offer
+                .unwrap(),
+            offer
+        );
     }
 
     #[test]

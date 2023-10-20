@@ -265,6 +265,37 @@ dictionary OfferInfo {
     OfferStatus status;
 };
 
+enum PermanentFailureCode {
+    "ThresholdExceeded",
+    "OrderInactive",
+    "CompaniesUnsupported",
+    "CountryUnsupported",
+    "OtherRiskDetected",
+    "CustomerRequested",
+    "AccountNotMatching",
+    "PayoutExpired",
+};
+
+[Enum]
+interface TemporaryFailureCode {
+    NoRoute();
+    InvoiceExpired();
+    Unexpected();
+    Unknown(
+        string msg
+    );
+};
+
+[Enum]
+interface PocketOfferError {
+    TemporaryFailure(
+        TemporaryFailureCode code
+    );
+    PermanentFailure(
+        PermanentFailureCode code
+    );
+};
+
 [Enum]
 interface OfferKind {
     Pocket(
@@ -272,7 +303,8 @@ interface OfferKind {
         ExchangeRate exchange_rate,
         u64 topup_value_minor_units,
         u64 exchange_fee_minor_units,
-        u16 exchange_fee_rate_permyriad
+        u16 exchange_fee_rate_permyriad,
+        PocketOfferError? error
     );
 };
 
