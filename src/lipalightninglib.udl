@@ -21,6 +21,9 @@ interface LightningNode {
     [Throws=LnError]
     InvoiceDetails create_invoice(u64 amount_sat, OpeningFeeParams? lsp_fee_params, string description, string metadata);
 
+    [Throws=LnError]
+    DecodedData decode_data(string data);
+
     [Throws=DecodeInvoiceError]
     InvoiceDetails decode_invoice(string invoice);
 
@@ -31,6 +34,9 @@ interface LightningNode {
 
     [Throws=PayError]
     void pay_open_invoice(string invoice, u64 amount_sat, string metadata);
+
+    [Throws=LnError]
+    string lnurl_pay(u64 amount_sat, LnUrlPayRequestData lnurl_pay_request_data);
 
     [Throws=LnError]
     sequence<Payment> get_latest_payments(u32 number_of_payments);
@@ -180,6 +186,28 @@ dictionary InvoiceDetails {
     timestamp creation_timestamp;
     duration expiry_interval;
     timestamp expiry_timestamp;
+};
+
+[Enum]
+interface DecodedData {
+    Bolt11Invoice(InvoiceDetails invoice_details);
+    LnUrlPay(LnUrlPayDetails lnurl_pay_details);
+};
+
+dictionary LnUrlPayDetails {
+    Amount min_sendable;
+    Amount max_sendable;
+    LnUrlPayRequestData request_data;
+};
+
+dictionary LnUrlPayRequestData {
+    string callback;
+    u64 min_sendable;
+    u64 max_sendable;
+    string metadata_str;
+    u16 comment_allowed;
+    string domain;
+    string? ln_address;
 };
 
 [Enum]

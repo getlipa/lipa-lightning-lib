@@ -61,9 +61,9 @@ use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightCredentials, GreenlightNodeConfig,
-    InputType, ListPaymentsRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest,
-    OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter, ReceiveOnchainRequest,
-    SweepRequest,
+    InputType, ListPaymentsRequest, LnUrlPayRequestData, LnUrlWithdrawResult, NodeConfig,
+    OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter,
+    ReceiveOnchainRequest, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo, TopupStatus};
@@ -155,6 +155,7 @@ pub enum PaymentState {
 }
 
 /// Information about an incoming or outgoing payment
+#[derive(PartialEq)]
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,
@@ -276,6 +277,38 @@ pub struct FailedSwapInfo {
 pub(crate) struct UserPreferences {
     fiat_currency: String,
     timezone_config: TzConfig,
+}
+
+/// Information about an LNURL-pay
+pub struct LnUrlPayDetails {
+    pub min_sendable: Amount,
+    pub max_sendable: Amount,
+    pub request_data: LnUrlPayRequestData,
+}
+
+impl LnUrlPayDetails {
+    fn from_lnurl_pay_request_data(
+        request_data: LnUrlPayRequestData,
+        exchange_rate: &Option<ExchangeRate>,
+    ) -> Self {
+        Self {
+            min_sendable: request_data
+                .min_sendable
+                .as_msats()
+                .to_amount_up(exchange_rate),
+            max_sendable: request_data
+                .max_sendable
+                .as_msats()
+                .to_amount_down(exchange_rate),
+            request_data,
+        }
+    }
+}
+
+/// Decoded data that can be obtained using [`LightningNode::decode_data`].
+pub enum DecodedData {
+    Bolt11Invoice { invoice_details: InvoiceDetails },
+    LnUrlPay { lnurl_pay_details: LnUrlPayDetails },
 }
 
 struct LipaEventListener {
@@ -626,6 +659,28 @@ impl LightningNode {
         ))
     }
 
+    /// Decode a user-provided string (usually obtained from QR-code or pasted)
+    ///
+    /// Can be used instead of [`LightningNode::decode_invoice`].
+    pub fn decode_data(&self, data: String) -> Result<DecodedData> {
+        match self.rt.handle().block_on(parse(&data)) {
+            Ok(InputType::Bolt11 { invoice }) => Ok(DecodedData::Bolt11Invoice {
+                invoice_details: InvoiceDetails::from_ln_invoice(
+                    invoice,
+                    &self.get_exchange_rate(),
+                ),
+            }),
+            Ok(InputType::LnUrlPay { data }) => Ok(DecodedData::LnUrlPay {
+                lnurl_pay_details: LnUrlPayDetails::from_lnurl_pay_request_data(
+                    data,
+                    &self.get_exchange_rate(),
+                ),
+            }),
+            Ok(_) => Err(invalid_input("Unsupported data type")), // TODO: improve returned error when new error model is introduced
+            Err(e) => Err(invalid_input(format!("Unrecognized data type {e}"))), // TODO: improve returned error when new error model is introduced
+        }
+    }
+
     /// Decodes an invoice returning detailed information
     ///
     /// Parameters:
@@ -717,6 +772,43 @@ impl LightningNode {
                 code: PayErrorCode::UnexpectedError,
                 msg: format!("Failed to start paying invoice: {e}"),
             }),
+        }
+    }
+
+    /// Pay an LNURL-pay the provided amount.
+    ///
+    /// Parameters:
+    /// * `amount_sat` - amount to be paid
+    /// * `lnurl_pay_request_data` - LNURL-pay request data as obtained from [`LightningNode::decode_data`]
+    ///
+    /// Returns the payment hash of the payment.
+    pub fn lnurl_pay(
+        &self,
+        amount_sat: u64,
+        lnurl_pay_request_data: LnUrlPayRequestData,
+    ) -> Result<String> {
+        let initial_latest_payments = self.get_latest_payments(1)?;
+        let initial_latest_payment = initial_latest_payments.get(0);
+
+        self.rt
+            .handle()
+            .block_on(self.sdk.lnurl_pay(amount_sat, None, lnurl_pay_request_data)) // TODO: return payment hash directly when Breez SDK allows for it
+            .map_to_invalid_input("Invalid parameters provided to lnurl_pay()")?;
+
+        let final_latest_payments = self.get_latest_payments(1)?;
+        let final_latest_payment = final_latest_payments.get(0);
+
+        // Temporary hack: check if there is a new payment to know if a payment attempt has been started
+        if initial_latest_payment != final_latest_payment {
+            Ok(final_latest_payment
+                .ok_or_permanent_failure("Expected at least one payment to exist")?
+                .hash
+                .clone())
+        } else {
+            Err(runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to get an invoice from LNURL-pay service",
+            ))
         }
     }
 

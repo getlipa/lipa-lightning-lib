@@ -9,10 +9,11 @@ use rustyline::history::DefaultHistory;
 use rustyline::Editor;
 use std::collections::HashSet;
 use std::path::Path;
-use uniffi_lipalightninglib::LiquidityLimit;
 use uniffi_lipalightninglib::{
-    Amount, FiatValue, MaxRoutingFeeMode, OfferKind, PaymentState, TopupCurrency,
+    Amount, DecodedData, FiatValue, LnUrlPayDetails, MaxRoutingFeeMode, OfferKind, PaymentState,
+    TopupCurrency,
 };
+use uniffi_lipalightninglib::{InvoiceDetails, LiquidityLimit};
 
 use crate::LightningNode;
 use crate::TzConfig;
@@ -92,6 +93,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", message.red());
                     }
                 }
+                "decodedata" => {
+                    if let Err(message) = decode_data(node, &mut words) {
+                        println!("{}", message.red());
+                    }
+                }
                 "decodeinvoice" => {
                     if let Err(message) = decode_invoice(node, &mut words) {
                         println!("{}", message.red());
@@ -124,6 +130,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 }
                 "refundfailedswap" => {
                     if let Err(message) = refund_failed_swap(node, &mut words) {
+                        println!("{}", message.red());
+                    }
+                }
+                "paylnurlp" => {
+                    if let Err(message) = pay_lnurlp(node, &mut words) {
                         println!("{}", message.red());
                     }
                 }
@@ -220,6 +231,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "invoice <amount in SAT> [description]",
         "invoice ",
     ));
+    hints.insert(CommandHint::new("decodedata <data>", "decodedata "));
     hints.insert(CommandHint::new(
         "decodeinvoice <invoice>",
         "decodeinvoice ",
@@ -232,6 +244,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new(
         "payopeninvoice <invoice> <amount in SAT>",
         "payopeninvoice ",
+    ));
+    hints.insert(CommandHint::new(
+        "paylnurlp <lnurlp> <amount in SAT>",
+        "paylnurlp ",
     ));
 
     hints.insert(CommandHint::new("getswapaddress", "getswapaddress"));
@@ -278,10 +294,12 @@ fn help() {
     println!("  changetimezone [timezone offset in mins] [timezone id]");
     println!();
     println!("  invoice <amount in SAT> [description]");
+    println!("  decodedata <data>");
     println!("  decodeinvoice <invoice>");
     println!("  getmaxroutingfeemode <payment amount in SAT>");
     println!("  payinvoice <invoice>");
     println!("  payopeninvoice <invoice> <amount in SAT>");
+    println!("  paylnurlp <lnurlp> <amount in SAT>");
     println!();
     println!("  getswapaddress");
     println!("  listfailedswaps");
@@ -466,6 +484,24 @@ fn create_invoice(
     Ok(())
 }
 
+fn decode_data(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<(), String> {
+    let data = words
+        .next()
+        .ok_or_else(|| "Error: data is required".to_string())?;
+
+    let data = match node.decode_data(data.to_string()) {
+        Ok(d) => d,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    match data {
+        DecodedData::Bolt11Invoice { invoice_details } => print_invoice_details(invoice_details),
+        DecodedData::LnUrlPay { lnurl_pay_details } => print_lnurl_pay_details(lnurl_pay_details),
+    }
+
+    Ok(())
+}
+
 fn decode_invoice(
     node: &LightningNode,
     words: &mut dyn Iterator<Item = &str>,
@@ -479,6 +515,12 @@ fn decode_invoice(
         Err(e) => return Err(e.to_string()),
     };
 
+    print_invoice_details(invoice_details);
+
+    Ok(())
+}
+
+fn print_invoice_details(invoice_details: InvoiceDetails) {
     println!("Invoice details:");
     println!(
         "  Amount              {:?}",
@@ -495,8 +537,38 @@ fn decode_invoice(
         "  Expiry interval     {:?}",
         invoice_details.expiry_interval
     );
+}
 
-    Ok(())
+fn print_lnurl_pay_details(lnurl_pay_details: LnUrlPayDetails) {
+    println!("LNURL-pay details:");
+    println!(
+        "  Callback              {}",
+        lnurl_pay_details.request_data.callback
+    );
+    println!(
+        "  Max Sendable          {}",
+        amount_to_string(lnurl_pay_details.max_sendable)
+    );
+    println!(
+        "  Min Sendable          {}",
+        amount_to_string(lnurl_pay_details.min_sendable)
+    );
+    println!(
+        "  Metadata              {}",
+        lnurl_pay_details.request_data.metadata_str
+    );
+    println!(
+        "  Comment Allowed       {:?}",
+        lnurl_pay_details.request_data.comment_allowed
+    );
+    println!(
+        "  Domain                {}",
+        lnurl_pay_details.request_data.domain
+    );
+    println!(
+        "  LN Address            {:?}",
+        lnurl_pay_details.request_data.ln_address
+    );
 }
 
 fn get_max_routing_fee_mode(
@@ -636,6 +708,38 @@ fn refund_failed_swap(
         }
         Err(e) => return Err(e.to_string()),
     }
+
+    Ok(())
+}
+fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<(), String> {
+    let lnurlp = words
+        .next()
+        .ok_or_else(|| "lnurlp is required".to_string())?;
+
+    let amount_argument = match words.next() {
+        Some(amount) => match amount.parse::<u64>() {
+            Ok(parsed) => Ok(parsed),
+            Err(_) => return Err("Error: SAT amount must be an integer".to_string()),
+        },
+        None => Err(
+            "Paying an LNURL-pay requires an amount in SAT as an additional argument".to_string(),
+        ),
+    }?;
+
+    let lnurlp_details = match node.decode_data(lnurlp.into()) {
+        Ok(DecodedData::LnUrlPay { lnurl_pay_details }) => lnurl_pay_details,
+        Ok(DecodedData::Bolt11Invoice { .. }) => {
+            return Err("A Bolt11 invoice was provided instead of an LNURL-pay".into())
+        }
+        Err(_) => return Err("Invalid lnurlp".into()),
+    };
+
+    match node.lnurl_pay(amount_argument, lnurlp_details.request_data) {
+        Ok(hash) => {
+            println!("Started to pay lnurlp - payment hash is {hash}");
+        }
+        Err(e) => return Err(e.to_string()),
+    };
 
     Ok(())
 }
