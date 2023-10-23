@@ -1040,7 +1040,7 @@ impl LightningNode {
     /// Query the current recommended onchain fee rate.
     ///
     /// This is useful to obtain a fee rate to be used for [`LightningNode::sweep()`]
-    pub fn query_onchain_fee(&self) -> Result<u32> {
+    pub fn query_onchain_fee_rate(&self) -> Result<u32> {
         let recommended_fees = self
             .rt
             .handle()
@@ -1057,16 +1057,16 @@ impl LightningNode {
     ///
     /// Parameters:
     ///      - `address` - the funds will be drained to this address
-    ///      - `onchain_fee` - the fees that should be applied for the transaction. The recommended on-chain fee can be queried using [`LightningNode::query_onchain_fee()`]
+    ///      - `onchain_fee` - the fee rate that should be applied for the transaction. The recommended on-chain fee rate can be queried using [`LightningNode::query_onchain_fee_rate()`]
     ///
     /// Returns the txid of the sweeping transaction.
-    pub fn sweep(&self, address: String, onchain_fee: u32) -> Result<String> {
+    pub fn sweep(&self, address: String, onchain_fee_rate: u32) -> Result<String> {
         Ok(self
             .rt
             .handle()
             .block_on(self.sdk.sweep(SweepRequest {
                 to_address: address,
-                fee_rate_sats_per_vbyte: onchain_fee,
+                fee_rate_sats_per_vbyte: onchain_fee_rate,
             }))
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to drain funds")?
             .txid

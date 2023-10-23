@@ -71,10 +71,10 @@ interface LightningNode {
     string get_payment_uuid(string payment_hash);
 
     [Throws=LnError]
-    u32 query_onchain_fee();
+    u32 query_onchain_fee_rate();
 
     [Throws=LnError]
-    string sweep(string address, u32 onchain_fee);
+    string sweep(string address, u32 onchain_fee_rate);
 
     [Throws=LnError]
     void hide_topup(string id);

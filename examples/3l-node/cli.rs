@@ -695,7 +695,7 @@ fn payment_uuid(
 }
 
 fn sweep(node: &LightningNode, address: String) -> Result<String, String> {
-    let fee_rate = node.query_onchain_fee().map_err(|e| e.to_string())?;
+    let fee_rate = node.query_onchain_fee_rate().map_err(|e| e.to_string())?;
 
     node.sweep(address.to_string(), fee_rate)
         .map_err(|e| e.to_string())
