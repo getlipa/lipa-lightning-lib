@@ -235,7 +235,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
 
     hints.insert(CommandHint::new("getswapaddress", "getswapaddress"));
-    hints.insert(CommandHint::new("listfailedswaps>", "listfailedswaps "));
+    hints.insert(CommandHint::new("listfailedswaps", "listfailedswaps"));
     hints.insert(CommandHint::new(
         "refundfailedswap <swap address> <to address>",
         "refundfailedswap ",
@@ -607,7 +607,7 @@ fn list_failed_swaps(node: &LightningNode) -> Result<(), String> {
     for swap in failed_swaps {
         let created_at: DateTime<Local> = swap.created_at.into();
         println!("Failed swap created at {created_at}:");
-        println!("      Address         {}", swap.address);
+        println!("      Address:        {}", swap.address);
         println!("      Amount:         {}", amount_to_string(swap.amount));
     }
 
