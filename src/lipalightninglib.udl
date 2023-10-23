@@ -36,7 +36,7 @@ interface LightningNode {
     void pay_open_invoice(string invoice, u64 amount_sat, string metadata);
 
     [Throws=LnError]
-    string lnurl_pay(u64 amount_sat, LnUrlPayRequestData lnurl_pay_request_data);
+    string pay_lnurlp(u64 amount_sat, LnUrlPayRequestData lnurl_pay_request_data);
 
     [Throws=LnError]
     sequence<Payment> get_latest_payments(u32 number_of_payments);

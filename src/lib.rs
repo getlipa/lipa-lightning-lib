@@ -782,7 +782,7 @@ impl LightningNode {
     /// * `lnurl_pay_request_data` - LNURL-pay request data as obtained from [`LightningNode::decode_data`]
     ///
     /// Returns the payment hash of the payment.
-    pub fn lnurl_pay(
+    pub fn pay_lnurlp(
         &self,
         amount_sat: u64,
         lnurl_pay_request_data: LnUrlPayRequestData,
@@ -793,7 +793,7 @@ impl LightningNode {
         self.rt
             .handle()
             .block_on(self.sdk.lnurl_pay(amount_sat, None, lnurl_pay_request_data)) // TODO: return payment hash directly when Breez SDK allows for it
-            .map_to_invalid_input("Invalid parameters provided to lnurl_pay()")?;
+            .map_to_invalid_input("Invalid parameters provided to pay_lnurlp()")?;
 
         let final_latest_payments = self.get_latest_payments(1)?;
         let final_latest_payment = final_latest_payments.get(0);

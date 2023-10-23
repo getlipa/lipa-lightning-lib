@@ -734,7 +734,7 @@ fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Re
         Err(_) => return Err("Invalid lnurlp".into()),
     };
 
-    match node.lnurl_pay(amount_argument, lnurlp_details.request_data) {
+    match node.pay_lnurlp(amount_argument, lnurlp_details.request_data) {
         Ok(hash) => {
             println!("Started to pay lnurlp - payment hash is {hash}");
         }
