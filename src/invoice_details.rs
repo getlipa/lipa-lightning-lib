@@ -1,4 +1,4 @@
-use crate::amount::{Amount, ToAmount};
+use crate::amount::{Amount, AsSats, ToAmount};
 
 use crate::util::unix_timestamp_to_system_time;
 use crate::ExchangeRate;
@@ -37,7 +37,7 @@ impl InvoiceDetails {
             invoice: ln_invoice.bolt11,
             amount: ln_invoice
                 .amount_msat
-                .map(|a| a.to_amount_down(exchange_rate)),
+                .map(|a| a.as_msats().to_amount_down(exchange_rate)),
             description: ln_invoice.description.unwrap_or_default(),
             payment_hash: ln_invoice.payment_hash,
             payee_pub_key: ln_invoice.payee_pubkey,
