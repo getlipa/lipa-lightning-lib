@@ -792,7 +792,7 @@ impl LightningNode {
 
         self.rt
             .handle()
-            .block_on(self.sdk.lnurl_pay(amount_sat, None, lnurl_pay_request_data)) // TODO: return payment hash directly when Breez SDK allows for it
+            .block_on(self.sdk.lnurl_pay(amount_sat, None, lnurl_pay_request_data)) // TODO: return payment hash directly when Breez SDK allows for it https://github.com/breez/breez-sdk/pull/550
             .map_to_invalid_input("Invalid parameters provided to pay_lnurlp()")?;
 
         let final_latest_payments = self.get_latest_payments(1)?;
