@@ -51,6 +51,7 @@ pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
 use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
+use amount::{AsSats, Sats};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 
 use bip39::{Language, Mnemonic};
@@ -288,7 +289,7 @@ impl EventListener for LipaEventListener {
 }
 
 const MAX_FEE_PERMYRIAD: u16 = 50;
-const EXEMPT_FEE_MSAT: u64 = 21_000;
+const EXEMPT_FEE: Sats = Sats::new(21);
 
 const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_exchange_rates: Some(Duration::from_secs(10 * 60)),
@@ -359,7 +360,7 @@ impl LightningNode {
         );
 
         breez_config.working_dir = config.local_persistence_path.clone();
-        breez_config.exemptfee_msat = EXEMPT_FEE_MSAT;
+        breez_config.exemptfee_msat = EXEMPT_FEE.msats;
         breez_config.maxfee_percent = MAX_FEE_PERMYRIAD as f64 / 100_f64;
 
         let sdk = rt
@@ -479,11 +480,20 @@ impl LightningNode {
         Ok(NodeInfo {
             node_pubkey: node_state.id,
             peers: node_state.connected_peers,
-            onchain_balance: node_state.onchain_balance_msat.to_amount_down(&rate),
+            onchain_balance: node_state
+                .onchain_balance_msat
+                .as_msats()
+                .to_amount_down(&rate),
             channels_info: ChannelsInfo {
-                local_balance: node_state.channels_balance_msat.to_amount_down(&rate),
-                inbound_capacity: node_state.inbound_liquidity_msats.to_amount_down(&rate),
-                outbound_capacity: node_state.max_payable_msat.to_amount_down(&rate),
+                local_balance: node_state
+                    .channels_balance_msat
+                    .as_msats()
+                    .to_amount_down(&rate),
+                inbound_capacity: node_state
+                    .inbound_liquidity_msats
+                    .as_msats()
+                    .to_amount_down(&rate),
+                outbound_capacity: node_state.max_payable_msat.as_msats().to_amount_down(&rate),
             },
         })
     }
@@ -497,7 +507,7 @@ impl LightningNode {
         let exchange_rate = self.get_exchange_rate();
         let lsp_fee = self.task_manager.lock_unwrap().get_lsp_fee()?;
         Ok(LspFee {
-            channel_minimum_fee: lsp_fee.min_msat.to_amount_up(&exchange_rate),
+            channel_minimum_fee: lsp_fee.min_msat.as_msats().to_amount_up(&exchange_rate),
             channel_fee_permyriad: lsp_fee.proportional as u64 / 100,
         })
     }
@@ -524,7 +534,10 @@ impl LightningNode {
                 "Failed to compute opening channel fee",
             )?;
         Ok(CalculateLspFeeResponse {
-            lsp_fee: res.fee_msat.to_amount_up(&self.get_exchange_rate()),
+            lsp_fee: res
+                .fee_msat
+                .as_msats()
+                .to_amount_up(&self.get_exchange_rate()),
             lsp_fee_params: res.used_fee_params,
         })
     }
@@ -777,15 +790,31 @@ impl LightningNode {
         let (payment_type, amount, network_fees, lsp_fees) = match breez_payment.payment_type {
             breez_sdk_core::PaymentType::Sent => (
                 PaymentType::Sending,
-                breez_payment.amount_msat.to_amount_up(&exchange_rate),
-                Some(breez_payment.fee_msat.to_amount_up(&exchange_rate)),
+                breez_payment
+                    .amount_msat
+                    .as_msats()
+                    .to_amount_up(&exchange_rate),
+                Some(
+                    breez_payment
+                        .fee_msat
+                        .as_msats()
+                        .to_amount_up(&exchange_rate),
+                ),
                 None,
             ),
             breez_sdk_core::PaymentType::Received => (
                 PaymentType::Receiving,
-                breez_payment.amount_msat.to_amount_down(&exchange_rate),
+                breez_payment
+                    .amount_msat
+                    .as_msats()
+                    .to_amount_down(&exchange_rate),
                 None,
-                Some(breez_payment.fee_msat.to_amount_up(&exchange_rate)),
+                Some(
+                    breez_payment
+                        .fee_msat
+                        .as_msats()
+                        .to_amount_up(&exchange_rate),
+                ),
             ),
             breez_sdk_core::PaymentType::ClosedChannel => {
                 return Err(permanent_failure(
@@ -1125,7 +1154,7 @@ fn to_offer(topup_info: TopupInfo, current_rate: &Option<ExchangeRate>) -> Offer
             exchange_fee_rate_permyriad: topup_info.exchange_fee_rate_permyriad,
             error: topup_info.error,
         },
-        amount: (topup_info.amount_sat * 1000).to_amount_down(current_rate),
+        amount: topup_info.amount_sat.as_sats().to_amount_down(current_rate),
         lnurlw: topup_info.lnurlw,
         created_at: topup_info.exchange_rate.updated_at,
         expires_at: topup_info.expires_at,
@@ -1239,9 +1268,9 @@ fn get_payment_max_routing_fee_mode(
     amount_sat: u64,
     exchange_rate: &Option<ExchangeRate>,
 ) -> MaxRoutingFeeMode {
-    if amount_sat * (MAX_FEE_PERMYRIAD as u64) / 10 < EXEMPT_FEE_MSAT {
+    if amount_sat * (MAX_FEE_PERMYRIAD as u64) / 10 < EXEMPT_FEE.msats {
         MaxRoutingFeeMode::Absolute {
-            max_fee_amount: EXEMPT_FEE_MSAT.to_amount_up(exchange_rate),
+            max_fee_amount: EXEMPT_FEE.to_amount_up(exchange_rate),
         }
     } else {
         MaxRoutingFeeMode::Relative {
@@ -1317,7 +1346,7 @@ mod tests {
 
         match max_routing_mode {
             MaxRoutingFeeMode::Absolute { max_fee_amount } => {
-                assert_eq!(max_fee_amount.sats, EXEMPT_FEE_MSAT / 1_000);
+                assert_eq!(max_fee_amount.sats, EXEMPT_FEE.sats);
             }
             _ => {
                 panic!("Unexpected variant");
@@ -1328,7 +1357,7 @@ mod tests {
     #[test]
     fn test_get_payment_max_routing_fee_mode_relative() {
         let max_routing_mode = get_payment_max_routing_fee_mode(
-            EXEMPT_FEE_MSAT / ((MAX_FEE_PERMYRIAD as u64) / 10),
+            EXEMPT_FEE.msats / ((MAX_FEE_PERMYRIAD as u64) / 10),
             &None,
         );
 

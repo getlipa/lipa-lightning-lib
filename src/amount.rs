@@ -1,6 +1,48 @@
 use crate::ExchangeRate;
 use std::time::SystemTime;
 
+pub(crate) struct Sats {
+    pub sats: u64,
+    pub msats: u64,
+}
+
+impl Sats {
+    pub const fn new(sats: u64) -> Sats {
+        Sats {
+            sats,
+            msats: sats * 1000,
+        }
+    }
+}
+
+pub(crate) struct Msats {
+    pub msats: u64,
+}
+
+#[allow(clippy::wrong_self_convention)]
+pub(crate) trait AsSats {
+    fn as_sats(self) -> Sats;
+    fn as_msats(self) -> Msats;
+}
+
+impl AsSats for u64 {
+    fn as_sats(self) -> Sats {
+        Sats::new(self)
+    }
+    fn as_msats(self) -> Msats {
+        Msats { msats: self }
+    }
+}
+
+impl AsSats for u32 {
+    fn as_sats(self) -> Sats {
+        Sats::new(self as u64)
+    }
+    fn as_msats(self) -> Msats {
+        Msats { msats: self as u64 }
+    }
+}
+
 /// A fiat value accompanied by the exchange rate that was used to get it.
 #[derive(Debug)]
 pub struct FiatValue {
@@ -24,13 +66,23 @@ pub(crate) trait ToAmount {
     fn to_amount_down(self, rate: &Option<ExchangeRate>) -> Amount;
 }
 
-impl ToAmount for u64 {
+impl ToAmount for Sats {
     fn to_amount_up(self, rate: &Option<ExchangeRate>) -> Amount {
-        msats_to_amount(Rounding::Up, self, rate)
+        msats_to_amount(Rounding::Up, self.msats, rate)
     }
 
     fn to_amount_down(self, rate: &Option<ExchangeRate>) -> Amount {
-        msats_to_amount(Rounding::Down, self, rate)
+        msats_to_amount(Rounding::Down, self.msats, rate)
+    }
+}
+
+impl ToAmount for Msats {
+    fn to_amount_up(self, rate: &Option<ExchangeRate>) -> Amount {
+        msats_to_amount(Rounding::Up, self.msats, rate)
+    }
+
+    fn to_amount_down(self, rate: &Option<ExchangeRate>) -> Amount {
+        msats_to_amount(Rounding::Down, self.msats, rate)
     }
 }
 
@@ -85,7 +137,7 @@ mod tests {
     #[test]
     pub fn rounding_to_amount_up() {
         let now = SystemTime::now();
-        let amount = 12349123u64.to_amount_up(&None);
+        let amount = 12349123u64.as_msats().to_amount_up(&None);
         assert_eq!(amount.sats, 12350);
         assert!(amount.fiat.is_none());
 
@@ -94,7 +146,7 @@ mod tests {
             rate: 4256,
             updated_at: now,
         };
-        let amount = 12349123u64.to_amount_up(&Some(rate));
+        let amount = 12349123u64.as_msats().to_amount_up(&Some(rate));
         assert_eq!(amount.sats, 12350);
         assert!(amount.fiat.is_some());
         let fiat = amount.fiat.unwrap();
@@ -106,7 +158,7 @@ mod tests {
     #[test]
     pub fn rounding_to_amount_down() {
         let now = SystemTime::now();
-        let amount = 12349123u64.to_amount_down(&None);
+        let amount = 12349123u64.as_msats().to_amount_down(&None);
         assert_eq!(amount.sats, 12349);
         assert!(amount.fiat.is_none());
 
@@ -115,7 +167,7 @@ mod tests {
             rate: 4256,
             updated_at: now,
         };
-        let amount = 12349123u64.to_amount_down(&Some(rate));
+        let amount = 12349123u64.as_msats().to_amount_down(&Some(rate));
         assert_eq!(amount.sats, 12349);
         assert!(amount.fiat.is_some());
         let fiat = amount.fiat.unwrap();
