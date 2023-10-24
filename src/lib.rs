@@ -73,8 +73,8 @@ use breez_sdk_core::{
     parse, parse_invoice, BreezEvent, BreezServices, EventListener, GreenlightCredentials,
     GreenlightNodeConfig, InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData,
     LnUrlWithdrawRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
-    PaymentDetails, PaymentStatus, PaymentTypeFilter, ReceiveOnchainRequest, RefundRequest,
-    SendPaymentRequest, SweepRequest,
+    PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRefundRequest, ReceiveOnchainRequest,
+    RefundRequest, SendPaymentRequest, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{
@@ -288,6 +288,14 @@ pub struct FailedSwapInfo {
     /// on-chain fees so it isn't possible to recover the entire amount.
     pub amount: Amount,
     pub created_at: SystemTime,
+}
+
+/// Information about a failed swap refund
+pub struct FailedSwapRefundInfo {
+    /// The amount that will be sent (swap amount - onchain fee)
+    pub refund_amount: Amount,
+    /// The amount that will be paid in onchain fees
+    pub onchain_fee: Amount,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -1416,6 +1424,45 @@ impl LightningNode {
                 created_at: unix_timestamp_to_system_time(s.created_at as u64),
             })
             .collect())
+    }
+
+    /// Prepares a failed swap refund in order to know how much will be recovered and how much
+    /// will be paid in onchain fees
+    ///
+    /// Parameters:
+    /// * `failed_swap_info` - the failed swap that will be prepared
+    /// * `to_address` - the destination address to which funds will be sent
+    /// * `onchain_fee_rate` - the fee rate that will be applied. The recommended one can be fetched
+    /// using [`LightningNode::query_onchain_fee_rate`]
+    pub fn prepare_refund_failed_swap(
+        &self,
+        failed_swap_info: FailedSwapInfo,
+        to_address: String,
+        onchain_fee_rate: u32,
+    ) -> Result<FailedSwapRefundInfo> {
+        let response = self
+            .rt
+            .handle()
+            .block_on(self.sdk.prepare_refund(PrepareRefundRequest {
+                swap_address: failed_swap_info.address,
+                to_address,
+                sat_per_vbyte: onchain_fee_rate,
+            }))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to prepare a failed swap refund transaction",
+            )?;
+
+        let rate = self.get_exchange_rate();
+        let onchain_fee = response.refund_tx_fee_sat.as_sats().to_amount_up(&rate);
+        let refund_amount = (failed_swap_info.amount.sats - onchain_fee.sats)
+            .as_sats()
+            .to_amount_down(&rate);
+
+        Ok(FailedSwapRefundInfo {
+            refund_amount,
+            onchain_fee,
+        })
     }
 
     /// Creates and broadcasts a refund transaction to recover funds from a failed swap. Existing
