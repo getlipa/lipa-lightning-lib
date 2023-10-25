@@ -62,7 +62,8 @@ use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightCredentials, GreenlightNodeConfig,
     InputType, ListPaymentsRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest,
-    OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter, SweepRequest,
+    OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter, ReceiveOnchainRequest,
+    SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo, TopupStatus};
@@ -250,6 +251,16 @@ pub struct OfferInfo {
     /// (i.e `status` is [`OfferStatus::REFUNDED`]).
     pub expires_at: Option<SystemTime>,
     pub status: OfferStatus,
+}
+
+/// Information about a generated swap address
+pub struct SwapAddressInfo {
+    /// Funds sent to this address will be swapped into LN to be received by the local wallet
+    pub address: String,
+    /// Minimum amount to be sent to `address`
+    pub min_deposit: Amount,
+    /// Maximum amount to be sent to `address`
+    pub max_deposit: Amount,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -516,7 +527,7 @@ impl LightningNode {
     /// If the already existing inbound capacity is enough, no new channel is required.
     ///
     /// Parameters:
-    ///    - `amount_sat` - amount in sats to compute LSP fee for
+    /// * `amount_sat` - amount in sats to compute LSP fee for
     ///
     /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
     /// provided to [`LightningNode::create_invoice()`]
@@ -609,7 +620,7 @@ impl LightningNode {
     /// Decodes an invoice returning detailed information
     ///
     /// Parameters:
-    ///    - `invoice` - a BOLT-11 invoice (Mainnet invoices start with "lnbc")
+    /// * `invoice` - a BOLT-11 invoice (Mainnet invoices start with "lnbc")
     pub fn decode_invoice(
         &self,
         invoice: String,
@@ -638,10 +649,10 @@ impl LightningNode {
     /// callbacks [`EventsCallback::payment_sent()`] and [`EventsCallback::payment_failed()`].
     ///
     /// Parameters:
-    ///    - `invoice` - a BOLT-11 invoice (normally starts with lnbc). The invoice must:
+    /// * `invoice` - a BOLT-11 invoice (normally starts with lnbc). The invoice must:
     ///         - use the same network as the one this node operates on
     ///         - have not expired
-    ///    - `metadata` - a metadata string that gets tied up to this payment. It can be used by the user of this library
+    /// * `metadata` - a metadata string that gets tied up to this payment. It can be used by the user of this library
     ///  to store data that is relevant to this payment. It is provided together with the respective payment in [`LightningNode::get_latest_payments()`].
     pub fn pay_invoice(&self, invoice: String, _metadata: String) -> PayResult<()> {
         match self.rt.handle().block_on(parse(&invoice)) {
@@ -671,7 +682,7 @@ impl LightningNode {
     /// specify an amount instead.
     ///
     /// Additional Parameters:
-    ///    - `amount_sat` - amount in sats to be paid
+    /// * `amount_sat` - amount in sats to be paid
     pub fn pay_open_invoice(
         &self,
         invoice: String,
@@ -703,7 +714,7 @@ impl LightningNode {
     /// Get a list of the latest payments
     ///
     /// Parameters:
-    ///    - `number_of_payments` - the maximum number of payments that will be returned
+    /// * `number_of_payments` - the maximum number of payments that will be returned
     pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
         let list_payments_request = ListPaymentsRequest {
             filter: PaymentTypeFilter::All,
@@ -725,7 +736,7 @@ impl LightningNode {
     /// Get a payment given its payment hash
     ///
     /// Parameters:
-    ///    - `hash` - hex representation of payment hash
+    /// * `hash` - hex representation of payment hash
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
         let breez_payment = self
             .rt
@@ -907,7 +918,7 @@ impl LightningNode {
     /// Change the timezone config.
     ///
     /// Parameters:
-    ///    - `timezone_config` - the user's current timezone
+    /// * `timezone_config` - the user's current timezone
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
         self.user_preferences.lock_unwrap().timezone_config = timezone_config;
     }
@@ -923,9 +934,9 @@ impl LightningNode {
     /// be able to withdraw sats using LNURL-w.
     ///
     /// Parameters:
-    ///      - `email` - this email will be used to send status information about different topups
-    ///      - `user_iban` - the user will send fiat from this iban
-    ///      - `user_currency` - the fiat currency that will be sent for exchange
+    /// * `email` - this email will be used to send status information about different topups
+    /// * `user_iban` - the user will send fiat from this iban
+    /// * `user_currency` - the fiat currency that will be sent for exchange
     pub fn register_fiat_topup(
         &self,
         email: Option<String>,
@@ -1052,7 +1063,7 @@ impl LightningNode {
     /// given the same input.
     ///
     /// Parameters:
-    ///     - `payment_hash` - a payment hash represented in hex
+    /// * `payment_hash` - a payment hash represented in hex
     pub fn get_payment_uuid(&self, payment_hash: String) -> Result<String> {
         get_payment_uuid(payment_hash)
     }
@@ -1085,8 +1096,9 @@ impl LightningNode {
     /// Sweeps all available onchain funds on the specified onchain address.
     ///
     /// Parameters:
-    ///      - `address` - the funds will be drained to this address
-    ///      - `onchain_fee` - the fee rate that should be applied for the transaction. The recommended on-chain fee rate can be queried using [`LightningNode::query_onchain_fee_rate()`]
+    /// * `address` - the funds will be drained to this address
+    /// * `onchain_fee_rate` - the fees that should be applied for the transaction.
+    /// The recommended on-chain fee can be queried using [`LightningNode::query_onchain_fee_rate()`]
     ///
     /// Returns the txid of the sweeping transaction.
     pub fn sweep(&self, address: String, onchain_fee_rate: u32) -> Result<String> {
@@ -1100,6 +1112,40 @@ impl LightningNode {
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to drain funds")?
             .txid
             .to_hex())
+    }
+
+    /// Generates a Bitcoin onchain address that can be used to topup the local LN wallet from an
+    /// external onchain wallet.
+    ///
+    /// Funds sent to this address should conform to the min and max values provided within
+    /// [`SwapAddressInfo`].
+    ///
+    /// If a swap is in progress, this method will return an error.
+    ///
+    /// Parameters:
+    /// * `lsp_fee_params` - the lsp fee parameters to be used if a new channel needs to
+    /// be opened. Can be obtained using [`LightningNode::calculate_lsp_fee`].
+    pub fn generate_swap_address(
+        &self,
+        lsp_fee_params: Option<OpeningFeeParams>,
+    ) -> Result<SwapAddressInfo> {
+        let swap_info = self
+            .rt
+            .handle()
+            .block_on(self.sdk.receive_onchain(ReceiveOnchainRequest {
+                opening_fee_params: lsp_fee_params,
+            }))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to generate swap address. Could one be in progress?",
+            )?;
+        let rate = self.get_exchange_rate();
+
+        Ok(SwapAddressInfo {
+            address: swap_info.bitcoin_address,
+            min_deposit: ((swap_info.min_allowed_deposit as u64) * 1000).to_amount_up(&rate),
+            max_deposit: ((swap_info.max_allowed_deposit as u64) * 1000).to_amount_down(&rate),
+        })
     }
 
     /// Prints additional debug information to the logs.

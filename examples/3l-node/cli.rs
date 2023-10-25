@@ -112,6 +112,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", message.red());
                     }
                 }
+                "getswapaddress" => {
+                    if let Err(message) = get_swap_address(node) {
+                        println!("{}", message.red());
+                    }
+                }
                 "registertopup" => {
                     if let Err(message) = register_topup(node, &mut words) {
                         println!("{}", message.red());
@@ -219,6 +224,8 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "payopeninvoice ",
     ));
 
+    hints.insert(CommandHint::new("getswapaddress", "getswapaddress"));
+
     hints.insert(CommandHint::new(
         "registertopup <IBAN> <currency> [email]",
         "registertopup ",
@@ -260,6 +267,8 @@ fn help() {
     println!("  getmaxroutingfeemode <payment amount in SAT>");
     println!("  payinvoice <invoice>");
     println!("  payopeninvoice <invoice> <amount in SAT>");
+    println!();
+    println!("  getswapaddress");
     println!();
     println!("  registertopup <IBAN> <currency> [email]");
     println!("  listoffers");
@@ -544,6 +553,26 @@ fn pay_open_invoice(
         Ok(_) => {}
         Err(e) => return Err(e.to_string()),
     };
+
+    Ok(())
+}
+
+fn get_swap_address(node: &LightningNode) -> Result<(), String> {
+    let swap_address_info = match node.generate_swap_address(None) {
+        Ok(s) => s,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    println!("Swap Address Information:");
+    println!("  Address             {}", swap_address_info.address);
+    println!(
+        "  Minimum deposit     {}",
+        amount_to_string(swap_address_info.min_deposit)
+    );
+    println!(
+        "  Maximum deposit     {}",
+        amount_to_string(swap_address_info.max_deposit)
+    );
 
     Ok(())
 }
