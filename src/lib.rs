@@ -263,6 +263,15 @@ pub struct SwapAddressInfo {
     pub max_deposit: Amount,
 }
 
+/// Information about a failed swap
+pub struct FailedSwapInfo {
+    pub address: String,
+    /// The amount that is available to be refunded. The refund will involve paying some
+    /// onchain fees so it isn't possible to recover the entire amount.
+    pub amount: Amount,
+    pub created_at: SystemTime,
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub(crate) struct UserPreferences {
     fiat_currency: String,
@@ -1143,9 +1152,60 @@ impl LightningNode {
 
         Ok(SwapAddressInfo {
             address: swap_info.bitcoin_address,
-            min_deposit: ((swap_info.min_allowed_deposit as u64) * 1000).to_amount_up(&rate),
-            max_deposit: ((swap_info.max_allowed_deposit as u64) * 1000).to_amount_down(&rate),
+            min_deposit: ((swap_info.min_allowed_deposit as u64).as_sats()).to_amount_up(&rate),
+            max_deposit: ((swap_info.max_allowed_deposit as u64).as_sats()).to_amount_down(&rate),
         })
+    }
+
+    /// Lists all unresolved failed swaps. Each individual failed swap can be refunded
+    /// using [`LightningNode::resolve_failed_swap`].
+    pub fn get_unresolved_failed_swaps(&self) -> Result<Vec<FailedSwapInfo>> {
+        Ok(self
+            .rt
+            .handle()
+            .block_on(self.sdk.list_refundables())
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to list refundable failed swaps",
+            )?
+            .into_iter()
+            .map(|s| FailedSwapInfo {
+                address: s.bitcoin_address.clone(),
+                amount: s
+                    .confirmed_sats
+                    .as_sats()
+                    .to_amount_down(&self.get_exchange_rate()),
+                created_at: unix_timestamp_to_system_time(s.created_at as u64),
+            })
+            .collect())
+    }
+
+    /// Creates and broadcasts a refund transaction to recover funds from a failed swap. Existing
+    /// failed swaps can be listed using [`LightningNode::get_unresolved_failed_swaps`].
+    ///
+    /// Parameters:
+    /// * `failed_swap_address` - the address of the failed swap (can be obtained from [`FailedSwapInfo`])
+    /// * `to_address` - the destination address to which funds will be sent
+    /// * `onchain_fee_rate` - the fee rate that will be applied. The recommeded one can be fetched
+    /// using [`LightningNode::query_onchain_fee_rate`]
+    ///
+    /// Returns the txid of the refund transaction.
+    pub fn resolve_failed_swap(
+        &self,
+        failed_swap_address: String,
+        to_address: String,
+        onchain_fee_rate: u32,
+    ) -> Result<String> {
+        self.rt
+            .handle()
+            .block_on(
+                self.sdk
+                    .refund(failed_swap_address, to_address, onchain_fee_rate),
+            )
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to create and broadcast failed swap refund transaction",
+            )
     }
 
     /// Prints additional debug information to the logs.

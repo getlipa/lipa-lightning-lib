@@ -80,6 +80,12 @@ interface LightningNode {
     SwapAddressInfo generate_swap_address(OpeningFeeParams? lsp_fee_params);
 
     [Throws=LnError]
+    sequence<FailedSwapInfo> get_unresolved_failed_swaps();
+
+    [Throws=LnError]
+    string resolve_failed_swap(string failed_swap_address, string to_address, u32 onchain_fee_rate);
+
+    [Throws=LnError]
     void hide_topup(string id);
 
     [Throws=LnError]
@@ -322,6 +328,12 @@ dictionary SwapAddressInfo {
     string address;
     Amount min_deposit;
     Amount max_deposit;
+};
+
+dictionary FailedSwapInfo {
+    string address;
+    Amount amount;
+    timestamp created_at;
 };
 
 //
