@@ -1158,7 +1158,7 @@ impl LightningNode {
     }
 
     /// Lists all unresolved failed swaps. Each individual failed swap can be refunded
-    /// using [`LightningNode::refund_failed_swap`].
+    /// using [`LightningNode::resolve_failed_swap`].
     pub fn get_unresolved_failed_swaps(&self) -> Result<Vec<FailedSwapInfo>> {
         Ok(self
             .rt
@@ -1190,7 +1190,7 @@ impl LightningNode {
     /// using [`LightningNode::query_onchain_fee_rate`]
     ///
     /// Returns the txid of the refund transaction.
-    pub fn refund_failed_swap(
+    pub fn resolve_failed_swap(
         &self,
         failed_swap_address: String,
         to_address: String,

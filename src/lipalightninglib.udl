@@ -83,7 +83,7 @@ interface LightningNode {
     sequence<FailedSwapInfo> get_unresolved_failed_swaps();
 
     [Throws=LnError]
-    string refund_failed_swap(string failed_swap_address, string to_address, u32 onchain_fee_rate);
+    string resolve_failed_swap(string failed_swap_address, string to_address, u32 onchain_fee_rate);
 
     [Throws=LnError]
     void hide_topup(string id);

@@ -630,7 +630,7 @@ fn refund_failed_swap(
         Err(e) => return Err(e.to_string()),
     };
 
-    match node.refund_failed_swap(swap_address.into(), to_address.into(), fee_rate) {
+    match node.resolve_failed_swap(swap_address.into(), to_address.into(), fee_rate) {
         Ok(txid) => {
             println!("Successfully broadcasted refund transaction - txid: {txid}")
         }
