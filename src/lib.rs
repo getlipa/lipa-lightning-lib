@@ -1168,7 +1168,7 @@ impl LightningNode {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to list refundable failed swaps",
             )?
-            .iter()
+            .into_iter()
             .map(|s| FailedSwapInfo {
                 address: s.bitcoin_address.clone(),
                 amount: s
