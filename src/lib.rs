@@ -279,10 +279,11 @@ pub(crate) struct UserPreferences {
     timezone_config: TzConfig,
 }
 
-/// Information about an LNURL-pay
+/// Information about an LNURL-pay.
 pub struct LnUrlPayDetails {
     pub min_sendable: Amount,
     pub max_sendable: Amount,
+    /// An internal struct is not supposed to be inspected, but only passed to [`LightningNode::pay_lnurlp`].
     pub request_data: LnUrlPayRequestData,
 }
 
@@ -299,7 +300,7 @@ impl LnUrlPayDetails {
             max_sendable: request_data
                 .max_sendable
                 .as_msats()
-                .to_amount_down(exchange_rate),
+                .to_amount_up(exchange_rate),
             request_data,
         }
     }
