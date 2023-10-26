@@ -61,9 +61,9 @@ use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightCredentials, GreenlightNodeConfig,
-    InputType, ListPaymentsRequest, LnUrlPayRequestData, LnUrlWithdrawResult, NodeConfig,
-    OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter,
-    ReceiveOnchainRequest, SweepRequest,
+    InputType, ListPaymentsRequest, LnUrlPayRequestData, LnUrlPayResult, LnUrlWithdrawResult,
+    NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails, PaymentStatus,
+    PaymentTypeFilter, ReceiveOnchainRequest, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo, TopupStatus};
@@ -791,10 +791,21 @@ impl LightningNode {
         let initial_latest_payments = self.get_latest_payments(1)?;
         let initial_latest_payment = initial_latest_payments.get(0);
 
-        self.rt
+        match self
+            .rt
             .handle()
             .block_on(self.sdk.lnurl_pay(amount_sat, None, lnurl_pay_request_data)) // TODO: return payment hash directly when Breez SDK allows for it https://github.com/breez/breez-sdk/pull/550
-            .map_to_invalid_input("Invalid parameters provided to pay_lnurlp()")?;
+            .map_to_invalid_input("Invalid parameters provided to pay_lnurlp()")?
+        {
+            LnUrlPayResult::EndpointSuccess { .. } => {}
+            LnUrlPayResult::EndpointError { .. } => {
+                return Err(runtime_error(
+                    // TODO: return a more specific error
+                    RuntimeErrorCode::NodeUnavailable,
+                    "Failed to get an invoice from the LNURL-pay service",
+                ));
+            }
+        }
 
         let final_latest_payments = self.get_latest_payments(1)?;
         let final_latest_payment = final_latest_payments.get(0);
