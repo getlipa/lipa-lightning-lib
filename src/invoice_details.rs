@@ -6,6 +6,7 @@ use breez_sdk_core::LNInvoice;
 use std::time::{Duration, SystemTime};
 
 /// Information embedded in an invoice
+#[derive(Debug, PartialEq)]
 pub struct InvoiceDetails {
     /// The BOLT-11 invoice.
     pub invoice: String,
