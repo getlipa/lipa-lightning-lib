@@ -61,9 +61,10 @@ use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{
     parse, BreezEvent, BreezServices, EventListener, GreenlightCredentials, GreenlightNodeConfig,
-    InputType, ListPaymentsRequest, LnUrlPayRequestData, LnUrlPayResult, LnUrlWithdrawResult,
-    NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails, PaymentStatus,
-    PaymentTypeFilter, ReceiveOnchainRequest, SweepRequest,
+    InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlPayResult,
+    LnUrlWithdrawRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
+    PaymentDetails, PaymentStatus, PaymentTypeFilter, ReceiveOnchainRequest, RefundRequest,
+    SendPaymentRequest, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo, TopupStatus};
@@ -636,7 +637,7 @@ impl LightningNode {
             .block_on(
                 self.sdk
                     .receive_payment(breez_sdk_core::ReceivePaymentRequest {
-                        amount_sats: amount_sat,
+                        amount_msat: amount_sat.as_sats().msats,
                         description,
                         preimage: None,
                         opening_fee_params: lsp_fee_params,
@@ -731,8 +732,10 @@ impl LightningNode {
         match self
             .rt
             .handle()
-            .block_on(self.sdk.send_payment(invoice, None))
-        {
+            .block_on(self.sdk.send_payment(SendPaymentRequest {
+                bolt11: invoice,
+                amount_msat: None,
+            })) {
             Ok(_) => Ok(()),
             // TODO: properly handle errors (requires changing either ours or the SDK's error model)
             Err(e) => Err(RuntimeError {
@@ -765,8 +768,10 @@ impl LightningNode {
         match self
             .rt
             .handle()
-            .block_on(self.sdk.send_payment(invoice, Some(amount_sat)))
-        {
+            .block_on(self.sdk.send_payment(SendPaymentRequest {
+                bolt11: invoice,
+                amount_msat: Some(amount_sat.as_sats().msats),
+            })) {
             Ok(_) => Ok(()),
             // TODO: properly handle errors (requires changing either ours or the SDK's error model)
             Err(e) => Err(RuntimeError {
@@ -794,7 +799,11 @@ impl LightningNode {
         match self
             .rt
             .handle()
-            .block_on(self.sdk.lnurl_pay(amount_sat, None, lnurl_pay_request_data)) // TODO: return payment hash directly when Breez SDK allows for it https://github.com/breez/breez-sdk/pull/550
+            .block_on(self.sdk.lnurl_pay(LnUrlPayRequest {
+                data: lnurl_pay_request_data,
+                amount_msat: amount_sat.as_sats().msats,
+                comment: None,
+            })) // TODO: return payment hash directly when Breez SDK allows for it https://github.com/breez/breez-sdk/pull/550
             .map_to_invalid_input("Invalid parameters provided to pay_lnurlp()")?
         {
             LnUrlPayResult::EndpointSuccess { .. } => {}
@@ -834,6 +843,8 @@ impl LightningNode {
             from_timestamp: None,
             to_timestamp: None,
             include_failures: Some(true),
+            limit: None,
+            offset: None,
         };
         self.rt
             .handle()
@@ -1120,10 +1131,11 @@ impl LightningNode {
         let hash = match self
             .rt
             .handle()
-            .block_on(
-                self.sdk
-                    .lnurl_withdraw(lnurlw_data, offer.amount.sats, None),
-            )
+            .block_on(self.sdk.lnurl_withdraw(LnUrlWithdrawRequest {
+                data: lnurlw_data,
+                amount_msat: offer.amount.sats.as_sats().msats,
+                description: None,
+            }))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to withdraw offer",
@@ -1300,16 +1312,19 @@ impl LightningNode {
         to_address: String,
         onchain_fee_rate: u32,
     ) -> Result<String> {
-        self.rt
+        Ok(self
+            .rt
             .handle()
-            .block_on(
-                self.sdk
-                    .refund(failed_swap_address, to_address, onchain_fee_rate),
-            )
+            .block_on(self.sdk.refund(RefundRequest {
+                swap_address: failed_swap_address,
+                to_address,
+                sat_per_vbyte: onchain_fee_rate,
+            }))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to create and broadcast failed swap refund transaction",
-            )
+            )?
+            .refund_tx_id)
     }
 
     /// Prints additional debug information to the logs.
