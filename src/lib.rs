@@ -100,11 +100,11 @@ pub struct LspFee {
     pub channel_fee_permyriad: u64,
 }
 
-/// The type returned by [`LightningNode::calculate_lsp_fee()`]
+/// The type returned by [`LightningNode::calculate_lsp_fee`]
 pub struct CalculateLspFeeResponse {
     /// Indicates the amount that will be charged
     pub lsp_fee: Amount,
-    /// Should be passed in to [`LightningNode::create_invoice()`]
+    /// Should be passed in to [`LightningNode::create_invoice`]
     pub lsp_fee_params: Option<OpeningFeeParams>,
 }
 
@@ -114,7 +114,7 @@ pub struct NodeInfo {
     pub node_pubkey: String,
     /// List of node ids of all the peers the node is connected to
     pub peers: Vec<String>,
-    /// Amount of onchain balance the node has
+    /// Amount of on-chain balance the node has
     pub onchain_balance: Amount,
     /// Information about the channels of the node
     pub channels_info: ChannelsInfo,
@@ -267,7 +267,7 @@ pub struct SwapAddressInfo {
 pub struct FailedSwapInfo {
     pub address: String,
     /// The amount that is available to be refunded. The refund will involve paying some
-    /// onchain fees so it isn't possible to recover the entire amount.
+    /// on-chain fees so it isn't possible to recover the entire amount.
     pub amount: Amount,
     pub created_at: SystemTime,
 }
@@ -539,7 +539,7 @@ impl LightningNode {
     /// * `amount_sat` - amount in sats to compute LSP fee for
     ///
     /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
-    /// provided to [`LightningNode::create_invoice()`]
+    /// provided to [`LightningNode::create_invoice`]
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
         let req = OpenChannelFeeRequest {
             amount_msat: amount_sat * 1_000,
@@ -583,12 +583,12 @@ impl LightningNode {
     ///    - `amount_sat` - the smallest amount of sats required for the node to accept the incoming
     /// payment (sender will have to pay fees on top of that amount)
     ///    - `lsp_fee_params` - the params that will be used to determine the lsp fee.
-    /// Can be obtained from [`LightningNode::calculate_lsp_fee()`] to guarantee predicted fees
+    /// Can be obtained from [`LightningNode::calculate_lsp_fee`] to guarantee predicted fees
     /// are the ones charged.
     ///    - `description` - a description to be embedded into the created invoice
     ///    - `metadata` - a metadata string that gets tied up to this payment. It can be used by
     /// the user of this library to store data that is relevant to this payment. It is provided
-    /// together with the respective payment in [`LightningNode::get_latest_payments()`]
+    /// together with the respective payment in [`LightningNode::get_latest_payments`]
     pub fn create_invoice(
         &self,
         amount_sat: u64,
@@ -655,14 +655,14 @@ impl LightningNode {
     /// Start an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.
     /// If successful, it doesn't mean that the payment itself was successful (funds received by the payee).
     /// After this method returns, the consumer of this library will learn about a successful/failed payment through the
-    /// callbacks [`EventsCallback::payment_sent()`] and [`EventsCallback::payment_failed()`].
+    /// callbacks [`EventsCallback::payment_sent`] and [`EventsCallback::payment_failed`].
     ///
     /// Parameters:
     /// * `invoice` - a BOLT-11 invoice (normally starts with lnbc). The invoice must:
     ///         - use the same network as the one this node operates on
     ///         - have not expired
     /// * `metadata` - a metadata string that gets tied up to this payment. It can be used by the user of this library
-    ///  to store data that is relevant to this payment. It is provided together with the respective payment in [`LightningNode::get_latest_payments()`].
+    ///  to store data that is relevant to this payment. It is provided together with the respective payment in [`LightningNode::get_latest_payments`].
     pub fn pay_invoice(&self, invoice: String, _metadata: String) -> PayResult<()> {
         match self.rt.handle().block_on(parse(&invoice)) {
             Ok(InputType::Bolt11 { invoice }) => self
@@ -919,7 +919,7 @@ impl LightningNode {
     }
 
     /// Change the fiat currency (ISO 4217 currency code) - not all are supported
-    /// The method [`LightningNode::list_currency_codes()`] can used to list supported codes.
+    /// The method [`LightningNode::list_currency_codes`] can used to list supported codes.
     pub fn change_fiat_currency(&self, fiat_currency: String) {
         self.user_preferences.lock_unwrap().fiat_currency = fiat_currency;
     }
@@ -973,7 +973,7 @@ impl LightningNode {
     }
 
     /// Hides the topup with the given id. Can be called on expired topups so that they stop being returned
-    /// by [`LightningNode::query_uncompleted_offers()`].
+    /// by [`LightningNode::query_uncompleted_offers`].
     ///
     /// Topup id can be obtained from [`OfferKind::Pocket`].
     pub fn hide_topup(&self, id: String) -> Result<()> {
@@ -998,7 +998,7 @@ impl LightningNode {
     /// Request to collect the offer (e.g. a Pocket topup).
     /// A payment hash will be returned to track incoming payment.
     /// The offer collection might be considered successful once
-    /// [`EventsCallback::payment_received()`] is called,
+    /// [`EventsCallback::payment_received`] is called,
     /// or the [`PaymentState`] of the respective payment becomes [`PaymentState::Succeeded`].
     ///
     /// Parameters:
@@ -1086,9 +1086,9 @@ impl LightningNode {
             .map_to_permanent_failure("Failed to persist payment info")
     }
 
-    /// Query the current recommended onchain fee rate.
+    /// Query the current recommended on-chain fee rate.
     ///
-    /// This is useful to obtain a fee rate to be used for [`LightningNode::sweep()`]
+    /// This is useful to obtain a fee rate to be used for [`LightningNode::sweep`]
     pub fn query_onchain_fee_rate(&self) -> Result<u32> {
         let recommended_fees = self
             .rt
@@ -1102,12 +1102,12 @@ impl LightningNode {
         Ok(recommended_fees.half_hour_fee as u32)
     }
 
-    /// Sweeps all available onchain funds on the specified onchain address.
+    /// Sweeps all available on-chain funds to the specified on-chain address.
     ///
     /// Parameters:
-    /// * `address` - the funds will be drained to this address
+    /// * `address` - the funds will be sweeped to this address
     /// * `onchain_fee_rate` - the fees that should be applied for the transaction.
-    /// The recommended on-chain fee can be queried using [`LightningNode::query_onchain_fee_rate()`]
+    /// The recommended on-chain fee can be queried using [`LightningNode::query_onchain_fee_rate`]
     ///
     /// Returns the txid of the sweeping transaction.
     pub fn sweep(&self, address: String, onchain_fee_rate: u32) -> Result<String> {
@@ -1123,8 +1123,8 @@ impl LightningNode {
             .to_hex())
     }
 
-    /// Generates a Bitcoin onchain address that can be used to topup the local LN wallet from an
-    /// external onchain wallet.
+    /// Generates a Bitcoin on-chain address that can be used to topup the local LN wallet from an
+    /// external on-chain wallet.
     ///
     /// Funds sent to this address should conform to the min and max values provided within
     /// [`SwapAddressInfo`].

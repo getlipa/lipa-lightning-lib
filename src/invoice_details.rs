@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime};
 
 /// Information embedded in an invoice
 pub struct InvoiceDetails {
-    /// The BOLT11 invoice.
+    /// The BOLT-11 invoice.
     pub invoice: String,
     /// Payment amount, if specified. If not available, invoice is an open-amount invoice
     /// and the user should be prompted for how much they want to pay.
