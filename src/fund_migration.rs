@@ -3,6 +3,7 @@ use crate::data_store::DataStore;
 use crate::errors::{Result, RuntimeErrorCode};
 use crate::locker::Locker;
 
+use crate::amount::AsSats;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::{Message, PublicKey, SecretKey, SECP256K1};
@@ -74,11 +75,11 @@ pub(crate) fn migrate_funds(
         .opening_fee_params_list
         .get_cheapest_opening_fee_params()
         .map_to_permanent_failure("Failed to get LSP fees")?;
-    let amount_to_request = add_lsp_fees(balance_msat, &lsp_fee) / 1_000;
+    let amount_to_request = add_lsp_fees(balance_msat, &lsp_fee).as_msats();
 
     let invoice = rt
         .block_on(sdk.receive_payment(breez_sdk_core::ReceivePaymentRequest {
-            amount_sats: amount_to_request,
+            amount_msat: amount_to_request.msats,
             description: MIGRATION_DESCRIPTION.to_string(),
             preimage: None,
             opening_fee_params: Some(lsp_fee),
