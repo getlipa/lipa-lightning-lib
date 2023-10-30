@@ -845,7 +845,7 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
     };
 
     println!("Total of {} payments\n", payments.len().to_string().bold());
-    for payment in payments {
+    for payment in payments.into_iter().rev() {
         let payment_type = format!("{:?}", payment.payment_type);
         let created_at: DateTime<Utc> = payment.created_at.time.into();
         let timezone = FixedOffset::east_opt(payment.created_at.timezone_utc_offset_secs).unwrap();
