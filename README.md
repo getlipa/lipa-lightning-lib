@@ -26,12 +26,12 @@ Create `.cargo/config.toml` file with desired values (see `.cargo/config.toml.sa
 
 To start the example node included in this repository, run:
 ```sh
-make run-3l
+make run-node
 ```
 
 To start the example node in another environment:
 ```sh
-make run-3l ARGS=dev
+make run-node ARGS=dev
 ```
 `local` (default), `dev`, `stage`, and `prod` environments are available.
 

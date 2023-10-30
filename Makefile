@@ -69,7 +69,7 @@ doc:
 .PHONY: pr
 pr: fmt buildall test clippy check-mod-test check-udl doc
 
-.PHONY: run-3l
-run-3l: ARGS =
-run-3l:
-	cargo run --example 3l-node -- $(ARGS)
+.PHONY: run-node
+run-node: ARGS =
+run-node:
+	cargo run --example node -- $(ARGS)
