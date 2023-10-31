@@ -445,9 +445,10 @@ impl LightningNode {
                     "Failed to list lsps",
                 )?;
                 let lsp = lsps
-                    .first()
+                    .into_iter()
+                    .next()
                     .ok_or_runtime_error(RuntimeErrorCode::NodeUnavailable, "No lsp available")?;
-                sdk.connect_lsp(lsp.id.clone()).await.map_to_runtime_error(
+                sdk.connect_lsp(lsp.id).await.map_to_runtime_error(
                     RuntimeErrorCode::NodeUnavailable,
                     "Failed to connect to lsp",
                 )?;
@@ -577,7 +578,7 @@ impl LightningNode {
     /// provided to [`LightningNode::create_invoice`]
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
         let req = OpenChannelFeeRequest {
-            amount_msat: amount_sat * 1_000,
+            amount_msat: amount_sat.as_sats().msats,
             expiry: None,
         };
         let res = self
