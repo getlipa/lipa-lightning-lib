@@ -109,6 +109,7 @@ fn fetch_legacy_balance(client: &Client, backend_url: &String, public_key: Strin
         node_pub_key: Some(public_key),
     };
     let data = post_blocking::<MigrationBalance>(client, backend_url, variables)
+        .prefix_error("Failed to fetch balance to migrate")
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
     let balance_sat = data
         .migration_balance
@@ -133,6 +134,7 @@ fn payout(
         ldk_node_pub_key: Some(public_key),
     };
     let _ = post_blocking::<MigrateFunds>(client, backend_url, variables)
+        .prefix_error("Failed to payout")
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
     Ok(())
 }
