@@ -35,8 +35,8 @@ impl Environment {
                 pocket_url: env!("POCKET_URL_LOCAL").to_string(),
             },
             EnvironmentCode::Dev => Self {
-                network: Network::Bitcoin,
-                environment_type: EnvironmentType::Production,
+                network: Network::Testnet,
+                environment_type: EnvironmentType::Staging,
                 backend_url,
                 backend_health_url,
                 pocket_url: env!("POCKET_URL_DEV").to_string(),

@@ -414,6 +414,8 @@ impl LightningNode {
             },
         );
 
+        // Override Breez SDK default network to our configuration.
+        breez_config.network = breez_sdk_core::Network::from(environment.network);
         breez_config.working_dir = config.local_persistence_path.clone();
         breez_config.exemptfee_msat = EXEMPT_FEE.msats;
         breez_config.maxfee_percent = MAX_FEE_PERMYRIAD as f64 / 100_f64;
