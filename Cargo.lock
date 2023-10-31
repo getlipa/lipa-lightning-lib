@@ -2181,6 +2181,7 @@ checksum = "3852614a3bd9ca9804678ba6be5e3b8ce76dfc902cae004e3e0c44051b6e88db"
 name = "lipalightninglib"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bip39",
  "bitcoin 0.29.2",
  "breez-sdk-core",
