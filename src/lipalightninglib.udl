@@ -30,10 +30,10 @@ interface LightningNode {
     MaxRoutingFeeMode get_payment_max_routing_fee_mode(u64 amount_sat);
 
     [Throws=PayError]
-    void pay_invoice(string invoice, string metadata);
+    void pay_invoice(InvoiceDetails invoice_details, string metadata);
 
     [Throws=PayError]
-    void pay_open_invoice(string invoice, u64 amount_sat, string metadata);
+    void pay_open_invoice(InvoiceDetails invoice_details, u64 amount_sat, string metadata);
 
     [Throws=LnError]
     string pay_lnurlp(u64 amount_sat, LnUrlPayRequestData lnurl_pay_request_data);
