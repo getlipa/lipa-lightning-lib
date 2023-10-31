@@ -716,25 +716,16 @@ impl LightningNode {
     /// callbacks [`EventsCallback::payment_sent`] and [`EventsCallback::payment_failed`].
     ///
     /// Parameters:
-    /// * `invoice` - a BOLT-11 invoice (normally starts with lnbc). The invoice must:
-    ///         - use the same network as the one this node operates on
-    ///         - have not expired
+    /// * `invoice_details` - details of an invoice decode by [`LightningNode::decode_data`]
     /// * `metadata` - a metadata string that gets tied up to this payment. It can be used by the user of this library
     ///  to store data that is relevant to this payment. It is provided together with the respective payment in [`LightningNode::get_latest_payments`].
-    pub fn pay_invoice(&self, invoice: String, _metadata: String) -> PayResult<()> {
-        match self.rt.handle().block_on(parse(&invoice)) {
-            Ok(InputType::Bolt11 { invoice }) => self
-                .store_payment_info(&invoice.payment_hash, None)
-                .map_to_permanent_failure("Failed to persist payment info"),
-            _ => Err(invalid_input("Invalid invoice")),
-        }?;
+    pub fn pay_invoice(&self, invoice_details: InvoiceDetails, _metadata: String) -> PayResult<()> {
         // TODO: persist metadata
-
         match self
             .rt
             .handle()
             .block_on(self.sdk.send_payment(SendPaymentRequest {
-                bolt11: invoice,
+                bolt11: invoice_details.invoice,
                 amount_msat: None,
             })) {
             Ok(_) => Ok(()),
@@ -754,23 +745,16 @@ impl LightningNode {
     /// * `amount_sat` - amount in sats to be paid
     pub fn pay_open_invoice(
         &self,
-        invoice: String,
+        invoice_details: InvoiceDetails,
         amount_sat: u64,
         _metadata: String,
     ) -> PayResult<()> {
-        match self.rt.handle().block_on(parse(&invoice)) {
-            Ok(InputType::Bolt11 { invoice }) => self
-                .store_payment_info(&invoice.payment_hash, None)
-                .map_to_permanent_failure("Failed to persist payment info"),
-            _ => Err(invalid_input("Invalid invoice")),
-        }?;
         // TODO: persist metadata
-
         match self
             .rt
             .handle()
             .block_on(self.sdk.send_payment(SendPaymentRequest {
-                bolt11: invoice,
+                bolt11: invoice_details.invoice,
                 amount_msat: Some(amount_sat.as_sats().msats),
             })) {
             Ok(_) => Ok(()),
@@ -918,8 +902,7 @@ impl LightningNode {
                         .timezone_config
                         .timezone_utc_offset_secs,
                 };
-                let offer = d.offer;
-                (exchange_rate, time, offer)
+                (exchange_rate, time, d.offer)
             }
         };
 
@@ -978,7 +961,7 @@ impl LightningNode {
             hash: payment_details.payment_hash,
             amount,
             invoice_details,
-            created_at: time.clone(),
+            created_at: time,
             description,
             preimage: Some(payment_details.payment_preimage),
             network_fees,

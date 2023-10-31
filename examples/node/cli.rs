@@ -612,10 +612,15 @@ fn pay_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
         return Err("To many arguments. Specifying an amount is only allowed for open invoices. To pay an open invoice use 'payopeninvoice'.".to_string());
     }
 
-    match node.pay_invoice(invoice.to_string(), String::new()) {
-        Ok(_) => {}
-        Err(e) => return Err(e.to_string()),
-    };
+    let result = node
+        .decode_data(invoice.to_string())
+        .map_err(|e| e.to_string())?;
+    if let DecodedData::Bolt11Invoice { invoice_details } = result {
+        node.pay_invoice(invoice_details, String::new())
+            .map_err(|e| e.to_string())?;
+    } else {
+        return Err("Provided data is not a BOLT-11 invoice".to_string());
+    }
 
     Ok(())
 }
@@ -638,10 +643,15 @@ fn pay_open_invoice(
         ),
     }?;
 
-    match node.pay_open_invoice(invoice.to_string(), amount_argument, String::new()) {
-        Ok(_) => {}
-        Err(e) => return Err(e.to_string()),
-    };
+    let result = node
+        .decode_data(invoice.to_string())
+        .map_err(|e| e.to_string())?;
+    if let DecodedData::Bolt11Invoice { invoice_details } = result {
+        node.pay_open_invoice(invoice_details, amount_argument, String::new())
+            .map_err(|e| e.to_string())?;
+    } else {
+        return Err("Provided data is not a BOLT-11 invoice".to_string());
+    }
 
     Ok(())
 }
@@ -729,7 +739,7 @@ fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Re
     let lnurlp_details = match node.decode_data(lnurlp.into()) {
         Ok(DecodedData::LnUrlPay { lnurl_pay_details }) => lnurl_pay_details,
         Ok(DecodedData::Bolt11Invoice { .. }) => {
-            return Err("A Bolt11 invoice was provided instead of an LNURL-pay".into())
+            return Err("A BOLT-11 invoice was provided instead of an LNURL-pay".into())
         }
         Err(_) => return Err("Invalid lnurlp".into()),
     };
