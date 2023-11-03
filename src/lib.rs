@@ -350,12 +350,14 @@ const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_exchange_rates: Some(Duration::from_secs(10 * 60)),
     sync_breez: Some(Duration::from_secs(10 * 60)),
     update_lsp_fee: Some(Duration::from_secs(10 * 60)),
+    redeem_swaps: Some(Duration::from_secs(10 * 60)),
 };
 
 const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_exchange_rates: None,
     sync_breez: Some(Duration::from_secs(30 * 60)),
     update_lsp_fee: None,
+    redeem_swaps: None,
 };
 
 /// The main class/struct of this library. Constructing an instance will initiate the Lightning node and
@@ -519,6 +521,7 @@ impl LightningNode {
                     update_exchange_rates: Some(period),
                     sync_breez: Some(period),
                     update_lsp_fee: Some(period),
+                    redeem_swaps: Some(period),
                 }
             }
             Err(_) => FOREGROUND_PERIODS,

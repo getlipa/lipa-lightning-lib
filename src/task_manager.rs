@@ -15,6 +15,7 @@ pub(crate) struct TaskPeriods {
     pub update_exchange_rates: Option<Duration>,
     pub sync_breez: Option<Duration>,
     pub update_lsp_fee: Option<Duration>,
+    pub redeem_swaps: Option<Duration>,
 }
 
 pub(crate) struct TaskManager {
@@ -82,6 +83,11 @@ impl TaskManager {
         // Update lsp fee.
         if let Some(period) = periods.update_lsp_fee {
             self.task_handles.push(self.start_lsp_fee_update(period));
+        }
+
+        // Redeem swaps.
+        if let Some(period) = periods.redeem_swaps {
+            self.task_handles.push(self.start_redeem_swaps(period));
         }
     }
 
@@ -153,6 +159,25 @@ impl TaskManager {
                     }
                     Err(e) => {
                         error!("Failed to update lsp fee: {e}");
+                    }
+                }
+            }
+        })
+    }
+
+    fn start_redeem_swaps(&self, period: Duration) -> RepeatingTaskHandle {
+        let sdk = Arc::clone(&self.sdk);
+        self.runtime_handle.spawn_repeating_task(period, move || {
+            let sdk = Arc::clone(&sdk);
+            async move {
+                trace!("Starting redeem swaps task");
+                match sdk.in_progress_swap().await {
+                    Ok(Some(s)) => {
+                        trace!("A swap is in progress: {s:?}");
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        error!("Failed to call in_progress_swap(): {e}");
                     }
                 }
             }
