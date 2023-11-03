@@ -173,7 +173,7 @@ impl TaskManager {
                 trace!("Starting redeem swaps task");
                 match sdk.in_progress_swap().await {
                     Ok(Some(s)) => {
-                        trace!("A swap is in progress: {:?}", s);
+                        trace!("A swap is in progress: {s:?}");
                     }
                     Ok(None) => {}
                     Err(e) => {
