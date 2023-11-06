@@ -12,13 +12,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 
-#[derive(Debug)]
-pub enum TopupCurrency {
-    EUR,
-    CHF,
-    GBP,
-}
-
 /// Information about a fiat top-up registration
 #[derive(Debug)]
 pub struct FiatTopupInfo {
@@ -153,7 +146,7 @@ impl PocketClient {
     pub fn register_pocket_fiat_topup(
         &self,
         user_iban: &str,
-        user_currency: TopupCurrency,
+        user_currency: String,
     ) -> Result<FiatTopupInfo> {
         let challenge_response = self.request_challenge()?;
 
@@ -196,7 +189,7 @@ impl PocketClient {
         &self,
         challenge_response: ChallengeResponse,
         user_iban: &str,
-        user_currency: TopupCurrency,
+        user_currency: String,
     ) -> Result<CreateOrderResponse> {
         let message = format!(
             "I confirm my bitcoin wallet. [{}]",
@@ -213,16 +206,11 @@ impl PocketClient {
             })?
             .id;
 
-        let user_currency = match user_currency {
-            TopupCurrency::EUR => "eur",
-            TopupCurrency::CHF => "chf",
-            TopupCurrency::GBP => "gbp",
-        };
         let create_order_request = CreateOrderRequest {
             active: true,
             affiliate_id: None,
             payment_method: PaymentMethodRequest {
-                currency: user_currency.to_string(),
+                currency: user_currency.to_lowercase(),
                 debitor_iban: user_iban.to_string(),
             },
             payout_method: PayoutMethod {

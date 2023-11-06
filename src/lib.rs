@@ -43,7 +43,6 @@ pub use crate::errors::{DecodeInvoiceError, MnemonicError, PayError, PayErrorCod
 pub use crate::errors::{Error as LnError, Result, RuntimeErrorCode};
 pub use crate::exchange_rate_provider::ExchangeRate;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
-pub use crate::fiat_topup::TopupCurrency;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
@@ -1043,12 +1042,14 @@ impl LightningNode {
     /// Parameters:
     /// * `email` - this email will be used to send status information about different topups
     /// * `user_iban` - the user will send fiat from this iban
-    /// * `user_currency` - the fiat currency that will be sent for exchange
+    /// * `user_currency` - the fiat currency (ISO 4217 currency code) that will be sent for
+    /// exchange. Not all are supported. A consumer of this library should find out about available
+    /// ones using other sources.
     pub fn register_fiat_topup(
         &self,
         email: Option<String>,
         user_iban: String,
-        user_currency: TopupCurrency,
+        user_currency: String,
     ) -> Result<FiatTopupInfo> {
         trace!("register_fiat_topup() - called with - email: {email:?} - user_iban: {user_iban} - user_currency: {user_currency:?}");
         user_iban
