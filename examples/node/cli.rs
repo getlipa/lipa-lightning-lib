@@ -12,7 +12,7 @@ use std::collections::HashSet;
 use std::path::Path;
 use uniffi_lipalightninglib::{
     Amount, DecodedData, ExchangeRate, FiatValue, InvoiceDetails, LightningNode, LiquidityLimit,
-    LnUrlPayDetails, MaxRoutingFeeMode, OfferKind, PaymentState, TopupCurrency, TzConfig,
+    LnUrlPayDetails, MaxRoutingFeeMode, OfferKind, PaymentState, TzConfig,
 };
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
@@ -673,15 +673,10 @@ fn register_topup(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -
     let iban = words.next().ok_or(anyhow!("IBAN is required"))?;
 
     let currency = words.next().ok_or(anyhow!("Currency is required"))?;
-    let currency = match currency {
-        "eur" => TopupCurrency::EUR,
-        "chf" => TopupCurrency::CHF,
-        _ => bail!("Invalid currency"),
-    };
 
     let email = words.next().map(String::from);
 
-    let topup_info = node.register_fiat_topup(email, iban.to_string(), currency)?;
+    let topup_info = node.register_fiat_topup(email, iban.to_string(), currency.to_string())?;
     println!("{topup_info:?}");
 
     Ok(())

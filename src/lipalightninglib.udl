@@ -60,7 +60,7 @@ interface LightningNode {
     void accept_pocket_terms_and_conditions();
 
     [Throws=LnError]
-    FiatTopupInfo register_fiat_topup(string? email, string user_iban, TopupCurrency user_currency);
+    FiatTopupInfo register_fiat_topup(string? email, string user_iban, string user_currency);
 
     [Throws=LnError]
     sequence<OfferInfo> query_uncompleted_offers();
@@ -267,12 +267,6 @@ dictionary ExchangeRate {
 dictionary Amount {
     u64 sats;
     FiatValue? fiat;
-};
-
-enum TopupCurrency {
-    "EUR",
-    "CHF",
-    "GBP",
 };
 
 dictionary FiatTopupInfo {
