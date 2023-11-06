@@ -60,6 +60,7 @@ rusqlite = { version = "0.29.0", features = [
 
 
 [dev-dependencies]
+anyhow = "1"
 colored = "2.0.4"
 ctor = "0.2.5"
 rustyline = { version = "12.0.0", features = ["derive"] }

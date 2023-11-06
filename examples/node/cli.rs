@@ -1,5 +1,6 @@
 use crate::hinter::{CommandHint, CommandHinter};
 
+use anyhow::{anyhow, bail, Context, Result};
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Local, Utc};
 use colored::Colorize;
@@ -10,14 +11,9 @@ use rustyline::Editor;
 use std::collections::HashSet;
 use std::path::Path;
 use uniffi_lipalightninglib::{
-    Amount, DecodedData, FiatValue, LnUrlPayDetails, MaxRoutingFeeMode, OfferKind, PaymentState,
-    TopupCurrency,
+    Amount, DecodedData, ExchangeRate, FiatValue, InvoiceDetails, LightningNode, LiquidityLimit,
+    LnUrlPayDetails, MaxRoutingFeeMode, OfferKind, PaymentState, TopupCurrency, TzConfig,
 };
-use uniffi_lipalightninglib::{InvoiceDetails, LiquidityLimit};
-
-use crate::LightningNode;
-use crate::TzConfig;
-use uniffi_lipalightninglib::ExchangeRate;
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("{}", "3L Example Node".blue().bold());
@@ -56,16 +52,14 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 }
                 "calculatelspfee" => {
                     if let Err(message) = calculate_lsp_fee(node, &mut words) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "paymentamountlimits" => {
                     payment_amount_limits(node);
                 }
                 "exchangerates" => {
-                    if let Err(message) = get_exchange_rate(node) {
-                        println!("{}", message.red());
-                    }
+                    get_exchange_rate(node);
                 }
                 "listcurrencies" => {
                     list_currency_codes(node);
@@ -85,77 +79,77 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 }
                 "changetimezone" => {
                     if let Err(message) = change_timezone(node, &mut words) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "invoice" => {
                     if let Err(message) = create_invoice(node, &mut words) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "decodedata" => {
                     if let Err(message) = decode_data(node, &mut words) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "decodeinvoice" => {
                     if let Err(message) = decode_invoice(node, &mut words) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "getmaxroutingfeemode" => {
                     if let Err(message) = get_max_routing_fee_mode(node, &mut words) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "payinvoice" => {
                     if let Err(message) = pay_invoice(node, &mut words) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "payopeninvoice" => {
                     if let Err(message) = pay_open_invoice(node, &mut words) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "getswapaddress" => {
                     if let Err(message) = get_swap_address(node) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "listfailedswaps" => {
                     if let Err(message) = list_failed_swaps(node) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "refundfailedswap" => {
                     if let Err(message) = refund_failed_swap(node, &mut words) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "paylnurlp" => {
                     if let Err(message) = pay_lnurlp(node, &mut words) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "registertopup" => {
                     if let Err(message) = register_topup(node, &mut words) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "listoffers" => {
                     if let Err(message) = list_offers(node) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "listpayments" => {
                     if let Err(message) = list_payments(node) {
-                        println!("{}", message.red());
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "paymentuuid" => match payment_uuid(node, &mut words) {
                     Ok(uuid) => println!("{uuid}"),
-                    Err(message) => eprintln!("{}", message.red()),
+                    Err(message) => eprintln!("{}", format!("{message:#}").red()),
                 },
                 "sweep" => {
                     let address = words
@@ -175,12 +169,12 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                             println!("Transaction Id: {}", txid);
                             println!("Payout address: {}", address)
                         }
-                        Err(e) => println!("{}", e.red()),
+                        Err(message) => println!("{}", format!("{message:#}").red()),
                     }
                 }
                 "logdebug" => {
-                    if let Err(e) = node.log_debug_info() {
-                        println!("{}", e.to_string().red());
+                    if let Err(message) = node.log_debug_info() {
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "foreground" => {
@@ -333,17 +327,13 @@ fn lsp_fee(node: &LightningNode) {
     );
 }
 
-fn calculate_lsp_fee(
-    node: &LightningNode,
-    words: &mut dyn Iterator<Item = &str>,
-) -> Result<(), String> {
-    let amount = words
+fn calculate_lsp_fee(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let amount: u64 = words
         .next()
-        .ok_or_else(|| "Error: amount in SAT is required".to_string())?;
-    let amount: u64 = amount
+        .ok_or(anyhow!("Amount in SAT is required"))?
         .parse()
-        .map_err(|_| "Error: amount should be an integer number".to_string())?;
-    let response = node.calculate_lsp_fee(amount).unwrap();
+        .context("Amount should be a positive integer number")?;
+    let response = node.calculate_lsp_fee(amount)?;
     println!(" LSP fee: {} SAT", amount_to_string(response.lsp_fee));
     Ok(())
 }
@@ -414,7 +404,7 @@ fn wallet_pubkey_id(node: &LightningNode) {
     }
 }
 
-fn get_exchange_rate(node: &LightningNode) -> Result<(), String> {
+fn get_exchange_rate(node: &LightningNode) {
     match node.get_exchange_rate() {
         Some(r) => {
             let dt: DateTime<Utc> = r.updated_at.into();
@@ -429,7 +419,6 @@ fn get_exchange_rate(node: &LightningNode) -> Result<(), String> {
             println!("Exchange rate not available");
         }
     }
-    Ok(())
 }
 
 fn list_currency_codes(node: &LightningNode) {
@@ -441,15 +430,12 @@ fn change_currency(node: &LightningNode, fiat_currency: &str) {
     node.change_fiat_currency(String::from(fiat_currency));
 }
 
-fn change_timezone(
-    node: &LightningNode,
-    words: &mut dyn Iterator<Item = &str>,
-) -> Result<(), String> {
+fn change_timezone(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let timezone_utc_offset_mins: i32 = words
         .next()
         .unwrap_or("0")
         .parse()
-        .map_err(|_| "Error: offset should be an integer number".to_string())?;
+        .context("Offset should be an integer number")?;
     let timezone_utc_offset_secs = timezone_utc_offset_mins * 60;
     let timezone_id = words.collect::<Vec<_>>().join(" ");
 
@@ -466,35 +452,22 @@ fn change_timezone(
     Ok(())
 }
 
-fn create_invoice(
-    node: &LightningNode,
-    words: &mut dyn Iterator<Item = &str>,
-) -> Result<(), String> {
-    let amount = words
+fn create_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let amount: u64 = words
         .next()
-        .ok_or_else(|| "Error: amount in SAT is required".to_string())?;
-    let amount: u64 = amount
+        .ok_or(anyhow!("Amount in SAT is required"))?
         .parse()
-        .map_err(|_| "Error: amount should be an integer number".to_string())?;
+        .context("Amount should be a positive integer number")?;
     let description = words.collect::<Vec<_>>().join(" ");
-    let invoice_details = node
-        .create_invoice(amount, None, description, String::new())
-        .map_err(|e| e.to_string())?;
+    let invoice_details = node.create_invoice(amount, None, description, String::new())?;
     println!("{}", invoice_details.invoice);
     Ok(())
 }
 
-fn decode_data(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<(), String> {
-    let data = words
-        .next()
-        .ok_or_else(|| "Error: data is required".to_string())?;
+fn decode_data(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let data = words.next().ok_or(anyhow!("Data is required"))?;
 
-    let data = match node.decode_data(data.to_string()) {
-        Ok(d) => d,
-        Err(e) => return Err(e.to_string()),
-    };
-
-    match data {
+    match node.decode_data(data.to_string())? {
         DecodedData::Bolt11Invoice { invoice_details } => print_invoice_details(invoice_details),
         DecodedData::LnUrlPay { lnurl_pay_details } => print_lnurl_pay_details(lnurl_pay_details),
     }
@@ -502,19 +475,10 @@ fn decode_data(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
     Ok(())
 }
 
-fn decode_invoice(
-    node: &LightningNode,
-    words: &mut dyn Iterator<Item = &str>,
-) -> Result<(), String> {
-    let invoice = words
-        .next()
-        .ok_or_else(|| "Error: invoice is required".to_string())?;
+fn decode_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let invoice = words.next().ok_or(anyhow!("Invoice is required"))?;
 
-    let invoice_details = match node.decode_invoice(invoice.to_string()) {
-        Ok(id) => id,
-        Err(e) => return Err(e.to_string()),
-    };
-
+    let invoice_details = node.decode_invoice(invoice.to_string())?;
     print_invoice_details(invoice_details);
 
     Ok(())
@@ -574,16 +538,14 @@ fn print_lnurl_pay_details(lnurl_pay_details: LnUrlPayDetails) {
 fn get_max_routing_fee_mode(
     node: &LightningNode,
     words: &mut dyn Iterator<Item = &str>,
-) -> Result<(), String> {
-    let amount_argument = match words.next() {
-        Some(amount) => match amount.parse::<u64>() {
-            Ok(parsed) => Ok(parsed),
-            Err(_) => return Err("Error: SAT amount must be an integer".to_string()),
-        },
-        None => Err("The payment amount in SAT is required".to_string()),
-    }?;
+) -> Result<()> {
+    let amount: u64 = words
+        .next()
+        .ok_or(anyhow!("The payment amount in SAT is required"))?
+        .parse()
+        .context("Amount should be a positive integer number")?;
 
-    let max_fee_strategy = node.get_payment_max_routing_fee_mode(amount_argument);
+    let max_fee_strategy = node.get_payment_max_routing_fee_mode(amount);
 
     match max_fee_strategy {
         MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
@@ -603,64 +565,44 @@ fn get_max_routing_fee_mode(
     Ok(())
 }
 
-fn pay_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<(), String> {
-    let invoice = words
-        .next()
-        .ok_or_else(|| "invoice is required".to_string())?;
+fn pay_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let invoice = words.next().ok_or(anyhow!("Invoice is required"))?;
 
     if words.next().is_some() {
-        return Err("To many arguments. Specifying an amount is only allowed for open invoices. To pay an open invoice use 'payopeninvoice'.".to_string());
+        bail!("To many arguments. Specifying an amount is only allowed for open invoices. To pay an open invoice use 'payopeninvoice'");
     }
 
-    let result = node
-        .decode_data(invoice.to_string())
-        .map_err(|e| e.to_string())?;
+    let result = node.decode_data(invoice.to_string())?;
     if let DecodedData::Bolt11Invoice { invoice_details } = result {
-        node.pay_invoice(invoice_details, String::new())
-            .map_err(|e| e.to_string())?;
+        node.pay_invoice(invoice_details, String::new())?;
     } else {
-        return Err("Provided data is not a BOLT-11 invoice".to_string());
+        bail!("Provided data is not a BOLT-11 invoice");
     }
 
     Ok(())
 }
 
-fn pay_open_invoice(
-    node: &LightningNode,
-    words: &mut dyn Iterator<Item = &str>,
-) -> Result<(), String> {
-    let invoice = words
+fn pay_open_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let invoice = words.next().ok_or(anyhow!("Invoice is required"))?;
+
+    let amount: u64 = words
         .next()
-        .ok_or_else(|| "invoice is required".to_string())?;
+        .ok_or(anyhow!("The payment amount in SAT is required"))?
+        .parse()
+        .context("Amount should be a positive integer number")?;
 
-    let amount_argument = match words.next() {
-        Some(amount) => match amount.parse::<u64>() {
-            Ok(parsed) => Ok(parsed),
-            Err(_) => return Err("Error: SAT amount must be an integer".to_string()),
-        },
-        None => Err(
-            "Open amount invoices require an amount in SAT as an additional argument".to_string(),
-        ),
-    }?;
-
-    let result = node
-        .decode_data(invoice.to_string())
-        .map_err(|e| e.to_string())?;
+    let result = node.decode_data(invoice.to_string())?;
     if let DecodedData::Bolt11Invoice { invoice_details } = result {
-        node.pay_open_invoice(invoice_details, amount_argument, String::new())
-            .map_err(|e| e.to_string())?;
+        node.pay_open_invoice(invoice_details, amount, String::new())?;
     } else {
-        return Err("Provided data is not a BOLT-11 invoice".to_string());
+        bail!("Provided data is not a BOLT-11 invoice");
     }
 
     Ok(())
 }
 
-fn get_swap_address(node: &LightningNode) -> Result<(), String> {
-    let swap_address_info = match node.generate_swap_address(None) {
-        Ok(s) => s,
-        Err(e) => return Err(e.to_string()),
-    };
+fn get_swap_address(node: &LightningNode) -> Result<()> {
+    let swap_address_info = node.generate_swap_address(None)?;
 
     println!("Swap Address Information:");
     println!("  Address             {}", swap_address_info.address);
@@ -676,11 +618,8 @@ fn get_swap_address(node: &LightningNode) -> Result<(), String> {
     Ok(())
 }
 
-fn list_failed_swaps(node: &LightningNode) -> Result<(), String> {
-    let failed_swaps = match node.get_unresolved_failed_swaps() {
-        Ok(s) => s,
-        Err(e) => return Err(e.to_string()),
-    };
+fn list_failed_swaps(node: &LightningNode) -> Result<()> {
+    let failed_swaps = node.get_unresolved_failed_swaps()?;
 
     println!(
         "Total of {} failed swaps\n",
@@ -696,99 +635,60 @@ fn list_failed_swaps(node: &LightningNode) -> Result<(), String> {
     Ok(())
 }
 
-fn refund_failed_swap(
-    node: &LightningNode,
-    words: &mut dyn Iterator<Item = &str>,
-) -> Result<(), String> {
-    let swap_address = words
-        .next()
-        .ok_or_else(|| "swap address is required".to_string())?;
-    let to_address = words
-        .next()
-        .ok_or_else(|| "to address is required".to_string())?;
+fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let swap_address = words.next().ok_or(anyhow!("Swap address is required"))?;
+    let to_address = words.next().ok_or(anyhow!("To address is required"))?;
 
-    let fee_rate = match node.query_onchain_fee_rate() {
-        Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
-    };
+    let fee_rate = node.query_onchain_fee_rate()?;
 
-    match node.resolve_failed_swap(swap_address.into(), to_address.into(), fee_rate) {
-        Ok(txid) => {
-            println!("Successfully broadcasted refund transaction - txid: {txid}")
-        }
-        Err(e) => return Err(e.to_string()),
-    }
+    let txid = node.resolve_failed_swap(swap_address.into(), to_address.into(), fee_rate)?;
+    println!("Successfully broadcasted refund transaction - txid: {txid}");
 
     Ok(())
 }
-fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<(), String> {
-    let lnurlp = words
-        .next()
-        .ok_or_else(|| "lnurlp is required".to_string())?;
+fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let lnurlp = words.next().ok_or(anyhow!("LNURL pay is required"))?;
 
-    let amount_argument = match words.next() {
-        Some(amount) => match amount.parse::<u64>() {
-            Ok(parsed) => Ok(parsed),
-            Err(_) => return Err("Error: SAT amount must be an integer".to_string()),
-        },
-        None => Err(
-            "Paying an LNURL-pay requires an amount in SAT as an additional argument".to_string(),
-        ),
-    }?;
+    let amount: u64 = words
+        .next()
+        .ok_or(anyhow!("The payment amount in SAT is required"))?
+        .parse()
+        .context("Amount should be a positive integer number")?;
 
     let lnurlp_details = match node.decode_data(lnurlp.into()) {
         Ok(DecodedData::LnUrlPay { lnurl_pay_details }) => lnurl_pay_details,
         Ok(DecodedData::Bolt11Invoice { .. }) => {
-            return Err("A BOLT-11 invoice was provided instead of an LNURL-pay".into())
+            bail!("A BOLT-11 invoice was provided instead of an LNURL-pay")
         }
-        Err(_) => return Err("Invalid lnurlp".into()),
+        Err(_) => bail!("Invalid lnurlp"),
     };
 
-    match node.pay_lnurlp(amount_argument, lnurlp_details.request_data) {
-        Ok(hash) => {
-            println!("Started to pay lnurlp - payment hash is {hash}");
-        }
-        Err(e) => return Err(e.to_string()),
-    };
+    let hash = node.pay_lnurlp(amount, lnurlp_details.request_data)?;
+    println!("Started to pay lnurlp - payment hash is {hash}");
 
     Ok(())
 }
 
-fn register_topup(
-    node: &LightningNode,
-    words: &mut dyn Iterator<Item = &str>,
-) -> Result<(), String> {
-    let iban = words.next().ok_or_else(|| "IBAN is required".to_string())?;
+fn register_topup(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let iban = words.next().ok_or(anyhow!("IBAN is required"))?;
 
-    let currency = words
-        .next()
-        .ok_or_else(|| "currency is required".to_string())?;
+    let currency = words.next().ok_or(anyhow!("Currency is required"))?;
     let currency = match currency {
         "eur" => TopupCurrency::EUR,
         "chf" => TopupCurrency::CHF,
-        "gbp" => TopupCurrency::GBP,
-        _ => {
-            return Err("Invalid currency".into());
-        }
+        _ => bail!("Invalid currency"),
     };
 
-    let email = words.next().map(|e| e.to_string());
+    let email = words.next().map(String::from);
 
-    let topup_info = match node.register_fiat_topup(email, iban.to_string(), currency) {
-        Ok(info) => info,
-        Err(e) => return Err(e.to_string()),
-    };
-
+    let topup_info = node.register_fiat_topup(email, iban.to_string(), currency)?;
     println!("{topup_info:?}");
 
     Ok(())
 }
 
-fn list_offers(node: &LightningNode) -> Result<(), String> {
-    let offers = match node.query_uncompleted_offers() {
-        Ok(p) => p,
-        Err(e) => return Err(e.to_string()),
-    };
+fn list_offers(node: &LightningNode) -> Result<()> {
+    let offers = node.query_uncompleted_offers()?;
 
     println!("Total of {} offers\n", offers.len().to_string().bold());
     for offer in offers {
@@ -800,7 +700,7 @@ fn list_offers(node: &LightningNode) -> Result<(), String> {
         let expires_at: Option<DateTime<Local>> = offer.expires_at.map(|e| e.into());
 
         println!("{kind} offer created at {created_at}:");
-        println!("      Expires at:         {:?}", expires_at);
+        println!("      Expires at:         {expires_at:?}");
         println!(
             "      Amount:             {}",
             amount_to_string(offer.amount)
@@ -837,7 +737,7 @@ fn list_offers(node: &LightningNode) -> Result<(), String> {
                 );
 
                 if let Some(e) = error {
-                    println!("             Failure reason: {:?}", e);
+                    println!("             Failure reason: {e:?}");
                 }
             }
         }
@@ -848,17 +748,15 @@ fn list_offers(node: &LightningNode) -> Result<(), String> {
     Ok(())
 }
 
-fn list_payments(node: &LightningNode) -> Result<(), String> {
-    let payments = match node.get_latest_payments(100) {
-        Ok(p) => p,
-        Err(e) => return Err(e.to_string()),
-    };
+fn list_payments(node: &LightningNode) -> Result<()> {
+    let payments = node.get_latest_payments(100)?;
 
     println!("Total of {} payments\n", payments.len().to_string().bold());
     for payment in payments.into_iter().rev() {
         let payment_type = format!("{:?}", payment.payment_type);
         let created_at: DateTime<Utc> = payment.created_at.time.into();
-        let timezone = FixedOffset::east_opt(payment.created_at.timezone_utc_offset_secs).unwrap();
+        let timezone = FixedOffset::east_opt(payment.created_at.timezone_utc_offset_secs)
+            .ok_or(anyhow!("east_opt failed"))?;
         let created_at = created_at.with_timezone(&timezone);
 
         println!(
@@ -889,22 +787,14 @@ fn list_payments(node: &LightningNode) -> Result<(), String> {
     Ok(())
 }
 
-fn payment_uuid(
-    node: &LightningNode,
-    words: &mut dyn Iterator<Item = &str>,
-) -> Result<String, String> {
-    let payment_hash = words
-        .next()
-        .ok_or_else(|| "Payment Hash is required".to_string())?;
-    node.get_payment_uuid(payment_hash.to_string())
-        .map_err(|e| e.to_string())
+fn payment_uuid(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<String> {
+    let payment_hash = words.next().ok_or(anyhow!("Payment Hash is required"))?;
+    Ok(node.get_payment_uuid(payment_hash.to_string())?)
 }
 
-fn sweep(node: &LightningNode, address: String) -> Result<String, String> {
-    let fee_rate = node.query_onchain_fee_rate().map_err(|e| e.to_string())?;
-
-    node.sweep(address.to_string(), fee_rate)
-        .map_err(|e| e.to_string())
+fn sweep(node: &LightningNode, address: String) -> Result<String> {
+    let fee_rate = node.query_onchain_fee_rate()?;
+    Ok(node.sweep(address.to_string(), fee_rate)?)
 }
 
 fn offer_to_string(offer: Option<OfferKind>) -> String {
