@@ -122,6 +122,41 @@ impl DataStore {
         }
     }
 
+    pub(crate) fn store_created_invoice(&self, hash: &str, invoice: &str) -> Result<()> {
+        self.conn
+            .execute(
+                "\
+            INSERT INTO created_invoices (hash, invoice)\
+            VALUES (?1, ?2)\
+            ",
+                [hash, invoice],
+            )
+            .map_to_permanent_failure("")?;
+        Ok(())
+    }
+
+    pub(crate) fn retrieve_created_invoices(&self) -> Result<Vec<String>> {
+        let mut statement = self
+            .conn
+            .prepare(
+                "\
+            SELECT invoice \
+            FROM created_invoices;
+        ",
+            )
+            .map_to_permanent_failure("Failed to retrieve created invoice from local db")?;
+
+        let invoice_iter = statement
+            .query_map([], |r| r.get::<usize, String>(0))
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
+
+        let mut invoices = Vec::new();
+        for rate in invoice_iter {
+            invoices.push(rate.map_to_permanent_failure("Corrupted db")?);
+        }
+        Ok(invoices)
+    }
+
     pub fn update_exchange_rate(
         &self,
         currency_code: &str,
@@ -777,6 +812,31 @@ mod tests {
         assert_eq!(
             data_store.retrive_funds_migration_status().unwrap(),
             MigrationStatus::Completed
+        );
+    }
+
+    #[test]
+    fn test_invoice_persistence() {
+        let db_name = String::from("invoice_persistence.db3");
+        reset_db(&db_name);
+        let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+
+        assert!(data_store.retrieve_created_invoices().unwrap().is_empty());
+
+        data_store
+            .store_created_invoice("hash1", "invoice1")
+            .unwrap();
+        assert_eq!(
+            data_store.retrieve_created_invoices().unwrap(),
+            vec!["invoice1".to_string()]
+        );
+
+        data_store
+            .store_created_invoice("hash2", "invoice2")
+            .unwrap();
+        assert_eq!(
+            data_store.retrieve_created_invoices().unwrap(),
+            vec!["invoice1".to_string(), "invoice2".to_string()]
         );
     }
 
