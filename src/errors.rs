@@ -1,4 +1,3 @@
-use crate::Network;
 use std::fmt::{Display, Formatter};
 
 /// A code that specifies the RuntimeError that occurred
@@ -68,16 +67,6 @@ impl Display for PayErrorCode {
 
 pub type PayError = perro::Error<PayErrorCode>;
 pub type PayResult<T> = std::result::Result<T, PayError>;
-
-#[derive(Debug, thiserror::Error)]
-pub enum DecodeInvoiceError {
-    #[error("Parse error: {msg}")]
-    ParseError { msg: String },
-    #[error("Semantic error: {msg}")]
-    SemanticError { msg: String },
-    #[error("Network mismatch (expected {expected}, found {found})")]
-    NetworkMismatch { expected: Network, found: Network },
-}
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum MnemonicError {

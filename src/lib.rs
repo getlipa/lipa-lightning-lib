@@ -39,8 +39,8 @@ pub use crate::config::{Config, TzConfig, TzTime};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 use crate::errors::{to_mnemonic_error, Error, SimpleError};
-pub use crate::errors::{DecodeInvoiceError, MnemonicError, PayError, PayErrorCode, PayResult};
 pub use crate::errors::{Error as LnError, Result, RuntimeErrorCode};
+pub use crate::errors::{MnemonicError, PayError, PayErrorCode, PayResult};
 pub use crate::exchange_rate_provider::ExchangeRate;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
@@ -60,11 +60,11 @@ use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{
-    parse, BreezEvent, BreezServices, EventListener, GreenlightCredentials, GreenlightNodeConfig,
-    InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlPayResult,
-    LnUrlWithdrawRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
-    PaymentDetails, PaymentStatus, PaymentTypeFilter, ReceiveOnchainRequest, RefundRequest,
-    SendPaymentRequest, SweepRequest,
+    parse, parse_invoice, BreezEvent, BreezServices, EventListener, GreenlightCredentials,
+    GreenlightNodeConfig, InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData,
+    LnUrlPayResult, LnUrlWithdrawRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest,
+    OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter, ReceiveOnchainRequest,
+    RefundRequest, SendPaymentRequest, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo, TopupStatus};
@@ -664,9 +664,7 @@ impl LightningNode {
         ))
     }
 
-    /// Decode a user-provided string (usually obtained from QR-code or pasted)
-    ///
-    /// Can be used instead of [`LightningNode::decode_invoice`].
+    /// Decode a user-provided string (usually obtained from QR-code or pasted).
     pub fn decode_data(&self, data: String) -> Result<DecodedData> {
         match self.rt.handle().block_on(parse(&data)) {
             Ok(InputType::Bolt11 { invoice }) => Ok(DecodedData::Bolt11Invoice {
@@ -683,27 +681,6 @@ impl LightningNode {
             }),
             Ok(_) => Err(invalid_input("Unsupported data type")), // TODO: improve returned error when new error model is introduced
             Err(e) => Err(invalid_input(format!("Unrecognized data type {e}"))), // TODO: improve returned error when new error model is introduced
-        }
-    }
-
-    /// Decodes an invoice returning detailed information
-    ///
-    /// Parameters:
-    /// * `invoice` - a BOLT-11 invoice (Mainnet invoices start with "lnbc")
-    pub fn decode_invoice(
-        &self,
-        invoice: String,
-    ) -> std::result::Result<InvoiceDetails, DecodeInvoiceError> {
-        match self.rt
-            .handle()
-            .block_on(parse(&invoice)) {
-            Ok(InputType::Bolt11 { invoice }) => Ok(InvoiceDetails::from_ln_invoice(invoice, &self.get_exchange_rate())),
-            Ok(_) => Err(DecodeInvoiceError::SemanticError {
-                msg: "Failed to decode invoice - provided string was recognized but not as a Bolt11 invoice".to_string(),
-            }),
-            Err(e) => Err(DecodeInvoiceError::ParseError {
-                msg: format!("Failed to parse invoice: {e}"),
-            }),
         }
     }
 
@@ -946,9 +923,9 @@ impl LightningNode {
             PaymentStatus::Failed => PaymentState::Failed,
         };
 
-        let invoice_details = self
-            .decode_invoice(payment_details.bolt11)
+        let invoice = parse_invoice(&payment_details.bolt11)
             .map_to_permanent_failure("Invalid invoice provided by the Breez SDK")?;
+        let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
 
         let description = invoice_details.description.clone();
 

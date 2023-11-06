@@ -24,9 +24,6 @@ interface LightningNode {
     [Throws=LnError]
     DecodedData decode_data(string data);
 
-    [Throws=DecodeInvoiceError]
-    InvoiceDetails decode_invoice(string invoice);
-
     MaxRoutingFeeMode get_payment_max_routing_fee_mode(u64 amount_sat);
 
     [Throws=PayError]
@@ -400,13 +397,6 @@ interface MnemonicError {
     BadEntropyBitCount();
     InvalidChecksum();
     AmbiguousLanguages();
-};
-
-[Error]
-interface DecodeInvoiceError {
-    ParseError(string msg);
-    SemanticError(string msg);
-    NetworkMismatch(Network expected, Network found);
 };
 
 [Error]

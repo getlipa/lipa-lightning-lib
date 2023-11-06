@@ -92,11 +92,6 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
-                "decodeinvoice" => {
-                    if let Err(message) = decode_invoice(node, &mut words) {
-                        println!("{}", format!("{message:#}").red());
-                    }
-                }
                 "getmaxroutingfeemode" => {
                     if let Err(message) = get_max_routing_fee_mode(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
@@ -227,10 +222,6 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
     hints.insert(CommandHint::new("decodedata <data>", "decodedata "));
     hints.insert(CommandHint::new(
-        "decodeinvoice <invoice>",
-        "decodeinvoice ",
-    ));
-    hints.insert(CommandHint::new(
         "getmaxroutingfeemode <payment amount in SAT>",
         "getmaxroutingfeemode ",
     ));
@@ -289,7 +280,6 @@ fn help() {
     println!();
     println!("  invoice <amount in SAT> [description]");
     println!("  decodedata <data>");
-    println!("  decodeinvoice <invoice>");
     println!("  getmaxroutingfeemode <payment amount in SAT>");
     println!("  payinvoice <invoice>");
     println!("  payopeninvoice <invoice> <amount in SAT>");
@@ -471,15 +461,6 @@ fn decode_data(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
         DecodedData::Bolt11Invoice { invoice_details } => print_invoice_details(invoice_details),
         DecodedData::LnUrlPay { lnurl_pay_details } => print_lnurl_pay_details(lnurl_pay_details),
     }
-
-    Ok(())
-}
-
-fn decode_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
-    let invoice = words.next().ok_or(anyhow!("Invoice is required"))?;
-
-    let invoice_details = node.decode_invoice(invoice.to_string())?;
-    print_invoice_details(invoice_details);
 
     Ok(())
 }
