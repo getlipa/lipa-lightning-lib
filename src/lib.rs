@@ -75,7 +75,6 @@ use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
 use iban::Iban;
 use log::{info, trace};
 use logger::init_logger_once;
-use num_enum::TryFromPrimitive;
 use perro::Error::RuntimeError;
 use perro::{
     invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
@@ -133,14 +132,14 @@ pub struct ChannelsInfo {
     pub outbound_capacity: Amount,
 }
 
-#[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 #[repr(u8)]
 pub enum PaymentType {
     Receiving,
     Sending,
 }
 
-#[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 #[repr(u8)]
 pub enum PaymentState {
     /// The payment was created and is in progress.

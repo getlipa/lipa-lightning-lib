@@ -1,5 +1,4 @@
 use crate::Network;
-use num_enum::TryFromPrimitive;
 use std::fmt::{Display, Formatter};
 
 /// A code that specifies the RuntimeError that occurred
@@ -30,7 +29,7 @@ pub type Error = perro::Error<RuntimeErrorCode>;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// A code that specifies the PayError that occurred.
-#[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 #[repr(u8)]
 pub enum PayErrorCode {
     /// The invoice has already expired.
