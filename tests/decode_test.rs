@@ -5,7 +5,7 @@ use crate::setup::start_alice;
 
 use serial_test::file_serial;
 use std::time::{Duration, SystemTime};
-use uniffi_lipalightninglib::{DecodedData, InvoiceDetails, LnError};
+use uniffi_lipalightninglib::{DecodeDataError, DecodedData, InvoiceDetails, UnsupportedDataType};
 
 #[test]
 #[file_serial(key, "/tmp/3l-int-tests-lock")]
@@ -14,11 +14,34 @@ fn test_decoding() {
 
     let invalid_invoice = "invalid".to_string();
     let result = node.decode_data(invalid_invoice);
-    assert!(matches!(result, Err(LnError::InvalidInput { .. })));
+    assert!(matches!(result, Err(DecodeDataError::Unrecognized { .. })));
 
     let bitcoin_address = "1DTHjgRiPnCYhgy7PcKxEEWAyFi4VoJpqi".to_string();
     let result = node.decode_data(bitcoin_address);
-    assert!(matches!(result, Err(LnError::InvalidInput { .. })));
+    assert!(matches!(
+        result,
+        Err(DecodeDataError::Unsupported {
+            typ: UnsupportedDataType::BitcoinAddress
+        })
+    ));
+
+    let node_id = "03864ef025fde8fb587d989186ce6a4a186895ee44a926bfc370e2c366597a3f8f".to_string();
+    let result = node.decode_data(node_id);
+    assert!(matches!(
+        result,
+        Err(DecodeDataError::Unsupported {
+            typ: UnsupportedDataType::NodeId
+        })
+    ));
+
+    let url = "https://lipa.swiss".to_string();
+    let result = node.decode_data(url);
+    assert!(matches!(
+        result,
+        Err(DecodeDataError::Unsupported {
+            typ: UnsupportedDataType::Url
+        })
+    ));
 
     let valid_invoice = "lnbc1pjs6m8ppp5krf0wqz805p6v2f2ducge75lxg5v9dk34t3vdamz4j0h9ycstp6sdqu2askcmr9wssx7e3q2dshgmmndp5scqzzsxqyz5vqsp5hymglgtm35e7hy6w7c4wswmcs77xg0hu8ns83wmkfskq9p34w8ds9qyyssq389370f0wm48ecajj9nz5vnx2nuru2cwmkdz93qywy45uvf5f7sjp9wjuv3gyvtr8emm6w56s7x94fpxqkgfpgeqq38xz85k9clnkqcq3rw49n".to_string();
     let data = node.decode_data(valid_invoice.clone()).unwrap();

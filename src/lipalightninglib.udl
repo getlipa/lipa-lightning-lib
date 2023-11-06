@@ -21,7 +21,7 @@ interface LightningNode {
     [Throws=LnError]
     InvoiceDetails create_invoice(u64 amount_sat, OpeningFeeParams? lsp_fee_params, string description, string metadata);
 
-    [Throws=LnError]
+    [Throws=DecodeDataError]
     DecodedData decode_data(string data);
 
     MaxRoutingFeeMode get_payment_max_routing_fee_mode(u64 amount_sat);
@@ -430,4 +430,19 @@ enum PayErrorCode {
     "RetriesExhausted",
     "NoMoreRoutes",
     "UnexpectedError",
+};
+
+enum UnsupportedDataType {
+    "BitcoinAddress",
+    "LnUrlAuth",
+    "LnUrlWithdraw",
+    "NodeId",
+    "Url",
+};
+
+[Error]
+interface DecodeDataError {
+    LnUrlError(string msg);
+    Unsupported(UnsupportedDataType typ);
+    Unrecognized(string msg);
 };
