@@ -1,12 +1,13 @@
-use crate::Result;
-use perro::Error;
+use crate::{ensure, Result};
+
+use perro::invalid_input;
 
 pub(crate) fn strong_type_seed(seed: &Vec<u8>) -> Result<[u8; 64]> {
-    if seed.len() != 64 {
-        return Err(Error::InvalidInput {
-            msg: "Seed must be 64 bytes long".to_string(),
-        });
-    }
+    ensure!(
+        seed.len() == 64,
+        invalid_input("Seed must be 64 bytes long")
+    );
+
     let mut seed_array = [0u8; 64];
     seed_array.copy_from_slice(&seed[0..64]);
 

@@ -1,10 +1,12 @@
 use crate::async_runtime::Handle;
 use crate::errors::{Result, RuntimeErrorCode};
+use crate::runtime_error;
+
 use breez_sdk_core::{BreezServices, SignMessageRequest};
 use chrono::{DateTime, Utc};
 use log::error;
 use perro::Error::RuntimeError;
-use perro::{runtime_error, MapToError};
+use perro::MapToError;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -177,10 +179,9 @@ impl PocketClient {
             error!(
                 "Got unexpected response to Pocket challenge request: Pocket API returned status {}", raw_response.status()
             );
-            return Err(runtime_error(
+            runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
-                format!("Got unexpected response to Pocket challenge request: Pocket API returned status {}", raw_response.status()),
-            ));
+                format!("Got unexpected response to Pocket challenge request: Pocket API returned status {}", raw_response.status()));
         }
 
         raw_response
@@ -245,10 +246,9 @@ impl PocketClient {
             error!(
                 "Got unexpected response to Pocket order creation request: Pocket API returned status {}", raw_response.status()
             );
-            return Err(runtime_error(
+            runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
-                format!("Got unexpected response to Pocket order creation request: Pocket API returned status {}", raw_response.status()),
-            ));
+                format!("Got unexpected response to Pocket order creation request: Pocket API returned status {}", raw_response.status()));
         }
 
         raw_response

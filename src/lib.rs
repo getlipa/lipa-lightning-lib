@@ -22,6 +22,7 @@ mod invoice_details;
 mod limits;
 mod locker;
 mod logger;
+mod macros;
 mod migrations;
 mod random;
 mod recovery;
@@ -868,11 +869,9 @@ impl LightningNode {
     ) -> Result<Payment> {
         let payment_details = match breez_payment.details {
             PaymentDetails::Ln { data } => data,
-            _ => {
-                return Err(permanent_failure(
-                    "Current interface doesn't support PaymentDetails::ClosedChannel",
-                ))
-            }
+            _ => permanent_failure!(
+                "Current interface doesn't support PaymentDetails::ClosedChannel"
+            ),
         };
 
         let local_payment_data = self
@@ -937,11 +936,9 @@ impl LightningNode {
                         .to_amount_up(&exchange_rate),
                 ),
             ),
-            breez_sdk_core::PaymentType::ClosedChannel => {
-                return Err(permanent_failure(
-                    "Current interface doesn't support PaymentDetails::ClosedChannel",
-                ))
-            }
+            breez_sdk_core::PaymentType::ClosedChannel => permanent_failure!(
+                "Current interface doesn't support PaymentDetails::ClosedChannel"
+            ),
         };
 
         let payment_state = match breez_payment.status {
@@ -1112,7 +1109,7 @@ impl LightningNode {
                 .ok_or_invalid_input("The provided offer didn't include an lnurlw")?,
         )) {
             Ok(InputType::LnUrlWithdraw { data }) => data,
-            _ => return Err(permanent_failure("Invalid LNURLw in offer")),
+            _ => permanent_failure!("Invalid LNURLw in offer"),
         };
         let hash = match self
             .rt
@@ -1127,12 +1124,10 @@ impl LightningNode {
                 "Failed to withdraw offer",
             )? {
             LnUrlWithdrawResult::Ok { data } => data.invoice.payment_hash,
-            LnUrlWithdrawResult::ErrorStatus { data } => {
-                return Err(runtime_error(
-                    RuntimeErrorCode::OfferServiceUnavailable,
-                    format!("Failed to withdraw offer due to: {}", data.reason),
-                ))
-            }
+            LnUrlWithdrawResult::ErrorStatus { data } => runtime_error!(
+                RuntimeErrorCode::OfferServiceUnavailable,
+                format!("Failed to withdraw offer due to: {}", data.reason)
+            ),
         };
 
         self.store_payment_info(&hash, Some(offer.offer_kind))?;
