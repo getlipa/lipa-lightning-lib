@@ -661,10 +661,7 @@ impl LightningNode {
         // TODO: persist metadata
         self.data_store
             .lock_unwrap()
-            .store_created_invoice(
-                &response.ln_invoice.payment_hash,
-                &response.ln_invoice.bolt11,
-            )
+            .store_created_invoice(&response.ln_invoice.bolt11)
             .map_to_permanent_failure("Failed to persist created invoice")?;
 
         Ok(InvoiceDetails::from_ln_invoice(
@@ -854,21 +851,27 @@ impl LightningNode {
             .map(|p| self.payment_from_breez_payment(p))
             .collect::<Result<Vec<Payment>>>()?;
 
-        let created_invoices = self.data_store.lock_unwrap().retrieve_created_invoices()?;
+        let breez_payment_invoices: HashSet<String> = breez_payments
+            .iter()
+            .map(|p| p.invoice_details.invoice.clone())
+            .collect();
+        let created_invoices = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_created_invoices(number_of_payments)?;
         let mut pending_inbound_payments = created_invoices
             .into_iter()
-            .filter(|i| {
-                breez_payments
-                    .iter()
-                    .all(|p| p.invoice_details.invoice.ne(i))
-            })
+            .filter(|i| !breez_payment_invoices.contains(i))
             .map(|i| self.payment_from_created_invoice(&i))
             .collect::<Result<Vec<Payment>>>()?;
 
         let mut payments = breez_payments;
         payments.append(&mut pending_inbound_payments);
         payments.sort_by_key(|p| Reverse(p.created_at.time));
-        Ok(payments)
+        Ok(payments
+            .into_iter()
+            .take(number_of_payments as usize)
+            .collect())
     }
 
     /// Get a payment given its payment hash

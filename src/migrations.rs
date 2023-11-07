@@ -56,7 +56,7 @@ const MIGRATION_03_OFFER_ERROR_MESSAGE: &str = "
 
 const MIGRATION_04_CREATED_INVOICES: &str = "
     CREATE TABLE created_invoices (
-        hash TEXT NOT NULL PRIMARY KEY,
+        id INTEGER NOT NULL PRIMARY KEY,
         invoice TEXT NOT NULL
     );
 ";

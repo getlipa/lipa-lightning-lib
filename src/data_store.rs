@@ -122,32 +122,34 @@ impl DataStore {
         }
     }
 
-    pub(crate) fn store_created_invoice(&self, hash: &str, invoice: &str) -> Result<()> {
+    pub fn store_created_invoice(&self, invoice: &str) -> Result<()> {
         self.conn
             .execute(
                 "\
-            INSERT INTO created_invoices (hash, invoice)\
-            VALUES (?1, ?2)\
+            INSERT INTO created_invoices (invoice)\
+            VALUES (?1)\
             ",
-                [hash, invoice],
+                [invoice],
             )
-            .map_to_permanent_failure("")?;
+            .map_to_permanent_failure("Failed to store created invoice to local db")?;
         Ok(())
     }
 
-    pub(crate) fn retrieve_created_invoices(&self) -> Result<Vec<String>> {
+    pub fn retrieve_created_invoices(&self, number_of_invoices: u32) -> Result<Vec<String>> {
         let mut statement = self
             .conn
             .prepare(
                 "\
-            SELECT invoice \
-            FROM created_invoices;
+            SELECT invoice, id \
+            FROM created_invoices \
+            ORDER BY id DESC \
+            LIMIT ?1;
         ",
             )
             .map_to_permanent_failure("Failed to retrieve created invoice from local db")?;
 
         let invoice_iter = statement
-            .query_map([], |r| r.get::<usize, String>(0))
+            .query_map([number_of_invoices], |r| r.get::<usize, String>(0))
             .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
 
         let mut invoices = Vec::new();
@@ -821,22 +823,23 @@ mod tests {
         reset_db(&db_name);
         let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
 
-        assert!(data_store.retrieve_created_invoices().unwrap().is_empty());
+        assert!(data_store.retrieve_created_invoices(5).unwrap().is_empty());
 
-        data_store
-            .store_created_invoice("hash1", "invoice1")
-            .unwrap();
+        data_store.store_created_invoice("invoice1").unwrap();
         assert_eq!(
-            data_store.retrieve_created_invoices().unwrap(),
+            data_store.retrieve_created_invoices(5).unwrap(),
             vec!["invoice1".to_string()]
         );
 
-        data_store
-            .store_created_invoice("hash2", "invoice2")
-            .unwrap();
+        data_store.store_created_invoice("invoice2").unwrap();
         assert_eq!(
-            data_store.retrieve_created_invoices().unwrap(),
-            vec!["invoice1".to_string(), "invoice2".to_string()]
+            data_store.retrieve_created_invoices(5).unwrap(),
+            vec!["invoice2".to_string(), "invoice1".to_string()]
+        );
+
+        assert_eq!(
+            data_store.retrieve_created_invoices(1).unwrap(),
+            vec!["invoice2".to_string()]
         );
     }
 
