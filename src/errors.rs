@@ -33,7 +33,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// A code that specifies the PayError that occurred.
 #[derive(PartialEq, Eq, Debug, Clone)]
-#[repr(u8)]
 pub enum PayErrorCode {
     /// An already recognized invoice tried to be paid.
     /// Either a payment attempt is in progress or the invoice has already been paid.
@@ -79,6 +78,42 @@ impl Display for PayErrorCode {
 
 pub type PayError = perro::Error<PayErrorCode>;
 pub type PayResult<T> = std::result::Result<T, PayError>;
+
+/// A code that specifies the LnUrlPayError that occurred.
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum LnUrlPayErrorCode {
+    /// LNURL server returned an error.
+    LnUrlServerError,
+
+    /// Not a single route was found.
+    NoRouteFound,
+
+    /// The payment failed. Likely the issue is on the receiver.
+    PaymentFailed,
+
+    /// Payment timed out.
+    /// It might make sense to retry the payment.
+    PaymentTimeout,
+
+    /// Route too expensive. The fee the route exceeds the settings.
+    RouteTooExpensive,
+
+    /// The remote lightning node or LNURL server is not available. Could be a network error.
+    ServiceConnectivity,
+
+    /// An unexpected error occurred.
+    /// This likely is a result of a bug within 3L/Breez SDK and should be reported to lipa.
+    UnexpectedError,
+}
+
+impl Display for LnUrlPayErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+pub type LnUrlPayError = perro::Error<LnUrlPayErrorCode>;
+pub type LnUrlPayResult<T> = std::result::Result<T, LnUrlPayError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum UnsupportedDataType {

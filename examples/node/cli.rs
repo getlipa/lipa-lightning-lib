@@ -654,7 +654,7 @@ fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Re
         Err(_) => bail!("Invalid lnurlp"),
     };
 
-    let hash = node.pay_lnurlp(amount, lnurlp_details.request_data)?;
+    let hash = node.pay_lnurlp(lnurlp_details.request_data, amount)?;
     println!("Started to pay lnurlp - payment hash is {hash}");
 
     Ok(())
