@@ -39,8 +39,10 @@ pub use crate::config::{Config, TzConfig, TzTime};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 use crate::errors::{to_mnemonic_error, Error, SimpleError};
-pub use crate::errors::{Error as LnError, Result, RuntimeErrorCode};
-pub use crate::errors::{MnemonicError, PayError, PayErrorCode, PayResult};
+pub use crate::errors::{
+    DecodeDataError, Error as LnError, MnemonicError, PayError, PayErrorCode, PayResult, Result,
+    RuntimeErrorCode, UnsupportedDataType,
+};
 pub use crate::exchange_rate_provider::ExchangeRate;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 use crate::fiat_topup::{FiatTopupInfo, PocketClient};
@@ -76,9 +78,7 @@ use iban::Iban;
 use log::{info, trace};
 use logger::init_logger_once;
 use perro::Error::RuntimeError;
-use perro::{
-    invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
-};
+use perro::{permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -665,7 +665,7 @@ impl LightningNode {
     }
 
     /// Decode a user-provided string (usually obtained from QR-code or pasted).
-    pub fn decode_data(&self, data: String) -> Result<DecodedData> {
+    pub fn decode_data(&self, data: String) -> std::result::Result<DecodedData, DecodeDataError> {
         match self.rt.handle().block_on(parse(&data)) {
             Ok(InputType::Bolt11 { invoice }) => Ok(DecodedData::Bolt11Invoice {
                 invoice_details: InvoiceDetails::from_ln_invoice(
@@ -679,8 +679,25 @@ impl LightningNode {
                     &self.get_exchange_rate(),
                 ),
             }),
-            Ok(_) => Err(invalid_input("Unsupported data type")), // TODO: improve returned error when new error model is introduced
-            Err(e) => Err(invalid_input(format!("Unrecognized data type {e}"))), // TODO: improve returned error when new error model is introduced
+            Ok(InputType::BitcoinAddress { .. }) => Err(DecodeDataError::Unsupported {
+                typ: UnsupportedDataType::BitcoinAddress,
+            }),
+            Ok(InputType::LnUrlAuth { .. }) => Err(DecodeDataError::Unsupported {
+                typ: UnsupportedDataType::LnUrlAuth,
+            }),
+            Ok(InputType::LnUrlError { data }) => {
+                Err(DecodeDataError::LnUrlError { msg: data.reason })
+            }
+            Ok(InputType::LnUrlWithdraw { .. }) => Err(DecodeDataError::Unsupported {
+                typ: UnsupportedDataType::LnUrlWithdraw,
+            }),
+            Ok(InputType::NodeId { .. }) => Err(DecodeDataError::Unsupported {
+                typ: UnsupportedDataType::NodeId,
+            }),
+            Ok(InputType::Url { .. }) => Err(DecodeDataError::Unsupported {
+                typ: UnsupportedDataType::Url,
+            }),
+            Err(e) => Err(DecodeDataError::Unrecognized { msg: e.to_string() }),
         }
     }
 

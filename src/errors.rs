@@ -68,6 +68,30 @@ impl Display for PayErrorCode {
 pub type PayError = perro::Error<PayErrorCode>;
 pub type PayResult<T> = std::result::Result<T, PayError>;
 
+#[derive(Debug, thiserror::Error)]
+pub enum UnsupportedDataType {
+    #[error("Bitcoin on-chain address")]
+    BitcoinAddress,
+    #[error("LNURL Auth")]
+    LnUrlAuth,
+    #[error("LNURL Withdraw")]
+    LnUrlWithdraw,
+    #[error("Lightning node id")]
+    NodeId,
+    #[error("URL")]
+    Url,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DecodeDataError {
+    #[error("LNURL error: {msg}")]
+    LnUrlError { msg: String },
+    #[error("Unsupported data type: {typ}")]
+    Unsupported { typ: UnsupportedDataType },
+    #[error("Unrecognized data type: {msg}")]
+    Unrecognized { msg: String },
+}
+
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum MnemonicError {
     /// Mnemonic has a word count that is not a multiple of 6.
