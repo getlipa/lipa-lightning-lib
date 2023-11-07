@@ -699,6 +699,8 @@ impl LightningNode {
     /// * `metadata` - a metadata string that gets tied up to this payment. It can be used by the user of this library
     ///  to store data that is relevant to this payment. It is provided together with the respective payment in [`LightningNode::get_latest_payments`].
     pub fn pay_invoice(&self, invoice_details: InvoiceDetails, _metadata: String) -> PayResult<()> {
+        self.store_payment_info(&invoice_details.payment_hash, None)
+            .map_to_permanent_failure("Failed to persist local payment data")?;
         // TODO: persist metadata
         match self
             .rt
@@ -728,6 +730,8 @@ impl LightningNode {
         amount_sat: u64,
         _metadata: String,
     ) -> PayResult<()> {
+        self.store_payment_info(&invoice_details.payment_hash, None)
+            .map_to_permanent_failure("Failed to persist local payment data")?;
         // TODO: persist metadata
         match self
             .rt
@@ -785,10 +789,13 @@ impl LightningNode {
 
         // Temporary hack: check if there is a new payment to know if a payment attempt has been started
         if initial_latest_payment != final_latest_payment {
-            Ok(final_latest_payment
+            let hash = final_latest_payment
                 .ok_or_permanent_failure("Expected at least one payment to exist")?
                 .hash
-                .clone())
+                .clone();
+            self.store_payment_info(&hash, None)
+                .map_to_permanent_failure("Failed to persist local payment data")?;
+            Ok(hash)
         } else {
             Err(runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
