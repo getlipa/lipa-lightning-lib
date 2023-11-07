@@ -79,6 +79,7 @@ use log::{info, trace};
 use logger::init_logger_once;
 use perro::Error::RuntimeError;
 use perro::{permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait};
+use std::collections::HashSet;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -1089,10 +1090,13 @@ impl LightningNode {
             .query_uncompleted_topups()
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
         let rate = self.get_exchange_rate();
-        Ok(topup_infos
-            .into_iter()
-            .map(|o| to_offer(o, &rate))
-            .collect())
+        let latest_payments = self.get_latest_payments(5)?;
+        Ok(
+            filter_out_recently_claimed_topups(topup_infos, latest_payments)
+                .into_iter()
+                .map(|o| to_offer(o, &rate))
+                .collect(),
+        )
     }
 
     /// Request to collect the offer (e.g. a Pocket topup).
@@ -1487,6 +1491,21 @@ fn get_payment_max_routing_fee_mode(
     }
 }
 
+fn filter_out_recently_claimed_topups(
+    topups: Vec<TopupInfo>,
+    latest_payments: Vec<Payment>,
+) -> Vec<TopupInfo> {
+    let latest_succeeded_payment_offer_ids: HashSet<String> = latest_payments
+        .into_iter()
+        .filter(|p| p.payment_state == PaymentState::Succeeded)
+        .filter_map(|p| p.offer.map(|OfferKind::Pocket { id, .. }| id))
+        .collect();
+    topups
+        .into_iter()
+        .filter(|o| !latest_succeeded_payment_offer_ids.contains(&o.id))
+        .collect()
+}
+
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
 
 #[cfg(test)]
@@ -1577,5 +1596,166 @@ mod tests {
                 panic!("Unexpected variant");
             }
         }
+    }
+
+    #[test]
+    fn test_filter_out_recently_claimed_topups() {
+        let topups = vec![
+            TopupInfo {
+                id: "123".to_string(),
+                status: TopupStatus::READY,
+                amount_sat: 0,
+                topup_value_minor_units: 0,
+                exchange_fee_rate_permyriad: 0,
+                exchange_fee_minor_units: 0,
+                exchange_rate: graphql::ExchangeRate {
+                    currency_code: "eur".to_string(),
+                    sats_per_unit: 0,
+                    updated_at: SystemTime::now(),
+                },
+                expires_at: None,
+                lnurlw: None,
+                error: None,
+            },
+            TopupInfo {
+                id: "234".to_string(),
+                status: TopupStatus::READY,
+                amount_sat: 0,
+                topup_value_minor_units: 0,
+                exchange_fee_rate_permyriad: 0,
+                exchange_fee_minor_units: 0,
+                exchange_rate: graphql::ExchangeRate {
+                    currency_code: "eur".to_string(),
+                    sats_per_unit: 0,
+                    updated_at: SystemTime::now(),
+                },
+                expires_at: None,
+                lnurlw: None,
+                error: None,
+            },
+        ];
+
+        let latest_payments = vec![
+            Payment {
+                payment_type: PaymentType::Receiving,
+                payment_state: PaymentState::Succeeded,
+                fail_reason: None,
+                hash: "hash".to_string(),
+                amount: Amount {
+                    sats: 0,
+                    fiat: None,
+                },
+                invoice_details: InvoiceDetails {
+                    invoice: "bca".to_string(),
+                    amount: None,
+                    description: "".to_string(),
+                    payment_hash: "".to_string(),
+                    payee_pub_key: "".to_string(),
+                    creation_timestamp: SystemTime::now(),
+                    expiry_interval: Default::default(),
+                    expiry_timestamp: SystemTime::now(),
+                },
+                created_at: TzTime {
+                    time: SystemTime::now(),
+                    timezone_id: "".to_string(),
+                    timezone_utc_offset_secs: 0,
+                },
+                description: "".to_string(),
+                preimage: None,
+                network_fees: None,
+                lsp_fees: None,
+                offer: None,
+                metadata: "".to_string(),
+            },
+            Payment {
+                payment_type: PaymentType::Receiving,
+                payment_state: PaymentState::Succeeded,
+                fail_reason: None,
+                hash: "hash2".to_string(),
+                amount: Amount {
+                    sats: 0,
+                    fiat: None,
+                },
+                invoice_details: InvoiceDetails {
+                    invoice: "abc".to_string(),
+                    amount: None,
+                    description: "".to_string(),
+                    payment_hash: "".to_string(),
+                    payee_pub_key: "".to_string(),
+                    creation_timestamp: SystemTime::now(),
+                    expiry_interval: Default::default(),
+                    expiry_timestamp: SystemTime::now(),
+                },
+                created_at: TzTime {
+                    time: SystemTime::now(),
+                    timezone_id: "".to_string(),
+                    timezone_utc_offset_secs: 0,
+                },
+                description: "".to_string(),
+                preimage: None,
+                network_fees: None,
+                lsp_fees: None,
+                offer: Some(OfferKind::Pocket {
+                    id: "123".to_string(),
+                    exchange_rate: ExchangeRate {
+                        currency_code: "".to_string(),
+                        rate: 0,
+                        updated_at: SystemTime::now(),
+                    },
+                    topup_value_minor_units: 0,
+                    exchange_fee_minor_units: 0,
+                    exchange_fee_rate_permyriad: 0,
+                    error: None,
+                }),
+                metadata: "".to_string(),
+            },
+            Payment {
+                payment_type: PaymentType::Receiving,
+                payment_state: PaymentState::Failed,
+                fail_reason: None,
+                hash: "hash3".to_string(),
+                amount: Amount {
+                    sats: 0,
+                    fiat: None,
+                },
+                invoice_details: InvoiceDetails {
+                    invoice: "cba".to_string(),
+                    amount: None,
+                    description: "".to_string(),
+                    payment_hash: "".to_string(),
+                    payee_pub_key: "".to_string(),
+                    creation_timestamp: SystemTime::now(),
+                    expiry_interval: Default::default(),
+                    expiry_timestamp: SystemTime::now(),
+                },
+                created_at: TzTime {
+                    time: SystemTime::now(),
+                    timezone_id: "".to_string(),
+                    timezone_utc_offset_secs: 0,
+                },
+                description: "".to_string(),
+                preimage: None,
+                network_fees: None,
+                lsp_fees: None,
+                offer: Some(OfferKind::Pocket {
+                    id: "234".to_string(),
+                    exchange_rate: ExchangeRate {
+                        currency_code: "".to_string(),
+                        rate: 0,
+                        updated_at: SystemTime::now(),
+                    },
+                    topup_value_minor_units: 0,
+                    exchange_fee_minor_units: 0,
+                    exchange_fee_rate_permyriad: 0,
+                    error: None,
+                }),
+                metadata: "".to_string(),
+            },
+        ];
+
+        let filtered_topups = filter_out_recently_claimed_topups(topups, latest_payments);
+
+        assert_eq!(filtered_topups.len(), 1);
+        assert_eq!(filtered_topups.get(0).unwrap().id, "234");
     }
 }
