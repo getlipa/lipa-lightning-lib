@@ -79,6 +79,7 @@ use log::{info, trace};
 use logger::init_logger_once;
 use perro::Error::RuntimeError;
 use perro::{permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait};
+use std::collections::HashSet;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -1494,16 +1495,14 @@ fn filter_out_recently_claimed_topups(
     topups: Vec<TopupInfo>,
     latest_payments: Vec<Payment>,
 ) -> Vec<TopupInfo> {
+    let latest_succeeded_payment_offer_ids: HashSet<String> = latest_payments
+        .into_iter()
+        .filter(|p| p.payment_state == PaymentState::Succeeded)
+        .filter_map(|p| p.offer.map(|OfferKind::Pocket { id, .. }| id))
+        .collect();
     topups
         .into_iter()
-        .filter(|o| {
-            latest_payments.iter().all(|p| match &p.offer {
-                None => true,
-                Some(OfferKind::Pocket { id: p_id, .. }) => {
-                    !(p.payment_state == PaymentState::Succeeded && p_id.eq(&o.id))
-                }
-            })
-        })
+        .filter(|o| !latest_succeeded_payment_offer_ids.contains(&o.id))
         .collect()
 }
 
