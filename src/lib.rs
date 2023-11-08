@@ -68,7 +68,7 @@ use bip39::{Language, Mnemonic};
 use bitcoin::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::Network;
-use breez_sdk_core::error::{ReceiveOnchainError, SendPaymentError};
+use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 use breez_sdk_core::{
     parse, parse_invoice, BreezEvent, BreezServices, EventListener, GreenlightCredentials,
     GreenlightNodeConfig, InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData,
@@ -826,12 +826,13 @@ impl LightningNode {
             }))
             .map_err(map_lnurl_pay_error)?
         {
-            breez_sdk_core::LnUrlPayResult::EndpointSuccess { data: _ } => {}
+            breez_sdk_core::LnUrlPayResult::EndpointSuccess { .. } => {}
             breez_sdk_core::LnUrlPayResult::EndpointError { data } => {
-                return Err(runtime_error(
+                runtime_error!(
                     LnUrlPayErrorCode::LnUrlServerError,
-                    data.reason,
-                ));
+                    "LNURL server returned error: {}",
+                    data.reason
+                );
             }
             LnUrlPayResult::PayError { .. } => {
                 runtime_error!(RuntimeErrorCode::NodeUnavailable, "Pay error")
@@ -854,9 +855,7 @@ impl LightningNode {
                 .map_to_permanent_failure("Failed to persist local payment data")?;
             Ok(hash)
         } else {
-            Err(permanent_failure(
-                "Failed to get the invoice for paid LNURL pay",
-            ))
+            permanent_failure!("Failed to get an invoice for paid LNURL pay");
         }
     }
 
@@ -1267,16 +1266,29 @@ impl LightningNode {
                 data: lnurlw_data,
                 amount_msat: offer.amount.sats.as_sats().msats,
                 description: None,
-            }))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to withdraw offer",
-            )? {
-            LnUrlWithdrawResult::Ok { data } => data.invoice.payment_hash,
-            LnUrlWithdrawResult::ErrorStatus { data } => runtime_error!(
+            })) {
+            Ok(LnUrlWithdrawResult::Ok { data }) => data.invoice.payment_hash,
+            Ok(LnUrlWithdrawResult::ErrorStatus { data }) => runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
                 "Failed to withdraw offer due to: {}",
                 data.reason
+            ),
+            Err(LnUrlWithdrawError::Generic { err }) => runtime_error!(
+                RuntimeErrorCode::OfferServiceUnavailable,
+                "Failed to withdraw offer due to: {err}"
+            ),
+            Err(LnUrlWithdrawError::InvalidAmount { err }) => {
+                permanent_failure!("Invalid amount in invoice for LNURL withdraw: {err}")
+            }
+            Err(LnUrlWithdrawError::InvalidInvoice { err }) => {
+                permanent_failure!("Invalid invoice for LNURL withdraw: {err}")
+            }
+            Err(LnUrlWithdrawError::InvalidUri { err }) => {
+                permanent_failure!("Invalid URL in LNURL withdraw: {err}")
+            }
+            Err(LnUrlWithdrawError::ServiceConnectivity { err }) => runtime_error!(
+                RuntimeErrorCode::OfferServiceUnavailable,
+                "Failed to withdraw offer due to: {err}"
             ),
         };
 
@@ -1649,12 +1661,14 @@ fn map_lnurl_pay_error(
         LnUrlPayError::InvalidUri { err } => invalid_input(format!("InvalidUri: {err}")),
         LnUrlPayError::AlreadyPaid => permanent_failure("LNURL pay invoice has been already paid"),
         LnUrlPayError::Generic { err } => runtime_error(LnUrlPayErrorCode::UnexpectedError, err),
-        LnUrlPayError::InvalidAmount { err } => permanent_failure(format!(
-            "Invalid amount in the invoice for LNURL pay: {err}"
-        )),
-        LnUrlPayError::InvalidInvoice { err } => permanent_failure(format!(
-            "Invalid invoice for LNURL pay was generated: {err}"
-        )),
+        LnUrlPayError::InvalidAmount { err } => runtime_error(
+            LnUrlPayErrorCode::LnUrlServerError,
+            format!("Invalid amount in the invoice from LNURL pay server: {err}"),
+        ),
+        LnUrlPayError::InvalidInvoice { err } => runtime_error(
+            LnUrlPayErrorCode::LnUrlServerError,
+            format!("Invalid invoice from LNURL pay server: {err}"),
+        ),
         LnUrlPayError::InvoiceExpired { err } => {
             permanent_failure(format!("Invoice for LNURL pay has already expired: {err}"))
         }
