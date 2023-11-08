@@ -138,7 +138,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     }
                 }
                 "listpayments" => {
-                    if let Err(message) = list_payments(node) {
+                    if let Err(message) = list_payments(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
@@ -248,7 +248,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
     hints.insert(CommandHint::new("listoffers", "listoffers"));
 
-    hints.insert(CommandHint::new("listpayments", "listpayments"));
+    hints.insert(CommandHint::new(
+        "listpayments [number of payments = 2]",
+        "listpayments ",
+    ));
     hints.insert(CommandHint::new(
         "paymentuuid <payment hash>",
         "paymentuuid",
@@ -724,11 +727,17 @@ fn list_offers(node: &LightningNode) -> Result<()> {
     Ok(())
 }
 
-fn list_payments(node: &LightningNode) -> Result<()> {
-    let payments = node.get_latest_payments(100)?;
+fn list_payments(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let number_of_payments: u32 = words
+        .next()
+        .unwrap_or("2")
+        .parse()
+        .context("Number of payments should be a positive integer number")?;
+    let payments = node.get_latest_payments(number_of_payments)?;
 
-    println!("Total of {} payments\n", payments.len().to_string().bold());
+    println!("Total of {} payments", payments.len().to_string().bold());
     for payment in payments.into_iter().rev() {
+        println!();
         let payment_type = format!("{:?}", payment.payment_type);
         let created_at: DateTime<Utc> = payment.created_at.time.into();
         let timezone = FixedOffset::east_opt(payment.created_at.timezone_utc_offset_secs)
