@@ -901,7 +901,7 @@ impl LightningNode {
         {
             self.payment_from_created_invoice(&invoice)
         } else {
-            return Err(invalid_input("No payment with provided hash was found"));
+            invalid_input!("No payment with provided hash was found");
         }
     }
 
