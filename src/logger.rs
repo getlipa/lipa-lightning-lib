@@ -47,7 +47,7 @@ static INIT_LOGGER_ONCE: Once = Once::new();
 /// Subsequent calls will have no effect.
 pub(crate) fn init_logger_once(min_level: Level, path: &PathBuf) -> Result<()> {
     fs::create_dir_all(path)
-        .map_to_permanent_failure(format!("Failed to create directory: {:?}", path))?;
+        .map_to_permanent_failure(format!("Failed to create directory: {path:?}"))?;
     INIT_LOGGER_ONCE.call_once(|| init_logger(min_level, path));
     Ok(())
 }
