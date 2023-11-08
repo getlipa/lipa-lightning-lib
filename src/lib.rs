@@ -78,7 +78,10 @@ use iban::Iban;
 use log::{info, trace};
 use logger::init_logger_once;
 use perro::Error::RuntimeError;
-use perro::{permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait};
+use perro::{
+    invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
+};
+use std::cmp::Reverse;
 use std::collections::HashSet;
 use std::path::Path;
 use std::str::FromStr;
@@ -658,6 +661,13 @@ impl LightningNode {
         self.store_payment_info(&response.ln_invoice.payment_hash, None)
             .map_to_permanent_failure("Failed to persist payment info")?;
         // TODO: persist metadata
+        self.data_store
+            .lock_unwrap()
+            .store_created_invoice(
+                &response.ln_invoice.payment_hash,
+                &response.ln_invoice.bolt11,
+            )
+            .map_to_permanent_failure("Failed to persist created invoice")?;
 
         Ok(InvoiceDetails::from_ln_invoice(
             response.ln_invoice,
@@ -835,7 +845,8 @@ impl LightningNode {
             limit: None,
             offset: None,
         };
-        self.rt
+        let breez_payments = self
+            .rt
             .handle()
             .block_on(self.sdk.list_payments(list_payments_request))
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
@@ -843,7 +854,29 @@ impl LightningNode {
             .filter(|p| p.payment_type != breez_sdk_core::PaymentType::ClosedChannel)
             .take(number_of_payments as usize)
             .map(|p| self.payment_from_breez_payment(p))
-            .collect::<Result<Vec<Payment>>>()
+            .collect::<Result<Vec<Payment>>>()?;
+
+        let breez_payment_invoices: HashSet<String> = breez_payments
+            .iter()
+            .map(|p| p.invoice_details.invoice.clone())
+            .collect();
+        let created_invoices = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_created_invoices(number_of_payments)?;
+        let mut pending_inbound_payments = created_invoices
+            .into_iter()
+            .filter(|i| !breez_payment_invoices.contains(i))
+            .map(|i| self.payment_from_created_invoice(&i))
+            .collect::<Result<Vec<Payment>>>()?;
+
+        let mut payments = breez_payments;
+        payments.append(&mut pending_inbound_payments);
+        payments.sort_by_key(|p| Reverse(p.created_at.time));
+        Ok(payments
+            .into_iter()
+            .take(number_of_payments as usize)
+            .collect())
     }
 
     /// Get a payment given its payment hash
@@ -851,17 +884,25 @@ impl LightningNode {
     /// Parameters:
     /// * `hash` - hex representation of payment hash
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
-        let breez_payment = self
+        if let Some(breez_payment) = self
             .rt
             .handle()
-            .block_on(self.sdk.payment_by_hash(hash))
+            .block_on(self.sdk.payment_by_hash(hash.clone()))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to get payment by hash",
             )?
-            .ok_or_invalid_input("Invalid hash: no payment with provided hash was found")?;
-
-        self.payment_from_breez_payment(breez_payment)
+        {
+            self.payment_from_breez_payment(breez_payment)
+        } else if let Some(invoice) = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_created_invoice_by_hash(&hash)?
+        {
+            self.payment_from_created_invoice(&invoice)
+        } else {
+            invalid_input!("No payment with provided hash was found");
+        }
     }
 
     fn payment_from_breez_payment(
@@ -875,17 +916,36 @@ impl LightningNode {
             ),
         };
 
+        let invoice = parse_invoice(&payment_details.bolt11)
+            .map_to_permanent_failure("Invalid invoice provided by the Breez SDK")?;
+        let invoice_details = InvoiceDetails::from_ln_invoice(invoice.clone(), &None);
+
         let local_payment_data = self
             .data_store
             .lock_unwrap()
             .retrieve_payment_info(&payment_details.payment_hash)?;
 
+        // Use invoice timestamp for receiving payments and breez_payment.payment_time for sending ones
+        // Reasoning: for receiving payments, Breez returns the time the invoice was paid. Given that
+        // now we show pending invoices, this can result in a receiving payment jumping around in the
+        // list when it gets paid.
+        let time = match breez_payment.payment_type {
+            breez_sdk_core::PaymentType::Sent => {
+                unix_timestamp_to_system_time(breez_payment.payment_time as u64)
+            }
+            breez_sdk_core::PaymentType::Received => invoice_details.creation_timestamp,
+            breez_sdk_core::PaymentType::ClosedChannel => {
+                permanent_failure!(
+                    "Current interface doesn't support PaymentDetails::ClosedChannel"
+                )
+            }
+        };
         let (exchange_rate, time, offer) = match local_payment_data {
             None => {
                 let exchange_rate = self.get_exchange_rate();
                 let user_preferences = self.user_preferences.lock_unwrap();
                 let time = TzTime {
-                    time: unix_timestamp_to_system_time(breez_payment.payment_time as u64),
+                    time,
                     timezone_id: user_preferences.timezone_config.timezone_id.clone(),
                     timezone_utc_offset_secs: user_preferences
                         .timezone_config
@@ -897,7 +957,7 @@ impl LightningNode {
             Some(d) => {
                 let exchange_rate = Some(d.exchange_rate);
                 let time = TzTime {
-                    time: unix_timestamp_to_system_time(breez_payment.payment_time as u64),
+                    time,
                     timezone_id: d.user_preferences.timezone_config.timezone_id,
                     timezone_utc_offset_secs: d
                         .user_preferences
@@ -948,8 +1008,6 @@ impl LightningNode {
             PaymentStatus::Failed => PaymentState::Failed,
         };
 
-        let invoice = parse_invoice(&payment_details.bolt11)
-            .map_to_permanent_failure("Invalid invoice provided by the Breez SDK")?;
         let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
 
         let description = invoice_details.description.clone();
@@ -967,6 +1025,58 @@ impl LightningNode {
             network_fees,
             lsp_fees,
             offer,
+            metadata: String::new(), // TODO: retrieve metadata from local db
+        })
+    }
+
+    fn payment_from_created_invoice(&self, invoice: &str) -> Result<Payment> {
+        let invoice = parse_invoice(invoice)
+            .map_to_permanent_failure("Invalid invoice provided by the Breez SDK")?;
+        let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &None);
+
+        let payment_state = if SystemTime::now() > invoice_details.expiry_timestamp {
+            PaymentState::InvoiceExpired
+        } else {
+            PaymentState::Created
+        };
+
+        let local_payment_data = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_payment_info(&invoice_details.payment_hash)?
+            .ok_or_permanent_failure("Locally created invoice doesn't have local payment data")?;
+        let exchange_rate = Some(local_payment_data.exchange_rate);
+        let time = TzTime {
+            time: invoice_details.creation_timestamp, // for receiving payments, we use the invoice timestamp
+            timezone_id: local_payment_data
+                .user_preferences
+                .timezone_config
+                .timezone_id,
+            timezone_utc_offset_secs: local_payment_data
+                .user_preferences
+                .timezone_config
+                .timezone_utc_offset_secs,
+        };
+
+        Ok(Payment {
+            payment_type: PaymentType::Receiving,
+            payment_state,
+            fail_reason: None,
+            hash: invoice_details.payment_hash.clone(),
+            amount: invoice_details
+                .amount
+                .clone()
+                .ok_or_permanent_failure("Locally created invoice doesn't include an amount")?
+                .sats
+                .as_sats()
+                .to_amount_down(&exchange_rate),
+            invoice_details: invoice_details.clone(),
+            created_at: time,
+            description: invoice_details.description,
+            preimage: None,
+            network_fees: None,
+            lsp_fees: None,
+            offer: None,
             metadata: String::new(), // TODO: retrieve metadata from local db
         })
     }

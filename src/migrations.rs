@@ -53,6 +53,15 @@ const MIGRATION_02_FUNDS_MIGRATION_STATUS: &str = "
 const MIGRATION_03_OFFER_ERROR_MESSAGE: &str = "
     ALTER TABLE offers ADD COLUMN error TEXT NULL;
 ";
+
+const MIGRATION_04_CREATED_INVOICES: &str = "
+    CREATE TABLE created_invoices (
+        id INTEGER NOT NULL PRIMARY KEY,
+        hash INTEGER NOT NULL,
+        invoice TEXT NOT NULL
+    );
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -64,6 +73,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_01_INIT),
         M::up(MIGRATION_02_FUNDS_MIGRATION_STATUS),
         M::up(MIGRATION_03_OFFER_ERROR_MESSAGE),
+        M::up(MIGRATION_04_CREATED_INVOICES),
     ])
 }
 
