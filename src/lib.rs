@@ -9,6 +9,7 @@
 extern crate core;
 
 mod amount;
+mod analytics;
 mod async_runtime;
 mod backup;
 mod callbacks;
@@ -61,7 +62,10 @@ use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
 
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
+pub use parrot::PaymentSource;
 
+use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
+pub use crate::analytics::{InvoiceCreationMetadata, PaymentMetadata};
 use crate::backup::BackupManager;
 use crate::key_derivation::derive_persistence_encryption_key;
 use bip39::{Language, Mnemonic};
@@ -77,10 +81,8 @@ use breez_sdk_core::{
     SendPaymentRequest, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
-use crow::{
-    CountryCode, LanguageCode, OfferManager, PermanentFailureCode, TemporaryFailureCode,
-    TopupError, TopupInfo, TopupStatus,
-};
+use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo, TopupStatus};
+pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 use data_store::DataStore;
 use email_address::EmailAddress;
 use honey_badger::secrets::{generate_keypair, KeyPair};
@@ -88,6 +90,7 @@ use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
 use iban::Iban;
 use log::{info, trace};
 use logger::init_logger_once;
+use parrot::AnalyticsClient;
 use perro::{
     invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
@@ -341,6 +344,7 @@ pub enum DecodedData {
 
 struct LipaEventListener {
     events_callback: Box<dyn EventsCallback>,
+    analytics_interceptor: Arc<AnalyticsInterceptor>,
 }
 
 impl EventListener for LipaEventListener {
@@ -348,17 +352,21 @@ impl EventListener for LipaEventListener {
         match e {
             BreezEvent::NewBlock { .. } => {}
             BreezEvent::InvoicePaid { details } => {
+                self.analytics_interceptor
+                    .request_succeeded(details.clone());
                 self.events_callback.payment_received(details.payment_hash)
             }
             BreezEvent::Synced => {}
             BreezEvent::PaymentSucceed { details } => {
-                if let PaymentDetails::Ln { data } = details.details {
+                if let PaymentDetails::Ln { data } = details.details.clone() {
+                    self.analytics_interceptor.pay_succeeded(details);
                     self.events_callback
                         .payment_sent(data.payment_hash, data.payment_preimage)
                 }
             }
             BreezEvent::PaymentFailed { details } => {
-                if let Some(invoice) = details.invoice {
+                if let Some(invoice) = details.invoice.clone() {
+                    self.analytics_interceptor.pay_failed(details);
                     self.events_callback.payment_failed(invoice.payment_hash)
                 }
             }
@@ -392,7 +400,7 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
 /// run it in the background. As long as an instance of `LightningNode` is held, the node will continue to run
 /// in the background. Dropping the instance will start a deinit process.  
 pub struct LightningNode {
-    user_preferences: Mutex<UserPreferences>,
+    user_preferences: Arc<Mutex<UserPreferences>>,
     sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
     fiat_topup_client: PocketClient,
@@ -400,6 +408,7 @@ pub struct LightningNode {
     rt: AsyncRuntime,
     data_store: Arc<Mutex<DataStore>>,
     task_manager: Arc<Mutex<TaskManager>>,
+    analytics_interceptor: Arc<AnalyticsInterceptor>,
 }
 
 impl LightningNode {
@@ -448,12 +457,32 @@ impl LightningNode {
         breez_config.exemptfee_msat = EXEMPT_FEE.msats;
         breez_config.maxfee_percent = MAX_FEE_PERMYRIAD as f64 / 100_f64;
 
+        let user_preferences = Arc::new(Mutex::new(UserPreferences {
+            fiat_currency: config.fiat_currency,
+            timezone_config: config.timezone_config,
+        }));
+
+        let analytics_client = Arc::new(AnalyticsClient::new(
+            environment.backend_url.clone(),
+            derive_analytics_keys(&strong_typed_seed)?,
+            auth.clone(),
+        ));
+
+        let analytics_interceptor = Arc::new(AnalyticsInterceptor::new(
+            analytics_client.clone(),
+            user_preferences.clone(),
+            rt.handle(),
+        ));
+
         let sdk = rt
             .handle()
             .block_on(BreezServices::connect(
                 breez_config,
                 config.seed.clone(),
-                Box::new(LipaEventListener { events_callback }),
+                Box::new(LipaEventListener {
+                    events_callback,
+                    analytics_interceptor: analytics_interceptor.clone(),
+                }),
             ))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
@@ -494,11 +523,6 @@ impl LightningNode {
         let offer_manager = OfferManager::new(environment.backend_url.clone(), Arc::clone(&auth));
 
         let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
-
-        let user_preferences = Mutex::new(UserPreferences {
-            fiat_currency: config.fiat_currency,
-            timezone_config: config.timezone_config,
-        });
 
         let data_store = Arc::new(Mutex::new(DataStore::new(&db_path)?));
 
@@ -549,6 +573,7 @@ impl LightningNode {
             rt,
             data_store,
             task_manager,
+            analytics_interceptor,
         })
     }
 
@@ -661,22 +686,23 @@ impl LightningNode {
         ))
     }
 
-    /// Create an invoice to receive a payment with:
-    ///    - `amount_sat` - the smallest amount of sats required for the node to accept the incoming
+    /// Create an invoice to receive a payment with.
+    ///
+    /// Parameters:
+    /// * `amount_sat` - the smallest amount of sats required for the node to accept the incoming
     /// payment (sender will have to pay fees on top of that amount)
-    ///    - `lsp_fee_params` - the params that will be used to determine the lsp fee.
+    /// * `lsp_fee_params` - the params that will be used to determine the lsp fee.
     /// Can be obtained from [`LightningNode::calculate_lsp_fee`] to guarantee predicted fees
     /// are the ones charged.
-    ///    - `description` - a description to be embedded into the created invoice
-    ///    - `metadata` - a metadata string that gets tied up to this payment. It can be used by
-    /// the user of this library to store data that is relevant to this payment. It is provided
-    /// together with the respective payment in [`LightningNode::get_latest_payments`]
+    /// * `description` - a description to be embedded into the created invoice
+    /// * `metadata` - additional data about the invoice creation used for analytics purposes,
+    /// used to improve the user experience
     pub fn create_invoice(
         &self,
         amount_sat: u64,
         lsp_fee_params: Option<OpeningFeeParams>,
         description: String,
-        _metadata: String,
+        metadata: InvoiceCreationMetadata,
     ) -> Result<InvoiceDetails> {
         let response = self
             .rt
@@ -709,6 +735,11 @@ impl LightningNode {
             )
             .map_to_permanent_failure("Failed to persist created invoice")?;
 
+        self.analytics_interceptor.request_initiated(
+            response.clone(),
+            self.get_exchange_rate(),
+            metadata,
+        );
         Ok(InvoiceDetails::from_ln_invoice(
             response.ln_invoice,
             &self.get_exchange_rate(),
@@ -764,9 +795,12 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `invoice_details` - details of an invoice decode by [`LightningNode::decode_data`]
-    /// * `metadata` - a metadata string that gets tied up to this payment. It can be used by the user of this library
-    ///  to store data that is relevant to this payment. It is provided together with the respective payment in [`LightningNode::get_latest_payments`].
-    pub fn pay_invoice(&self, invoice_details: InvoiceDetails, metadata: String) -> PayResult<()> {
+    /// * `metadata` - additional meta information about the payment, used by analytics to improve the user experience.
+    pub fn pay_invoice(
+        &self,
+        invoice_details: InvoiceDetails,
+        metadata: PaymentMetadata,
+    ) -> PayResult<()> {
         self.pay_open_invoice(invoice_details, 0, metadata)
     }
 
@@ -780,7 +814,7 @@ impl LightningNode {
         &self,
         invoice_details: InvoiceDetails,
         amount_sat: u64,
-        _metadata: String,
+        metadata: PaymentMetadata,
     ) -> PayResult<()> {
         let amount_msat = if amount_sat == 0 {
             None
@@ -800,6 +834,13 @@ impl LightningNode {
                 PayErrorCode::PayingToSelf,
                 "A locally issued invoice tried to be paid"
             )
+        );
+
+        self.analytics_interceptor.pay_initiated(
+            invoice_details.clone(),
+            metadata,
+            amount_msat,
+            self.get_exchange_rate(),
         );
 
         self.rt
@@ -1695,7 +1736,7 @@ fn map_lnurl_pay_error(
     }
 }
 
-fn derive_key_pair_hex(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair> {
+pub(crate) fn derive_key_pair_hex(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair> {
     let master_xpriv = ExtendedPrivKey::new_master(Network::Bitcoin, seed)
         .map_to_invalid_input("Failed to get xpriv from from seed")?;
 

@@ -4,12 +4,16 @@ use anyhow::{anyhow, bail, Context, Result};
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Local, Utc};
 use colored::Colorize;
+use parrot::PaymentSource;
 use rustyline::config::{Builder, CompletionType};
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use rustyline::Editor;
 use std::collections::HashSet;
 use std::path::Path;
+use std::time::SystemTime;
+use uniffi_lipalightninglib::InvoiceCreationMetadata;
+use uniffi_lipalightninglib::PaymentMetadata;
 use uniffi_lipalightninglib::{
     Amount, DecodedData, ExchangeRate, FiatValue, InvoiceDetails, LightningNode, LiquidityLimit,
     LnUrlPayDetails, MaxRoutingFeeMode, OfferKind, PaymentState, TzConfig,
@@ -459,7 +463,14 @@ fn create_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -
         .parse()
         .context("Amount should be a positive integer number")?;
     let description = words.collect::<Vec<_>>().join(" ");
-    let invoice_details = node.create_invoice(amount, None, description, String::new())?;
+    let invoice_details = node.create_invoice(
+        amount,
+        None,
+        description,
+        InvoiceCreationMetadata {
+            request_currency: "sat".to_string(),
+        },
+    )?;
     println!("{}", invoice_details.invoice);
     Ok(())
 }
@@ -565,7 +576,13 @@ fn pay_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
 
     let result = node.decode_data(invoice.to_string())?;
     if let DecodedData::Bolt11Invoice { invoice_details } = result {
-        node.pay_invoice(invoice_details, String::new())?;
+        node.pay_invoice(
+            invoice_details,
+            PaymentMetadata {
+                source: PaymentSource::Clipboard,
+                process_started_at: SystemTime::now(),
+            },
+        )?
     } else {
         bail!("Provided data is not a BOLT-11 invoice");
     }
@@ -584,7 +601,14 @@ fn pay_open_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>)
 
     let result = node.decode_data(invoice.to_string())?;
     if let DecodedData::Bolt11Invoice { invoice_details } = result {
-        node.pay_open_invoice(invoice_details, amount, String::new())?;
+        node.pay_open_invoice(
+            invoice_details,
+            amount,
+            PaymentMetadata {
+                source: PaymentSource::Clipboard,
+                process_started_at: SystemTime::now(),
+            },
+        )?;
     } else {
         bail!("Provided data is not a BOLT-11 invoice");
     }
