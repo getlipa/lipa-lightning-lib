@@ -5,9 +5,10 @@ mod print_events_handler;
 
 use crate::print_events_handler::PrintEventsHandler;
 
-use uniffi_lipalightninglib::{mnemonic_to_secret, LightningNode};
+use uniffi_lipalightninglib::{mnemonic_to_secret, recover_lightning_node, LightningNode};
 use uniffi_lipalightninglib::{Config, EnvironmentCode, TzConfig};
 
+use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, fs};
@@ -26,6 +27,13 @@ fn main() {
     let events = Box::new(PrintEventsHandler {});
 
     let seed = read_seed_from_env();
+
+    if Path::new(&base_dir)
+        .read_dir()
+        .is_ok_and(|mut d| d.next().is_none())
+    {
+        recover_lightning_node(environment, seed.clone(), base_dir.clone(), true).unwrap();
+    }
 
     let config = Config {
         environment,

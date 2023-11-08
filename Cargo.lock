@@ -721,7 +721,7 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.14.1#015ade00cc616db37d2636928a939f9447ce11a6"
+source = "git+https://github.com/getlipa/wild?tag=v1.15.0#627f33fa1d1febccd0312fe394c5eec6a87cb9f5"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -892,7 +892,7 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.14.1#015ade00cc616db37d2636928a939f9447ce11a6"
+source = "git+https://github.com/getlipa/wild?tag=v1.15.0#627f33fa1d1febccd0312fe394c5eec6a87cb9f5"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -1511,7 +1511,7 @@ dependencies = [
  "async-trait",
  "base64 0.21.4",
  "bech32",
- "bitcoin 0.29.2",
+ "bitcoin 0.30.1",
  "bytes",
  "chacha20poly1305",
  "cln-grpc",
@@ -1570,7 +1570,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.14.1#015ade00cc616db37d2636928a939f9447ce11a6"
+source = "git+https://github.com/getlipa/wild?tag=v1.15.0#627f33fa1d1febccd0312fe394c5eec6a87cb9f5"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1756,7 +1756,7 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.14.1#015ade00cc616db37d2636928a939f9447ce11a6"
+source = "git+https://github.com/getlipa/wild?tag=v1.15.0#627f33fa1d1febccd0312fe394c5eec6a87cb9f5"
 dependencies = [
  "base64 0.21.4",
  "bdk",
@@ -1766,6 +1766,7 @@ dependencies = [
  "rand",
  "secp256k1 0.27.0",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -2143,6 +2144,7 @@ checksum = "3852614a3bd9ca9804678ba6be5e3b8ce76dfc902cae004e3e0c44051b6e88db"
 name = "lipalightninglib"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "anyhow",
  "bip39",
  "bitcoin 0.30.1",
@@ -2171,6 +2173,7 @@ dependencies = [
  "serde",
  "serial_test",
  "simplelog",
+ "squirrel",
  "strip-ansi-escapes",
  "thiserror",
  "tokio",
@@ -3609,6 +3612,16 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
+name = "squirrel"
+version = "0.1.0"
+source = "git+https://github.com/getlipa/wild?tag=v1.15.0#627f33fa1d1febccd0312fe394c5eec6a87cb9f5"
+dependencies = [
+ "graphql",
+ "hex",
+ "honey-badger",
+]
 
 [[package]]
 name = "static_assertions"

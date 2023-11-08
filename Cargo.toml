@@ -11,14 +11,16 @@ name = "uniffi_lipalightninglib"
 nigiri = []
 
 [dependencies]
-chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.14.1" }
-crow = { git = "https://github.com/getlipa/wild", tag = "v1.14.1" }
-honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.14.1" }
-graphql = { git = "https://github.com/getlipa/wild", tag = "v1.14.1" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.15.0" }
+crow = { git = "https://github.com/getlipa/wild", tag = "v1.15.0" }
+honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.15.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.15.0" }
+squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.15.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.9" }
 
+aes-gcm = "0.10.3"
 bip39 = "2.0.0"
 bitcoin = "0.30.1"
 chrono = { version = "0.4.31", default-features = false, features = ["serde"] }

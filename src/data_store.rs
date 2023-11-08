@@ -17,15 +17,25 @@ pub(crate) struct LocalPaymentData {
     pub offer: Option<OfferKind>,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum BackupStatus {
+    Complete,
+    WaitingForBackup,
+}
+
 pub(crate) struct DataStore {
     conn: Connection,
+    pub backup_status: BackupStatus,
 }
 
 impl DataStore {
     pub fn new(db_path: &str) -> Result<Self> {
         let mut conn = Connection::open(db_path).map_to_invalid_input("Invalid db path")?;
         migrate(&mut conn)?;
-        Ok(DataStore { conn })
+        Ok(DataStore {
+            conn,
+            backup_status: BackupStatus::WaitingForBackup,
+        })
     }
 
     pub fn store_payment_info(
@@ -35,6 +45,7 @@ impl DataStore {
         exchange_rates: Vec<ExchangeRate>,
         offer: Option<OfferKind>,
     ) -> Result<()> {
+        self.backup_status = BackupStatus::WaitingForBackup;
         let tx = self
             .conn
             .transaction()
@@ -123,7 +134,8 @@ impl DataStore {
         }
     }
 
-    pub fn store_created_invoice(&self, hash: &str, invoice: &str) -> Result<()> {
+    pub fn store_created_invoice(&mut self, hash: &str, invoice: &str) -> Result<()> {
+        self.backup_status = BackupStatus::WaitingForBackup;
         self.conn
             .execute(
                 "\
@@ -181,11 +193,12 @@ impl DataStore {
     }
 
     pub fn update_exchange_rate(
-        &self,
+        &mut self,
         currency_code: &str,
         rate: u32,
         updated_at: SystemTime,
     ) -> Result<()> {
+        self.backup_status = BackupStatus::WaitingForBackup;
         let dt: DateTime<Utc> = updated_at.into();
         self.conn
             .execute(
@@ -223,7 +236,8 @@ impl DataStore {
     }
 
     #[allow(dead_code)]
-    pub fn append_funds_migration_status(&self, status: MigrationStatus) -> Result<()> {
+    pub fn append_funds_migration_status(&mut self, status: MigrationStatus) -> Result<()> {
+        self.backup_status = BackupStatus::WaitingForBackup;
         self.conn
             .execute(
                 "INSERT INTO funds_migration_status (status) VALUES (?1)",
@@ -796,7 +810,7 @@ mod tests {
     fn test_exchange_rate_storage() {
         let db_name = String::from("rates.db3");
         reset_db(&db_name);
-        let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
 
         assert!(data_store.get_all_exchange_rates().unwrap().is_empty());
 
@@ -866,7 +880,7 @@ mod tests {
     fn test_persisting_funds_migration_status() {
         let db_name = String::from("funds_migration.db3");
         reset_db(&db_name);
-        let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
 
         assert_eq!(
             data_store.retrive_funds_migration_status().unwrap(),
@@ -894,7 +908,7 @@ mod tests {
     fn test_invoice_persistence() {
         let db_name = String::from("invoice_persistence.db3");
         reset_db(&db_name);
-        let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
 
         assert!(data_store.retrieve_created_invoices(5).unwrap().is_empty());
 

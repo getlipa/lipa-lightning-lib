@@ -10,6 +10,7 @@ extern crate core;
 
 mod amount;
 mod async_runtime;
+mod backup;
 mod callbacks;
 mod config;
 mod data_store;
@@ -19,6 +20,7 @@ mod exchange_rate_provider;
 mod fiat_topup;
 mod fund_migration;
 mod invoice_details;
+mod key_derivation;
 mod limits;
 mod locker;
 mod logger;
@@ -28,6 +30,7 @@ mod random;
 mod recovery;
 mod sanitize_input;
 mod secret;
+mod symmetric_encryption;
 mod task_manager;
 mod util;
 
@@ -57,6 +60,8 @@ use crate::util::unix_timestamp_to_system_time;
 use amount::{AsSats, Sats};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 
+use crate::backup::BackupManager;
+use crate::key_derivation::derive_persistence_encryption_key;
 use bip39::{Language, Mnemonic};
 use bitcoin::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
@@ -81,6 +86,7 @@ use perro::Error::RuntimeError;
 use perro::{
     invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
+use squirrel::RemoteBackupClient;
 use std::cmp::Reverse;
 use std::collections::HashSet;
 use std::path::Path;
@@ -92,6 +98,8 @@ use uuid::Uuid;
 
 const LOG_LEVEL: log::Level = log::Level::Trace;
 const LOGS_DIR: &str = "logs";
+
+pub(crate) const DB_FILENAME: &str = "db2.db3";
 
 const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 
@@ -354,6 +362,7 @@ const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     sync_breez: Some(Duration::from_secs(10 * 60)),
     update_lsp_fee: Some(Duration::from_secs(10 * 60)),
     redeem_swaps: Some(Duration::from_secs(10 * 60)),
+    backup: Some(Duration::from_secs(30)),
 };
 
 const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
@@ -361,6 +370,7 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
     sync_breez: Some(Duration::from_secs(30 * 60)),
     update_lsp_fee: None,
     redeem_swaps: None,
+    backup: None,
 };
 
 /// The main class/struct of this library. Constructing an instance will initiate the Lightning node and
@@ -468,7 +478,7 @@ impl LightningNode {
 
         let offer_manager = OfferManager::new(environment.backend_url.clone(), Arc::clone(&auth));
 
-        let db_path = format!("{}/db2.db3", config.local_persistence_path);
+        let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
 
         let user_preferences = Mutex::new(UserPreferences {
             fiat_currency: config.fiat_currency,
@@ -480,11 +490,24 @@ impl LightningNode {
         let fiat_topup_client =
             PocketClient::new(environment.pocket_url, Arc::clone(&sdk), rt.handle())?;
 
+        let async_auth = Arc::new(build_async_auth(
+            &strong_typed_seed,
+            environment.backend_url.clone(),
+        )?);
+        let backup_client =
+            RemoteBackupClient::new(environment.backend_url.clone(), Arc::clone(&async_auth));
+        let backup_manager = BackupManager::new(
+            backup_client,
+            db_path,
+            derive_persistence_encryption_key(&strong_typed_seed)?,
+        );
+
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),
             exchange_rate_provider,
             Arc::clone(&data_store),
             Arc::clone(&sdk),
+            backup_manager,
         )?));
         task_manager
             .lock_unwrap()
@@ -526,6 +549,7 @@ impl LightningNode {
                     sync_breez: Some(period),
                     update_lsp_fee: Some(period),
                     redeem_swaps: Some(period),
+                    backup: Some(period),
                 }
             }
             Err(_) => FOREGROUND_PERIODS,
@@ -1571,6 +1595,26 @@ fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
     .map_to_permanent_failure("Failed to build auth client")
 }
 
+fn build_async_auth(
+    seed: &[u8; 64],
+    graphql_url: String,
+) -> Result<honey_badger::asynchronous::Auth> {
+    let auth_keys = derive_key_pair_hex(seed, BACKEND_AUTH_DERIVATION_PATH)
+        .lift_invalid_input()
+        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
+    let auth_keys = KeyPair {
+        secret_key: auth_keys.secret_key,
+        public_key: auth_keys.public_key,
+    };
+    honey_badger::asynchronous::Auth::new(
+        graphql_url,
+        AuthLevel::Pseudonymous,
+        auth_keys,
+        generate_keypair(),
+    )
+    .map_to_permanent_failure("Failed to build auth client")
+}
+
 fn derive_key_pair_hex(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair> {
     let master_xpriv = ExtendedPrivKey::new_master(Network::Bitcoin, seed)
         .map_to_invalid_input("Failed to get xpriv from from seed")?;
@@ -1638,9 +1682,8 @@ include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bip39::Mnemonic;
+    use crate::key_derivation::tests::mnemonic_to_seed;
     use perro::Error;
-    use std::str::FromStr;
 
     const PAYMENT_HASH: &str = "0b78877a596f18d5f6effde3dda1df25a5cf20439ff1ac91478d7e518211040f";
     const PAYMENT_UUID: &str = "c6e597bd-0a98-5b46-8e74-f6098f5d16a3";
@@ -1673,14 +1716,6 @@ mod tests {
             &invalid_hash_encoding.unwrap_err().to_string()[0..43],
             "InvalidInput: Invalid payment hash encoding"
         );
-    }
-
-    fn mnemonic_to_seed(mnemonic: &str) -> [u8; 64] {
-        let mnemonic = Mnemonic::from_str(mnemonic).unwrap();
-        let mut seed = [0u8; 64];
-        seed.copy_from_slice(&mnemonic.to_seed("")[0..64]);
-
-        seed
     }
 
     #[test]

@@ -9,6 +9,10 @@ pub enum RuntimeErrorCode {
     OfferServiceUnavailable,
     /// The lsp service is unavailable. Could there be a loss of internet connection?
     LspServiceUnavailable,
+    /// The backup service is unavailable. Could there be a loss of internet connection?
+    BackupServiceUnavailable,
+    /// No backup was found for the provided mnemonic.
+    BackupNotFound,
 
     // Breez runtime errors
     /// Information about the remote node isn't cached and couldn't be accessed. Could be a network error.
