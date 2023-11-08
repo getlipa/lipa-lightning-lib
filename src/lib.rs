@@ -870,7 +870,7 @@ impl LightningNode {
     ) -> Result<Payment> {
         let payment_details = match breez_payment.details {
             PaymentDetails::Ln { data } => data,
-            _ => permanent_failure!(
+            PaymentDetails::ClosedChannel { .. } => permanent_failure!(
                 "Current interface doesn't support PaymentDetails::ClosedChannel"
             ),
         };
@@ -1115,7 +1115,10 @@ impl LightningNode {
                 .ok_or_invalid_input("The provided offer didn't include an lnurlw")?,
         )) {
             Ok(InputType::LnUrlWithdraw { data }) => data,
-            _ => permanent_failure!("Invalid LNURLw in offer"),
+            Ok(input_type) => {
+                permanent_failure!("Invalid input type LNURLw in offer: {input_type:?}")
+            }
+            Err(err) => permanent_failure!("Invalid LNURLw in offer: {err}"),
         };
         let hash = match self
             .rt
@@ -1132,7 +1135,8 @@ impl LightningNode {
             LnUrlWithdrawResult::Ok { data } => data.invoice.payment_hash,
             LnUrlWithdrawResult::ErrorStatus { data } => runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
-                format!("Failed to withdraw offer due to: {}", data.reason)
+                "Failed to withdraw offer due to: {}",
+                data.reason
             ),
         };
 

@@ -174,7 +174,7 @@ impl PocketClient {
             );
             runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
-                format!("Got unexpected response to Pocket challenge request: Pocket API returned status {}", raw_response.status()));
+                "Got unexpected response to Pocket challenge request: Pocket API returned status {}", raw_response.status());
         }
 
         raw_response
@@ -236,7 +236,7 @@ impl PocketClient {
             );
             runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
-                format!("Got unexpected response to Pocket order creation request: Pocket API returned status {}", raw_response.status()));
+                "Got unexpected response to Pocket order creation request: Pocket API returned status {}", raw_response.status());
         }
 
         raw_response

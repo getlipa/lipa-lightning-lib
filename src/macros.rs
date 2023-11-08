@@ -9,21 +9,24 @@ macro_rules! ensure {
 
 #[macro_export]
 macro_rules! invalid_input {
-    ($err:expr) => {
-        return Err(invalid_input($err))
-    };
+    ($($arg:tt)*) => {{
+        let res = std::fmt::format(format_args!($($arg)*));
+        return Err(invalid_input(res))
+    }}
 }
 
 #[macro_export]
 macro_rules! runtime_error {
-    ($code:expr, $err:expr) => {
-        return Err(runtime_error($code, $err))
-    };
+    ($code:expr, $($arg:tt)*) => {{
+        let res = std::fmt::format(format_args!($($arg)*));
+        return Err(runtime_error($code, res))
+    }}
 }
 
 #[macro_export]
 macro_rules! permanent_failure {
-    ($err:expr) => {
-        return Err(permanent_failure($err))
-    };
+    ($($arg:tt)*) => {{
+        let res = std::fmt::format(format_args!($($arg)*));
+        return Err(permanent_failure(res))
+    }}
 }
