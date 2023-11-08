@@ -78,7 +78,9 @@ use iban::Iban;
 use log::{info, trace};
 use logger::init_logger_once;
 use perro::Error::RuntimeError;
-use perro::{permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait};
+use perro::{
+    invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
+};
 use std::cmp::Reverse;
 use std::collections::HashSet;
 use std::path::Path;
@@ -661,7 +663,10 @@ impl LightningNode {
         // TODO: persist metadata
         self.data_store
             .lock_unwrap()
-            .store_created_invoice(&response.ln_invoice.bolt11)
+            .store_created_invoice(
+                &response.ln_invoice.payment_hash,
+                &response.ln_invoice.bolt11,
+            )
             .map_to_permanent_failure("Failed to persist created invoice")?;
 
         Ok(InvoiceDetails::from_ln_invoice(
@@ -879,17 +884,25 @@ impl LightningNode {
     /// Parameters:
     /// * `hash` - hex representation of payment hash
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
-        let breez_payment = self
+        if let Some(breez_payment) = self
             .rt
             .handle()
-            .block_on(self.sdk.payment_by_hash(hash))
+            .block_on(self.sdk.payment_by_hash(hash.clone()))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to get payment by hash",
             )?
-            .ok_or_invalid_input("Invalid hash: no payment with provided hash was found")?;
-
-        self.payment_from_breez_payment(breez_payment)
+        {
+            self.payment_from_breez_payment(breez_payment)
+        } else if let Some(invoice) = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_created_invoice_by_hash(&hash)?
+        {
+            self.payment_from_created_invoice(&invoice)
+        } else {
+            return Err(invalid_input("No payment with provided hash was found"));
+        }
     }
 
     fn payment_from_breez_payment(
