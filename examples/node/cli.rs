@@ -373,7 +373,7 @@ fn node_info(node: &LightningNode) {
     println!("Node PubKey: {}", node_info.node_pubkey);
     println!("Connected peer(s): {}", peers_list.join(", "));
     println!(
-        "On-Chain balance: {}",
+        "         On-chain balance: {}",
         amount_to_string(node_info.onchain_balance)
     );
     println!(
