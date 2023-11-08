@@ -79,7 +79,7 @@ interface LightningNode {
     [Throws=LnError]
     string sweep(string address, u32 onchain_fee_rate);
 
-    [Throws=LnError]
+    [Throws=SwapError]
     SwapAddressInfo generate_swap_address(OpeningFeeParams? lsp_fee_params);
 
     [Throws=LnError]
@@ -462,4 +462,11 @@ enum LnUrlPayErrorCode {
     "RouteTooExpensive",
     "UnexpectedError",
     "ServiceConnectivity",
+};
+
+[Error]
+interface SwapError {
+    Generic(string err);
+    ServiceConnectivity(string err);
+    SwapInProgress(string err);
 };

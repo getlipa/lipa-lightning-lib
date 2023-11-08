@@ -59,7 +59,8 @@ pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
 use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
-pub use crow::{PermanentFailureCode, TemporaryFailureCode};
+
+pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 
 use crate::backup::BackupManager;
 use crate::key_derivation::derive_persistence_encryption_key;
@@ -67,7 +68,7 @@ use bip39::{Language, Mnemonic};
 use bitcoin::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::Network;
-use breez_sdk_core::error::SendPaymentError;
+use breez_sdk_core::error::{ReceiveOnchainError, SendPaymentError};
 use breez_sdk_core::{
     parse, parse_invoice, BreezEvent, BreezServices, EventListener, GreenlightCredentials,
     GreenlightNodeConfig, InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData,
@@ -76,7 +77,10 @@ use breez_sdk_core::{
     SendPaymentRequest, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
-use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo, TopupStatus};
+use crow::{
+    CountryCode, LanguageCode, OfferManager, PermanentFailureCode, TemporaryFailureCode,
+    TopupError, TopupInfo, TopupStatus,
+};
 use data_store::DataStore;
 use email_address::EmailAddress;
 use honey_badger::secrets::{generate_keypair, KeyPair};
@@ -1380,17 +1384,13 @@ impl LightningNode {
     pub fn generate_swap_address(
         &self,
         lsp_fee_params: Option<OpeningFeeParams>,
-    ) -> Result<SwapAddressInfo> {
-        let swap_info = self
-            .rt
-            .handle()
-            .block_on(self.sdk.receive_onchain(ReceiveOnchainRequest {
-                opening_fee_params: lsp_fee_params,
-            }))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to generate swap address. Could one be in progress?",
-            )?;
+    ) -> std::result::Result<SwapAddressInfo, ReceiveOnchainError> {
+        let swap_info =
+            self.rt
+                .handle()
+                .block_on(self.sdk.receive_onchain(ReceiveOnchainRequest {
+                    opening_fee_params: lsp_fee_params,
+                }))?;
         let rate = self.get_exchange_rate();
 
         Ok(SwapAddressInfo {
