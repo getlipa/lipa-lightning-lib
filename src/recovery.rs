@@ -43,7 +43,7 @@ pub fn recover_lightning_node(
         environment.backend_url.clone(),
     )?);
 
-    let backup_client = RemoteBackupClient::new(environment.backend_url.clone(), Arc::clone(&auth));
+    let backup_client = RemoteBackupClient::new(environment.backend_url, auth);
     let backup_manager = BackupManager::new(
         backup_client,
         db_path,

@@ -97,7 +97,7 @@ impl TaskManager {
 
         // Backup local db
         if let Some(period) = periods.backup {
-            self.task_handles.push(self.backup_local_db(period));
+            self.task_handles.push(self.start_backup_local_db(period));
         }
     }
 
@@ -194,7 +194,7 @@ impl TaskManager {
         })
     }
 
-    fn backup_local_db(&self, period: Duration) -> RepeatingTaskHandle {
+    fn start_backup_local_db(&self, period: Duration) -> RepeatingTaskHandle {
         let data_store = Arc::clone(&self.data_store);
         let backup_manager = Arc::clone(&self.backup_manager);
         self.runtime_handle.spawn_repeating_task(period, move || {
