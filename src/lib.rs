@@ -45,7 +45,8 @@ pub use crate::errors::{
 };
 pub use crate::exchange_rate_provider::ExchangeRate;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
-use crate::fiat_topup::{FiatTopupInfo, PocketClient};
+pub use crate::fiat_topup::FiatTopupInfo;
+use crate::fiat_topup::PocketClient;
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 use crate::locker::Locker;
@@ -466,8 +467,6 @@ impl LightningNode {
             Arc::clone(&auth),
         ));
 
-        let fiat_topup_client =
-            PocketClient::new(environment.pocket_url, Arc::clone(&sdk), rt.handle())?;
         let offer_manager = OfferManager::new(environment.backend_url.clone(), Arc::clone(&auth));
 
         let db_path = format!("{}/db2.db3", config.local_persistence_path);
@@ -478,6 +477,13 @@ impl LightningNode {
         });
 
         let data_store = Arc::new(Mutex::new(DataStore::new(&db_path)?));
+
+        let fiat_topup_client = PocketClient::new(
+            environment.pocket_url,
+            Arc::clone(&sdk),
+            rt.handle(),
+            Arc::clone(&data_store),
+        )?;
 
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),
@@ -1454,6 +1460,13 @@ impl LightningNode {
         info!("List of peer channels:\n{}", peer_channels);
 
         Ok(())
+    }
+
+    /// Returns the latest [`FiatTopupInfo`] if the user has registered for the fiat topup.
+    pub fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupInfo>> {
+        self.data_store
+            .lock_unwrap()
+            .retrieve_latest_fiat_topup_info()
     }
 }
 

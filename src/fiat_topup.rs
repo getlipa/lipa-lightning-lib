@@ -2,6 +2,8 @@ use crate::async_runtime::Handle;
 use crate::errors::{Result, RuntimeErrorCode};
 use crate::runtime_error;
 
+use crate::data_store::DataStore;
+use crate::locker::Locker;
 use breez_sdk_core::{BreezServices, SignMessageRequest};
 use chrono::{DateTime, Utc};
 use log::error;
@@ -9,11 +11,11 @@ use perro::Error::RuntimeError;
 use perro::MapToError;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// Information about a fiat top-up registration
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FiatTopupInfo {
     pub order_id: String,
     /// The user should transfer fiat from this IBAN
@@ -33,6 +35,7 @@ pub struct FiatTopupInfo {
     pub creditor_postal_code: String,
     pub creditor_town: String,
     pub creditor_country: String,
+    pub currency: String,
 }
 
 impl FiatTopupInfo {
@@ -55,6 +58,7 @@ impl FiatTopupInfo {
             creditor_postal_code: create_order_response.payment_method.creditor_postal_code,
             creditor_town: create_order_response.payment_method.creditor_town,
             creditor_country: create_order_response.payment_method.creditor_country,
+            currency: create_order_response.payment_method.currency,
         }
     }
 }
@@ -127,10 +131,16 @@ pub(crate) struct PocketClient {
     client: reqwest::blocking::Client,
     sdk: Arc<BreezServices>,
     rt_handle: Handle,
+    datastore: Arc<Mutex<DataStore>>,
 }
 
 impl PocketClient {
-    pub fn new(pocket_url: String, sdk: Arc<BreezServices>, rt_handle: Handle) -> Result<Self> {
+    pub fn new(
+        pocket_url: String,
+        sdk: Arc<BreezServices>,
+        rt_handle: Handle,
+        datastore: Arc<Mutex<DataStore>>,
+    ) -> Result<Self> {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(20))
             .build()
@@ -140,6 +150,7 @@ impl PocketClient {
             client,
             sdk,
             rt_handle,
+            datastore,
         })
     }
 
@@ -153,9 +164,14 @@ impl PocketClient {
         let create_order_response =
             self.create_order(challenge_response, user_iban, user_currency)?;
 
-        Ok(FiatTopupInfo::from_pocket_create_order_response(
-            create_order_response,
-        ))
+        let fiat_topup_info =
+            FiatTopupInfo::from_pocket_create_order_response(create_order_response);
+
+        self.datastore
+            .lock_unwrap()
+            .store_fiat_topup_info(fiat_topup_info.clone())?;
+
+        Ok(fiat_topup_info)
     }
 
     fn request_challenge(&self) -> Result<ChallengeResponse> {

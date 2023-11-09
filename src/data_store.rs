@@ -3,11 +3,12 @@ use crate::fund_migration::MigrationStatus;
 use crate::migrations::migrate;
 use crate::{ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
 
+use crate::fiat_topup::FiatTopupInfo;
 use chrono::{DateTime, Utc};
 use crow::{PermanentFailureCode, TemporaryFailureCode};
 use perro::MapToError;
-use rusqlite::Connection;
 use rusqlite::Row;
+use rusqlite::{params, Connection};
 use std::time::SystemTime;
 
 pub(crate) struct LocalPaymentData {
@@ -252,6 +253,33 @@ impl DataStore {
             )
             .map_to_permanent_failure("Failed to query funds migration status")
     }
+
+    pub fn store_fiat_topup_info(&self, fiat_topup_info: FiatTopupInfo) -> Result<()> {
+        let dt: DateTime<Utc> = SystemTime::now().into();
+        self.conn
+            .execute(
+                "INSERT INTO fiat_topup_info (order_id, created_at, debitor_iban, creditor_reference, creditor_iban, creditor_bank_name, creditor_bank_street, creditor_bank_postal_code, creditor_bank_town, creditor_bank_country, creditor_bank_bic, creditor_name, creditor_street, creditor_postal_code, creditor_town, creditor_country, currency)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+                params![fiat_topup_info.order_id, dt, fiat_topup_info.debitor_iban, fiat_topup_info.creditor_reference, fiat_topup_info.creditor_iban, fiat_topup_info.creditor_bank_name, fiat_topup_info.creditor_bank_street, fiat_topup_info.creditor_bank_postal_code, fiat_topup_info.creditor_bank_town, fiat_topup_info.creditor_bank_country, fiat_topup_info.creditor_bank_bic, fiat_topup_info.creditor_name, fiat_topup_info.creditor_street, fiat_topup_info.creditor_postal_code, fiat_topup_info.creditor_town, fiat_topup_info.creditor_country, fiat_topup_info.currency],
+            )
+            .map_to_permanent_failure("Failed to store fiat topup info in db")?;
+        Ok(())
+    }
+
+    pub fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupInfo>> {
+        let mut statement = self.conn.prepare(
+            "SELECT order_id, debitor_iban, creditor_reference, creditor_iban, creditor_bank_name, creditor_bank_street, creditor_bank_postal_code, creditor_bank_town, creditor_bank_country, creditor_bank_bic, creditor_name, creditor_street, creditor_postal_code, creditor_town, creditor_country, currency FROM fiat_topup_info ORDER BY created_at DESC LIMIT 1",
+        ).map_to_permanent_failure("Failed to prepare query latest fiat topup info statement")?;
+
+        let mut fiat_topup_info_iter = statement
+            .query_map([], fiat_topup_info_from_row)
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
+
+        match fiat_topup_info_iter.next() {
+            None => Ok(None),
+            Some(f) => Ok(f.map_to_permanent_failure("Corrupted db")?),
+        }
+    }
 }
 
 // Store all provided exchange rates.
@@ -416,6 +444,27 @@ pub fn to_offer_error(code: Option<String>) -> Option<PocketOfferError> {
     })
 }
 
+fn fiat_topup_info_from_row(row: &Row) -> rusqlite::Result<Option<FiatTopupInfo>> {
+    Ok(Some(FiatTopupInfo {
+        order_id: row.get(0)?,
+        debitor_iban: row.get(1)?,
+        creditor_reference: row.get(2)?,
+        creditor_iban: row.get(3)?,
+        creditor_bank_name: row.get(4)?,
+        creditor_bank_street: row.get(5)?,
+        creditor_bank_postal_code: row.get(6)?,
+        creditor_bank_town: row.get(7)?,
+        creditor_bank_country: row.get(8)?,
+        creditor_bank_bic: row.get(9)?,
+        creditor_name: row.get(10)?,
+        creditor_street: row.get(11)?,
+        creditor_postal_code: row.get(12)?,
+        creditor_town: row.get(13)?,
+        creditor_country: row.get(14)?,
+        currency: row.get(15)?,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::config::TzConfig;
@@ -423,6 +472,7 @@ mod tests {
     use crate::fund_migration::MigrationStatus;
     use crate::{ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
 
+    use crate::fiat_topup::FiatTopupInfo;
     use crow::TopupError::TemporaryFailure;
     use crow::{PermanentFailureCode, TemporaryFailureCode};
     use std::fs;
@@ -881,6 +931,52 @@ mod tests {
                 .retrieve_created_invoice_by_hash("hash2")
                 .unwrap(),
             Some("invoice2".into())
+        );
+    }
+
+    #[test]
+    fn test_fiat_topup_info_persistence() {
+        let db_name = String::from("fiat_topup_info_persistence");
+        reset_db(&db_name);
+        let data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+
+        assert_eq!(data_store.retrieve_latest_fiat_topup_info().unwrap(), None);
+
+        let mut fiat_topup_info = FiatTopupInfo {
+            order_id: "961b8ee9-74cc-4844-9fe8-b02ce0702663".to_string(),
+            debitor_iban: "CH4889144919566329178".to_string(),
+            creditor_reference: "8584-9931-ABCD".to_string(),
+            creditor_iban: "DE2089144126222826294".to_string(),
+            creditor_bank_name: "Example Bank".to_string(),
+            creditor_bank_street: "Bankingstreet 21".to_string(),
+            creditor_bank_postal_code: "2121".to_string(),
+            creditor_bank_town: "Example Town".to_string(),
+            creditor_bank_country: "CH".to_string(),
+            creditor_bank_bic: "VA7373".to_string(),
+            creditor_name: "John Doe".to_string(),
+            creditor_street: "Doestreet 21".to_string(),
+            creditor_postal_code: "2112".to_string(),
+            creditor_town: "Creditor Town".to_string(),
+            creditor_country: "DE".to_string(),
+            currency: "EUR".to_string(),
+        };
+
+        data_store
+            .store_fiat_topup_info(fiat_topup_info.clone())
+            .unwrap();
+        assert_eq!(
+            data_store.retrieve_latest_fiat_topup_info().unwrap(),
+            Some(fiat_topup_info.clone())
+        );
+
+        fiat_topup_info.order_id = "361dd7f8-c7b7-4871-b906-b67fa3ed9b55".to_string();
+
+        data_store
+            .store_fiat_topup_info(fiat_topup_info.clone())
+            .unwrap();
+        assert_eq!(
+            data_store.retrieve_latest_fiat_topup_info().unwrap(),
+            Some(fiat_topup_info)
         );
     }
 

@@ -93,6 +93,9 @@ interface LightningNode {
 
     [Throws=LnError]
     void log_debug_info();
+
+    [Throws=LnError]
+    FiatTopupInfo? retrieve_latest_fiat_topup_info();
 };
 
 dictionary Config {
@@ -282,6 +285,7 @@ dictionary FiatTopupInfo {
     string creditor_postal_code;
     string creditor_town;
     string creditor_country;
+    string currency;
 };
 
 dictionary OfferInfo {
