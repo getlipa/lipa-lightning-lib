@@ -4,10 +4,9 @@ use crate::errors::{Result, RuntimeErrorCode};
 use crate::locker::Locker;
 
 use crate::amount::AsSats;
-use bitcoin::hashes::hex::ToHex;
+use bitcoin::bip32::{ChildNumber, ExtendedPrivKey};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::{Message, PublicKey, SecretKey, SECP256K1};
-use bitcoin::util::bip32::{ChildNumber, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{BreezServices, OpeningFeeParams};
 use graphql::schema::{migrate_funds, migration_balance, MigrateFunds, MigrationBalance};
@@ -47,7 +46,7 @@ pub(crate) fn migrate_funds(
     }
 
     let (private_key, public_key) = derive_ldk_keys(seed)?;
-    let public_key = public_key.serialize().to_hex();
+    let public_key = hex::encode(public_key.serialize());
 
     let token = auth
         .query_token()

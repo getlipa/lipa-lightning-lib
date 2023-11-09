@@ -58,9 +58,8 @@ use amount::{AsSats, Sats};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 
 use bip39::{Language, Mnemonic};
-use bitcoin::hashes::hex::ToHex;
+use bitcoin::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
-use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::Network;
 use breez_sdk_core::{
     parse, parse_invoice, BreezEvent, BreezServices, EventListener, GreenlightCredentials,
@@ -1329,7 +1328,7 @@ impl LightningNode {
     ///
     /// Returns the txid of the sweeping transaction.
     pub fn sweep(&self, address: String, onchain_fee_rate: u32) -> Result<String> {
-        Ok(self
+        let txid = self
             .rt
             .handle()
             .block_on(self.sdk.sweep(SweepRequest {
@@ -1337,8 +1336,8 @@ impl LightningNode {
                 fee_rate_sats_per_vbyte: onchain_fee_rate,
             }))
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to drain funds")?
-            .txid
-            .to_hex())
+            .txid;
+        Ok(hex::encode(txid))
     }
 
     /// Generates a Bitcoin on-chain address that can be used to topup the local LN wallet from an
@@ -1574,8 +1573,8 @@ fn derive_key_pair_hex(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair
     let public_key = PublicKey::from_secret_key(SECP256K1, &derived_xpriv.private_key).serialize();
 
     Ok(KeyPair {
-        secret_key: secret_key.to_vec().to_hex(),
-        public_key: public_key.to_hex(),
+        secret_key: hex::encode(secret_key),
+        public_key: hex::encode(public_key),
     })
 }
 
@@ -1674,7 +1673,7 @@ mod tests {
     #[test]
     fn test_derive_auth_key_pair() {
         let seed = mnemonic_to_seed(MNEMONIC_STR);
-        assert_eq!(seed.to_hex(), SEED_HEX.to_string());
+        assert_eq!(hex::encode(seed), SEED_HEX.to_string());
 
         let key_pair = derive_key_pair_hex(&seed, BACKEND_AUTH_DERIVATION_PATH).unwrap();
 
