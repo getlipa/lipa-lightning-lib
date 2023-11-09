@@ -45,7 +45,8 @@ pub use crate::errors::{
 };
 pub use crate::exchange_rate_provider::ExchangeRate;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
-use crate::fiat_topup::{FiatTopupInfo, PocketClient};
+pub use crate::fiat_topup::FiatTopupInfo;
+use crate::fiat_topup::PocketClient;
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 use crate::locker::Locker;
@@ -104,11 +105,11 @@ pub struct LspFee {
     pub channel_fee_permyriad: u64,
 }
 
-/// The type returned by [`LightningNode::calculate_lsp_fee`]
+/// The type returned by [`LightningNode::calculate_lsp_fee`].
 pub struct CalculateLspFeeResponse {
-    /// Indicates the amount that will be charged
+    /// Indicates the amount that will be charged.
     pub lsp_fee: Amount,
-    /// Should be passed in to [`LightningNode::create_invoice`]
+    /// An internal struct is not supposed to be inspected, but only passed to [`LightningNode::create_invoice`].
     pub lsp_fee_params: Option<OpeningFeeParams>,
 }
 
