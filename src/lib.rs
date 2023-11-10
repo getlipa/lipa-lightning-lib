@@ -467,8 +467,6 @@ impl LightningNode {
             Arc::clone(&auth),
         ));
 
-        let fiat_topup_client =
-            PocketClient::new(environment.pocket_url, Arc::clone(&sdk), rt.handle())?;
         let offer_manager = OfferManager::new(environment.backend_url.clone(), Arc::clone(&auth));
 
         let db_path = format!("{}/db2.db3", config.local_persistence_path);
@@ -479,6 +477,9 @@ impl LightningNode {
         });
 
         let data_store = Arc::new(Mutex::new(DataStore::new(&db_path)?));
+
+        let fiat_topup_client =
+            PocketClient::new(environment.pocket_url, Arc::clone(&sdk), rt.handle())?;
 
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),
@@ -1177,6 +1178,10 @@ impl LightningNode {
             .fiat_topup_client
             .register_pocket_fiat_topup(&user_iban, user_currency)?;
 
+        self.data_store
+            .lock_unwrap()
+            .store_fiat_topup_info(topup_info.clone())?;
+
         self.offer_manager
             .register_topup(topup_info.order_id.clone(), email)
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
@@ -1455,6 +1460,13 @@ impl LightningNode {
         info!("List of peer channels:\n{}", peer_channels);
 
         Ok(())
+    }
+
+    /// Returns the latest [`FiatTopupInfo`] if the user has registered for the fiat topup.
+    pub fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupInfo>> {
+        self.data_store
+            .lock_unwrap()
+            .retrieve_latest_fiat_topup_info()
     }
 }
 

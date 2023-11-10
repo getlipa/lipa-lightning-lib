@@ -62,6 +62,28 @@ const MIGRATION_04_CREATED_INVOICES: &str = "
     );
 ";
 
+const MIGRATION_05_FIAT_TOPUP_INFO: &str = "
+    CREATE TABLE fiat_topup_info (
+        order_id TEXT NOT NULL PRIMARY KEY,
+        created_at INTEGER NOT NULL,
+        debitor_iban TEXT NOT NULL,
+        creditor_reference TEXT NOT NULL,
+        creditor_iban TEXT NOT NULL,
+        creditor_bank_name TEXT NOT NULL,
+        creditor_bank_street TEXT NOT NULL,
+        creditor_bank_postal_code TEXT NOT NULL,
+        creditor_bank_town TEXT NOT NULL,
+        creditor_bank_country TEXT NOT NULL,
+        creditor_bank_bic TEXT NOT NULL,
+        creditor_name TEXT NOT NULL,
+        creditor_street TEXT NOT NULL,
+        creditor_postal_code TEXT NOT NULL,
+        creditor_town TEXT NOT NULL,
+        creditor_country TEXT NOT NULL,
+        currency TEXT NOT NULL
+    );
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -74,6 +96,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_02_FUNDS_MIGRATION_STATUS),
         M::up(MIGRATION_03_OFFER_ERROR_MESSAGE),
         M::up(MIGRATION_04_CREATED_INVOICES),
+        M::up(MIGRATION_05_FIAT_TOPUP_INFO),
     ])
 }
 

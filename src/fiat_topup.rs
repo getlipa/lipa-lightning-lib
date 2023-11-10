@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 /// Information about a fiat top-up registration
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FiatTopupInfo {
     pub order_id: String,
     /// The user should transfer fiat from this IBAN
@@ -33,6 +33,7 @@ pub struct FiatTopupInfo {
     pub creditor_postal_code: String,
     pub creditor_town: String,
     pub creditor_country: String,
+    pub currency: String,
 }
 
 impl FiatTopupInfo {
@@ -55,6 +56,7 @@ impl FiatTopupInfo {
             creditor_postal_code: create_order_response.payment_method.creditor_postal_code,
             creditor_town: create_order_response.payment_method.creditor_town,
             creditor_country: create_order_response.payment_method.creditor_country,
+            currency: create_order_response.payment_method.currency,
         }
     }
 }

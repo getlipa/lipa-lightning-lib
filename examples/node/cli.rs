@@ -132,6 +132,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "getregisteredtopup" => {
+                    if let Err(message) = get_registered_topup(node) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "listoffers" => {
                     if let Err(message) = list_offers(node) {
                         println!("{}", format!("{message:#}").red());
@@ -246,6 +251,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "registertopup <IBAN> <currency> [email]",
         "registertopup ",
     ));
+    hints.insert(CommandHint::new("getregisteredtopup", "getregisteredtopup"));
     hints.insert(CommandHint::new("listoffers", "listoffers"));
 
     hints.insert(CommandHint::new(
@@ -293,6 +299,7 @@ fn help() {
     println!("  refundfailedswap <swap address> <to address>");
     println!();
     println!("  registertopup <IBAN> <currency> [email]");
+    println!("  getregisteredtopup");
     println!("  listoffers");
     println!();
     println!("  listpayments");
@@ -826,4 +833,11 @@ fn amount_to_string(amount: Amount) -> String {
         None => "exchange rate unknown".to_string(),
     };
     format!("{} SAT ({fiat})", amount.sats)
+}
+
+fn get_registered_topup(node: &LightningNode) -> Result<()> {
+    let topup_info = node.retrieve_latest_fiat_topup_info()?;
+    println!("{topup_info:?}");
+
+    Ok(())
 }
