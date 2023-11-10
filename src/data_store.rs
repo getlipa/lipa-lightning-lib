@@ -258,8 +258,11 @@ impl DataStore {
         let dt: DateTime<Utc> = SystemTime::now().into();
         self.conn
             .execute(
-                "INSERT INTO fiat_topup_info (order_id, created_at, debitor_iban, creditor_reference, creditor_iban, creditor_bank_name, creditor_bank_street, creditor_bank_postal_code, creditor_bank_town, creditor_bank_country, creditor_bank_bic, creditor_name, creditor_street, creditor_postal_code, creditor_town, creditor_country, currency)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+                "INSERT INTO fiat_topup_info (order_id, created_at, debitor_iban, creditor_reference, creditor_iban, creditor_bank_name,
+                             creditor_bank_street, creditor_bank_postal_code, creditor_bank_town, creditor_bank_country,
+                             creditor_bank_bic, creditor_name, creditor_street, creditor_postal_code, creditor_town,
+                             creditor_country, currency)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17);",
                 params![fiat_topup_info.order_id, dt, fiat_topup_info.debitor_iban, fiat_topup_info.creditor_reference, fiat_topup_info.creditor_iban, fiat_topup_info.creditor_bank_name, fiat_topup_info.creditor_bank_street, fiat_topup_info.creditor_bank_postal_code, fiat_topup_info.creditor_bank_town, fiat_topup_info.creditor_bank_country, fiat_topup_info.creditor_bank_bic, fiat_topup_info.creditor_name, fiat_topup_info.creditor_street, fiat_topup_info.creditor_postal_code, fiat_topup_info.creditor_town, fiat_topup_info.creditor_country, fiat_topup_info.currency],
             )
             .map_to_permanent_failure("Failed to store fiat topup info in db")?;

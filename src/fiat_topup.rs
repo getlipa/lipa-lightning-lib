@@ -2,8 +2,6 @@ use crate::async_runtime::Handle;
 use crate::errors::{Result, RuntimeErrorCode};
 use crate::runtime_error;
 
-use crate::data_store::DataStore;
-use crate::locker::Locker;
 use breez_sdk_core::{BreezServices, SignMessageRequest};
 use chrono::{DateTime, Utc};
 use log::error;
@@ -11,7 +9,7 @@ use perro::Error::RuntimeError;
 use perro::MapToError;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Information about a fiat top-up registration
@@ -131,16 +129,10 @@ pub(crate) struct PocketClient {
     client: reqwest::blocking::Client,
     sdk: Arc<BreezServices>,
     rt_handle: Handle,
-    datastore: Arc<Mutex<DataStore>>,
 }
 
 impl PocketClient {
-    pub fn new(
-        pocket_url: String,
-        sdk: Arc<BreezServices>,
-        rt_handle: Handle,
-        datastore: Arc<Mutex<DataStore>>,
-    ) -> Result<Self> {
+    pub fn new(pocket_url: String, sdk: Arc<BreezServices>, rt_handle: Handle) -> Result<Self> {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(20))
             .build()
@@ -150,7 +142,6 @@ impl PocketClient {
             client,
             sdk,
             rt_handle,
-            datastore,
         })
     }
 
@@ -164,14 +155,9 @@ impl PocketClient {
         let create_order_response =
             self.create_order(challenge_response, user_iban, user_currency)?;
 
-        let fiat_topup_info =
-            FiatTopupInfo::from_pocket_create_order_response(create_order_response);
-
-        self.datastore
-            .lock_unwrap()
-            .store_fiat_topup_info(fiat_topup_info.clone())?;
-
-        Ok(fiat_topup_info)
+        Ok(FiatTopupInfo::from_pocket_create_order_response(
+            create_order_response,
+        ))
     }
 
     fn request_challenge(&self) -> Result<ChallengeResponse> {

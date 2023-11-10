@@ -478,12 +478,8 @@ impl LightningNode {
 
         let data_store = Arc::new(Mutex::new(DataStore::new(&db_path)?));
 
-        let fiat_topup_client = PocketClient::new(
-            environment.pocket_url,
-            Arc::clone(&sdk),
-            rt.handle(),
-            Arc::clone(&data_store),
-        )?;
+        let fiat_topup_client =
+            PocketClient::new(environment.pocket_url, Arc::clone(&sdk), rt.handle())?;
 
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),
@@ -1181,6 +1177,10 @@ impl LightningNode {
         let topup_info = self
             .fiat_topup_client
             .register_pocket_fiat_topup(&user_iban, user_currency)?;
+
+        self.data_store
+            .lock_unwrap()
+            .store_fiat_topup_info(topup_info.clone())?;
 
         self.offer_manager
             .register_topup(topup_info.order_id.clone(), email)
