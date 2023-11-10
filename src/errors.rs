@@ -59,7 +59,7 @@ pub enum PayErrorCode {
     /// It might make sense to retry the payment.
     PaymentTimeout,
 
-    /// Route too expensive. The fee the route exceeds the settings.
+    /// Route too expensive. The route's fee exceeds the settings.
     RouteTooExpensive,
 
     /// The remote lightning node is not available. Could be a network error.
@@ -95,7 +95,7 @@ pub enum LnUrlPayErrorCode {
     /// It might make sense to retry the payment.
     PaymentTimeout,
 
-    /// Route too expensive. The fee the route exceeds the settings.
+    /// Route too expensive. The route's fee exceeds the settings.
     RouteTooExpensive,
 
     /// The remote lightning node or LNURL server is not available. Could be a network error.

@@ -772,6 +772,11 @@ impl LightningNode {
         amount_sat: u64,
         _metadata: String,
     ) -> PayResult<()> {
+        let amount_msat = if amount_sat == 0 {
+            None
+        } else {
+            Some(amount_sat.as_sats().msats)
+        };
         self.store_payment_info(&invoice_details.payment_hash, None)
             .map_to_permanent_failure("Failed to persist local payment data")?;
         // TODO: persist metadata
@@ -791,7 +796,7 @@ impl LightningNode {
             .handle()
             .block_on(self.sdk.send_payment(SendPaymentRequest {
                 bolt11: invoice_details.invoice,
-                amount_msat: Some(amount_sat.as_sats().msats),
+                amount_msat,
             }))
             .map_err(map_send_payment_error)?;
         Ok(())
