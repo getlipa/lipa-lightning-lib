@@ -809,14 +809,7 @@ impl LightningNode {
         lnurl_pay_request_data: LnUrlPayRequestData,
         amount_sat: u64,
     ) -> LnUrlPayResult<String> {
-        let initial_latest_payments = self.get_latest_payments(1).map_to_runtime_error(
-            LnUrlPayErrorCode::ServiceConnectivity,
-            "Failed to list payments",
-        )?;
-        let initial_latest_payment = initial_latest_payments.first();
-
-        // TODO: return payment hash directly when Breez SDK allows for it https://github.com/breez/breez-sdk/pull/550
-        match self
+        let payment_hash = match self
             .rt
             .handle()
             .block_on(self.sdk.lnurl_pay(LnUrlPayRequest {
@@ -826,37 +819,22 @@ impl LightningNode {
             }))
             .map_err(map_lnurl_pay_error)?
         {
-            breez_sdk_core::LnUrlPayResult::EndpointSuccess { .. } => {}
-            breez_sdk_core::LnUrlPayResult::EndpointError { data } => {
-                runtime_error!(
-                    LnUrlPayErrorCode::LnUrlServerError,
-                    "LNURL server returned error: {}",
-                    data.reason
-                );
-            }
-            LnUrlPayResult::PayError { .. } => {
-                runtime_error!(RuntimeErrorCode::NodeUnavailable, "Pay error")
-            }
+            breez_sdk_core::LnUrlPayResult::EndpointSuccess { data } => Ok(data.payment_hash),
+            breez_sdk_core::LnUrlPayResult::EndpointError { data } => runtime_error!(
+                LnUrlPayErrorCode::LnUrlServerError,
+                "LNURL server returned error: {}",
+                data.reason
+            ),
+            breez_sdk_core::LnUrlPayResult::PayError { data } => runtime_error!(
+                LnUrlPayErrorCode::PaymentFailed,
+                "Paying invoice for LNURL pay failed: {}",
+                data.reason
+            ),
+        }?;
+        if let Err(err) = self.store_payment_info(&payment_hash, None) {
+            log::error!("Failed to persist payment info for {payment_hash}: {err}. Ignoring.");
         }
-
-        let final_latest_payments = self.get_latest_payments(1).map_to_runtime_error(
-            LnUrlPayErrorCode::ServiceConnectivity,
-            "Failed to list payments",
-        )?;
-        let final_latest_payment = final_latest_payments.first();
-
-        // Temporary hack: check if there is a new payment to know if a payment attempt has been started
-        if initial_latest_payment != final_latest_payment {
-            let hash = final_latest_payment
-                .ok_or_permanent_failure("Expected at least one payment to exist")?
-                .hash
-                .clone();
-            self.store_payment_info(&hash, None)
-                .map_to_permanent_failure("Failed to persist local payment data")?;
-            Ok(hash)
-        } else {
-            permanent_failure!("Failed to get an invoice for paid LNURL pay");
-        }
+        Ok(payment_hash)
     }
 
     /// Get a list of the latest payments
