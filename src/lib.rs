@@ -159,16 +159,16 @@ pub enum PaymentState {
     InvoiceExpired,
 }
 
-/// Information about an incoming or outgoing payment
+/// Information about an incoming or outgoing payment.
 #[derive(PartialEq)]
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,
-    /// For now, will always be empty
+    /// For now, will always be empty.
     pub fail_reason: Option<PayErrorCode>,
-    /// Hex representation of payment hash
+    /// Hex representation of payment hash.
     pub hash: String,
-    /// Nominal amount specified in the invoice
+    /// Nominal amount specified in the invoice.
     pub amount: Amount,
     pub invoice_details: InvoiceDetails,
     pub created_at: TzTime,
@@ -188,7 +188,17 @@ pub struct Payment {
     pub lsp_fees: Option<Amount>,
     /// An offer a [`PaymentType::Receiving`] payment came from if any.
     pub offer: Option<OfferKind>,
+    /// The swap information of a [`PaymentType::Receiving`] payment if triggered by a swap.
+    pub swap: Option<SwapInfo>,
     pub metadata: String,
+}
+
+/// Information about a successful swap.
+#[derive(PartialEq)]
+pub struct SwapInfo {
+    pub bitcoin_address: String,
+    pub created_at: TzTime,
+    pub paid_sats: u64,
 }
 
 /// Indicates the max routing fee mode used to restrict fees of a payment of a given size
@@ -1015,6 +1025,18 @@ impl LightningNode {
 
         let description = invoice_details.description.clone();
 
+        let user_preferences = self.user_preferences.lock_unwrap();
+        let swap = payment_details.swap_info.map(|s| SwapInfo {
+            bitcoin_address: s.bitcoin_address,
+            created_at: TzTime {
+                // TODO: Persist SwapInfo in local db on state change, requires https://github.com/breez/breez-sdk/issues/518
+                time: unix_timestamp_to_system_time(s.created_at as u64),
+                timezone_id: user_preferences.timezone_config.timezone_id.clone(),
+                timezone_utc_offset_secs: user_preferences.timezone_config.timezone_utc_offset_secs,
+            },
+            paid_sats: s.paid_sats,
+        });
+
         Ok(Payment {
             payment_type,
             payment_state,
@@ -1028,6 +1050,7 @@ impl LightningNode {
             network_fees,
             lsp_fees,
             offer,
+            swap,
             metadata: String::new(), // TODO: retrieve metadata from local db
         })
     }
@@ -1080,6 +1103,7 @@ impl LightningNode {
             network_fees: None,
             lsp_fees: None,
             offer: None,
+            swap: None,
             metadata: String::new(), // TODO: retrieve metadata from local db
         })
     }
@@ -1793,6 +1817,7 @@ mod tests {
                 network_fees: None,
                 lsp_fees: None,
                 offer: None,
+                swap: None,
                 metadata: "".to_string(),
             },
             Payment {
@@ -1835,6 +1860,7 @@ mod tests {
                     exchange_fee_rate_permyriad: 0,
                     error: None,
                 }),
+                swap: None,
                 metadata: "".to_string(),
             },
             Payment {
@@ -1877,6 +1903,7 @@ mod tests {
                     exchange_fee_rate_permyriad: 0,
                     error: None,
                 }),
+                swap: None,
                 metadata: "".to_string(),
             },
         ];
