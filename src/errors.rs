@@ -51,8 +51,7 @@ pub enum PayErrorCode {
     /// There's no point in retrying this payment.
     PayingToSelf,
 
-    /// The payment failed. Likely the issue is on the receiver.
-    /// There's no point in retrying this payment.
+    /// The payment failed for another reason. Might be an issue with the receiver.
     PaymentFailed,
 
     /// Payment timed out.
@@ -88,7 +87,7 @@ pub enum LnUrlPayErrorCode {
     /// Not a single route was found.
     NoRouteFound,
 
-    /// The payment failed. Likely the issue is on the receiver.
+    /// The payment failed for another reason. Might be an issue with the receiver.
     PaymentFailed,
 
     /// Payment timed out.
