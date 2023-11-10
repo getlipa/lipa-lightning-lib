@@ -50,6 +50,7 @@ rusqlite = { version = "0.29.0", features = [
     "load_extension",
     "backup",
     "hooks",
+    "backup",
 ] }
 [target.'cfg(target_os = "ios")'.dependencies]
 rusqlite = { version = "0.29.0", features = [
@@ -58,6 +59,7 @@ rusqlite = { version = "0.29.0", features = [
     "load_extension",
     "backup",
     "hooks",
+    "backup",
 ] }
 
 

@@ -8,8 +8,10 @@ use chrono::{DateTime, Utc};
 use crow::{PermanentFailureCode, TemporaryFailureCode};
 use perro::MapToError;
 use rusqlite::Row;
-use rusqlite::{params, Connection};
-use std::time::SystemTime;
+use rusqlite::{backup, params, Connection};
+use std::time::{Duration, SystemTime};
+
+pub(crate) const BACKUP_DB_FILENAME_SUFFIX: &str = ".backup";
 
 pub(crate) struct LocalPaymentData {
     pub user_preferences: UserPreferences,
@@ -25,15 +27,19 @@ pub(crate) enum BackupStatus {
 
 pub(crate) struct DataStore {
     conn: Connection,
+    backup_conn: Connection,
     pub backup_status: BackupStatus,
 }
 
 impl DataStore {
     pub fn new(db_path: &str) -> Result<Self> {
         let mut conn = Connection::open(db_path).map_to_invalid_input("Invalid db path")?;
+        let backup_conn = Connection::open(format!("{db_path}{BACKUP_DB_FILENAME_SUFFIX}"))
+            .map_to_permanent_failure("Failed to open backup db connection")?;
         migrate(&mut conn)?;
         Ok(DataStore {
             conn,
+            backup_conn,
             backup_status: BackupStatus::WaitingForBackup,
         })
     }
@@ -296,6 +302,13 @@ impl DataStore {
             None => Ok(None),
             Some(f) => Ok(f.map_to_permanent_failure("Corrupted db")?),
         }
+    }
+    pub(crate) fn backup_db(&mut self) -> Result<()> {
+        let backup = backup::Backup::new(&self.conn, &mut self.backup_conn)
+            .map_to_permanent_failure("Failed to create backup instance")?;
+        backup
+            .run_to_completion(5, Duration::from_millis(250), None)
+            .map_to_permanent_failure("Failed to backup db")
     }
 }
 

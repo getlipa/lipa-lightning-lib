@@ -1,3 +1,4 @@
+use crate::data_store::BACKUP_DB_FILENAME_SUFFIX;
 use crate::errors::Result;
 use crate::symmetric_encryption::{decrypt, encrypt};
 use crate::{runtime_error, RuntimeErrorCode};
@@ -12,6 +13,7 @@ const SCHEMA_VERSION: &str = "0";
 pub(crate) struct BackupManager {
     remote_backup_client: RemoteBackupClient,
     local_db_path: String,
+    local_backup_db_path: String,
     encryption_key: [u8; 32],
 }
 
@@ -23,13 +25,14 @@ impl BackupManager {
     ) -> Self {
         BackupManager {
             remote_backup_client,
-            local_db_path,
+            local_db_path: local_db_path.clone(),
+            local_backup_db_path: format!("{}{BACKUP_DB_FILENAME_SUFFIX}", local_db_path),
             encryption_key,
         }
     }
 
     pub async fn backup(&self) -> Result<()> {
-        let local_db = fs::read(&self.local_db_path)
+        let local_db = fs::read(&self.local_backup_db_path)
             .map_to_permanent_failure("Failed to read db file from local filesystem")?;
         let encrypted_local_db = encrypt(&local_db, &self.encryption_key)?;
         self.remote_backup_client

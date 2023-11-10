@@ -205,15 +205,26 @@ impl TaskManager {
                 let backup_status = data_store.lock_unwrap().backup_status;
                 match backup_status {
                     BackupStatus::Complete => {}
-                    BackupStatus::WaitingForBackup => match backup_manager.backup().await {
-                        Ok(_) => {
-                            trace!("Successfully backed up local db");
-                            data_store.lock_unwrap().backup_status = BackupStatus::Complete;
+                    BackupStatus::WaitingForBackup => {
+                        match data_store.lock_unwrap().backup_db() {
+                            Ok(_) => {
+                                trace!("Successfully backed up local db into separate db file");
+                            }
+                            Err(e) => {
+                                error!("Failed to back up local db into separate db file: {e}");
+                                return;
+                            }
                         }
-                        Err(e) => {
-                            error!("Failed to back up local db: {e}")
+                        match backup_manager.backup().await {
+                            Ok(_) => {
+                                trace!("Successfully backed up local db to remote storage");
+                                data_store.lock_unwrap().backup_status = BackupStatus::Complete;
+                            }
+                            Err(e) => {
+                                error!("Failed to back up local db to remote storage: {e}")
+                            }
                         }
-                    },
+                    }
                 }
             }
         })
