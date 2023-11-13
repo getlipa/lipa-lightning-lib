@@ -223,7 +223,6 @@ dictionary Payment {
     Amount? lsp_fees;
     OfferKind? offer;
     SwapInfo? swap;
-    string metadata;
 };
 
 enum PaymentType {

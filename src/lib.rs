@@ -205,7 +205,6 @@ pub struct Payment {
     pub offer: Option<OfferKind>,
     /// The swap information of a [`PaymentType::Receiving`] payment if triggered by a swap.
     pub swap: Option<SwapInfo>,
-    pub metadata: String,
 }
 
 /// Information about a successful swap.
@@ -1097,7 +1096,6 @@ impl LightningNode {
             lsp_fees,
             offer,
             swap,
-            metadata: String::new(), // TODO: retrieve metadata from local db
         })
     }
 
@@ -1150,7 +1148,6 @@ impl LightningNode {
             lsp_fees: None,
             offer: None,
             swap: None,
-            metadata: String::new(), // TODO: retrieve metadata from local db
         })
     }
 
@@ -1949,7 +1946,6 @@ mod tests {
                 lsp_fees: None,
                 offer: None,
                 swap: None,
-                metadata: "".to_string(),
             },
             Payment {
                 payment_type: PaymentType::Receiving,
@@ -1992,7 +1988,6 @@ mod tests {
                     error: None,
                 }),
                 swap: None,
-                metadata: "".to_string(),
             },
             Payment {
                 payment_type: PaymentType::Receiving,
@@ -2035,7 +2030,6 @@ mod tests {
                     error: None,
                 }),
                 swap: None,
-                metadata: "".to_string(),
             },
         ];
 
