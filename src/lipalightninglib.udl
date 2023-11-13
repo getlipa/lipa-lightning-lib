@@ -32,8 +32,8 @@ interface LightningNode {
     [Throws=PayError]
     void pay_open_invoice(InvoiceDetails invoice_details, u64 amount_sat, string metadata);
 
-    [Throws=LnError]
-    string pay_lnurlp(u64 amount_sat, LnUrlPayRequestData lnurl_pay_request_data);
+    [Throws=LnUrlPayError]
+    string pay_lnurlp(LnUrlPayRequestData lnurl_pay_request_data, u64 amount_sat);
 
     [Throws=LnError]
     sequence<Payment> get_latest_payments(u32 number_of_payments);
@@ -79,7 +79,7 @@ interface LightningNode {
     [Throws=LnError]
     string sweep(string address, u32 onchain_fee_rate);
 
-    [Throws=LnError]
+    [Throws=SwapError]
     SwapAddressInfo generate_swap_address(OpeningFeeParams? lsp_fee_params);
 
     [Throws=LnError]
@@ -421,13 +421,14 @@ interface PayError {
 };
 
 enum PayErrorCode {
-    "InvoiceExpired",
     "AlreadyUsedInvoice",
-    "PayingToSelf",
+    "InvoiceExpired",
     "NoRouteFound",
-    "RecipientRejected",
-    "RetriesExhausted",
-    "NoMoreRoutes",
+    "PayingToSelf",
+    "PaymentFailed",
+    "PaymentTimeout",
+    "RouteTooExpensive",
+    "NodeUnavailable",
     "UnexpectedError",
 };
 
@@ -444,4 +445,28 @@ interface DecodeDataError {
     LnUrlError(string msg);
     Unsupported(UnsupportedDataType typ);
     Unrecognized(string msg);
+};
+
+[Error]
+interface LnUrlPayError {
+    InvalidInput(string msg);
+    RuntimeError(LnUrlPayErrorCode code, string msg);
+    PermanentFailure(string msg);
+};
+
+enum LnUrlPayErrorCode {
+    "LnUrlServerError",
+    "NoRouteFound",
+    "PaymentFailed",
+    "PaymentTimeout",
+    "RouteTooExpensive",
+    "UnexpectedError",
+    "ServiceConnectivity",
+};
+
+[Error]
+interface SwapError {
+    Generic(string err);
+    ServiceConnectivity(string err);
+    SwapInProgress(string err);
 };

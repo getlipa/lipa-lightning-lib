@@ -36,6 +36,7 @@ mod util;
 
 use crate::amount::ToAmount;
 pub use crate::amount::{Amount, FiatValue};
+use crate::amount::{AsSats, Sats};
 use crate::async_runtime::AsyncRuntime;
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
@@ -43,8 +44,9 @@ use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 use crate::errors::{to_mnemonic_error, Error, SimpleError};
 pub use crate::errors::{
-    DecodeDataError, Error as LnError, MnemonicError, PayError, PayErrorCode, PayResult, Result,
-    RuntimeErrorCode, UnsupportedDataType,
+    DecodeDataError, Error as LnError, LnUrlPayError, LnUrlPayErrorCode, LnUrlPayResult,
+    MnemonicError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode,
+    UnsupportedDataType,
 };
 pub use crate::exchange_rate_provider::ExchangeRate;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
@@ -57,8 +59,8 @@ pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
 use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
-use amount::{AsSats, Sats};
-pub use crow::{PermanentFailureCode, TemporaryFailureCode};
+
+pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 
 use crate::backup::BackupManager;
 use crate::key_derivation::derive_persistence_encryption_key;
@@ -66,15 +68,19 @@ use bip39::{Language, Mnemonic};
 use bitcoin::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::Network;
+use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 use breez_sdk_core::{
     parse, parse_invoice, BreezEvent, BreezServices, EventListener, GreenlightCredentials,
     GreenlightNodeConfig, InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData,
-    LnUrlPayResult, LnUrlWithdrawRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest,
-    OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter, ReceiveOnchainRequest,
-    RefundRequest, SendPaymentRequest, SweepRequest,
+    LnUrlWithdrawRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
+    PaymentDetails, PaymentStatus, PaymentTypeFilter, ReceiveOnchainRequest, RefundRequest,
+    SendPaymentRequest, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
-use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo, TopupStatus};
+use crow::{
+    CountryCode, LanguageCode, OfferManager, PermanentFailureCode, TemporaryFailureCode,
+    TopupError, TopupInfo, TopupStatus,
+};
 use data_store::DataStore;
 use email_address::EmailAddress;
 use honey_badger::secrets::{generate_keypair, KeyPair};
@@ -82,7 +88,6 @@ use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
 use iban::Iban;
 use log::{info, trace};
 use logger::init_logger_once;
-use perro::Error::RuntimeError;
 use perro::{
     invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
@@ -751,24 +756,8 @@ impl LightningNode {
     /// * `invoice_details` - details of an invoice decode by [`LightningNode::decode_data`]
     /// * `metadata` - a metadata string that gets tied up to this payment. It can be used by the user of this library
     ///  to store data that is relevant to this payment. It is provided together with the respective payment in [`LightningNode::get_latest_payments`].
-    pub fn pay_invoice(&self, invoice_details: InvoiceDetails, _metadata: String) -> PayResult<()> {
-        self.store_payment_info(&invoice_details.payment_hash, None)
-            .map_to_permanent_failure("Failed to persist local payment data")?;
-        // TODO: persist metadata
-        match self
-            .rt
-            .handle()
-            .block_on(self.sdk.send_payment(SendPaymentRequest {
-                bolt11: invoice_details.invoice,
-                amount_msat: None,
-            })) {
-            Ok(_) => Ok(()),
-            // TODO: properly handle errors (requires changing either ours or the SDK's error model)
-            Err(e) => Err(RuntimeError {
-                code: PayErrorCode::UnexpectedError,
-                msg: format!("Failed to start paying invoice: {e}"),
-            }),
-        }
+    pub fn pay_invoice(&self, invoice_details: InvoiceDetails, metadata: String) -> PayResult<()> {
+        self.pay_open_invoice(invoice_details, 0, metadata)
     }
 
     /// Similar to [`LightningNode::pay_invoice`] with the difference that the passed in invoice
@@ -783,81 +772,74 @@ impl LightningNode {
         amount_sat: u64,
         _metadata: String,
     ) -> PayResult<()> {
+        let amount_msat = if amount_sat == 0 {
+            None
+        } else {
+            Some(amount_sat.as_sats().msats)
+        };
         self.store_payment_info(&invoice_details.payment_hash, None)
             .map_to_permanent_failure("Failed to persist local payment data")?;
         // TODO: persist metadata
-        match self
-            .rt
+        let node_state = self
+            .sdk
+            .node_info()
+            .map_to_runtime_error(PayErrorCode::NodeUnavailable, "Failed to read node info")?;
+        ensure!(
+            node_state.id != invoice_details.payee_pub_key,
+            runtime_error(
+                PayErrorCode::PayingToSelf,
+                "A locally issued invoice tried to be paid"
+            )
+        );
+
+        self.rt
             .handle()
             .block_on(self.sdk.send_payment(SendPaymentRequest {
                 bolt11: invoice_details.invoice,
-                amount_msat: Some(amount_sat.as_sats().msats),
-            })) {
-            Ok(_) => Ok(()),
-            // TODO: properly handle errors (requires changing either ours or the SDK's error model)
-            Err(e) => Err(RuntimeError {
-                code: PayErrorCode::UnexpectedError,
-                msg: format!("Failed to start paying invoice: {e}"),
-            }),
-        }
+                amount_msat,
+            }))
+            .map_err(map_send_payment_error)?;
+        Ok(())
     }
 
     /// Pay an LNURL-pay the provided amount.
     ///
     /// Parameters:
-    /// * `amount_sat` - amount to be paid
     /// * `lnurl_pay_request_data` - LNURL-pay request data as obtained from [`LightningNode::decode_data`]
+    /// * `amount_sat` - amount to be paid
     ///
     /// Returns the payment hash of the payment.
     pub fn pay_lnurlp(
         &self,
-        amount_sat: u64,
         lnurl_pay_request_data: LnUrlPayRequestData,
-    ) -> Result<String> {
-        let initial_latest_payments = self.get_latest_payments(1)?;
-        let initial_latest_payment = initial_latest_payments.get(0);
-
-        match self
+        amount_sat: u64,
+    ) -> LnUrlPayResult<String> {
+        let payment_hash = match self
             .rt
             .handle()
             .block_on(self.sdk.lnurl_pay(LnUrlPayRequest {
                 data: lnurl_pay_request_data,
                 amount_msat: amount_sat.as_sats().msats,
                 comment: None,
-            })) // TODO: return payment hash directly when Breez SDK allows for it https://github.com/breez/breez-sdk/pull/550
-            .map_to_invalid_input("Invalid parameters provided to pay_lnurlp()")?
+            }))
+            .map_err(map_lnurl_pay_error)?
         {
-            LnUrlPayResult::EndpointSuccess { .. } => {}
-            LnUrlPayResult::EndpointError { .. } => {
-                return Err(runtime_error(
-                    // TODO: return a more specific error
-                    RuntimeErrorCode::NodeUnavailable,
-                    "Failed to get an invoice from the LNURL-pay service",
-                ));
-            }
-            LnUrlPayResult::PayError { .. } => {
-                runtime_error!(RuntimeErrorCode::NodeUnavailable, "Pay error")
-            }
+            breez_sdk_core::LnUrlPayResult::EndpointSuccess { data } => Ok(data.payment_hash),
+            breez_sdk_core::LnUrlPayResult::EndpointError { data } => runtime_error!(
+                LnUrlPayErrorCode::LnUrlServerError,
+                "LNURL server returned error: {}",
+                data.reason
+            ),
+            breez_sdk_core::LnUrlPayResult::PayError { data } => runtime_error!(
+                LnUrlPayErrorCode::PaymentFailed,
+                "Paying invoice for LNURL pay failed: {}",
+                data.reason
+            ),
+        }?;
+        if let Err(err) = self.store_payment_info(&payment_hash, None) {
+            log::error!("Failed to persist payment info for {payment_hash}: {err}. Ignoring.");
         }
-
-        let final_latest_payments = self.get_latest_payments(1)?;
-        let final_latest_payment = final_latest_payments.get(0);
-
-        // Temporary hack: check if there is a new payment to know if a payment attempt has been started
-        if initial_latest_payment != final_latest_payment {
-            let hash = final_latest_payment
-                .ok_or_permanent_failure("Expected at least one payment to exist")?
-                .hash
-                .clone();
-            self.store_payment_info(&hash, None)
-                .map_to_permanent_failure("Failed to persist local payment data")?;
-            Ok(hash)
-        } else {
-            Err(runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to get an invoice from LNURL-pay service",
-            ))
-        }
+        Ok(payment_hash)
     }
 
     /// Get a list of the latest payments
@@ -1267,16 +1249,29 @@ impl LightningNode {
                 data: lnurlw_data,
                 amount_msat: offer.amount.sats.as_sats().msats,
                 description: None,
-            }))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to withdraw offer",
-            )? {
-            LnUrlWithdrawResult::Ok { data } => data.invoice.payment_hash,
-            LnUrlWithdrawResult::ErrorStatus { data } => runtime_error!(
+            })) {
+            Ok(LnUrlWithdrawResult::Ok { data }) => data.invoice.payment_hash,
+            Ok(LnUrlWithdrawResult::ErrorStatus { data }) => runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
                 "Failed to withdraw offer due to: {}",
                 data.reason
+            ),
+            Err(LnUrlWithdrawError::Generic { err }) => runtime_error!(
+                RuntimeErrorCode::OfferServiceUnavailable,
+                "Failed to withdraw offer due to: {err}"
+            ),
+            Err(LnUrlWithdrawError::InvalidAmount { err }) => {
+                permanent_failure!("Invalid amount in invoice for LNURL withdraw: {err}")
+            }
+            Err(LnUrlWithdrawError::InvalidInvoice { err }) => {
+                permanent_failure!("Invalid invoice for LNURL withdraw: {err}")
+            }
+            Err(LnUrlWithdrawError::InvalidUri { err }) => {
+                permanent_failure!("Invalid URL in LNURL withdraw: {err}")
+            }
+            Err(LnUrlWithdrawError::ServiceConnectivity { err }) => runtime_error!(
+                RuntimeErrorCode::OfferServiceUnavailable,
+                "Failed to withdraw offer due to: {err}"
             ),
         };
 
@@ -1384,17 +1379,13 @@ impl LightningNode {
     pub fn generate_swap_address(
         &self,
         lsp_fee_params: Option<OpeningFeeParams>,
-    ) -> Result<SwapAddressInfo> {
-        let swap_info = self
-            .rt
-            .handle()
-            .block_on(self.sdk.receive_onchain(ReceiveOnchainRequest {
-                opening_fee_params: lsp_fee_params,
-            }))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to generate swap address. Could one be in progress?",
-            )?;
+    ) -> std::result::Result<SwapAddressInfo, ReceiveOnchainError> {
+        let swap_info =
+            self.rt
+                .handle()
+                .block_on(self.sdk.receive_onchain(ReceiveOnchainRequest {
+                    opening_fee_params: lsp_fee_params,
+                }))?;
         let rate = self.get_exchange_rate();
 
         Ok(SwapAddressInfo {
@@ -1613,6 +1604,71 @@ fn build_async_auth(
         generate_keypair(),
     )
     .map_to_permanent_failure("Failed to build auth client")
+}
+
+fn map_send_payment_error(err: SendPaymentError) -> PayError {
+    match err {
+        SendPaymentError::AlreadyPaid => {
+            runtime_error(PayErrorCode::AlreadyUsedInvoice, String::new())
+        }
+        SendPaymentError::Generic { err } => runtime_error(PayErrorCode::UnexpectedError, err),
+        SendPaymentError::InvalidAmount { err } => invalid_input(format!("Invalid amount: {err}")),
+        SendPaymentError::InvalidInvoice { err } => {
+            invalid_input(format!("Invalid invoice: {err}"))
+        }
+        SendPaymentError::InvoiceExpired { err } => {
+            runtime_error(PayErrorCode::InvoiceExpired, err)
+        }
+        SendPaymentError::PaymentFailed { err } => runtime_error(PayErrorCode::PaymentFailed, err),
+        SendPaymentError::PaymentTimeout { err } => {
+            runtime_error(PayErrorCode::PaymentTimeout, err)
+        }
+        SendPaymentError::RouteNotFound { err } => runtime_error(PayErrorCode::NoRouteFound, err),
+        SendPaymentError::RouteTooExpensive { err } => {
+            runtime_error(PayErrorCode::RouteTooExpensive, err)
+        }
+        SendPaymentError::ServiceConnectivity { err } => {
+            runtime_error(PayErrorCode::NodeUnavailable, err)
+        }
+    }
+}
+
+fn map_lnurl_pay_error(
+    error: breez_sdk_core::error::LnUrlPayError,
+) -> crate::errors::LnUrlPayError {
+    use breez_sdk_core::error::LnUrlPayError;
+    match error {
+        LnUrlPayError::AesDecryptionFailed { .. } => {
+            runtime_error(LnUrlPayErrorCode::LnUrlServerError, error)
+        }
+        LnUrlPayError::InvalidUri { err } => invalid_input(format!("InvalidUri: {err}")),
+        LnUrlPayError::AlreadyPaid => permanent_failure("LNURL pay invoice has been already paid"),
+        LnUrlPayError::Generic { err } => runtime_error(LnUrlPayErrorCode::UnexpectedError, err),
+        LnUrlPayError::InvalidAmount { err } => runtime_error(
+            LnUrlPayErrorCode::LnUrlServerError,
+            format!("Invalid amount in the invoice from LNURL pay server: {err}"),
+        ),
+        LnUrlPayError::InvalidInvoice { err } => runtime_error(
+            LnUrlPayErrorCode::LnUrlServerError,
+            format!("Invalid invoice from LNURL pay server: {err}"),
+        ),
+        LnUrlPayError::InvoiceExpired { err } => {
+            permanent_failure(format!("Invoice for LNURL pay has already expired: {err}"))
+        }
+        LnUrlPayError::PaymentFailed { err } => {
+            runtime_error(LnUrlPayErrorCode::PaymentFailed, err)
+        }
+        LnUrlPayError::PaymentTimeout { err } => {
+            runtime_error(LnUrlPayErrorCode::PaymentTimeout, err)
+        }
+        LnUrlPayError::RouteNotFound { err } => runtime_error(LnUrlPayErrorCode::NoRouteFound, err),
+        LnUrlPayError::RouteTooExpensive { err } => {
+            runtime_error(LnUrlPayErrorCode::RouteTooExpensive, err)
+        }
+        LnUrlPayError::ServiceConnectivity { err } => {
+            runtime_error(LnUrlPayErrorCode::ServiceConnectivity, err)
+        }
+    }
 }
 
 fn derive_key_pair_hex(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair> {

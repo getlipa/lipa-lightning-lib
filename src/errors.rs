@@ -33,33 +33,39 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// A code that specifies the PayError that occurred.
 #[derive(PartialEq, Eq, Debug, Clone)]
-#[repr(u8)]
 pub enum PayErrorCode {
-    /// The invoice has already expired.
-    /// There's no point in retrying this payment
-    InvoiceExpired,
-    /// An already recognized invoice tried to be paid. Either a payment attempt is in progress or the invoice has already been paid.
-    /// There's no point in retrying this payment
+    /// An already recognized invoice tried to be paid.
+    /// Either a payment attempt is in progress or the invoice has already been paid.
+    /// There's no point in retrying this payment.
     AlreadyUsedInvoice,
-    /// A locally issued invoice tried to be paid. Self-payments are not supported.
-    /// There's no point in retrying this payment
-    PayingToSelf,
+
+    /// The invoice has already expired.
+    /// There's no point in retrying this payment.
+    InvoiceExpired,
+
     /// Not a single route was found.
-    /// There's no point in retrying this payment
+    /// There's no point in retrying this payment.
     NoRouteFound,
-    /// The recipient has rejected the payment.
+
+    /// A locally issued invoice tried to be paid. Self-payments are not supported.
+    /// There's no point in retrying this payment.
+    PayingToSelf,
+
+    /// The payment failed for another reason. Might be an issue with the receiver.
+    PaymentFailed,
+
+    /// Payment timed out.
     /// It might make sense to retry the payment.
-    RecipientRejected,
-    /// Retry attempts or timeout was reached.
-    /// It might make sense to retry the payment.
-    RetriesExhausted,
-    /// All possible routes failed.
-    /// It might make sense to retry the payment.
-    NoMoreRoutes,
-    /// An unexpected error occurred. This likely is a result of a bug within 3L/LDK and should be reported to lipa.
-    ///
-    /// *WARNING* At the moment, all payment failures will return this code. Once Breez SDK reworks their error model, we'll
-    /// be able to provide much more specific error codes, such as the other ones that are part of this enum.
+    PaymentTimeout,
+
+    /// Route too expensive. The route's fee exceeds the settings.
+    RouteTooExpensive,
+
+    /// The remote lightning node is not available. Could be a network error.
+    NodeUnavailable,
+
+    /// An unexpected error occurred.
+    /// This likely is a result of a bug within 3L/Breez SDK and should be reported to lipa.
     UnexpectedError,
 }
 
@@ -71,6 +77,42 @@ impl Display for PayErrorCode {
 
 pub type PayError = perro::Error<PayErrorCode>;
 pub type PayResult<T> = std::result::Result<T, PayError>;
+
+/// A code that specifies the LnUrlPayError that occurred.
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum LnUrlPayErrorCode {
+    /// LNURL server returned an error.
+    LnUrlServerError,
+
+    /// Not a single route was found.
+    NoRouteFound,
+
+    /// The payment failed for another reason. Might be an issue with the receiver.
+    PaymentFailed,
+
+    /// Payment timed out.
+    /// It might make sense to retry the payment.
+    PaymentTimeout,
+
+    /// Route too expensive. The route's fee exceeds the settings.
+    RouteTooExpensive,
+
+    /// The remote lightning node or LNURL server is not available. Could be a network error.
+    ServiceConnectivity,
+
+    /// An unexpected error occurred.
+    /// This likely is a result of a bug within 3L/Breez SDK and should be reported to lipa.
+    UnexpectedError,
+}
+
+impl Display for LnUrlPayErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+pub type LnUrlPayError = perro::Error<LnUrlPayErrorCode>;
+pub type LnUrlPayResult<T> = std::result::Result<T, LnUrlPayError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum UnsupportedDataType {
