@@ -723,7 +723,7 @@ name = "chameleon"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.15.0#627f33fa1d1febccd0312fe394c5eec6a87cb9f5"
 dependencies = [
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.15.0)",
  "honey-badger",
 ]
 
@@ -894,7 +894,7 @@ name = "crow"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.15.0#627f33fa1d1febccd0312fe394c5eec6a87cb9f5"
 dependencies = [
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.15.0)",
  "honey-badger",
  "isocountry",
  "isolanguage-1",
@@ -1511,7 +1511,7 @@ dependencies = [
  "async-trait",
  "base64 0.21.4",
  "bech32",
- "bitcoin 0.30.1",
+ "bitcoin 0.29.2",
  "bytes",
  "chacha20poly1305",
  "cln-grpc",
@@ -1571,6 +1571,19 @@ dependencies = [
 name = "graphql"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.15.0#627f33fa1d1febccd0312fe394c5eec6a87cb9f5"
+dependencies = [
+ "chrono",
+ "graphql_client",
+ "log",
+ "perro",
+ "reqwest",
+ "serde",
+]
+
+[[package]]
+name = "graphql"
+version = "0.1.0"
+source = "git+https://github.com/getlipa/wild?tag=v1.16.0#1f1e925d0bb2d5bb04aaad0b1664010971d1df5a"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1760,7 +1773,7 @@ source = "git+https://github.com/getlipa/wild?tag=v1.15.0#627f33fa1d1febccd0312f
 dependencies = [
  "base64 0.21.4",
  "bdk",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.15.0)",
  "hex",
  "log",
  "rand",
@@ -2158,7 +2171,7 @@ dependencies = [
  "ctor",
  "email_address",
  "file-rotate",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.16.0)",
  "hex",
  "honey-badger",
  "iban_validate",
@@ -3618,7 +3631,7 @@ name = "squirrel"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.15.0#627f33fa1d1febccd0312fe394c5eec6a87cb9f5"
 dependencies = [
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.15.0)",
  "hex",
  "honey-badger",
 ]
