@@ -19,7 +19,7 @@ breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.9" }
 
 aes-gcm = "0.10.3"
 bip39 = "2.0.0"
-bitcoin = "0.30.1"
+bitcoin = "0.31.0"
 chrono = { version = "0.4.31", default-features = false, features = ["serde"] }
 cipher = "0.4.4"
 email_address = "0.2.4"
