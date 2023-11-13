@@ -31,7 +31,5 @@ jobs:
           CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.7.0
-        with:
-          save-if: false
       - name: Run integration tests
         run: make integrationtests
