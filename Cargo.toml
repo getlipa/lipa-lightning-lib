@@ -12,7 +12,7 @@ chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.15.0" }
 crow = { git = "https://github.com/getlipa/wild", tag = "v1.15.0" }
 honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.15.0" }
 graphql = { git = "https://github.com/getlipa/wild", tag = "v1.15.0" }
-squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.15.0" }
+squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.16.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.9" }
