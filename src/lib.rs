@@ -36,6 +36,7 @@ mod util;
 
 use crate::amount::ToAmount;
 pub use crate::amount::{Amount, FiatValue};
+use crate::amount::{AsSats, Sats};
 use crate::async_runtime::AsyncRuntime;
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
@@ -57,7 +58,6 @@ pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
 use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
-use amount::{AsSats, Sats};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 
 use crate::backup::BackupManager;
@@ -66,6 +66,7 @@ use bip39::{Language, Mnemonic};
 use bitcoin::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::Network;
+use breez_sdk_core::error::SendPaymentError;
 use breez_sdk_core::{
     parse, parse_invoice, BreezEvent, BreezServices, EventListener, GreenlightCredentials,
     GreenlightNodeConfig, InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData,
@@ -82,7 +83,6 @@ use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
 use iban::Iban;
 use log::{info, trace};
 use logger::init_logger_once;
-use perro::Error::RuntimeError;
 use perro::{
     invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
@@ -751,24 +751,8 @@ impl LightningNode {
     /// * `invoice_details` - details of an invoice decode by [`LightningNode::decode_data`]
     /// * `metadata` - a metadata string that gets tied up to this payment. It can be used by the user of this library
     ///  to store data that is relevant to this payment. It is provided together with the respective payment in [`LightningNode::get_latest_payments`].
-    pub fn pay_invoice(&self, invoice_details: InvoiceDetails, _metadata: String) -> PayResult<()> {
-        self.store_payment_info(&invoice_details.payment_hash, None)
-            .map_to_permanent_failure("Failed to persist local payment data")?;
-        // TODO: persist metadata
-        match self
-            .rt
-            .handle()
-            .block_on(self.sdk.send_payment(SendPaymentRequest {
-                bolt11: invoice_details.invoice,
-                amount_msat: None,
-            })) {
-            Ok(_) => Ok(()),
-            // TODO: properly handle errors (requires changing either ours or the SDK's error model)
-            Err(e) => Err(RuntimeError {
-                code: PayErrorCode::UnexpectedError,
-                msg: format!("Failed to start paying invoice: {e}"),
-            }),
-        }
+    pub fn pay_invoice(&self, invoice_details: InvoiceDetails, metadata: String) -> PayResult<()> {
+        self.pay_open_invoice(invoice_details, 0, metadata)
     }
 
     /// Similar to [`LightningNode::pay_invoice`] with the difference that the passed in invoice
@@ -786,20 +770,26 @@ impl LightningNode {
         self.store_payment_info(&invoice_details.payment_hash, None)
             .map_to_permanent_failure("Failed to persist local payment data")?;
         // TODO: persist metadata
-        match self
-            .rt
+        let node_state = self
+            .sdk
+            .node_info()
+            .map_to_runtime_error(PayErrorCode::NodeUnavailable, "Failed to read node info")?;
+        ensure!(
+            node_state.id != invoice_details.payee_pub_key,
+            runtime_error(
+                PayErrorCode::PayingToSelf,
+                "A locally issued invoice tried to be paid"
+            )
+        );
+
+        self.rt
             .handle()
             .block_on(self.sdk.send_payment(SendPaymentRequest {
                 bolt11: invoice_details.invoice,
                 amount_msat: Some(amount_sat.as_sats().msats),
-            })) {
-            Ok(_) => Ok(()),
-            // TODO: properly handle errors (requires changing either ours or the SDK's error model)
-            Err(e) => Err(RuntimeError {
-                code: PayErrorCode::UnexpectedError,
-                msg: format!("Failed to start paying invoice: {e}"),
-            }),
-        }
+            }))
+            .map_err(map_send_payment_error)?;
+        Ok(())
     }
 
     /// Pay an LNURL-pay the provided amount.
@@ -1613,6 +1603,33 @@ fn build_async_auth(
         generate_keypair(),
     )
     .map_to_permanent_failure("Failed to build auth client")
+}
+
+fn map_send_payment_error(err: SendPaymentError) -> PayError {
+    match err {
+        SendPaymentError::AlreadyPaid => {
+            runtime_error(PayErrorCode::AlreadyUsedInvoice, String::new())
+        }
+        SendPaymentError::Generic { err } => runtime_error(PayErrorCode::UnexpectedError, err),
+        SendPaymentError::InvalidAmount { err } => invalid_input(format!("Invalid amount: {err}")),
+        SendPaymentError::InvalidInvoice { err } => {
+            invalid_input(format!("Invalid invoice: {err}"))
+        }
+        SendPaymentError::InvoiceExpired { err } => {
+            runtime_error(PayErrorCode::InvoiceExpired, err)
+        }
+        SendPaymentError::PaymentFailed { err } => runtime_error(PayErrorCode::PaymentFailed, err),
+        SendPaymentError::PaymentTimeout { err } => {
+            runtime_error(PayErrorCode::PaymentTimeout, err)
+        }
+        SendPaymentError::RouteNotFound { err } => runtime_error(PayErrorCode::NoRouteFound, err),
+        SendPaymentError::RouteTooExpensive { err } => {
+            runtime_error(PayErrorCode::RouteTooExpensive, err)
+        }
+        SendPaymentError::ServiceConnectivity { err } => {
+            runtime_error(PayErrorCode::NodeUnavailable, err)
+        }
+    }
 }
 
 fn derive_key_pair_hex(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair> {

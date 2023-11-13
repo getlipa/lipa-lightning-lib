@@ -421,13 +421,14 @@ interface PayError {
 };
 
 enum PayErrorCode {
-    "InvoiceExpired",
     "AlreadyUsedInvoice",
-    "PayingToSelf",
+    "InvoiceExpired",
     "NoRouteFound",
-    "RecipientRejected",
-    "RetriesExhausted",
-    "NoMoreRoutes",
+    "PayingToSelf",
+    "PaymentFailed",
+    "PaymentTimeout",
+    "RouteTooExpensive",
+    "NodeUnavailable",
     "UnexpectedError",
 };
 
