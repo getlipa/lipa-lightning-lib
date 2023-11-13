@@ -86,7 +86,7 @@ interface LightningNode {
     sequence<FailedSwapInfo> get_unresolved_failed_swaps();
 
     [Throws=LnError]
-    FailedSwapRefundInfo prepare_refund_failed_swap(FailedSwapInfo failed_swap_info, string to_address, u32 onchain_fee_rate);
+    ResolveFailedSwapInfo prepare_resolve_failed_swap(FailedSwapInfo failed_swap_info, string to_address, u32 onchain_fee_rate);
 
     [Throws=LnError]
     string resolve_failed_swap(string failed_swap_address, string to_address, u32 onchain_fee_rate);
@@ -350,8 +350,8 @@ dictionary SwapAddressInfo {
     Amount max_deposit;
 };
 
-dictionary FailedSwapRefundInfo {
-    Amount refund_amount;
+dictionary ResolveFailedSwapInfo {
+    Amount recovered_amount;
     Amount onchain_fee;
 };
 
