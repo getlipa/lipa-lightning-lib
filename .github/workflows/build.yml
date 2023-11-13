@@ -37,7 +37,7 @@ jobs:
         env:
           CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.2.0
+        uses: Swatinem/rust-cache@v2.7.0
       - name: Build
         run: cargo build --verbose
       - name: Run unit tests
@@ -69,7 +69,9 @@ jobs:
         env:
           CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.2.0
+        uses: Swatinem/rust-cache@v2.7.0
+        with:
+          key: "${{ matrix.target }}"
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
@@ -99,7 +101,9 @@ jobs:
         env:
           CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.2.0
+        uses: Swatinem/rust-cache@v2.7.0
+        with:
+          key: "${{ matrix.target }}"
       - name: Install Cross
         run: cargo install cross --locked
       - name: Build target
