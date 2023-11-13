@@ -114,13 +114,6 @@ enum EnvironmentCode {
     "Prod",
 };
 
-enum Network {
-    "Bitcoin",
-    "Testnet",
-    "Signet",
-    "Regtest",
-};
-
 dictionary TzConfig {
     string timezone_id;
     i32 timezone_utc_offset_secs;
@@ -414,6 +407,8 @@ enum RuntimeErrorCode {
     "AuthServiceUnavailable",
     "OfferServiceUnavailable",
     "LspServiceUnavailable",
+    "BackupServiceUnavailable",
+    "BackupNotFound",
     "NodeUnavailable",
     "FailedFundMigration",
 };
