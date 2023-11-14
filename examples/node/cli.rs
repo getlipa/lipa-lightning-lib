@@ -632,7 +632,21 @@ fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str
 
     let fee_rate = node.query_onchain_fee_rate()?;
 
-    let txid = node.resolve_failed_swap(swap_address.into(), to_address.into(), fee_rate)?;
+    let failed_swaps = node
+        .get_unresolved_failed_swaps()
+        .map_err(|e| anyhow!("Failed to fetch currently unresolved failed swaps: {e}"))?;
+    let failed_swap = failed_swaps
+        .into_iter()
+        .find(|s| s.address.eq(swap_address))
+        .ok_or(anyhow!(
+            "No unresolved failed swap with provided swap address was found"
+        ))?;
+    let resolve_failed_swap_info = node
+        .prepare_resolve_failed_swap(failed_swap, to_address.into(), fee_rate)
+        .map_err(|e| anyhow!("Failed to prepare the resolution of the failed swap: {e}"))?;
+    let txid = node
+        .resolve_failed_swap(resolve_failed_swap_info)
+        .map_err(|e| anyhow!("Failed to resolve failed swap: {e}"))?;
     println!("Successfully broadcasted refund transaction - txid: {txid}");
 
     Ok(())

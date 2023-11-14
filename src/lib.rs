@@ -292,10 +292,16 @@ pub struct FailedSwapInfo {
 
 /// Information the resolution of a failed swap.
 pub struct ResolveFailedSwapInfo {
-    /// The amount that will be sent (swap amount - onchain fee)
+    /// The address of the failed swap.
+    pub swap_address: String,
+    /// The amount that will be sent (swap amount - onchain fee).
     pub recovered_amount: Amount,
-    /// The amount that will be paid in onchain fees
+    /// The amount that will be paid in onchain fees.
     pub onchain_fee: Amount,
+    /// The address to which recovered funds will be sent.
+    pub to_address: String,
+    /// The onchain fee rate that will be applied. This fee rate results in the `onchain_fee`.
+    pub onchain_fee_rate: u32,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -1444,8 +1450,8 @@ impl LightningNode {
             .rt
             .handle()
             .block_on(self.sdk.prepare_refund(PrepareRefundRequest {
-                swap_address: failed_swap_info.address,
-                to_address,
+                swap_address: failed_swap_info.address.clone(),
+                to_address: to_address.clone(),
                 sat_per_vbyte: onchain_fee_rate,
             }))
             .map_to_runtime_error(
@@ -1460,36 +1466,36 @@ impl LightningNode {
             .to_amount_down(&rate);
 
         Ok(ResolveFailedSwapInfo {
+            swap_address: failed_swap_info.address,
             recovered_amount,
             onchain_fee,
+            to_address,
+            onchain_fee_rate,
         })
     }
 
     /// Creates and broadcasts a resolving transaction to recover funds from a failed swap. Existing
-    /// failed swaps can be listed using [`LightningNode::get_unresolved_failed_swaps`].
+    /// failed swaps can be listed using [`LightningNode::get_unresolved_failed_swaps`] and preparing
+    /// the resolution of a failed swap can be done using [`LightningNode::prepare_resolve_failed_swap`].
     ///
     /// Parameters:
-    /// * `failed_swap_address` - the address of the failed swap (can be obtained from [`FailedSwapInfo`])
-    /// * `to_address` - the destination address to which funds will be sent
-    /// * `onchain_fee_rate` - the fee rate that will be applied. The recommeded one can be fetched
-    /// using [`LightningNode::query_onchain_fee_rate`]
+    /// * `resolve_failed_swap_info` - Information needed to resolve the failed swap. Can be obtained
+    /// using [`LightningNode::prepare_resolve_failed_swap`].
     ///
     /// Returns the txid of the resolving transaction.
     ///
     /// Paid on-chain fees can be known in advance using [`LightningNode::prepare_resolve_failed_swap`].
     pub fn resolve_failed_swap(
         &self,
-        failed_swap_address: String,
-        to_address: String,
-        onchain_fee_rate: u32,
+        resolve_failed_swap_info: ResolveFailedSwapInfo,
     ) -> Result<String> {
         Ok(self
             .rt
             .handle()
             .block_on(self.sdk.refund(RefundRequest {
-                swap_address: failed_swap_address,
-                to_address,
-                sat_per_vbyte: onchain_fee_rate,
+                swap_address: resolve_failed_swap_info.swap_address,
+                to_address: resolve_failed_swap_info.to_address,
+                sat_per_vbyte: resolve_failed_swap_info.onchain_fee_rate,
             }))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
