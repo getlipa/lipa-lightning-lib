@@ -343,7 +343,6 @@ enum OfferStatus {
     "SETTLED",
 };
 
-
 dictionary SwapAddressInfo {
     string address;
     Amount min_deposit;
