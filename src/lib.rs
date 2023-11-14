@@ -86,7 +86,7 @@ use email_address::EmailAddress;
 use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
 use iban::Iban;
-use log::{info, trace};
+use log::{debug, info};
 use logger::init_logger_once;
 use perro::{
     invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
@@ -101,7 +101,7 @@ use std::time::{Duration, SystemTime};
 use std::{env, fs};
 use uuid::Uuid;
 
-const LOG_LEVEL: log::Level = log::Level::Trace;
+const LOG_LEVEL: log::Level = log::Level::Debug;
 const LOGS_DIR: &str = "logs";
 
 pub(crate) const DB_FILENAME: &str = "db2.db3";
@@ -1171,7 +1171,7 @@ impl LightningNode {
         user_iban: String,
         user_currency: String,
     ) -> Result<FiatTopupInfo> {
-        trace!("register_fiat_topup() - called with - email: {email:?} - user_iban: {user_iban} - user_currency: {user_currency:?}");
+        debug!("register_fiat_topup() - called with - email: {email:?} - user_iban: {user_iban} - user_currency: {user_currency:?}");
         user_iban
             .parse::<Iban>()
             .map_to_invalid_input("Invalid user_iban")?;
