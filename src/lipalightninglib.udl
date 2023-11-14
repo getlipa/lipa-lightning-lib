@@ -19,7 +19,7 @@ interface LightningNode {
     CalculateLspFeeResponse calculate_lsp_fee(u64 amount_sat);
 
     [Throws=LnError]
-    InvoiceDetails create_invoice(u64 amount_sat, OpeningFeeParams? lsp_fee_params, string description, string metadata);
+    InvoiceDetails create_invoice(u64 amount_sat, OpeningFeeParams? lsp_fee_params, string description, InvoiceCreationMetadata metadata);
 
     [Throws=DecodeDataError]
     DecodedData decode_data(string data);
@@ -27,10 +27,10 @@ interface LightningNode {
     MaxRoutingFeeMode get_payment_max_routing_fee_mode(u64 amount_sat);
 
     [Throws=PayError]
-    void pay_invoice(InvoiceDetails invoice_details, string metadata);
+    void pay_invoice(InvoiceDetails invoice_details, PaymentMetadata metadata);
 
     [Throws=PayError]
-    void pay_open_invoice(InvoiceDetails invoice_details, u64 amount_sat, string metadata);
+    void pay_open_invoice(InvoiceDetails invoice_details, u64 amount_sat, PaymentMetadata metadata);
 
     [Throws=LnUrlPayError]
     string pay_lnurlp(LnUrlPayRequestData lnurl_pay_request_data, u64 amount_sat);
@@ -357,6 +357,22 @@ dictionary SwapInfo {
     string bitcoin_address;
     TzTime created_at;
     u64 paid_sats;
+};
+
+enum PaymentSource {
+    "Camera",
+    "Clipboard",
+    "Nfc",
+    "Manual",
+};
+
+dictionary PaymentMetadata {
+    PaymentSource source;
+    timestamp process_started_at;
+};
+
+dictionary InvoiceCreationMetadata {
+    string request_currency;
 };
 
 //
