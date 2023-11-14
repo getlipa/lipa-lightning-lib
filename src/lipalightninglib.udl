@@ -222,6 +222,7 @@ dictionary Payment {
     Amount? network_fees;
     Amount? lsp_fees;
     OfferKind? offer;
+    SwapInfo? swap;
     string metadata;
 };
 
@@ -350,6 +351,12 @@ dictionary FailedSwapInfo {
     string address;
     Amount amount;
     timestamp created_at;
+};
+
+dictionary SwapInfo {
+    string bitcoin_address;
+    TzTime created_at;
+    u64 paid_sats;
 };
 
 //
