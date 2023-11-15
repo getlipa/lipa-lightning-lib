@@ -956,6 +956,10 @@ impl LightningNode {
     /// Parameters:
     /// * `hash` - hex representation of payment hash
     pub fn get_payment(&self, hash: String) -> Result<Payment> {
+        let optional_invoice = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_created_invoice_by_hash(&hash)?;
         if let Some(breez_payment) = self
             .rt
             .handle()
@@ -966,11 +970,7 @@ impl LightningNode {
             )?
         {
             self.payment_from_breez_payment(breez_payment)
-        } else if let Some(invoice) = self
-            .data_store
-            .lock_unwrap()
-            .retrieve_created_invoice_by_hash(&hash)?
-        {
+        } else if let Some(invoice) = optional_invoice {
             self.payment_from_created_invoice(&invoice)
         } else {
             invalid_input!("No payment with provided hash was found");
