@@ -12,12 +12,12 @@ use std::sync::Once;
 fn init_logger(min_level: Level, path: &Path) {
     let base_log_file = path.join("logs.txt");
 
-    // Main log file ~10MB + 3 compressed older logs ~2MB = Total storage taken of ~12MB
-    // Compressing all log files leads to a ~3MB file and provides latest 200k logged lines
+    // Main log file ~25MB + 9 compressed older logs <2MB = Total storage < 50MB
+    // Logs provide latest 1M logged lines
     let rotated_log = FileRotate::new(
         base_log_file,
-        AppendCount::new(3),
-        ContentLimit::Lines(50_000),
+        AppendCount::new(7),
+        ContentLimit::Lines(100_000),
         Compression::OnRotate(0),
         None,
     );

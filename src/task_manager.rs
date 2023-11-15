@@ -7,7 +7,7 @@ use crate::RuntimeErrorCode;
 
 use crate::backup::BackupManager;
 use breez_sdk_core::{BreezServices, OpeningFeeParams};
-use log::{error, trace};
+use log::{debug, error};
 use perro::OptionToError;
 use std::sync::{Arc, Mutex};
 use tokio::time::Duration;
@@ -106,7 +106,7 @@ impl TaskManager {
         self.runtime_handle.spawn_repeating_task(period, move || {
             let sdk = Arc::clone(&sdk);
             async move {
-                trace!("Starting breez sdk sync");
+                debug!("Starting breez sdk sync");
                 if let Err(e) = sdk.sync().await {
                     error!("Failed to sync breez sdk: {e}");
                 }
@@ -123,7 +123,7 @@ impl TaskManager {
             let exchange_rates = Arc::clone(&exchange_rates);
             let data_store = Arc::clone(&data_store);
             async move {
-                trace!("Starting exchange rate update task");
+                debug!("Starting exchange rate update task");
                 match tokio::task::spawn_blocking(move || {
                     exchange_rate_provider.query_all_exchange_rates()
                 })
@@ -152,7 +152,7 @@ impl TaskManager {
             let lsp_fee = Arc::clone(&lsp_fee);
 
             async move {
-                trace!("Starting lsp fee update task");
+                debug!("Starting lsp fee update task");
                 match sdk.lsp_info().await {
                     Ok(lsp_information) => {
                         match lsp_information
@@ -180,10 +180,10 @@ impl TaskManager {
         self.runtime_handle.spawn_repeating_task(period, move || {
             let sdk = Arc::clone(&sdk);
             async move {
-                trace!("Starting redeem swaps task");
+                debug!("Starting redeem swaps task");
                 match sdk.in_progress_swap().await {
                     Ok(Some(s)) => {
-                        trace!("A swap is in progress: {s:?}");
+                        debug!("A swap is in progress: {s:?}");
                     }
                     Ok(None) => {}
                     Err(e) => {
@@ -201,14 +201,14 @@ impl TaskManager {
             let data_store = Arc::clone(&data_store);
             let backup_manager = Arc::clone(&backup_manager);
             async move {
-                trace!("Starting local db backup task");
+                debug!("Starting local db backup task");
                 let backup_status = data_store.lock_unwrap().backup_status;
                 match backup_status {
                     BackupStatus::Complete => {}
                     BackupStatus::WaitingForBackup => {
                         match data_store.lock_unwrap().backup_db() {
                             Ok(_) => {
-                                trace!("Successfully backed up local db into separate db file");
+                                debug!("Successfully backed up local db into separate db file");
                             }
                             Err(e) => {
                                 error!("Failed to back up local db into separate db file: {e}");
@@ -217,7 +217,7 @@ impl TaskManager {
                         }
                         match backup_manager.backup().await {
                             Ok(_) => {
-                                trace!("Successfully backed up local db to remote storage");
+                                debug!("Successfully backed up local db to remote storage");
                                 data_store.lock_unwrap().backup_status = BackupStatus::Complete;
                             }
                             Err(e) => {
