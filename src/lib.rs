@@ -97,6 +97,7 @@ use perro::{
 use squirrel::RemoteBackupClient;
 use std::cmp::Reverse;
 use std::collections::HashSet;
+use std::ops::Not;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -1105,7 +1106,11 @@ impl LightningNode {
             invoice_details,
             created_at: time,
             description,
-            preimage: Some(payment_details.payment_preimage),
+            preimage: payment_details
+                .payment_preimage
+                .is_empty()
+                .not()
+                .then_some(payment_details.payment_preimage),
             network_fees,
             lsp_fees,
             offer,
