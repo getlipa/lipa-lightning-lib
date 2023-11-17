@@ -824,7 +824,8 @@ fn payment_uuid(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
 
 fn sweep(node: &LightningNode, address: String) -> Result<String> {
     let fee_rate = node.query_onchain_fee_rate()?;
-    Ok(node.sweep(address.to_string(), fee_rate)?)
+    let sweep_info = node.prepare_sweep(address, fee_rate)?;
+    Ok(node.sweep(sweep_info)?)
 }
 
 fn offer_to_string(offer: Option<OfferKind>) -> String {

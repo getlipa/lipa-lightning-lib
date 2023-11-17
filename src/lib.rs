@@ -77,8 +77,8 @@ use breez_sdk_core::{
     parse, parse_invoice, BreezEvent, BreezServices, EventListener, GreenlightCredentials,
     GreenlightNodeConfig, InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData,
     LnUrlWithdrawRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
-    PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRefundRequest, ReceiveOnchainRequest,
-    RefundRequest, SendPaymentRequest, SweepRequest,
+    PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest,
+    ReceiveOnchainRequest, RefundRequest, SendPaymentRequest, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo, TopupStatus};
@@ -282,6 +282,12 @@ pub struct OfferInfo {
     /// (i.e `status` is [`OfferStatus::REFUNDED`]).
     pub expires_at: Option<SystemTime>,
     pub status: OfferStatus,
+}
+
+pub struct SweepInfo {
+    pub address: String,
+    pub onchain_fee_rate: u32,
+    pub onchain_fee_sat: Amount,
 }
 
 /// Information about a generated swap address
@@ -1426,23 +1432,53 @@ impl LightningNode {
         Ok(recommended_fees.half_hour_fee as u32)
     }
 
-    /// Sweeps all available on-chain funds to the specified on-chain address.
+    /// Prepares a sweep of all available on-chain funds to the provided on-chain address.
     ///
     /// Parameters:
     /// * `address` - the funds will be sweeped to this address
-    /// * `onchain_fee_rate` - the fees that should be applied for the transaction.
-    /// The recommended on-chain fee can be queried using [`LightningNode::query_onchain_fee_rate`]
+    /// * `onchain_fee_rate` - the fee rate that should be applied for the transaction.
+    /// The recommended on-chain fee rate can be queried using [`LightningNode::query_onchain_fee_rate`]
     ///
-    /// Returns the txid of the sweeping transaction.
-    pub fn sweep(&self, address: String, onchain_fee_rate: u32) -> Result<String> {
+    /// Returns information on the prepared sweep, including the exact fee that results from
+    /// using the provided fee rate. The method [`LightningNode::sweep`] can be used to broadcast
+    /// the sweep transaction.
+    pub fn prepare_sweep(&self, address: String, onchain_fee_rate: u32) -> Result<SweepInfo> {
+        let res = self
+            .rt
+            .handle()
+            .block_on(self.sdk.prepare_sweep(PrepareSweepRequest {
+                to_address: address.clone(),
+                sats_per_vbyte: onchain_fee_rate as u64,
+            }))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to prepare sweep transaction",
+            )?;
+        Ok(SweepInfo {
+            address,
+            onchain_fee_rate,
+            onchain_fee_sat: res
+                .sweep_tx_fee_sat
+                .as_sats()
+                .to_amount_up(&self.get_exchange_rate()),
+        })
+    }
+
+    /// Sweeps all available on-chain funds to the specified on-chain address.
+    ///
+    /// Parameters:
+    /// * `sweep_info` - a prepared sweep info that can be obtained using [`LightningNode::prepare_sweep`]
+    ///
+    /// Returns the txid of the sweep transaction.
+    pub fn sweep(&self, sweep_info: SweepInfo) -> Result<String> {
         let txid = self
             .rt
             .handle()
             .block_on(self.sdk.sweep(SweepRequest {
-                to_address: address,
-                fee_rate_sats_per_vbyte: onchain_fee_rate,
+                to_address: sweep_info.address,
+                fee_rate_sats_per_vbyte: sweep_info.onchain_fee_rate,
             }))
-            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to drain funds")?
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to sweep funds")?
             .txid;
         Ok(hex::encode(txid))
     }
