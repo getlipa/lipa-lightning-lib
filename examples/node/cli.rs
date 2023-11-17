@@ -136,6 +136,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "resettopup" => {
+                    if let Err(message) = node.reset_fiat_topup() {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "getregisteredtopup" => {
                     if let Err(message) = get_registered_topup(node) {
                         println!("{}", format!("{message:#}").red());
@@ -255,6 +260,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "registertopup <IBAN> <currency> [email]",
         "registertopup ",
     ));
+    hints.insert(CommandHint::new("resettopup", "resettopup"));
     hints.insert(CommandHint::new("getregisteredtopup", "getregisteredtopup"));
     hints.insert(CommandHint::new("listoffers", "listoffers"));
 
@@ -303,6 +309,7 @@ fn help() {
     println!("  refundfailedswap <swap address> <to address>");
     println!();
     println!("  registertopup <IBAN> <currency> [email]");
+    println!("  resettopup");
     println!("  getregisteredtopup");
     println!("  listoffers");
     println!();

@@ -1276,6 +1276,10 @@ impl LightningNode {
         Ok(topup_info)
     }
 
+    pub fn reset_fiat_topup(&self) -> Result<()> {
+        self.data_store.lock_unwrap().clear_fiat_topup_info()
+    }
+
     /// Hides the topup with the given id. Can be called on expired topups so that they stop being returned
     /// by [`LightningNode::query_uncompleted_offers`].
     ///

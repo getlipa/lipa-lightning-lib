@@ -289,6 +289,14 @@ impl DataStore {
         Ok(())
     }
 
+    pub fn clear_fiat_topup_info(&self) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM fiat_topup_info;", params![])
+            .map_to_permanent_failure("Failed to delete fiat topup info")?;
+
+        Ok(())
+    }
+
     pub fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupInfo>> {
         let mut statement = self.conn.prepare(
             "SELECT order_id, debitor_iban, creditor_reference, creditor_iban, creditor_bank_name, creditor_bank_street, creditor_bank_postal_code, creditor_bank_town, creditor_bank_country, creditor_bank_bic, creditor_name, creditor_street, creditor_postal_code, creditor_town, creditor_country, currency FROM fiat_topup_info ORDER BY created_at DESC LIMIT 1",

@@ -60,6 +60,9 @@ interface LightningNode {
     FiatTopupInfo register_fiat_topup(string? email, string user_iban, string user_currency);
 
     [Throws=LnError]
+    void reset_fiat_topup();
+
+    [Throws=LnError]
     sequence<OfferInfo> query_uncompleted_offers();
 
     [Throws=LnError]
