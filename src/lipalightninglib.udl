@@ -80,7 +80,10 @@ interface LightningNode {
     u32 query_onchain_fee_rate();
 
     [Throws=LnError]
-    string sweep(string address, u32 onchain_fee_rate);
+    SweepInfo prepare_sweep(string address, u32 onchain_fee_rate);
+
+    [Throws=LnError]
+    string sweep(SweepInfo sweep_info);
 
     [Throws=SwapError]
     SwapAddressInfo generate_swap_address(OpeningFeeParams? lsp_fee_params);
@@ -344,6 +347,12 @@ enum OfferStatus {
     "FAILED",
     "REFUNDED",
     "SETTLED",
+};
+
+dictionary SweepInfo {
+    string address;
+    u32 onchain_fee_rate;
+    Amount onchain_fee_sat;
 };
 
 dictionary SwapAddressInfo {
