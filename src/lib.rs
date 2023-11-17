@@ -1097,7 +1097,7 @@ impl LightningNode {
         Ok(Payment {
             payment_type,
             payment_state,
-            fail_reason: None, // TODO: Request SDK to store and provide reason for failed payments
+            fail_reason: None, // TODO: Request SDK to store and provide reason for failed payments - issue: https://github.com/breez/breez-sdk/issues/626
             hash: payment_details.payment_hash,
             amount,
             invoice_details,
