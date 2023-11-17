@@ -176,7 +176,7 @@ pub enum PaymentState {
 }
 
 /// Information about an incoming or outgoing payment.
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,
@@ -209,7 +209,7 @@ pub struct Payment {
 }
 
 /// Information about a successful swap.
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub struct SwapInfo {
     pub bitcoin_address: String,
     pub created_at: TzTime,
@@ -1121,7 +1121,7 @@ impl LightningNode {
     fn payment_from_created_invoice(&self, invoice: &str) -> Result<Payment> {
         let invoice = parse_invoice(invoice)
             .map_to_permanent_failure("Invalid invoice provided by the Breez SDK")?;
-        let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &None);
+        let invoice_details = InvoiceDetails::from_ln_invoice(invoice.clone(), &None);
 
         let payment_state = if SystemTime::now() > invoice_details.expiry_timestamp {
             PaymentState::InvoiceExpired
@@ -1135,6 +1135,7 @@ impl LightningNode {
             .retrieve_payment_info(&invoice_details.payment_hash)?
             .ok_or_permanent_failure("Locally created invoice doesn't have local payment data")?;
         let exchange_rate = Some(local_payment_data.exchange_rate);
+        let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
         let time = TzTime {
             time: invoice_details.creation_timestamp, // for receiving payments, we use the invoice timestamp
             timezone_id: local_payment_data
