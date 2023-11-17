@@ -738,9 +738,7 @@ impl LightningNode {
                 "Failed to create an invoice",
             )?;
 
-        self.store_payment_info(&response.ln_invoice.payment_hash, None)
-            .map_to_permanent_failure("Failed to persist payment info")?;
-        // TODO: persist metadata
+        self.store_payment_info(&response.ln_invoice.payment_hash, None)?;
         self.data_store
             .lock_unwrap()
             .store_created_invoice(
@@ -837,7 +835,6 @@ impl LightningNode {
         };
         self.store_payment_info(&invoice_details.payment_hash, None)
             .map_to_permanent_failure("Failed to persist local payment data")?;
-        // TODO: persist metadata
         let node_state = self
             .sdk
             .node_info()
