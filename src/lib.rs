@@ -27,6 +27,7 @@ mod locker;
 mod logger;
 mod macros;
 mod migrations;
+mod offer;
 mod random;
 mod recovery;
 mod sanitize_input;
@@ -56,6 +57,7 @@ use crate::fiat_topup::PocketClient;
 pub use crate::invoice_details::InvoiceDetails;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 use crate::locker::Locker;
+pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
 pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
 use crate::task_manager::{TaskManager, TaskPeriods};
@@ -81,7 +83,7 @@ use breez_sdk_core::{
     ReceiveOnchainRequest, RefundRequest, SendPaymentRequest, SweepRequest,
 };
 use cipher::generic_array::typenum::U32;
-use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo, TopupStatus};
+use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 use data_store::DataStore;
 use email_address::EmailAddress;
@@ -227,62 +229,12 @@ pub enum MaxRoutingFeeMode {
     },
 }
 
-#[derive(Debug)]
-pub enum OfferStatus {
-    READY,
-    /// Claiming the offer failed, but it can be retried.
-    FAILED,
-    /// The offer could not be claimed, so the user got refunded.
-    /// Specific info for Pocket offers:
-    /// - The Refund happened over the Fiat rails
-    /// - Reasons for why the offer was refunded: <https://pocketbitcoin.com/developers/docs/rest/v1/webhooks#refund-reasons>
-    REFUNDED,
-    SETTLED,
-}
-
 /// An error associated with a specific PocketOffer. Can be temporary, indicating there was an issue
 /// with a previous withdrawal attempt and it can be retried, or it can be permanent.
 ///
 /// More information on each specific error can be found on
 /// [Pocket's Documentation Page](<https://pocketbitcoin.com/developers/docs/rest/v1/webhooks>).
 pub type PocketOfferError = TopupError;
-
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub enum OfferKind {
-    /// An offer related to a topup using the Pocket exchange
-    /// Values are denominated in the fiat currency the user sent to the exchange.
-    /// The currency code can be found in `exchange_rate`.
-    Pocket {
-        id: String,
-        /// The exchange rate used by the exchange to exchange fiat to sats
-        exchange_rate: ExchangeRate,
-        /// The original fiat amount sent to the exchange
-        topup_value_minor_units: u64,
-        /// The fee paid to perform the exchange from fiat to sats
-        exchange_fee_minor_units: u64,
-        /// The rate of the fee expressed in permyriad (e.g. 1.5% would be 150)
-        exchange_fee_rate_permyriad: u16,
-        /// The optional error that might have occurred in the offer withdrawal process
-        error: Option<PocketOfferError>,
-    },
-}
-
-/// Information on a funds offer that can be claimed
-/// using [`LightningNode::request_offer_collection`].
-#[derive(Debug)]
-pub struct OfferInfo {
-    pub offer_kind: OfferKind,
-    /// Amount available for withdrawal
-    pub amount: Amount,
-    /// The lnurlw string that will be used to withdraw this offer. Can be empty if the offer isn't
-    /// available anymore (i.e `status` is [`OfferStatus::REFUNDED`])
-    pub lnurlw: Option<String>,
-    pub created_at: SystemTime,
-    /// The time this offer expires at. Can be empty if the offer isn't available anymore
-    /// (i.e `status` is [`OfferStatus::REFUNDED`]).
-    pub expires_at: Option<SystemTime>,
-    pub status: OfferStatus,
-}
 
 pub struct SweepInfo {
     pub address: String,
@@ -1305,7 +1257,7 @@ impl LightningNode {
         Ok(
             filter_out_recently_claimed_topups(topup_infos, latest_payments)
                 .into_iter()
-                .map(|o| to_offer(o, &rate))
+                .map(|topup_info| OfferInfo::from(topup_info, &rate))
                 .collect(),
         )
     }
@@ -1645,37 +1597,6 @@ impl LightningNode {
     }
 }
 
-fn to_offer(topup_info: TopupInfo, current_rate: &Option<ExchangeRate>) -> OfferInfo {
-    let exchange_rate = ExchangeRate {
-        currency_code: topup_info.exchange_rate.currency_code,
-        rate: topup_info.exchange_rate.sats_per_unit,
-        updated_at: topup_info.exchange_rate.updated_at,
-    };
-
-    let status = match topup_info.status {
-        TopupStatus::READY => OfferStatus::READY,
-        TopupStatus::FAILED => OfferStatus::FAILED,
-        TopupStatus::REFUNDED => OfferStatus::REFUNDED,
-        TopupStatus::SETTLED => OfferStatus::SETTLED,
-    };
-
-    OfferInfo {
-        offer_kind: OfferKind::Pocket {
-            id: topup_info.id,
-            exchange_rate,
-            topup_value_minor_units: topup_info.topup_value_minor_units,
-            exchange_fee_minor_units: topup_info.exchange_fee_minor_units,
-            exchange_fee_rate_permyriad: topup_info.exchange_fee_rate_permyriad,
-            error: topup_info.error,
-        },
-        amount: topup_info.amount_sat.as_sats().to_amount_down(current_rate),
-        lnurlw: topup_info.lnurlw,
-        created_at: topup_info.exchange_rate.updated_at,
-        expires_at: topup_info.expires_at,
-        status,
-    }
-}
-
 /// Accept lipa's terms and conditions. Should be called before instantiating a [`LightningNode`]
 /// for the first time.
 pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) -> Result<()> {
@@ -1899,6 +1820,7 @@ include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
 mod tests {
     use super::*;
     use crate::key_derivation::tests::mnemonic_to_seed;
+    use crow::TopupStatus;
     use perro::Error;
 
     const PAYMENT_HASH: &str = "0b78877a596f18d5f6effde3dda1df25a5cf20439ff1ac91478d7e518211040f";
