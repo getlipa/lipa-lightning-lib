@@ -32,6 +32,7 @@ mod random;
 mod recovery;
 mod sanitize_input;
 mod secret;
+mod swap;
 mod symmetric_encryption;
 mod task_manager;
 mod util;
@@ -39,7 +40,10 @@ mod util;
 use crate::amount::ToAmount;
 pub use crate::amount::{Amount, FiatValue};
 use crate::amount::{AsSats, Sats};
+use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
+pub use crate::analytics::{InvoiceCreationMetadata, PaymentMetadata};
 use crate::async_runtime::AsyncRuntime;
+use crate::backup::BackupManager;
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
 use crate::environment::Environment;
@@ -55,25 +59,20 @@ use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::fiat_topup::FiatTopupInfo;
 use crate::fiat_topup::PocketClient;
 pub use crate::invoice_details::InvoiceDetails;
+use crate::key_derivation::derive_persistence_encryption_key;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 use crate::locker::Locker;
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
 pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
+pub use crate::swap::{FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo};
 use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
-
-pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
-pub use parrot::PaymentSource;
-
-use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
-pub use crate::analytics::{InvoiceCreationMetadata, PaymentMetadata};
-use crate::backup::BackupManager;
-use crate::key_derivation::derive_persistence_encryption_key;
 use bip39::{Language, Mnemonic};
 use bitcoin::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::Network;
+pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 use breez_sdk_core::{
     parse, parse_invoice, BreezEvent, BreezServices, EventListener, GreenlightCredentials,
@@ -93,6 +92,7 @@ use iban::Iban;
 use log::{debug, info};
 use logger::init_logger_once;
 use parrot::AnalyticsClient;
+pub use parrot::PaymentSource;
 use perro::{
     invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
@@ -210,14 +210,6 @@ pub struct Payment {
     pub swap: Option<SwapInfo>,
 }
 
-/// Information about a successful swap.
-#[derive(PartialEq, Debug)]
-pub struct SwapInfo {
-    pub bitcoin_address: String,
-    pub created_at: TzTime,
-    pub paid_sats: u64,
-}
-
 /// Indicates the max routing fee mode used to restrict fees of a payment of a given size
 pub enum MaxRoutingFeeMode {
     /// `max_fee_permyriad` Parts per myriad (aka basis points) -> 100 is 1%
@@ -240,39 +232,6 @@ pub struct SweepInfo {
     pub address: String,
     pub onchain_fee_rate: u32,
     pub onchain_fee_sat: Amount,
-}
-
-/// Information about a generated swap address
-pub struct SwapAddressInfo {
-    /// Funds sent to this address will be swapped into LN to be received by the local wallet
-    pub address: String,
-    /// Minimum amount to be sent to `address`
-    pub min_deposit: Amount,
-    /// Maximum amount to be sent to `address`
-    pub max_deposit: Amount,
-}
-
-/// Information about a failed swap
-pub struct FailedSwapInfo {
-    pub address: String,
-    /// The amount that is available to be recovered. The recovery will involve paying some
-    /// on-chain fees so it isn't possible to recover the entire amount.
-    pub amount: Amount,
-    pub created_at: SystemTime,
-}
-
-/// Information the resolution of a failed swap.
-pub struct ResolveFailedSwapInfo {
-    /// The address of the failed swap.
-    pub swap_address: String,
-    /// The amount that will be sent (swap amount - onchain fee).
-    pub recovered_amount: Amount,
-    /// The amount that will be paid in onchain fees.
-    pub onchain_fee: Amount,
-    /// The address to which recovered funds will be sent.
-    pub to_address: String,
-    /// The onchain fee rate that will be applied. This fee rate results in the `onchain_fee`.
-    pub onchain_fee_rate: u32,
 }
 
 #[derive(Clone, PartialEq, Debug)]
