@@ -68,6 +68,7 @@ use crate::secret::Secret;
 pub use crate::swap::{FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo};
 use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
+use crate::util::LogIgnoreError;
 use bip39::{Language, Mnemonic};
 use bitcoin::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::secp256k1::{PublicKey, SECP256K1};
@@ -89,7 +90,7 @@ use email_address::EmailAddress;
 use honey_badger::secrets::{generate_keypair, KeyPair};
 use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
 use iban::Iban;
-use log::{debug, info};
+use log::{debug, info, Level};
 use logger::init_logger_once;
 use parrot::AnalyticsClient;
 pub use parrot::PaymentSource;
@@ -655,7 +656,7 @@ impl LightningNode {
                 "Failed to create an invoice",
             )?;
 
-        self.store_payment_info(&response.ln_invoice.payment_hash, None)?;
+        self.store_payment_info(&response.ln_invoice.payment_hash, None);
         self.data_store
             .lock_unwrap()
             .store_created_invoice(
@@ -750,8 +751,7 @@ impl LightningNode {
         } else {
             Some(amount_sat.as_sats().msats)
         };
-        self.store_payment_info(&invoice_details.payment_hash, None)
-            .map_to_permanent_failure("Failed to persist local payment data")?;
+        self.store_payment_info(&invoice_details.payment_hash, None);
         let node_state = self
             .sdk
             .node_info()
@@ -815,9 +815,7 @@ impl LightningNode {
                 data.reason
             ),
         }?;
-        if let Err(err) = self.store_payment_info(&payment_hash, None) {
-            log::error!("Failed to persist payment info for {payment_hash}: {err}. Ignoring.");
-        }
+        self.store_payment_info(&payment_hash, None);
         Ok(payment_hash)
     }
 
@@ -1275,7 +1273,7 @@ impl LightningNode {
             ),
         };
 
-        self.store_payment_info(&hash, Some(offer.offer_kind))?;
+        self.store_payment_info(&hash, Some(offer.offer_kind));
 
         Ok(hash)
     }
@@ -1319,13 +1317,13 @@ impl LightningNode {
         get_payment_uuid(payment_hash)
     }
 
-    fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) -> Result<()> {
+    fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) {
         let user_preferences = self.user_preferences.lock_unwrap().clone();
         let exchange_rates = self.task_manager.lock_unwrap().get_exchange_rates();
         self.data_store
             .lock_unwrap()
             .store_payment_info(hash, user_preferences, exchange_rates, offer)
-            .map_to_permanent_failure("Failed to persist payment info")
+            .log_ignore_error(Level::Error, "Failed to persist payment info")
     }
 
     /// Query the current recommended on-chain fee rate.

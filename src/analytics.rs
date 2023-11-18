@@ -2,12 +2,13 @@ use crate::amount::AsSats;
 use crate::async_runtime::Handle;
 use crate::errors::Result;
 use crate::locker::Locker;
-use crate::util::unix_timestamp_to_system_time;
+use crate::util::{unix_timestamp_to_system_time, LogIgnoreError};
 use crate::{derive_key_pair_hex, ExchangeRate, InvoiceDetails, UserPreferences};
+
 use breez_sdk_core::{
     InvoicePaidDetails, Payment, PaymentDetails, PaymentFailedData, ReceivePaymentResponse,
 };
-use log::{error, info, warn};
+use log::{error, info, Level};
 use parrot::{AnalyticsClient, AnalyticsEvent, PayFailureReason, PaymentSource};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
@@ -85,7 +86,7 @@ impl AnalyticsInterceptor {
                     executed_at: SystemTime::now(),
                 })
                 .await
-                .log_ignore_error()
+                .log_ignore_error(Level::Warn, "Failed to report an analytics event")
         });
     }
 
@@ -103,7 +104,7 @@ impl AnalyticsInterceptor {
                         ),
                     })
                     .await
-                    .log_ignore_error()
+                    .log_ignore_error(Level::Warn, "Failed to report an analytics event")
             });
         }
     }
@@ -124,7 +125,7 @@ impl AnalyticsInterceptor {
                     failed_at: SystemTime::now(),
                 })
                 .await
-                .log_ignore_error()
+                .log_ignore_error(Level::Warn, "Failed to report an analytics event")
         });
     }
 
@@ -148,7 +149,7 @@ impl AnalyticsInterceptor {
                     created_at: SystemTime::now(),
                 })
                 .await
-                .log_ignore_error()
+                .log_ignore_error(Level::Warn, "Failed to report an analytics event")
         });
     }
 
@@ -165,23 +166,8 @@ impl AnalyticsInterceptor {
                     received_at: SystemTime::now(),
                 })
                 .await
-                .log_ignore_error()
+                .log_ignore_error(Level::Warn, "Failed to report an analytics event")
         });
-    }
-}
-
-trait LogIgnoreError {
-    fn log_ignore_error(self);
-}
-
-impl LogIgnoreError for graphql::Result<()> {
-    fn log_ignore_error(self) {
-        if let Err(e) = self {
-            warn!(
-                "An error occurred while trying to report an analytics event: {:?}",
-                e
-            )
-        };
     }
 }
 
