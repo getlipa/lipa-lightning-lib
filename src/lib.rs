@@ -68,7 +68,7 @@ pub use crate::payment::{Payment, PaymentState, PaymentType};
 pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
 pub use crate::swap::{FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo};
-use crate::task_manager::{TaskManager, TaskPeriods};
+use crate::task_manager::TaskManager;
 use crate::util::unix_timestamp_to_system_time;
 use crate::util::LogIgnoreError;
 use bip39::{Language, Mnemonic};
@@ -104,7 +104,7 @@ use std::ops::Not;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 use std::{env, fs};
 use uuid::Uuid;
 
@@ -254,22 +254,6 @@ impl EventListener for LipaEventListener {
 
 const MAX_FEE_PERMYRIAD: u16 = 50;
 const EXEMPT_FEE: Sats = Sats::new(21);
-
-const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
-    update_exchange_rates: Some(Duration::from_secs(10 * 60)),
-    sync_breez: Some(Duration::from_secs(10 * 60)),
-    update_lsp_fee: Some(Duration::from_secs(10 * 60)),
-    redeem_swaps: Some(Duration::from_secs(10 * 60)),
-    backup: Some(Duration::from_secs(30)),
-};
-
-const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
-    update_exchange_rates: None,
-    sync_breez: Some(Duration::from_secs(30 * 60)),
-    update_lsp_fee: None,
-    redeem_swaps: None,
-    backup: None,
-};
 
 /// The main class/struct of this library. Constructing an instance will initiate the Lightning node and
 /// run it in the background. As long as an instance of `LightningNode` is held, the node will continue to run
@@ -423,9 +407,7 @@ impl LightningNode {
             Arc::clone(&sdk),
             backup_manager,
         )?));
-        task_manager
-            .lock_unwrap()
-            .restart(Self::get_foreground_periods());
+        task_manager.lock_unwrap().foreground();
 
         let data_store_clone = Arc::clone(&data_store);
         let auth_clone = Arc::clone(&auth);
@@ -450,25 +432,6 @@ impl LightningNode {
             task_manager,
             analytics_interceptor,
         })
-    }
-
-    fn get_foreground_periods() -> TaskPeriods {
-        match env::var("TESTING_TASK_PERIODS") {
-            Ok(period) => {
-                let period: u64 = period
-                    .parse()
-                    .expect("TESTING_TASK_PERIODS should be an integer number");
-                let period = Duration::from_secs(period);
-                TaskPeriods {
-                    update_exchange_rates: Some(period),
-                    sync_breez: Some(period),
-                    update_lsp_fee: Some(period),
-                    redeem_swaps: Some(period),
-                    backup: Some(period),
-                }
-            }
-            Err(_) => FOREGROUND_PERIODS,
-        }
     }
 
     /// Request some basic info about the node
@@ -1029,16 +992,14 @@ impl LightningNode {
     /// Call the method when the app goes to foreground, such that the user can interact with it.
     /// The library starts running the background tasks more frequently to improve user experience.
     pub fn foreground(&self) {
-        self.task_manager
-            .lock_unwrap()
-            .restart(Self::get_foreground_periods());
+        self.task_manager.lock_unwrap().foreground();
     }
 
     /// Call the method when the app goes to background, such that the user can not interact with it.
     /// The library stops running some unnecessary tasks and runs necessary tasks less frequently.
     /// It should save battery and internet traffic.
     pub fn background(&self) {
-        self.task_manager.lock_unwrap().restart(BACKGROUND_PERIODS);
+        self.task_manager.lock_unwrap().background();
     }
 
     /// List codes of supported fiat currencies.
