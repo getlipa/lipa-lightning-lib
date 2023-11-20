@@ -18,6 +18,7 @@ mod config;
 mod data_store;
 mod environment;
 mod errors;
+mod event;
 mod exchange_rate_provider;
 mod fiat_topup;
 mod fund_migration;
@@ -55,6 +56,7 @@ pub use crate::errors::{
     MnemonicError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode, SimpleError,
     UnsupportedDataType,
 };
+use crate::event::LipaEventListener;
 pub use crate::exchange_rate_provider::ExchangeRate;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::fiat_topup::FiatTopupInfo;
@@ -75,10 +77,10 @@ use bitcoin::Network;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 use breez_sdk_core::{
-    parse, parse_invoice, BreezEvent, BreezServices, EventListener, GreenlightCredentials,
-    GreenlightNodeConfig, InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData,
-    LnUrlWithdrawRequest, LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
-    PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest,
+    parse, parse_invoice, BreezServices, GreenlightCredentials, GreenlightNodeConfig, InputType,
+    ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
+    LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails,
+    PaymentStatus, PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest,
     ReceiveOnchainRequest, RefundRequest, SendPaymentRequest, SweepRequest,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
@@ -214,41 +216,6 @@ pub enum DecodedData {
     LnUrlPay { lnurl_pay_details: LnUrlPayDetails },
 }
 
-struct LipaEventListener {
-    events_callback: Box<dyn EventsCallback>,
-    analytics_interceptor: Arc<AnalyticsInterceptor>,
-}
-
-impl EventListener for LipaEventListener {
-    fn on_event(&self, e: BreezEvent) {
-        match e {
-            BreezEvent::NewBlock { .. } => {}
-            BreezEvent::InvoicePaid { details } => {
-                self.analytics_interceptor
-                    .request_succeeded(details.clone());
-                self.events_callback.payment_received(details.payment_hash)
-            }
-            BreezEvent::Synced => {}
-            BreezEvent::PaymentSucceed { details } => {
-                if let PaymentDetails::Ln { data } = details.details.clone() {
-                    self.analytics_interceptor.pay_succeeded(details);
-                    self.events_callback
-                        .payment_sent(data.payment_hash, data.payment_preimage)
-                }
-            }
-            BreezEvent::PaymentFailed { details } => {
-                if let Some(invoice) = details.invoice.clone() {
-                    self.analytics_interceptor.pay_failed(details);
-                    self.events_callback.payment_failed(invoice.payment_hash)
-                }
-            }
-            BreezEvent::BackupStarted => {}
-            BreezEvent::BackupSucceeded => {}
-            BreezEvent::BackupFailed { .. } => {}
-        }
-    }
-}
-
 const MAX_FEE_PERMYRIAD: u16 = 50;
 const EXEMPT_FEE: Sats = Sats::new(21);
 
@@ -321,13 +288,18 @@ impl LightningNode {
         let analytics_client = Arc::new(AnalyticsClient::new(
             environment.backend_url.clone(),
             derive_analytics_keys(&strong_typed_seed)?,
-            auth.clone(),
+            Arc::clone(&auth),
         ));
 
         let analytics_interceptor = Arc::new(AnalyticsInterceptor::new(
-            analytics_client.clone(),
-            user_preferences.clone(),
+            Arc::clone(&analytics_client),
+            Arc::clone(&user_preferences),
             rt.handle(),
+        ));
+
+        let event_listener = Box::new(LipaEventListener::new(
+            events_callback,
+            Arc::clone(&analytics_interceptor),
         ));
 
         let sdk = rt
@@ -335,10 +307,7 @@ impl LightningNode {
             .block_on(BreezServices::connect(
                 breez_config,
                 config.seed.clone(),
-                Box::new(LipaEventListener {
-                    events_callback,
-                    analytics_interceptor: analytics_interceptor.clone(),
-                }),
+                event_listener,
             ))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
@@ -1337,7 +1306,7 @@ impl LightningNode {
             )?
             .into_iter()
             .map(|s| FailedSwapInfo {
-                address: s.bitcoin_address.clone(),
+                address: s.bitcoin_address,
                 amount: s
                     .confirmed_sats
                     .as_sats()
