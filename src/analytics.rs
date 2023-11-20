@@ -35,12 +35,12 @@ pub struct InvoiceCreationMetadata {
 
 impl AnalyticsInterceptor {
     pub fn new(
-        analytics_client: Arc<AnalyticsClient>,
+        analytics_client: AnalyticsClient,
         user_preferences: Arc<Mutex<UserPreferences>>,
         rt_handle: Handle,
     ) -> Self {
         Self {
-            analytics_client,
+            analytics_client: Arc::new(analytics_client),
             user_preferences,
             rt_handle,
         }
@@ -54,18 +54,15 @@ impl AnalyticsInterceptor {
         exchange_rate: Option<ExchangeRate>,
     ) {
         let invoice_amount = invoice_details.amount.map(|a| a.sats.as_sats().msats);
-        let paid_amount_msat = match paid_amount {
-            None => match invoice_amount {
-                None => {
-                    error!(
-                        "Couldn't retrieve invoice amount of initiated payment: {}",
-                        invoice_details.payment_hash
-                    );
-                    return;
-                }
-                Some(a) => a,
-            },
+        let paid_amount_msat = match paid_amount.or(invoice_amount) {
             Some(a) => a,
+            None => {
+                error!(
+                    "Couldn't retrieve invoice amount of initiated payment: {}",
+                    invoice_details.payment_hash
+                );
+                return;
+            }
         };
 
         let user_currency = self.user_preferences.lock_unwrap().fiat_currency.clone();
