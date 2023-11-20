@@ -1,3 +1,5 @@
+use crate::{invalid_input, permanent_failure, runtime_error};
+use breez_sdk_core::error::SendPaymentError;
 use std::fmt::{Display, Formatter};
 
 /// A code that specifies the RuntimeError that occurred
@@ -175,4 +177,67 @@ pub fn to_mnemonic_error(e: bip39::Error) -> MnemonicError {
 pub enum SimpleError {
     #[error("SimpleError: {msg}")]
     Simple { msg: String },
+}
+
+pub(crate) fn map_send_payment_error(err: SendPaymentError) -> PayError {
+    match err {
+        SendPaymentError::AlreadyPaid => {
+            runtime_error(PayErrorCode::AlreadyUsedInvoice, String::new())
+        }
+        SendPaymentError::Generic { err } => runtime_error(PayErrorCode::UnexpectedError, err),
+        SendPaymentError::InvalidAmount { err } => invalid_input(format!("Invalid amount: {err}")),
+        SendPaymentError::InvalidInvoice { err } => {
+            invalid_input(format!("Invalid invoice: {err}"))
+        }
+        SendPaymentError::InvoiceExpired { err } => {
+            runtime_error(PayErrorCode::InvoiceExpired, err)
+        }
+        SendPaymentError::PaymentFailed { err } => runtime_error(PayErrorCode::PaymentFailed, err),
+        SendPaymentError::PaymentTimeout { err } => {
+            runtime_error(PayErrorCode::PaymentTimeout, err)
+        }
+        SendPaymentError::RouteNotFound { err } => runtime_error(PayErrorCode::NoRouteFound, err),
+        SendPaymentError::RouteTooExpensive { err } => {
+            runtime_error(PayErrorCode::RouteTooExpensive, err)
+        }
+        SendPaymentError::ServiceConnectivity { err } => {
+            runtime_error(PayErrorCode::NodeUnavailable, err)
+        }
+    }
+}
+
+pub(crate) fn map_lnurl_pay_error(error: breez_sdk_core::error::LnUrlPayError) -> LnUrlPayError {
+    use breez_sdk_core::error::LnUrlPayError;
+    match error {
+        LnUrlPayError::AesDecryptionFailed { .. } => {
+            runtime_error(LnUrlPayErrorCode::LnUrlServerError, error)
+        }
+        LnUrlPayError::InvalidUri { err } => invalid_input(format!("InvalidUri: {err}")),
+        LnUrlPayError::AlreadyPaid => permanent_failure("LNURL pay invoice has been already paid"),
+        LnUrlPayError::Generic { err } => runtime_error(LnUrlPayErrorCode::UnexpectedError, err),
+        LnUrlPayError::InvalidAmount { err } => runtime_error(
+            LnUrlPayErrorCode::LnUrlServerError,
+            format!("Invalid amount in the invoice from LNURL pay server: {err}"),
+        ),
+        LnUrlPayError::InvalidInvoice { err } => runtime_error(
+            LnUrlPayErrorCode::LnUrlServerError,
+            format!("Invalid invoice from LNURL pay server: {err}"),
+        ),
+        LnUrlPayError::InvoiceExpired { err } => {
+            permanent_failure(format!("Invoice for LNURL pay has already expired: {err}"))
+        }
+        LnUrlPayError::PaymentFailed { err } => {
+            runtime_error(LnUrlPayErrorCode::PaymentFailed, err)
+        }
+        LnUrlPayError::PaymentTimeout { err } => {
+            runtime_error(LnUrlPayErrorCode::PaymentTimeout, err)
+        }
+        LnUrlPayError::RouteNotFound { err } => runtime_error(LnUrlPayErrorCode::NoRouteFound, err),
+        LnUrlPayError::RouteTooExpensive { err } => {
+            runtime_error(LnUrlPayErrorCode::RouteTooExpensive, err)
+        }
+        LnUrlPayError::ServiceConnectivity { err } => {
+            runtime_error(LnUrlPayErrorCode::ServiceConnectivity, err)
+        }
+    }
 }

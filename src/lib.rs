@@ -51,6 +51,7 @@ pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
+use crate::errors::{map_lnurl_pay_error, map_send_payment_error};
 pub use crate::errors::{
     DecodeDataError, Error as LnError, LnUrlPayError, LnUrlPayErrorCode, LnUrlPayResult,
     MnemonicError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode, SimpleError,
@@ -74,8 +75,9 @@ use crate::task_manager::TaskManager;
 use crate::util::unix_timestamp_to_system_time;
 use crate::util::LogIgnoreError;
 use bitcoin::Network;
+use breez_sdk_core::error::LnUrlWithdrawError;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
-use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
+use breez_sdk_core::error::ReceiveOnchainError;
 use breez_sdk_core::{
     parse, parse_invoice, BreezServices, GreenlightCredentials, GreenlightNodeConfig, InputType,
     ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
@@ -107,7 +109,7 @@ use std::time::SystemTime;
 use std::{env, fs};
 use uuid::Uuid;
 
-const LOG_LEVEL: log::Level = log::Level::Debug;
+const LOG_LEVEL: Level = Level::Debug;
 const LOGS_DIR: &str = "logs";
 
 pub(crate) const DB_FILENAME: &str = "db2.db3";
@@ -1433,71 +1435,6 @@ pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) 
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions()
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
-}
-
-fn map_send_payment_error(err: SendPaymentError) -> PayError {
-    match err {
-        SendPaymentError::AlreadyPaid => {
-            runtime_error(PayErrorCode::AlreadyUsedInvoice, String::new())
-        }
-        SendPaymentError::Generic { err } => runtime_error(PayErrorCode::UnexpectedError, err),
-        SendPaymentError::InvalidAmount { err } => invalid_input(format!("Invalid amount: {err}")),
-        SendPaymentError::InvalidInvoice { err } => {
-            invalid_input(format!("Invalid invoice: {err}"))
-        }
-        SendPaymentError::InvoiceExpired { err } => {
-            runtime_error(PayErrorCode::InvoiceExpired, err)
-        }
-        SendPaymentError::PaymentFailed { err } => runtime_error(PayErrorCode::PaymentFailed, err),
-        SendPaymentError::PaymentTimeout { err } => {
-            runtime_error(PayErrorCode::PaymentTimeout, err)
-        }
-        SendPaymentError::RouteNotFound { err } => runtime_error(PayErrorCode::NoRouteFound, err),
-        SendPaymentError::RouteTooExpensive { err } => {
-            runtime_error(PayErrorCode::RouteTooExpensive, err)
-        }
-        SendPaymentError::ServiceConnectivity { err } => {
-            runtime_error(PayErrorCode::NodeUnavailable, err)
-        }
-    }
-}
-
-fn map_lnurl_pay_error(
-    error: breez_sdk_core::error::LnUrlPayError,
-) -> crate::errors::LnUrlPayError {
-    use breez_sdk_core::error::LnUrlPayError;
-    match error {
-        LnUrlPayError::AesDecryptionFailed { .. } => {
-            runtime_error(LnUrlPayErrorCode::LnUrlServerError, error)
-        }
-        LnUrlPayError::InvalidUri { err } => invalid_input(format!("InvalidUri: {err}")),
-        LnUrlPayError::AlreadyPaid => permanent_failure("LNURL pay invoice has been already paid"),
-        LnUrlPayError::Generic { err } => runtime_error(LnUrlPayErrorCode::UnexpectedError, err),
-        LnUrlPayError::InvalidAmount { err } => runtime_error(
-            LnUrlPayErrorCode::LnUrlServerError,
-            format!("Invalid amount in the invoice from LNURL pay server: {err}"),
-        ),
-        LnUrlPayError::InvalidInvoice { err } => runtime_error(
-            LnUrlPayErrorCode::LnUrlServerError,
-            format!("Invalid invoice from LNURL pay server: {err}"),
-        ),
-        LnUrlPayError::InvoiceExpired { err } => {
-            permanent_failure(format!("Invoice for LNURL pay has already expired: {err}"))
-        }
-        LnUrlPayError::PaymentFailed { err } => {
-            runtime_error(LnUrlPayErrorCode::PaymentFailed, err)
-        }
-        LnUrlPayError::PaymentTimeout { err } => {
-            runtime_error(LnUrlPayErrorCode::PaymentTimeout, err)
-        }
-        LnUrlPayError::RouteNotFound { err } => runtime_error(LnUrlPayErrorCode::NoRouteFound, err),
-        LnUrlPayError::RouteTooExpensive { err } => {
-            runtime_error(LnUrlPayErrorCode::RouteTooExpensive, err)
-        }
-        LnUrlPayError::ServiceConnectivity { err } => {
-            runtime_error(LnUrlPayErrorCode::ServiceConnectivity, err)
-        }
-    }
 }
 
 fn get_payment_uuid(payment_hash: String) -> Result<String> {
