@@ -39,9 +39,8 @@ mod symmetric_encryption;
 mod task_manager;
 mod util;
 
-use crate::amount::ToAmount;
 pub use crate::amount::{Amount, FiatValue};
-use crate::amount::{AsSats, Sats};
+use crate::amount::{AsSats, Sats, ToAmount};
 use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
 pub use crate::analytics::{InvoiceCreationMetadata, PaymentMetadata};
 use crate::async_runtime::AsyncRuntime;
@@ -51,10 +50,9 @@ pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
-use crate::errors::{to_mnemonic_error, Error, SimpleError};
 pub use crate::errors::{
     DecodeDataError, Error as LnError, LnUrlPayError, LnUrlPayErrorCode, LnUrlPayResult,
-    MnemonicError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode,
+    MnemonicError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode, SimpleError,
     UnsupportedDataType,
 };
 pub use crate::exchange_rate_provider::ExchangeRate;
@@ -68,12 +66,11 @@ use crate::locker::Locker;
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
 pub use crate::payment::{Payment, PaymentState, PaymentType};
 pub use crate::recovery::recover_lightning_node;
-use crate::secret::Secret;
+pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
 pub use crate::swap::{FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo};
 use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
 use crate::util::LogIgnoreError;
-use bip39::{Language, Mnemonic};
 use bitcoin::Network;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
@@ -84,7 +81,6 @@ use breez_sdk_core::{
     PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest,
     ReceiveOnchainRequest, RefundRequest, SendPaymentRequest, SweepRequest,
 };
-use cipher::generic_array::typenum::U32;
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 use data_store::DataStore;
@@ -388,7 +384,7 @@ impl LightningNode {
                     "Failed to connect to lsp",
                 )?;
             }
-            Ok::<(), Error>(())
+            Ok::<(), LnError>(())
         })?;
 
         let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
@@ -1507,48 +1503,6 @@ pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) 
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions()
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
-}
-
-fn derive_secret_from_mnemonic(mnemonic: Mnemonic, passphrase: String) -> Secret {
-    let seed = mnemonic.to_seed(&passphrase);
-    let mnemonic_string: Vec<String> = mnemonic.word_iter().map(String::from).collect();
-
-    Secret {
-        mnemonic: mnemonic_string,
-        passphrase,
-        seed: seed.to_vec(),
-    }
-}
-
-/// Generate a new mnemonic with an optional passphrase. Provide an empty string to use no passphrase.
-pub fn generate_secret(passphrase: String) -> std::result::Result<Secret, SimpleError> {
-    let entropy = random::generate_random_bytes::<U32>().map_err(|e| SimpleError::Simple {
-        msg: format!("Failed to generate random bytes: {e}"),
-    })?;
-    let mnemonic = Mnemonic::from_entropy(&entropy).map_err(|e| SimpleError::Simple {
-        msg: format!("Failed to generate mnemonic: {e}"),
-    })?;
-
-    Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
-}
-
-/// Generate a Secret object (containing the seed). Provide an empty string to use no passphrase.
-pub fn mnemonic_to_secret(
-    mnemonic_string: Vec<String>,
-    passphrase: String,
-) -> std::result::Result<Secret, MnemonicError> {
-    let mnemonic = Mnemonic::from_str(&mnemonic_string.join(" ")).map_err(to_mnemonic_error)?;
-    Ok(derive_secret_from_mnemonic(mnemonic, passphrase))
-}
-
-/// Return a list of valid BIP-39 English words starting with the prefix.
-/// Calling this function with empty prefix will return the full list of BIP-39 words.
-pub fn words_by_prefix(prefix: String) -> Vec<String> {
-    Language::English
-        .words_by_prefix(&prefix)
-        .iter()
-        .map(|w| w.to_string())
-        .collect()
 }
 
 fn map_send_payment_error(err: SendPaymentError) -> PayError {
