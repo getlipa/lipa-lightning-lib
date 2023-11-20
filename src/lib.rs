@@ -60,7 +60,7 @@ use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::fiat_topup::FiatTopupInfo;
 use crate::fiat_topup::PocketClient;
 pub use crate::invoice_details::InvoiceDetails;
-use crate::key_derivation::derive_persistence_encryption_key;
+use crate::key_derivation::{derive_auth_keys, derive_persistence_encryption_key};
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 use crate::locker::Locker;
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
@@ -72,8 +72,6 @@ use crate::task_manager::{TaskManager, TaskPeriods};
 use crate::util::unix_timestamp_to_system_time;
 use crate::util::LogIgnoreError;
 use bip39::{Language, Mnemonic};
-use bitcoin::bip32::{DerivationPath, ExtendedPrivKey};
-use bitcoin::secp256k1::{PublicKey, SECP256K1};
 use bitcoin::Network;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
@@ -114,8 +112,6 @@ const LOG_LEVEL: log::Level = log::Level::Debug;
 const LOGS_DIR: &str = "logs";
 
 pub(crate) const DB_FILENAME: &str = "db2.db3";
-
-const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
 
 /// The fee charged by the Lightning Service Provider (LSP) for opening a channel with the node.
 /// This fee is being charged at the time of the channel creation.
@@ -1555,12 +1551,11 @@ pub fn words_by_prefix(prefix: String) -> Vec<String> {
 }
 
 fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
-    let auth_keys = derive_key_pair_hex(seed, BACKEND_AUTH_DERIVATION_PATH)
-        .lift_invalid_input()
-        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
+    let auth_keys =
+        derive_auth_keys(seed).map_to_permanent_failure("Failed to derive auth keys")?;
     let auth_keys = KeyPair {
-        secret_key: auth_keys.secret_key,
-        public_key: auth_keys.public_key,
+        secret_key: hex::encode(auth_keys.secret_key),
+        public_key: hex::encode(auth_keys.public_key),
     };
     Auth::new(
         graphql_url,
@@ -1575,12 +1570,11 @@ fn build_async_auth(
     seed: &[u8; 64],
     graphql_url: String,
 ) -> Result<honey_badger::asynchronous::Auth> {
-    let auth_keys = derive_key_pair_hex(seed, BACKEND_AUTH_DERIVATION_PATH)
-        .lift_invalid_input()
-        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)?;
+    let auth_keys =
+        derive_auth_keys(seed).map_to_permanent_failure("Failed to derive auth keys")?;
     let auth_keys = KeyPair {
-        secret_key: auth_keys.secret_key,
-        public_key: auth_keys.public_key,
+        secret_key: hex::encode(auth_keys.secret_key),
+        public_key: hex::encode(auth_keys.public_key),
     };
     honey_badger::asynchronous::Auth::new(
         graphql_url,
@@ -1656,26 +1650,6 @@ fn map_lnurl_pay_error(
     }
 }
 
-pub(crate) fn derive_key_pair_hex(seed: &[u8; 64], derivation_path: &str) -> Result<KeyPair> {
-    let master_xpriv = ExtendedPrivKey::new_master(Network::Bitcoin, seed)
-        .map_to_invalid_input("Failed to get xpriv from from seed")?;
-
-    let derivation_path = DerivationPath::from_str(derivation_path)
-        .map_to_invalid_input("Invalid derivation path")?;
-
-    let derived_xpriv = master_xpriv
-        .derive_priv(SECP256K1, &derivation_path)
-        .map_to_permanent_failure("Failed to derive keys")?;
-
-    let secret_key = derived_xpriv.private_key.secret_bytes();
-    let public_key = PublicKey::from_secret_key(SECP256K1, &derived_xpriv.private_key).serialize();
-
-    Ok(KeyPair {
-        secret_key: hex::encode(secret_key),
-        public_key: hex::encode(public_key),
-    })
-}
-
 fn get_payment_uuid(payment_hash: String) -> Result<String> {
     let hash = hex::decode(payment_hash).map_to_invalid_input("Invalid payment hash encoding")?;
 
@@ -1723,20 +1697,11 @@ include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::key_derivation::tests::mnemonic_to_seed;
     use crow::TopupStatus;
     use perro::Error;
 
     const PAYMENT_HASH: &str = "0b78877a596f18d5f6effde3dda1df25a5cf20439ff1ac91478d7e518211040f";
     const PAYMENT_UUID: &str = "c6e597bd-0a98-5b46-8e74-f6098f5d16a3";
-    const BACKEND_AUTH_DERIVATION_PATH: &str = "m/76738065'/0'/0";
-    // Values used for testing were obtained from https://iancoleman.io/bip39
-    const MNEMONIC_STR: &str = "between angry ketchup hill admit attitude echo wisdom still barrel coral obscure home museum trick grow magic eagle school tilt loop actress equal law";
-    const SEED_HEX: &str = "781bfd3b2c6a5cfa9ed1551303fa20edf12baa5864521e7782d42a1bb15c2a444f7b81785f537bec6e38a533d0dc88e2a7effad7b975dd7c9bca1f9e7117966d";
-    const DERIVED_AUTH_SECRET_KEY_HEX: &str =
-        "1b64f7c3f7462e3815eacef53ddf18e5623bf8945d065761b05b022f19e60251";
-    const DERIVED_AUTH_PUBLIC_KEY_HEX: &str =
-        "02549b15801b155d32ca3931665361b1d2997ee531859b2d48cebbc2ccf21aac96";
 
     #[test]
     pub fn test_payment_uuid() {
@@ -1758,17 +1723,6 @@ mod tests {
             &invalid_hash_encoding.unwrap_err().to_string()[0..43],
             "InvalidInput: Invalid payment hash encoding"
         );
-    }
-
-    #[test]
-    fn test_derive_auth_key_pair() {
-        let seed = mnemonic_to_seed(MNEMONIC_STR);
-        assert_eq!(hex::encode(seed), SEED_HEX.to_string());
-
-        let key_pair = derive_key_pair_hex(&seed, BACKEND_AUTH_DERIVATION_PATH).unwrap();
-
-        assert_eq!(key_pair.secret_key, DERIVED_AUTH_SECRET_KEY_HEX.to_string());
-        assert_eq!(key_pair.public_key, DERIVED_AUTH_PUBLIC_KEY_HEX.to_string());
     }
 
     #[test]

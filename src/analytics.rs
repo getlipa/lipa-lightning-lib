@@ -1,10 +1,10 @@
 use crate::amount::AsSats;
 use crate::async_runtime::Handle;
 use crate::errors::Result;
+use crate::key_derivation::derive_analytics_key;
 use crate::locker::Locker;
 use crate::util::{unix_timestamp_to_system_time, LogIgnoreError};
-use crate::{derive_key_pair_hex, ExchangeRate, InvoiceDetails, UserPreferences};
-
+use crate::{ExchangeRate, InvoiceDetails, UserPreferences};
 use breez_sdk_core::{
     InvoicePaidDetails, Payment, PaymentDetails, PaymentFailedData, ReceivePaymentResponse,
 };
@@ -13,8 +13,6 @@ use parrot::{AnalyticsClient, AnalyticsEvent, PayFailureReason, PaymentSource};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use uuid::Uuid;
-
-const BACKEND_ANALYTICS_DERIVATION_PATH: &str = "m/82640931'/0'/0";
 
 pub(crate) struct AnalyticsInterceptor {
     pub analytics_client: Arc<AnalyticsClient>,
@@ -172,13 +170,10 @@ impl AnalyticsInterceptor {
 }
 
 pub(crate) fn derive_analytics_keys(seed: &[u8; 64]) -> Result<String> {
-    let key_pair = derive_key_pair_hex(seed, BACKEND_ANALYTICS_DERIVATION_PATH)?;
-
-    Ok(
-        Uuid::new_v5(&Uuid::NAMESPACE_OID, key_pair.public_key.as_bytes())
-            .hyphenated()
-            .to_string(),
-    )
+    let key = derive_analytics_key(seed)?;
+    Ok(Uuid::new_v5(&Uuid::NAMESPACE_OID, &key)
+        .hyphenated()
+        .to_string())
 }
 
 fn map_error_to_failure_reason(error: String) -> PayFailureReason {
