@@ -4,6 +4,7 @@ use crate::errors::Result;
 use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProvider};
 use crate::locker::Locker;
 use crate::RuntimeErrorCode;
+use std::env;
 
 use crate::backup::BackupManager;
 use breez_sdk_core::{BreezServices, OpeningFeeParams};
@@ -32,6 +33,21 @@ pub(crate) struct TaskManager {
     task_handles: Vec<RepeatingTaskHandle>,
 }
 
+const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
+    update_exchange_rates: Some(Duration::from_secs(10 * 60)),
+    sync_breez: Some(Duration::from_secs(10 * 60)),
+    update_lsp_fee: Some(Duration::from_secs(10 * 60)),
+    redeem_swaps: Some(Duration::from_secs(10 * 60)),
+    backup: Some(Duration::from_secs(30)),
+};
+
+const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
+    update_exchange_rates: None,
+    sync_breez: Some(Duration::from_secs(30 * 60)),
+    update_lsp_fee: None,
+    redeem_swaps: None,
+    backup: None,
+};
 impl TaskManager {
     pub fn new(
         runtime_handle: Handle,
@@ -65,13 +81,21 @@ impl TaskManager {
         )
     }
 
+    pub fn foreground(&mut self) {
+        self.restart(get_foreground_periods());
+    }
+
+    pub fn background(&mut self) {
+        self.restart(BACKGROUND_PERIODS)
+    }
+
     pub fn request_shutdown_all(&mut self) {
         self.task_handles
             .drain(..)
             .for_each(|h| h.request_shutdown());
     }
 
-    pub fn restart(&mut self, periods: TaskPeriods) {
+    fn restart(&mut self, periods: TaskPeriods) {
         self.request_shutdown_all();
 
         // Update exchange rates.
@@ -240,6 +264,25 @@ fn persist_exchange_rates(data_store: &Arc<Mutex<DataStore>>, rates: &[ExchangeR
                 error!("Failed to update exchange rate in db: {e}")
             }
         }
+    }
+}
+
+fn get_foreground_periods() -> TaskPeriods {
+    match env::var("TESTING_TASK_PERIODS") {
+        Ok(period) => {
+            let period: u64 = period
+                .parse()
+                .expect("TESTING_TASK_PERIODS should be an integer number");
+            let period = Duration::from_secs(period);
+            TaskPeriods {
+                update_exchange_rates: Some(period),
+                sync_breez: Some(period),
+                update_lsp_fee: Some(period),
+                redeem_swaps: Some(period),
+                backup: Some(period),
+            }
+        }
+        Err(_) => FOREGROUND_PERIODS,
     }
 }
 
