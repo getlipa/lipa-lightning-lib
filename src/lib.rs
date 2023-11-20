@@ -28,6 +28,7 @@ mod logger;
 mod macros;
 mod migrations;
 mod offer;
+mod payment;
 mod random;
 mod recovery;
 mod sanitize_input;
@@ -63,6 +64,7 @@ use crate::key_derivation::derive_persistence_encryption_key;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 use crate::locker::Locker;
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
+pub use crate::payment::{Payment, PaymentState, PaymentType};
 pub use crate::recovery::recover_lightning_node;
 use crate::secret::Secret;
 pub use crate::swap::{FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo};
@@ -154,61 +156,6 @@ pub struct ChannelsInfo {
     /// Capacity the node can actually send.
     /// It excludes non usable channels, pending HTLCs, channels reserves, etc.
     pub outbound_capacity: Amount,
-}
-
-#[derive(PartialEq, Eq, Debug, Clone)]
-#[repr(u8)]
-pub enum PaymentType {
-    Receiving,
-    Sending,
-}
-
-#[derive(PartialEq, Eq, Debug, Clone)]
-#[repr(u8)]
-pub enum PaymentState {
-    /// The payment was created and is in progress.
-    Created,
-    /// The payment succeeded.
-    Succeeded,
-    /// The payment failed. If it is a [`PaymentType::Sending`] payment, it can be retried.
-    Failed,
-    /// A payment retrial is in progress.
-    Retried,
-    /// The invoice associated with this payment has expired.
-    InvoiceExpired,
-}
-
-/// Information about an incoming or outgoing payment.
-#[derive(PartialEq, Debug)]
-pub struct Payment {
-    pub payment_type: PaymentType,
-    pub payment_state: PaymentState,
-    /// For now, will always be empty.
-    pub fail_reason: Option<PayErrorCode>,
-    /// Hex representation of payment hash.
-    pub hash: String,
-    /// Nominal amount specified in the invoice.
-    pub amount: Amount,
-    pub invoice_details: InvoiceDetails,
-    pub created_at: TzTime,
-    /// The description embedded in the invoice. Given the length limit of this data,
-    /// it is possible that a hex hash of the description is provided instead, but that is uncommon.
-    pub description: String,
-    /// Hex representation of the preimage. Will only be present on successful payments.
-    pub preimage: Option<String>,
-    /// Routing fees paid in a [`PaymentType::Sending`] payment. Will only be present if the payment
-    /// was successful.
-    /// The cost of sending a payment is `amount` + `network_fees`.
-    pub network_fees: Option<Amount>,
-    /// LSP fees paid in a [`PaymentType::Receiving`] payment. Will never be present for
-    /// [`PaymentType::Sending`] payments but might be 0 for [`PaymentType::Receiving`] payments.
-    /// The amount is only paid if successful.
-    /// The value that is received in practice is given by `amount` - `lsp_fees`.
-    pub lsp_fees: Option<Amount>,
-    /// An offer a [`PaymentType::Receiving`] payment came from if any.
-    pub offer: Option<OfferKind>,
-    /// The swap information of a [`PaymentType::Receiving`] payment if triggered by a swap.
-    pub swap: Option<SwapInfo>,
 }
 
 /// Indicates the max routing fee mode used to restrict fees of a payment of a given size
