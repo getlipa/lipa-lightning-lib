@@ -11,6 +11,7 @@ extern crate core;
 mod amount;
 mod analytics;
 mod async_runtime;
+mod auth;
 mod backup;
 mod callbacks;
 mod config;
@@ -44,6 +45,7 @@ use crate::amount::{AsSats, Sats};
 use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
 pub use crate::analytics::{InvoiceCreationMetadata, PaymentMetadata};
 use crate::async_runtime::AsyncRuntime;
+use crate::auth::{build_async_auth, build_auth};
 use crate::backup::BackupManager;
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
@@ -60,7 +62,7 @@ use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::fiat_topup::FiatTopupInfo;
 use crate::fiat_topup::PocketClient;
 pub use crate::invoice_details::InvoiceDetails;
-use crate::key_derivation::{derive_auth_keys, derive_persistence_encryption_key};
+use crate::key_derivation::derive_persistence_encryption_key;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 use crate::locker::Locker;
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
@@ -87,8 +89,7 @@ use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 use data_store::DataStore;
 use email_address::EmailAddress;
-use honey_badger::secrets::{generate_keypair, KeyPair};
-use honey_badger::{Auth, AuthLevel, CustomTermsAndConditions};
+use honey_badger::{Auth, CustomTermsAndConditions};
 use iban::Iban;
 use log::{debug, info, Level};
 use logger::init_logger_once;
@@ -1548,41 +1549,6 @@ pub fn words_by_prefix(prefix: String) -> Vec<String> {
         .iter()
         .map(|w| w.to_string())
         .collect()
-}
-
-fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
-    let auth_keys =
-        derive_auth_keys(seed).map_to_permanent_failure("Failed to derive auth keys")?;
-    let auth_keys = KeyPair {
-        secret_key: hex::encode(auth_keys.secret_key),
-        public_key: hex::encode(auth_keys.public_key),
-    };
-    Auth::new(
-        graphql_url,
-        AuthLevel::Pseudonymous,
-        auth_keys,
-        generate_keypair(),
-    )
-    .map_to_permanent_failure("Failed to build auth client")
-}
-
-fn build_async_auth(
-    seed: &[u8; 64],
-    graphql_url: String,
-) -> Result<honey_badger::asynchronous::Auth> {
-    let auth_keys =
-        derive_auth_keys(seed).map_to_permanent_failure("Failed to derive auth keys")?;
-    let auth_keys = KeyPair {
-        secret_key: hex::encode(auth_keys.secret_key),
-        public_key: hex::encode(auth_keys.public_key),
-    };
-    honey_badger::asynchronous::Auth::new(
-        graphql_url,
-        AuthLevel::Pseudonymous,
-        auth_keys,
-        generate_keypair(),
-    )
-    .map_to_permanent_failure("Failed to build auth client")
 }
 
 fn map_send_payment_error(err: SendPaymentError) -> PayError {
