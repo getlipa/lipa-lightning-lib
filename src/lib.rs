@@ -692,9 +692,9 @@ impl LightningNode {
             .map(|p| self.payment_from_breez_payment(p))
             .collect::<Result<Vec<Payment>>>()?;
 
-        let breez_payment_invoices: HashSet<String> = breez_payments
+        let breez_payment_hashes: HashSet<String> = breez_payments
             .iter()
-            .map(|p| p.invoice_details.invoice.clone())
+            .map(|p| p.invoice_details.payment_hash.clone())
             .collect();
         let created_invoices = self
             .data_store
@@ -702,7 +702,7 @@ impl LightningNode {
             .retrieve_created_invoices(number_of_payments)?;
         let mut pending_inbound_payments = created_invoices
             .into_iter()
-            .filter(|i| !breez_payment_invoices.contains(i.invoice.as_str()))
+            .filter(|i| !breez_payment_hashes.contains(i.hash.as_str()))
             .map(|i| self.payment_from_created_invoice(&i))
             .collect::<Result<Vec<Payment>>>()?;
 
