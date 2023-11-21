@@ -262,14 +262,14 @@ impl LightningNode {
             timezone_config: config.timezone_config,
         }));
 
-        let analytics_client = Arc::new(AnalyticsClient::new(
+        let analytics_client = AnalyticsClient::new(
             environment.backend_url.clone(),
             derive_analytics_keys(&strong_typed_seed)?,
             Arc::clone(&auth),
-        ));
+        );
 
         let analytics_interceptor = Arc::new(AnalyticsInterceptor::new(
-            Arc::clone(&analytics_client),
+            analytics_client,
             Arc::clone(&user_preferences),
             rt.handle(),
         ));
