@@ -25,6 +25,7 @@ mod fund_migration;
 mod invoice_details;
 mod key_derivation;
 mod limits;
+mod lnurl;
 mod locker;
 mod logger;
 mod macros;
@@ -65,6 +66,7 @@ use crate::fiat_topup::PocketClient;
 pub use crate::invoice_details::InvoiceDetails;
 use crate::key_derivation::derive_persistence_encryption_key;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
+pub use crate::lnurl::LnUrlPayDetails;
 use crate::locker::Locker;
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
 pub use crate::payment::{Payment, PaymentState, PaymentType};
@@ -183,33 +185,6 @@ pub struct SweepInfo {
 pub(crate) struct UserPreferences {
     fiat_currency: String,
     timezone_config: TzConfig,
-}
-
-/// Information about an LNURL-pay.
-pub struct LnUrlPayDetails {
-    pub min_sendable: Amount,
-    pub max_sendable: Amount,
-    /// An internal struct is not supposed to be inspected, but only passed to [`LightningNode::pay_lnurlp`].
-    pub request_data: LnUrlPayRequestData,
-}
-
-impl LnUrlPayDetails {
-    fn from_lnurl_pay_request_data(
-        request_data: LnUrlPayRequestData,
-        exchange_rate: &Option<ExchangeRate>,
-    ) -> Self {
-        Self {
-            min_sendable: request_data
-                .min_sendable
-                .as_msats()
-                .to_amount_up(exchange_rate),
-            max_sendable: request_data
-                .max_sendable
-                .as_msats()
-                .to_amount_up(exchange_rate),
-            request_data,
-        }
-    }
 }
 
 /// Decoded data that can be obtained using [`LightningNode::decode_data`].
