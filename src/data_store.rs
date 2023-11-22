@@ -33,6 +33,7 @@ pub(crate) struct DataStore {
 
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) struct CreatedInvoice {
+    pub hash: String,
     pub invoice: String,
     pub channel_opening_fees: Option<u64>,
 }
@@ -173,7 +174,7 @@ impl DataStore {
             .conn
             .prepare(
                 "\
-            SELECT invoice, channel_opening_fees, id \
+            SELECT hash, invoice, channel_opening_fees \
             FROM created_invoices \
             ORDER BY id DESC \
             LIMIT ?1;
@@ -184,8 +185,9 @@ impl DataStore {
         let invoice_iter = statement
             .query_map([number_of_invoices], |r| {
                 Ok(CreatedInvoice {
-                    invoice: r.get(0)?,
-                    channel_opening_fees: r.get(1)?,
+                    hash: r.get(0)?,
+                    invoice: r.get(1)?,
+                    channel_opening_fees: r.get(2)?,
                 })
             })
             .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
@@ -212,6 +214,7 @@ impl DataStore {
         let mut invoice_iter = statement
             .query_map([hash], |r| {
                 Ok(CreatedInvoice {
+                    hash: hash.to_string(),
                     invoice: r.get(0)?,
                     channel_opening_fees: r.get(1)?,
                 })
@@ -958,16 +961,22 @@ mod tests {
         assert!(data_store.retrieve_created_invoices(5).unwrap().is_empty());
 
         let invoice1 = CreatedInvoice {
+            hash: "hash1".to_string(),
             invoice: "invoice1".to_string(),
             channel_opening_fees: Some(25000000),
         };
         let invoice2 = CreatedInvoice {
+            hash: "hash2".to_string(),
             invoice: "invoice2".to_string(),
             channel_opening_fees: None,
         };
 
         data_store
-            .store_created_invoice("hash1", "invoice1", &Some(25000000))
+            .store_created_invoice(
+                invoice1.hash.as_str(),
+                invoice1.invoice.as_str(),
+                &invoice1.channel_opening_fees,
+            )
             .unwrap();
         assert_eq!(
             data_store.retrieve_created_invoices(5).unwrap(),
@@ -975,7 +984,11 @@ mod tests {
         );
 
         data_store
-            .store_created_invoice("hash2", "invoice2", &None)
+            .store_created_invoice(
+                invoice2.hash.as_str(),
+                invoice2.invoice.as_str(),
+                &invoice2.channel_opening_fees,
+            )
             .unwrap();
         assert_eq!(
             data_store.retrieve_created_invoices(5).unwrap(),
@@ -993,13 +1006,13 @@ mod tests {
             .is_none());
         assert_eq!(
             data_store
-                .retrieve_created_invoice_by_hash("hash1")
+                .retrieve_created_invoice_by_hash(invoice1.hash.as_str())
                 .unwrap(),
             Some(invoice1)
         );
         assert_eq!(
             data_store
-                .retrieve_created_invoice_by_hash("hash2")
+                .retrieve_created_invoice_by_hash(invoice2.hash.as_str())
                 .unwrap(),
             Some(invoice2)
         );
