@@ -50,6 +50,7 @@ use crate::auth::{build_async_auth, build_auth};
 use crate::backup::BackupManager;
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
+use crate::data_store::CreatedInvoice;
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 use crate::errors::{map_lnurl_pay_error, map_send_payment_error};
@@ -511,6 +512,7 @@ impl LightningNode {
             .store_created_invoice(
                 &response.ln_invoice.payment_hash,
                 &response.ln_invoice.bolt11,
+                &response.opening_fee_msat,
             )
             .map_to_permanent_failure("Failed to persist created invoice")?;
 
@@ -700,7 +702,7 @@ impl LightningNode {
             .retrieve_created_invoices(number_of_payments)?;
         let mut pending_inbound_payments = created_invoices
             .into_iter()
-            .filter(|i| !breez_payment_invoices.contains(i))
+            .filter(|i| !breez_payment_invoices.contains(i.invoice.as_str()))
             .map(|i| self.payment_from_created_invoice(&i))
             .collect::<Result<Vec<Payment>>>()?;
 
@@ -879,8 +881,8 @@ impl LightningNode {
         })
     }
 
-    fn payment_from_created_invoice(&self, invoice: &str) -> Result<Payment> {
-        let invoice = parse_invoice(invoice)
+    fn payment_from_created_invoice(&self, created_invoice: &CreatedInvoice) -> Result<Payment> {
+        let invoice = parse_invoice(created_invoice.invoice.as_str())
             .map_to_permanent_failure("Invalid invoice provided by the Breez SDK")?;
         let invoice_details = InvoiceDetails::from_ln_invoice(invoice.clone(), &None);
 
@@ -908,6 +910,9 @@ impl LightningNode {
                 .timezone_config
                 .timezone_utc_offset_secs,
         };
+        let lsp_fees = created_invoice
+            .channel_opening_fees
+            .map(|f| f.as_msats().to_amount_up(&exchange_rate));
 
         Ok(Payment {
             payment_type: PaymentType::Receiving,
@@ -926,7 +931,7 @@ impl LightningNode {
             description: invoice_details.description,
             preimage: None,
             network_fees: None,
-            lsp_fees: None,
+            lsp_fees,
             offer: None,
             swap: None,
         })

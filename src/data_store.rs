@@ -31,6 +31,12 @@ pub(crate) struct DataStore {
     pub backup_status: BackupStatus,
 }
 
+#[derive(PartialEq, Debug, Clone)]
+pub(crate) struct CreatedInvoice {
+    pub invoice: String,
+    pub channel_opening_fees: Option<u64>,
+}
+
 impl DataStore {
     pub fn new(db_path: &str) -> Result<Self> {
         let mut conn = Connection::open(db_path).map_to_invalid_input("Invalid db path")?;
@@ -140,26 +146,34 @@ impl DataStore {
         }
     }
 
-    pub fn store_created_invoice(&mut self, hash: &str, invoice: &str) -> Result<()> {
+    pub fn store_created_invoice(
+        &mut self,
+        hash: &str,
+        invoice: &str,
+        channel_opening_fees: &Option<u64>,
+    ) -> Result<()> {
         self.backup_status = BackupStatus::WaitingForBackup;
         self.conn
             .execute(
                 "\
-            INSERT INTO created_invoices (hash, invoice)\
-            VALUES (?1, ?2)\
+            INSERT INTO created_invoices (hash, invoice, channel_opening_fees)\
+            VALUES (?1, ?2, ?3)\
             ",
-                [hash, invoice],
+                params![hash, invoice, channel_opening_fees],
             )
             .map_to_permanent_failure("Failed to store created invoice to local db")?;
         Ok(())
     }
 
-    pub fn retrieve_created_invoices(&self, number_of_invoices: u32) -> Result<Vec<String>> {
+    pub fn retrieve_created_invoices(
+        &self,
+        number_of_invoices: u32,
+    ) -> Result<Vec<CreatedInvoice>> {
         let mut statement = self
             .conn
             .prepare(
                 "\
-            SELECT invoice, id \
+            SELECT invoice, channel_opening_fees, id \
             FROM created_invoices \
             ORDER BY id DESC \
             LIMIT ?1;
@@ -168,7 +182,12 @@ impl DataStore {
             .map_to_permanent_failure("Failed to retrieve created invoice from local db")?;
 
         let invoice_iter = statement
-            .query_map([number_of_invoices], |r| r.get::<usize, String>(0))
+            .query_map([number_of_invoices], |r| {
+                Ok(CreatedInvoice {
+                    invoice: r.get(0)?,
+                    channel_opening_fees: r.get(1)?,
+                })
+            })
             .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
 
         let mut invoices = Vec::new();
@@ -178,12 +197,12 @@ impl DataStore {
         Ok(invoices)
     }
 
-    pub fn retrieve_created_invoice_by_hash(&self, hash: &str) -> Result<Option<String>> {
+    pub fn retrieve_created_invoice_by_hash(&self, hash: &str) -> Result<Option<CreatedInvoice>> {
         let mut statement = self
             .conn
             .prepare(
                 "\
-            SELECT invoice \
+            SELECT invoice, channel_opening_fees \
             FROM created_invoices \
             WHERE hash=?1;
         ",
@@ -191,7 +210,12 @@ impl DataStore {
             .map_to_permanent_failure("Failed to retrieve created invoice from local db")?;
 
         let mut invoice_iter = statement
-            .query_map([hash], |r| r.get::<usize, String>(0))
+            .query_map([hash], |r| {
+                Ok(CreatedInvoice {
+                    invoice: r.get(0)?,
+                    channel_opening_fees: r.get(1)?,
+                })
+            })
             .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?
             .filter_map(|i| i.ok());
 
@@ -506,7 +530,7 @@ fn fiat_topup_info_from_row(row: &Row) -> rusqlite::Result<Option<FiatTopupInfo>
 #[cfg(test)]
 mod tests {
     use crate::config::TzConfig;
-    use crate::data_store::DataStore;
+    use crate::data_store::{CreatedInvoice, DataStore};
     use crate::fund_migration::MigrationStatus;
     use crate::{ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
 
@@ -933,25 +957,34 @@ mod tests {
 
         assert!(data_store.retrieve_created_invoices(5).unwrap().is_empty());
 
+        let invoice1 = CreatedInvoice {
+            invoice: "invoice1".to_string(),
+            channel_opening_fees: Some(25000000),
+        };
+        let invoice2 = CreatedInvoice {
+            invoice: "invoice2".to_string(),
+            channel_opening_fees: None,
+        };
+
         data_store
-            .store_created_invoice("hash1", "invoice1")
+            .store_created_invoice("hash1", "invoice1", &Some(25000000))
             .unwrap();
         assert_eq!(
             data_store.retrieve_created_invoices(5).unwrap(),
-            vec!["invoice1".to_string()]
+            vec![invoice1.clone()]
         );
 
         data_store
-            .store_created_invoice("hash2", "invoice2")
+            .store_created_invoice("hash2", "invoice2", &None)
             .unwrap();
         assert_eq!(
             data_store.retrieve_created_invoices(5).unwrap(),
-            vec!["invoice2".to_string(), "invoice1".to_string()]
+            vec![invoice2.clone(), invoice1.clone()]
         );
 
         assert_eq!(
             data_store.retrieve_created_invoices(1).unwrap(),
-            vec!["invoice2".to_string()]
+            vec![invoice2.clone()]
         );
 
         assert!(data_store
@@ -962,13 +995,13 @@ mod tests {
             data_store
                 .retrieve_created_invoice_by_hash("hash1")
                 .unwrap(),
-            Some("invoice1".into())
+            Some(invoice1)
         );
         assert_eq!(
             data_store
                 .retrieve_created_invoice_by_hash("hash2")
                 .unwrap(),
-            Some("invoice2".into())
+            Some(invoice2)
         );
     }
 
