@@ -7,12 +7,6 @@ A Rust library that implements the main lightning logic of the lipa wallet app.
 
 ***
 
-# Build
-
-## Prerequisites
-* [protobuf](https://grpc.io/docs/protoc-installation/)
-
-***
 # Development environment
 
 ## Getting started
