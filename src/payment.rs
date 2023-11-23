@@ -31,8 +31,10 @@ pub struct Payment {
     pub fail_reason: Option<PayErrorCode>,
     /// Hex representation of payment hash.
     pub hash: String,
-    /// Nominal amount specified in the invoice.
+    /// Actual amount payed or received, will equal the `requested_amount` until payment succeeded.
     pub amount: Amount,
+    /// Nominal amount specified in the invoice.
+    pub requested_amount: Amount,
     pub invoice_details: InvoiceDetails,
     pub created_at: TzTime,
     /// The description embedded in the invoice. Given the length limit of this data,
@@ -42,12 +44,10 @@ pub struct Payment {
     pub preimage: Option<String>,
     /// Routing fees paid in a [`PaymentType::Sending`] payment. Will only be present if the payment
     /// was successful.
-    /// The cost of sending a payment is `amount` + `network_fees`.
     pub network_fees: Option<Amount>,
     /// LSP fees paid in a [`PaymentType::Receiving`] payment. Will never be present for
     /// [`PaymentType::Sending`] payments but might be 0 for [`PaymentType::Receiving`] payments.
     /// The amount is only paid if successful.
-    /// The value that is received in practice is given by `amount` - `lsp_fees`.
     pub lsp_fees: Option<Amount>,
     /// An offer a [`PaymentType::Receiving`] payment came from if any.
     pub offer: Option<OfferKind>,

@@ -224,6 +224,7 @@ dictionary Payment {
     PayErrorCode? fail_reason;
     string hash;
     Amount amount;
+    Amount requested_amount;
     InvoiceDetails invoice_details;
     TzTime created_at;
     string description;

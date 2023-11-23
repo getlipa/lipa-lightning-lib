@@ -804,39 +804,46 @@ impl LightningNode {
             }
         };
 
-        let (payment_type, amount, network_fees, lsp_fees) = match breez_payment.payment_type {
-            breez_sdk_core::PaymentType::Sent => (
-                PaymentType::Sending,
-                breez_payment
-                    .amount_msat
-                    .as_msats()
-                    .to_amount_up(&exchange_rate),
-                Some(
-                    breez_payment
-                        .fee_msat
+        let (payment_type, amount, requested_amount, network_fees, lsp_fees) =
+            match breez_payment.payment_type {
+                breez_sdk_core::PaymentType::Sent => (
+                    PaymentType::Sending,
+                    (breez_payment.amount_msat + breez_payment.fee_msat)
                         .as_msats()
                         .to_amount_up(&exchange_rate),
-                ),
-                None,
-            ),
-            breez_sdk_core::PaymentType::Received => (
-                PaymentType::Receiving,
-                breez_payment
-                    .amount_msat
-                    .as_msats()
-                    .to_amount_down(&exchange_rate),
-                None,
-                Some(
                     breez_payment
-                        .fee_msat
+                        .amount_msat
                         .as_msats()
                         .to_amount_up(&exchange_rate),
+                    Some(
+                        breez_payment
+                            .fee_msat
+                            .as_msats()
+                            .to_amount_up(&exchange_rate),
+                    ),
+                    None,
                 ),
-            ),
-            breez_sdk_core::PaymentType::ClosedChannel => permanent_failure!(
-                "Current interface doesn't support PaymentDetails::ClosedChannel"
-            ),
-        };
+                breez_sdk_core::PaymentType::Received => (
+                    PaymentType::Receiving,
+                    (breez_payment.amount_msat - breez_payment.fee_msat)
+                        .as_msats()
+                        .to_amount_down(&exchange_rate),
+                    breez_payment
+                        .amount_msat
+                        .as_msats()
+                        .to_amount_down(&exchange_rate),
+                    None,
+                    Some(
+                        breez_payment
+                            .fee_msat
+                            .as_msats()
+                            .to_amount_up(&exchange_rate),
+                    ),
+                ),
+                breez_sdk_core::PaymentType::ClosedChannel => permanent_failure!(
+                    "Current interface doesn't support PaymentDetails::ClosedChannel"
+                ),
+            };
 
         let payment_state = match breez_payment.status {
             PaymentStatus::Pending => PaymentState::Created,
@@ -866,6 +873,7 @@ impl LightningNode {
             fail_reason: None, // TODO: Request SDK to store and provide reason for failed payments - issue: https://github.com/breez/breez-sdk/issues/626
             hash: payment_details.payment_hash,
             amount,
+            requested_amount,
             invoice_details,
             created_at: time,
             description,
@@ -913,19 +921,21 @@ impl LightningNode {
         let lsp_fees = created_invoice
             .channel_opening_fees
             .map(|f| f.as_msats().to_amount_up(&exchange_rate));
+        let amount = invoice_details
+            .amount
+            .clone()
+            .ok_or_permanent_failure("Locally created invoice doesn't include an amount")?
+            .sats
+            .as_sats()
+            .to_amount_down(&exchange_rate);
 
         Ok(Payment {
             payment_type: PaymentType::Receiving,
             payment_state,
             fail_reason: None,
             hash: invoice_details.payment_hash.clone(),
-            amount: invoice_details
-                .amount
-                .clone()
-                .ok_or_permanent_failure("Locally created invoice doesn't include an amount")?
-                .sats
-                .as_sats()
-                .to_amount_down(&exchange_rate),
+            amount: amount.clone(),
+            requested_amount: amount,
             invoice_details: invoice_details.clone(),
             created_at: time,
             description: invoice_details.description,
@@ -1570,6 +1580,10 @@ mod tests {
                     sats: 0,
                     fiat: None,
                 },
+                requested_amount: Amount {
+                    sats: 0,
+                    fiat: None,
+                },
                 invoice_details: InvoiceDetails {
                     invoice: "bca".to_string(),
                     amount: None,
@@ -1598,6 +1612,10 @@ mod tests {
                 fail_reason: None,
                 hash: "hash2".to_string(),
                 amount: Amount {
+                    sats: 0,
+                    fiat: None,
+                },
+                requested_amount: Amount {
                     sats: 0,
                     fiat: None,
                 },
@@ -1640,6 +1658,10 @@ mod tests {
                 fail_reason: None,
                 hash: "hash3".to_string(),
                 amount: Amount {
+                    sats: 0,
+                    fiat: None,
+                },
+                requested_amount: Amount {
                     sats: 0,
                     fiat: None,
                 },
