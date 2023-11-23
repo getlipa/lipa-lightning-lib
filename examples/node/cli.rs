@@ -801,24 +801,34 @@ fn list_payments(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) ->
             payment_type.bold(),
             payment.created_at.timezone_id
         );
-        println!("      State:        {:?}", payment.payment_state);
+        println!("      State:            {:?}", payment.payment_state);
         if payment.payment_state == PaymentState::Failed {
-            println!("      Fail reason:  {:?}", payment.fail_reason);
+            println!("      Fail reason:      {:?}", payment.fail_reason);
         }
-        println!("      Amount:       {}", amount_to_string(payment.amount));
         println!(
-            "      Network fees: {:?}",
+            "      Amount:           {}",
+            amount_to_string(payment.amount)
+        );
+        println!(
+            "      Requested Amount: {}",
+            amount_to_string(payment.requested_amount)
+        );
+        println!(
+            "      Network fees:     {:?}",
             payment.network_fees.map(amount_to_string)
         );
         println!(
-            "      LSP fees:     {:?}",
+            "      LSP fees:         {:?}",
             payment.lsp_fees.map(amount_to_string)
         );
-        println!("      Hash:         {}", payment.hash);
-        println!("      Preimage:     {:?}", payment.preimage);
-        println!("      Description:  {}", payment.description);
-        println!("      Invoice:      {}", payment.invoice_details.invoice);
-        println!("      Offer:        {}", offer_to_string(payment.offer));
+        println!("      Hash:             {}", payment.hash);
+        println!("      Preimage:         {:?}", payment.preimage);
+        println!("      Description:      {}", payment.description);
+        println!(
+            "      Invoice:          {}",
+            payment.invoice_details.invoice
+        );
+        println!("      Offer:            {}", offer_to_string(payment.offer));
     }
 
     Ok(())
