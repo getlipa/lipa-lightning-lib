@@ -116,14 +116,35 @@ impl Display for LnUrlPayErrorCode {
 pub type LnUrlPayError = perro::Error<LnUrlPayErrorCode>;
 pub type LnUrlPayResult<T> = std::result::Result<T, LnUrlPayError>;
 
+/// A code that specifies the LnUrlWithdrawError that occurred.
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum LnUrlWithdrawErrorCode {
+    /// LNURL server returned an error.
+    LnUrlServerError,
+
+    /// The remote lightning node or LNURL server is not available. Could be a network error.
+    ServiceConnectivity,
+
+    /// An unexpected error occurred.
+    /// This likely is a result of a bug within 3L/Breez SDK and should be reported to lipa.
+    UnexpectedError,
+}
+
+impl Display for LnUrlWithdrawErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+pub type LnUrlWithdrawError = perro::Error<LnUrlWithdrawErrorCode>;
+pub type LnUrlWithdrawResult<T> = std::result::Result<T, LnUrlWithdrawError>;
+
 #[derive(Debug, thiserror::Error)]
 pub enum UnsupportedDataType {
     #[error("Bitcoin on-chain address")]
     BitcoinAddress,
     #[error("LNURL Auth")]
     LnUrlAuth,
-    #[error("LNURL Withdraw")]
-    LnUrlWithdraw,
     #[error("Lightning node id")]
     NodeId,
     #[error("URL")]
@@ -238,6 +259,27 @@ pub(crate) fn map_lnurl_pay_error(error: breez_sdk_core::error::LnUrlPayError) -
         }
         LnUrlPayError::ServiceConnectivity { err } => {
             runtime_error(LnUrlPayErrorCode::ServiceConnectivity, err)
+        }
+    }
+}
+
+pub(crate) fn map_lnurl_withdraw_error(
+    error: breez_sdk_core::error::LnUrlWithdrawError,
+) -> LnUrlWithdrawError {
+    use breez_sdk_core::error::LnUrlWithdrawError;
+    match error {
+        LnUrlWithdrawError::Generic { err } => {
+            runtime_error(LnUrlWithdrawErrorCode::UnexpectedError, err)
+        }
+        LnUrlWithdrawError::InvalidAmount { err } => {
+            invalid_input(format!("Invalid withdraw amount: {err}"))
+        }
+        LnUrlWithdrawError::InvalidInvoice { err } => {
+            permanent_failure(format!("Invalid invoice was created locally: {err}"))
+        }
+        LnUrlWithdrawError::InvalidUri { err } => invalid_input(format!("InvalidUri: {err}")),
+        LnUrlWithdrawError::ServiceConnectivity { err } => {
+            runtime_error(LnUrlWithdrawErrorCode::ServiceConnectivity, err)
         }
     }
 }

@@ -65,6 +65,11 @@ fn test_decoding() {
     let valid_lnurlp = "lightning:LNURL1DP68GURN8GHJ7MRWW4EXCTNXD9SHG6NPVCHXXMMD9AKXUATJDSKHQCTE8AEK2UMND9HKU0FJ89JXXCT989JRGVE3XVMK2ERZXPJX2DECXP3KXV33XQCKVE3C8QMXXD3CVVUXXEPNV3NRWE3HXVUKZWP3XSEX2V3CXEJXGCNRXGUKGUQ0868".to_string();
     let data = node.decode_data(valid_lnurlp).unwrap();
     assert!(matches!(data, DecodedData::LnUrlPay { .. }));
+
+    // LNURL-withdraw from https://lnurl.fiatjaf.com/
+    let valid_lnurlw = "lightning:LNURL1DP68GURN8GHJ7MRWW4EXCTNXD9SHG6NPVCHXXMMD9AKXUATJDSKHW6T5DPJ8YCTH8AEK2UMND9HKU0TZVFNXYDFSXP3RQWRYXP3XYCNYXSUXYD3S893XYVPC8YCX2CN9VYMRYWT9X3JX2WT9V5MNXCFSV4NXGWRYV5EN2ERRVE3XGCFCXSMNYRWM42Q".to_string();
+    let data = node.decode_data(valid_lnurlw).unwrap();
+    assert!(matches!(data, DecodedData::LnUrlWithdraw { .. }));
 }
 
 fn unix_timestamp_to_system_time(timestamp: u64) -> SystemTime {
