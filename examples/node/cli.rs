@@ -764,7 +764,7 @@ fn withdraw_lnurlw(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
         Ok(DecodedData::Bolt11Invoice { .. }) => {
             bail!("A BOLT-11 invoice was provided instead of an LNURL-Withdraw")
         }
-        Err(_) => bail!("Invalid lnurlp"),
+        Err(_) => bail!("Invalid lnurlw"),
     };
 
     let hash = node.withdraw_lnurlw(lnurlw_details.request_data, amount)?;
