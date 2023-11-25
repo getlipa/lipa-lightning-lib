@@ -194,6 +194,7 @@ dictionary InvoiceDetails {
 interface DecodedData {
     Bolt11Invoice(InvoiceDetails invoice_details);
     LnUrlPay(LnUrlPayDetails lnurl_pay_details);
+    LnUrlWithdraw(LnUrlWithdrawDetails lnurl_withdraw_details);
 };
 
 dictionary LnUrlPayDetails {
@@ -210,6 +211,20 @@ dictionary LnUrlPayRequestData {
     u16 comment_allowed;
     string domain;
     string? ln_address;
+};
+
+dictionary LnUrlWithdrawDetails {
+    Amount min_withdrawable;
+    Amount max_withdrawable;
+    LnUrlWithdrawRequestData request_data;
+};
+
+dictionary LnUrlWithdrawRequestData {
+    string callback;
+    string k1;
+    string default_description;
+    u64 min_withdrawable;
+    u64 max_withdrawable;
 };
 
 [Enum]
@@ -481,7 +496,6 @@ enum PayErrorCode {
 enum UnsupportedDataType {
     "BitcoinAddress",
     "LnUrlAuth",
-    "LnUrlWithdraw",
     "NodeId",
     "Url",
 };

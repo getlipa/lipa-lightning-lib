@@ -53,7 +53,10 @@ pub use crate::config::{Config, TzConfig, TzTime};
 use crate::data_store::CreatedInvoice;
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
-use crate::errors::{map_lnurl_pay_error, map_send_payment_error};
+use crate::errors::{
+    map_lnurl_pay_error, map_lnurl_withdraw_error, map_send_payment_error, LnUrlWithdrawErrorCode,
+    LnUrlWithdrawResult,
+};
 pub use crate::errors::{
     DecodeDataError, Error as LnError, LnUrlPayError, LnUrlPayErrorCode, LnUrlPayResult,
     MnemonicError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode, SimpleError,
@@ -67,7 +70,7 @@ use crate::fiat_topup::PocketClient;
 pub use crate::invoice_details::InvoiceDetails;
 use crate::key_derivation::derive_persistence_encryption_key;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
-pub use crate::lnurl::LnUrlPayDetails;
+pub use crate::lnurl::{LnUrlPayDetails, LnUrlWithdrawDetails};
 use crate::locker::Locker;
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
 pub use crate::payment::{Payment, PaymentState, PaymentType};
@@ -84,7 +87,7 @@ use breez_sdk_core::error::ReceiveOnchainError;
 use breez_sdk_core::{
     parse, parse_invoice, BreezServices, GreenlightCredentials, GreenlightNodeConfig, InputType,
     ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
-    LnUrlWithdrawResult, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails,
+    LnUrlWithdrawRequestData, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails,
     PaymentStatus, PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest,
     ReceiveOnchainRequest, RefundRequest, SendPaymentRequest, SweepRequest,
 };
@@ -190,8 +193,15 @@ pub(crate) struct UserPreferences {
 
 /// Decoded data that can be obtained using [`LightningNode::decode_data`].
 pub enum DecodedData {
-    Bolt11Invoice { invoice_details: InvoiceDetails },
-    LnUrlPay { lnurl_pay_details: LnUrlPayDetails },
+    Bolt11Invoice {
+        invoice_details: InvoiceDetails,
+    },
+    LnUrlPay {
+        lnurl_pay_details: LnUrlPayDetails,
+    },
+    LnUrlWithdraw {
+        lnurl_withdraw_details: LnUrlWithdrawDetails,
+    },
 }
 
 const MAX_FEE_PERMYRIAD: u16 = 50;
@@ -551,8 +561,11 @@ impl LightningNode {
             Ok(InputType::LnUrlError { data }) => {
                 Err(DecodeDataError::LnUrlError { msg: data.reason })
             }
-            Ok(InputType::LnUrlWithdraw { .. }) => Err(DecodeDataError::Unsupported {
-                typ: UnsupportedDataType::LnUrlWithdraw,
+            Ok(InputType::LnUrlWithdraw { data }) => Ok(DecodedData::LnUrlWithdraw {
+                lnurl_withdraw_details: LnUrlWithdrawDetails::from_lnurl_withdraw_request_data(
+                    data,
+                    &self.get_exchange_rate(),
+                ),
             }),
             Ok(InputType::NodeId { .. }) => Err(DecodeDataError::Unsupported {
                 typ: UnsupportedDataType::NodeId,
@@ -663,6 +676,39 @@ impl LightningNode {
             breez_sdk_core::LnUrlPayResult::PayError { data } => runtime_error!(
                 LnUrlPayErrorCode::PaymentFailed,
                 "Paying invoice for LNURL pay failed: {}",
+                data.reason
+            ),
+        }?;
+        self.store_payment_info(&payment_hash, None);
+        Ok(payment_hash)
+    }
+
+    /// Withdraw an LNURL-withdraw the provided amount.
+    ///
+    /// Parameters:
+    /// * `lnurl_withdraw_request_data` - LNURL-withdraw request data as obtained from [`LightningNode::decode_data`]
+    /// * `amount_sat` - amount to be withdraw
+    ///
+    /// Returns the payment hash of the payment.
+    pub fn withdraw_lnurlw(
+        &self,
+        lnurl_withdraw_request_data: LnUrlWithdrawRequestData,
+        amount_sat: u64,
+    ) -> LnUrlWithdrawResult<String> {
+        let payment_hash = match self
+            .rt
+            .handle()
+            .block_on(self.sdk.lnurl_withdraw(LnUrlWithdrawRequest {
+                data: lnurl_withdraw_request_data,
+                amount_msat: amount_sat.as_sats().msats,
+                description: Some("LNURL Withdrawal".into()),
+            }))
+            .map_err(map_lnurl_withdraw_error)?
+        {
+            breez_sdk_core::LnUrlWithdrawResult::Ok { data } => Ok(data.invoice.payment_hash),
+            breez_sdk_core::LnUrlWithdrawResult::ErrorStatus { data } => runtime_error!(
+                LnUrlWithdrawErrorCode::LnUrlServerError,
+                "LNURL server returned error: {}",
                 data.reason
             ),
         }?;
@@ -1110,8 +1156,8 @@ impl LightningNode {
                 amount_msat: offer.amount.sats.as_sats().msats,
                 description: None,
             })) {
-            Ok(LnUrlWithdrawResult::Ok { data }) => data.invoice.payment_hash,
-            Ok(LnUrlWithdrawResult::ErrorStatus { data }) => runtime_error!(
+            Ok(breez_sdk_core::LnUrlWithdrawResult::Ok { data }) => data.invoice.payment_hash,
+            Ok(breez_sdk_core::LnUrlWithdrawResult::ErrorStatus { data }) => runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
                 "Failed to withdraw offer due to: {}",
                 data.reason

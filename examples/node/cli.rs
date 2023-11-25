@@ -12,12 +12,12 @@ use rustyline::Editor;
 use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
-use uniffi_lipalightninglib::InvoiceCreationMetadata;
 use uniffi_lipalightninglib::PaymentMetadata;
 use uniffi_lipalightninglib::{
     Amount, DecodedData, ExchangeRate, FiatValue, InvoiceDetails, LightningNode, LiquidityLimit,
     LnUrlPayDetails, MaxRoutingFeeMode, OfferKind, PaymentState, TzConfig,
 };
+use uniffi_lipalightninglib::{InvoiceCreationMetadata, LnUrlWithdrawDetails};
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("{}", "3L Example Node".blue().bold());
@@ -128,6 +128,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 }
                 "paylnurlp" => {
                     if let Err(message) = pay_lnurlp(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
+                "withdrawlnurlw" => {
+                    if let Err(message) = withdraw_lnurlw(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
@@ -248,6 +253,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "paylnurlp <lnurlp> <amount in SAT>",
         "paylnurlp ",
     ));
+    hints.insert(CommandHint::new(
+        "withdrawlnurlw <lnurlw> <amount in SAT>",
+        "withdrawlnurlw ",
+    ));
 
     hints.insert(CommandHint::new("getswapaddress", "getswapaddress"));
     hints.insert(CommandHint::new("listfailedswaps", "listfailedswaps"));
@@ -303,6 +312,7 @@ fn help() {
     println!("  payinvoice <invoice>");
     println!("  payopeninvoice <invoice> <amount in SAT>");
     println!("  paylnurlp <lnurlp> <amount in SAT>");
+    println!("  withdrawlnurlw <lnurlw> <amount in SAT>");
     println!();
     println!("  getswapaddress");
     println!("  listfailedswaps");
@@ -488,6 +498,9 @@ fn decode_data(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
     match node.decode_data(data.to_string())? {
         DecodedData::Bolt11Invoice { invoice_details } => print_invoice_details(invoice_details),
         DecodedData::LnUrlPay { lnurl_pay_details } => print_lnurl_pay_details(lnurl_pay_details),
+        DecodedData::LnUrlWithdraw {
+            lnurl_withdraw_details,
+        } => print_lnurl_withdraw_details(lnurl_withdraw_details),
     }
 
     Ok(())
@@ -541,6 +554,30 @@ fn print_lnurl_pay_details(lnurl_pay_details: LnUrlPayDetails) {
     println!(
         "  LN Address            {:?}",
         lnurl_pay_details.request_data.ln_address
+    );
+}
+
+fn print_lnurl_withdraw_details(lnurl_withdraw_details: LnUrlWithdrawDetails) {
+    println!("LNURL-withdraw details:");
+    println!(
+        "  Callback              {}",
+        lnurl_withdraw_details.request_data.callback
+    );
+    println!(
+        "  Max Withdrawable      {}",
+        amount_to_string(lnurl_withdraw_details.max_withdrawable)
+    );
+    println!(
+        "  Min Withdrawable      {}",
+        amount_to_string(lnurl_withdraw_details.min_withdrawable)
+    );
+    println!(
+        "  K1                    {}",
+        lnurl_withdraw_details.request_data.k1
+    );
+    println!(
+        "  Default Description   {}",
+        lnurl_withdraw_details.request_data.default_description
     );
 }
 
@@ -693,6 +730,9 @@ fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Re
 
     let lnurlp_details = match node.decode_data(lnurlp.into()) {
         Ok(DecodedData::LnUrlPay { lnurl_pay_details }) => lnurl_pay_details,
+        Ok(DecodedData::LnUrlWithdraw { .. }) => {
+            bail!("An LNURL-Withdraw was provided instead of an LNURL-Pay")
+        }
         Ok(DecodedData::Bolt11Invoice { .. }) => {
             bail!("A BOLT-11 invoice was provided instead of an LNURL-pay")
         }
@@ -701,6 +741,34 @@ fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Re
 
     let hash = node.pay_lnurlp(lnurlp_details.request_data, amount)?;
     println!("Started to pay lnurlp - payment hash is {hash}");
+
+    Ok(())
+}
+
+fn withdraw_lnurlw(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let lnurlw = words.next().ok_or(anyhow!("LNURL withdraw is required"))?;
+
+    let amount: u64 = words
+        .next()
+        .ok_or(anyhow!("The withdraw amount in SAT is required"))?
+        .parse()
+        .context("Amount should be a positive integer number")?;
+
+    let lnurlw_details = match node.decode_data(lnurlw.into()) {
+        Ok(DecodedData::LnUrlWithdraw {
+            lnurl_withdraw_details,
+        }) => lnurl_withdraw_details,
+        Ok(DecodedData::LnUrlPay { .. }) => {
+            bail!("An LNURL-Pay was provided instead of an LNURL-Withdraw")
+        }
+        Ok(DecodedData::Bolt11Invoice { .. }) => {
+            bail!("A BOLT-11 invoice was provided instead of an LNURL-Withdraw")
+        }
+        Err(_) => bail!("Invalid lnurlw"),
+    };
+
+    let hash = node.withdraw_lnurlw(lnurlw_details.request_data, amount)?;
+    println!("Started to withdraw lnurlw - payment hash is {hash}");
 
     Ok(())
 }
