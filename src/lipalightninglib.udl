@@ -491,7 +491,6 @@ enum PayErrorCode {
     "RouteTooExpensive",
     "NodeUnavailable",
     "UnexpectedError",
-    "InvalidNetwork",
 };
 
 enum UnsupportedDataType {

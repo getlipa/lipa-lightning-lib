@@ -69,9 +69,6 @@ pub enum PayErrorCode {
     /// An unexpected error occurred.
     /// This likely is a result of a bug within 3L/Breez SDK and should be reported to lipa.
     UnexpectedError,
-
-    /// The invoice is issued for another bitcoin network (e.g. testnet).
-    InvalidNetwork,
 }
 
 impl Display for PayErrorCode {
@@ -231,7 +228,7 @@ pub(crate) fn map_send_payment_error(err: SendPaymentError) -> PayError {
             runtime_error(PayErrorCode::NodeUnavailable, err)
         }
         SendPaymentError::InvalidNetwork { err } => {
-            runtime_error(PayErrorCode::InvalidNetwork, err)
+            invalid_input(format!("Invalid network: {err}"))
         }
     }
 }

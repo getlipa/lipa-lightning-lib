@@ -151,15 +151,15 @@ impl AnalyticsInterceptor {
     pub fn request_succeeded(&self, paid_details: InvoicePaidDetails) {
         let analytics_client = Arc::clone(&self.analytics_client);
 
-        if paid_details.payment.is_none() {
+        let payment = if let Some(payment) = paid_details.payment {
+            payment
+        } else {
             warn!(
                 "Request succeeded without payment data available: {}",
                 paid_details.bolt11
             );
             return;
-        }
-
-        let payment = paid_details.payment.unwrap();
+        };
 
         self.rt_handle.spawn(async move {
             analytics_client
