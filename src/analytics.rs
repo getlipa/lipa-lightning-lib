@@ -8,7 +8,7 @@ use crate::{ExchangeRate, InvoiceDetails, UserPreferences};
 use breez_sdk_core::{
     InvoicePaidDetails, Payment, PaymentDetails, PaymentFailedData, ReceivePaymentResponse,
 };
-use log::{error, info, Level};
+use log::{error, info, warn, Level};
 use parrot::{AnalyticsClient, AnalyticsEvent, PayFailureReason, PaymentSource};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
@@ -148,16 +148,25 @@ impl AnalyticsInterceptor {
         });
     }
 
-    // TODO complete data https://github.com/breez/breez-sdk/pull/593
     pub fn request_succeeded(&self, paid_details: InvoicePaidDetails) {
         let analytics_client = Arc::clone(&self.analytics_client);
+
+        if paid_details.payment.is_none() {
+            warn!(
+                "Request succeeded without payment data available: {}",
+                paid_details.bolt11
+            );
+            return;
+        }
+
+        let payment = paid_details.payment.unwrap();
 
         self.rt_handle.spawn(async move {
             analytics_client
                 .report_event(AnalyticsEvent::RequestSucceeded {
                     payment_hash: paid_details.payment_hash,
-                    paid_amount_sat: 0,
-                    channel_opening_fee_msat: 0,
+                    paid_amount_msat: payment.amount_msat,
+                    channel_opening_fee_msat: payment.fee_msat,
                     received_at: SystemTime::now(),
                 })
                 .await

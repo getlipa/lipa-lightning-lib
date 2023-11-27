@@ -1266,7 +1266,7 @@ impl LightningNode {
             .handle()
             .block_on(self.sdk.prepare_sweep(PrepareSweepRequest {
                 to_address: address.clone(),
-                sats_per_vbyte: onchain_fee_rate as u64,
+                sat_per_vbyte: onchain_fee_rate as u64,
             }))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
@@ -1294,7 +1294,7 @@ impl LightningNode {
             .handle()
             .block_on(self.sdk.sweep(SweepRequest {
                 to_address: sweep_info.address,
-                fee_rate_sats_per_vbyte: sweep_info.onchain_fee_rate,
+                sat_per_vbyte: sweep_info.onchain_fee_rate,
             }))
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to sweep funds")?
             .txid;
