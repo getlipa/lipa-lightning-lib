@@ -61,6 +61,15 @@ fn test_decoding() {
         assert_eq!(invoice_details, expected_invoice_details);
     }
 
+    let testnet_invoice = "lntb10u1pjkvq6mpp5zszjfrehd5y8sq4w47jegjy5xglw3smcfelfkqud56vtq9c48kmsdqqcqzzsxqyz5vqsp5kgjy259sn4t24er4hawcsr9zl9u7vrkdk7a9kcs9ffury0kf50cq9qyyssqept74lw02kkng3cpzqhyrwt542ct6dtfcz7mtesfggt57r5j7djyz7z5de4cyaupehhwyv7ql6yatqe3e4hvnp2lvpvdwxstpy2rnwqq89p90d".to_string();
+    let result = node.decode_data(testnet_invoice);
+    assert!(matches!(
+        result,
+        Err(DecodeDataError::Unsupported {
+            typ: UnsupportedDataType::Network { .. }
+        })
+    ));
+
     // LNURL-pay from https://lnurl.fiatjaf.com/
     let valid_lnurlp = "lightning:LNURL1DP68GURN8GHJ7MRWW4EXCTNXD9SHG6NPVCHXXMMD9AKXUATJDSKHQCTE8AEK2UMND9HKU0FJ89JXXCT989JRGVE3XVMK2ERZXPJX2DECXP3KXV33XQCKVE3C8QMXXD3CVVUXXEPNV3NRWE3HXVUKZWP3XSEX2V3CXEJXGCNRXGUKGUQ0868".to_string();
     let data = node.decode_data(valid_lnurlp).unwrap();
