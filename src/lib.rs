@@ -51,8 +51,8 @@ use crate::backup::BackupManager;
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
 use crate::data_store::CreatedInvoice;
+use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
-use crate::environment::{map_breez_network_into_network, Environment};
 use crate::errors::{
     map_lnurl_pay_error, map_lnurl_withdraw_error, map_send_payment_error, LnUrlWithdrawErrorCode,
     LnUrlWithdrawResult,
@@ -80,7 +80,6 @@ pub use crate::swap::{FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, Sw
 use crate::task_manager::TaskManager;
 use crate::util::unix_timestamp_to_system_time;
 use crate::util::LogIgnoreError;
-use bitcoin::Network;
 use breez_sdk_core::error::LnUrlWithdrawError;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::ReceiveOnchainError;
@@ -546,12 +545,11 @@ impl LightningNode {
     pub fn decode_data(&self, data: String) -> std::result::Result<DecodedData, DecodeDataError> {
         match self.rt.handle().block_on(parse(&data)) {
             Ok(InputType::Bolt11 { invoice }) => {
-                let invoice_network = map_breez_network_into_network(invoice.network);
                 ensure!(
-                    invoice_network == self.environment.network,
+                    invoice.network == self.environment.network,
                     DecodeDataError::Unsupported {
                         typ: UnsupportedDataType::Network {
-                            network: invoice_network.to_string(),
+                            network: invoice.network.to_string(),
                         },
                     }
                 );

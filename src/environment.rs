@@ -1,5 +1,4 @@
-use crate::Network;
-use breez_sdk_core::EnvironmentType;
+use breez_sdk_core::{EnvironmentType, Network};
 
 /// A code of the environment for the node to run.
 #[derive(Clone, Copy, Debug)]
@@ -65,14 +64,5 @@ fn get_backend_base_url(environment: EnvironmentCode) -> &'static str {
         EnvironmentCode::Dev => env!("BACKEND_URL_DEV"),
         EnvironmentCode::Stage => env!("BACKEND_URL_STAGE"),
         EnvironmentCode::Prod => env!("BACKEND_URL_PROD"),
-    }
-}
-
-pub fn map_breez_network_into_network(network: breez_sdk_core::Network) -> Network {
-    match network {
-        breez_sdk_core::Network::Bitcoin => Network::Bitcoin,
-        breez_sdk_core::Network::Testnet => Network::Testnet,
-        breez_sdk_core::Network::Signet => Network::Signet,
-        breez_sdk_core::Network::Regtest => Network::Regtest,
     }
 }
