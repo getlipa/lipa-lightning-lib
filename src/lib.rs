@@ -95,7 +95,7 @@ use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 use data_store::DataStore;
 use email_address::EmailAddress;
-use honey_badger::{Auth, CustomTermsAndConditions};
+use honey_badger::{Auth, TermsAndConditions};
 use iban::Iban;
 use log::{debug, info, Level};
 use logger::init_logger_once;
@@ -1070,7 +1070,7 @@ impl LightningNode {
 
     pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
         self.auth
-            .accept_custom_terms_and_conditions(CustomTermsAndConditions::Pocket)
+            .accept_terms_and_conditions(TermsAndConditions::Pocket)
             .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
     }
 
@@ -1486,7 +1486,7 @@ pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) 
     let environment = Environment::load(environment);
     let seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = build_auth(&seed, environment.backend_url)?;
-    auth.accept_terms_and_conditions()
+    auth.accept_terms_and_conditions(TermsAndConditions::Lipa)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
 

@@ -8,12 +8,12 @@ crate-type = ["lib", "staticlib", "cdylib"]
 name = "uniffi_lipalightninglib"
 
 [dependencies]
-chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.16.2" }
-crow = { git = "https://github.com/getlipa/wild", tag = "v1.16.2" }
-honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.16.2" }
-graphql = { git = "https://github.com/getlipa/wild", tag = "v1.16.2" }
-squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.16.2" }
-parrot = { git = "https://github.com/getlipa/wild", tag = "v1.16.2" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.17.0" }
+crow = { git = "https://github.com/getlipa/wild", tag = "v1.17.0" }
+honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.17.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.17.0" }
+squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.17.0" }
+parrot = { git = "https://github.com/getlipa/wild", tag = "v1.17.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.10" }
