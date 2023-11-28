@@ -105,6 +105,9 @@ pub enum LnUrlPayErrorCode {
     /// An unexpected error occurred.
     /// This likely is a result of a bug within 3L/Breez SDK and should be reported to lipa.
     UnexpectedError,
+
+    /// The invoice is issued for another bitcoin network (e.g. testnet).
+    InvalidNetwork,
 }
 
 impl Display for LnUrlPayErrorCode {
@@ -149,6 +152,8 @@ pub enum UnsupportedDataType {
     NodeId,
     #[error("URL")]
     Url,
+    #[error("Network: {network}")]
+    Network { network: String },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -224,15 +229,15 @@ pub(crate) fn map_send_payment_error(err: SendPaymentError) -> PayError {
         SendPaymentError::ServiceConnectivity { err } => {
             runtime_error(PayErrorCode::NodeUnavailable, err)
         }
+        SendPaymentError::InvalidNetwork { err } => {
+            invalid_input(format!("Invalid network: {err}"))
+        }
     }
 }
 
 pub(crate) fn map_lnurl_pay_error(error: breez_sdk_core::error::LnUrlPayError) -> LnUrlPayError {
     use breez_sdk_core::error::LnUrlPayError;
     match error {
-        LnUrlPayError::AesDecryptionFailed { .. } => {
-            runtime_error(LnUrlPayErrorCode::LnUrlServerError, error)
-        }
         LnUrlPayError::InvalidUri { err } => invalid_input(format!("InvalidUri: {err}")),
         LnUrlPayError::AlreadyPaid => permanent_failure("LNURL pay invoice has been already paid"),
         LnUrlPayError::Generic { err } => runtime_error(LnUrlPayErrorCode::UnexpectedError, err),
@@ -259,6 +264,9 @@ pub(crate) fn map_lnurl_pay_error(error: breez_sdk_core::error::LnUrlPayError) -
         }
         LnUrlPayError::ServiceConnectivity { err } => {
             runtime_error(LnUrlPayErrorCode::ServiceConnectivity, err)
+        }
+        LnUrlPayError::InvalidNetwork { err } => {
+            runtime_error(LnUrlPayErrorCode::InvalidNetwork, err)
         }
     }
 }
