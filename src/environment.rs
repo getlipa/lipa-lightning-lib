@@ -67,3 +67,12 @@ fn get_backend_base_url(environment: EnvironmentCode) -> &'static str {
         EnvironmentCode::Prod => env!("BACKEND_URL_PROD"),
     }
 }
+
+pub fn map_breez_network_into_network(network: breez_sdk_core::Network) -> Network {
+    match network {
+        breez_sdk_core::Network::Bitcoin => Network::Bitcoin,
+        breez_sdk_core::Network::Testnet => Network::Testnet,
+        breez_sdk_core::Network::Signet => Network::Signet,
+        breez_sdk_core::Network::Regtest => Network::Regtest,
+    }
+}

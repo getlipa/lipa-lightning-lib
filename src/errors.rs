@@ -152,6 +152,8 @@ pub enum UnsupportedDataType {
     NodeId,
     #[error("URL")]
     Url,
+    #[error("Network: {network}")]
+    Network { network: String },
 }
 
 #[derive(Debug, thiserror::Error)]

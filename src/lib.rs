@@ -51,8 +51,8 @@ use crate::backup::BackupManager;
 pub use crate::callbacks::EventsCallback;
 pub use crate::config::{Config, TzConfig, TzTime};
 use crate::data_store::CreatedInvoice;
-use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
+use crate::environment::{map_breez_network_into_network, Environment};
 use crate::errors::{
     map_lnurl_pay_error, map_lnurl_withdraw_error, map_send_payment_error, LnUrlWithdrawErrorCode,
     LnUrlWithdrawResult,
@@ -220,6 +220,7 @@ pub struct LightningNode {
     data_store: Arc<Mutex<DataStore>>,
     task_manager: Arc<Mutex<TaskManager>>,
     analytics_interceptor: Arc<AnalyticsInterceptor>,
+    environment: Environment,
 }
 
 impl LightningNode {
@@ -254,7 +255,7 @@ impl LightningNode {
         };
 
         let mut breez_config = BreezServices::default_config(
-            environment.environment_type,
+            environment.environment_type.clone(),
             env!("BREEZ_SDK_API_KEY").to_string(),
             NodeConfig::Greenlight {
                 config: GreenlightNodeConfig {
@@ -339,8 +340,11 @@ impl LightningNode {
 
         let data_store = Arc::new(Mutex::new(DataStore::new(&db_path)?));
 
-        let fiat_topup_client =
-            PocketClient::new(environment.pocket_url, Arc::clone(&sdk), rt.handle())?;
+        let fiat_topup_client = PocketClient::new(
+            environment.pocket_url.clone(),
+            Arc::clone(&sdk),
+            rt.handle(),
+        )?;
 
         let async_auth = Arc::new(build_async_auth(
             &strong_typed_seed,
@@ -385,6 +389,7 @@ impl LightningNode {
             data_store,
             task_manager,
             analytics_interceptor,
+            environment,
         })
     }
 
@@ -540,12 +545,22 @@ impl LightningNode {
     /// Decode a user-provided string (usually obtained from QR-code or pasted).
     pub fn decode_data(&self, data: String) -> std::result::Result<DecodedData, DecodeDataError> {
         match self.rt.handle().block_on(parse(&data)) {
-            Ok(InputType::Bolt11 { invoice }) => Ok(DecodedData::Bolt11Invoice {
-                invoice_details: InvoiceDetails::from_ln_invoice(
-                    invoice,
-                    &self.get_exchange_rate(),
-                ),
-            }),
+            Ok(InputType::Bolt11 { invoice }) => {
+                if map_breez_network_into_network(invoice.network) != self.environment.network {
+                    return Err(DecodeDataError::Unsupported {
+                        typ: UnsupportedDataType::Network {
+                            network: map_breez_network_into_network(invoice.network).to_string(),
+                        },
+                    });
+                }
+
+                Ok(DecodedData::Bolt11Invoice {
+                    invoice_details: InvoiceDetails::from_ln_invoice(
+                        invoice,
+                        &self.get_exchange_rate(),
+                    ),
+                })
+            }
             Ok(InputType::LnUrlPay { data }) => Ok(DecodedData::LnUrlPay {
                 lnurl_pay_details: LnUrlPayDetails::from_lnurl_pay_request_data(
                     data,

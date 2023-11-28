@@ -493,11 +493,13 @@ enum PayErrorCode {
     "UnexpectedError",
 };
 
-enum UnsupportedDataType {
-    "BitcoinAddress",
-    "LnUrlAuth",
-    "NodeId",
-    "Url",
+[Enum]
+interface UnsupportedDataType {
+    BitcoinAddress();
+    LnUrlAuth();
+    NodeId();
+    Url();
+    Network(string network);
 };
 
 [Error]
