@@ -546,13 +546,15 @@ impl LightningNode {
     pub fn decode_data(&self, data: String) -> std::result::Result<DecodedData, DecodeDataError> {
         match self.rt.handle().block_on(parse(&data)) {
             Ok(InputType::Bolt11 { invoice }) => {
-                if map_breez_network_into_network(invoice.network) != self.environment.network {
-                    return Err(DecodeDataError::Unsupported {
+                let invoice_network = map_breez_network_into_network(invoice.network);
+                ensure!(
+                    invoice_network == self.environment.network,
+                    DecodeDataError::Unsupported {
                         typ: UnsupportedDataType::Network {
-                            network: map_breez_network_into_network(invoice.network).to_string(),
+                            network: invoice_network.to_string(),
                         },
-                    });
-                }
+                    }
+                );
 
                 Ok(DecodedData::Bolt11Invoice {
                     invoice_details: InvoiceDetails::from_ln_invoice(
