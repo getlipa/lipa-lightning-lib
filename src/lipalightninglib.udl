@@ -57,6 +57,9 @@ interface LightningNode {
     void accept_pocket_terms_and_conditions();
 
     [Throws=LnError]
+    TermsAndConditionsStatus get_terms_and_conditions_status(TermsAndConditions terms_and_conditions);
+
+    [Throws=LnError]
     FiatTopupInfo register_fiat_topup(string? email, string user_iban, string user_currency);
 
     [Throws=LnError]
@@ -413,6 +416,16 @@ dictionary InvoiceCreationMetadata {
     string request_currency;
 };
 
+enum TermsAndConditions {
+    "Lipa",
+    "Pocket",
+};
+
+dictionary TermsAndConditionsStatus {
+    timestamp? accepted_at;
+    TermsAndConditions terms_and_conditions;
+};
+
 //
 // ----------------------------- TOP LEVEL FUNCTIONS + RELATED DEFINITIONS -----------------------------
 //
@@ -428,6 +441,9 @@ namespace lipalightninglib {
 
     [Throws=LnError]
     void accept_terms_and_conditions(EnvironmentCode environment, bytes seed);
+
+    [Throws=LnError]
+    TermsAndConditionsStatus get_terms_and_conditions_status(EnvironmentCode environment, bytes seed, TermsAndConditions terms_and_conditions);
 
     [Throws=LnError]
     void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path, boolean enable_file_logging);

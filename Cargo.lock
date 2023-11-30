@@ -721,7 +721,7 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.17.0#0e0acc2e9cb17991b5636b4d75c66acb8700d149"
+source = "git+https://github.com/getlipa/wild?branch=feature/terms-conditions-status#ba068064381580da1d877eb08495e98c3862b044"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -891,7 +891,7 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.17.0#0e0acc2e9cb17991b5636b4d75c66acb8700d149"
+source = "git+https://github.com/getlipa/wild?branch=feature/terms-conditions-status#ba068064381580da1d877eb08495e98c3862b044"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -1568,7 +1568,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.17.0#0e0acc2e9cb17991b5636b4d75c66acb8700d149"
+source = "git+https://github.com/getlipa/wild?branch=feature/terms-conditions-status#ba068064381580da1d877eb08495e98c3862b044"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1754,7 +1754,7 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.17.0#0e0acc2e9cb17991b5636b4d75c66acb8700d149"
+source = "git+https://github.com/getlipa/wild?branch=feature/terms-conditions-status#ba068064381580da1d877eb08495e98c3862b044"
 dependencies = [
  "base64 0.21.4",
  "bdk",
@@ -2611,7 +2611,7 @@ dependencies = [
 [[package]]
 name = "parrot"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.17.0#0e0acc2e9cb17991b5636b4d75c66acb8700d149"
+source = "git+https://github.com/getlipa/wild?branch=feature/terms-conditions-status#ba068064381580da1d877eb08495e98c3862b044"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -3623,7 +3623,7 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 [[package]]
 name = "squirrel"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.17.0#0e0acc2e9cb17991b5636b4d75c66acb8700d149"
+source = "git+https://github.com/getlipa/wild?branch=feature/terms-conditions-status#ba068064381580da1d877eb08495e98c3862b044"
 dependencies = [
  "bdk",
  "graphql",
