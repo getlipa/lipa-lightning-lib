@@ -8,6 +8,7 @@ use crate::print_events_handler::PrintEventsHandler;
 use uniffi_lipalightninglib::{mnemonic_to_secret, recover_lightning_node, LightningNode};
 use uniffi_lipalightninglib::{Config, EnvironmentCode, TzConfig};
 
+use log::info;
 use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
@@ -32,7 +33,17 @@ fn main() {
         .read_dir()
         .is_ok_and(|mut d| d.next().is_none())
     {
-        recover_lightning_node(environment, seed.clone(), base_dir.clone(), true).unwrap();
+        if let Err(e) = recover_lightning_node(environment, seed.clone(), base_dir.clone(), true) {
+            match e {
+                perro::Error::RuntimeError {
+                    code: uniffi_lipalightninglib::RuntimeErrorCode::BackupNotFound,
+                    ..
+                } => {
+                    info!("No remote backup found, creating new node");
+                }
+                _ => panic!("Failed to recover node: {:?}", e),
+            };
+        }
     }
 
     let config = Config {
