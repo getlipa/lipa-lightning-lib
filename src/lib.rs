@@ -86,8 +86,8 @@ use breez_sdk_core::{
     parse, parse_invoice, BreezServices, GreenlightCredentials, GreenlightNodeConfig, InputType,
     ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
     LnUrlWithdrawRequestData, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails,
-    PaymentStatus, PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest,
-    ReceiveOnchainRequest, RefundRequest, SendPaymentRequest, SweepRequest,
+    PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest, ReceiveOnchainRequest,
+    RefundRequest, SendPaymentRequest, SweepRequest,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -905,12 +905,6 @@ impl LightningNode {
                 ),
             };
 
-        let payment_state = match breez_payment.status {
-            PaymentStatus::Pending => PaymentState::Created,
-            PaymentStatus::Complete => PaymentState::Succeeded,
-            PaymentStatus::Failed => PaymentState::Failed,
-        };
-
         let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
 
         let description = invoice_details.description.clone();
@@ -929,7 +923,7 @@ impl LightningNode {
 
         Ok(Payment {
             payment_type,
-            payment_state,
+            payment_state: breez_payment.status.into(),
             fail_reason: None, // TODO: Request SDK to store and provide reason for failed payments - issue: https://github.com/breez/breez-sdk/issues/626
             hash: payment_details.payment_hash,
             amount,
