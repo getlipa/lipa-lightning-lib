@@ -28,7 +28,6 @@ mod limits;
 mod lnurl;
 mod locker;
 mod logger;
-mod macros;
 mod migrations;
 mod offer;
 mod payment;
@@ -94,14 +93,14 @@ use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 use data_store::DataStore;
 use email_address::EmailAddress;
-use honey_badger::{Auth, TermsAndConditions};
+use honey_badger::{Auth, TermsAndConditions, TermsAndConditionsStatus};
 use iban::Iban;
 use log::{debug, info, Level};
 use logger::init_logger_once;
 use parrot::AnalyticsClient;
 pub use parrot::PaymentSource;
 use perro::{
-    invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
+    ensure, invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
 use squirrel::RemoteBackupClient;
 use std::cmp::Reverse;
@@ -1072,6 +1071,17 @@ impl LightningNode {
             .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
     }
 
+    /// Similar to [`get_terms_and_conditions_status`] with the difference that this method is pre-filling
+    /// the environment and seed based on the node configuration.
+    pub fn get_terms_and_conditions_status(
+        &self,
+        terms_and_conditions: TermsAndConditions,
+    ) -> Result<TermsAndConditionsStatus> {
+        self.auth
+            .get_terms_and_conditions_status(terms_and_conditions)
+            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
+    }
+
     /// Register for fiat topups. Returns information that can be used by the user to transfer fiat
     /// to the 3rd party exchange service. Once the 3rd party exchange receives funds, the user will
     /// be able to withdraw sats using LNURL-w.
@@ -1485,6 +1495,27 @@ pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) 
     let seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions(TermsAndConditions::Lipa)
+        .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
+}
+
+/// Allows checking if certain terms and conditions have been accepted by the user.
+///
+/// Parameters:
+/// * `environment` - Which environment should be used.
+/// * `seed` - The seed of the wallet.
+/// * `terms_and_conditions` - [`TermsAndConditions`] for which the status should be requested.
+///
+/// Returns the status of the requested [`TermsAndConditions`].
+pub fn get_terms_and_conditions_status(
+    environment: EnvironmentCode,
+    seed: Vec<u8>,
+    terms_and_conditions: TermsAndConditions,
+) -> Result<TermsAndConditionsStatus> {
+    enable_backtrace();
+    let environment = Environment::load(environment);
+    let seed = sanitize_input::strong_type_seed(&seed)?;
+    let auth = build_auth(&seed, environment.backend_url)?;
+    auth.get_terms_and_conditions_status(terms_and_conditions)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
 

@@ -721,7 +721,7 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.17.0#0e0acc2e9cb17991b5636b4d75c66acb8700d149"
+source = "git+https://github.com/getlipa/wild?tag=v1.18.0#21727681934c601cd0af8691367b6bd739fccf83"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -891,7 +891,7 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.17.0#0e0acc2e9cb17991b5636b4d75c66acb8700d149"
+source = "git+https://github.com/getlipa/wild?tag=v1.18.0#21727681934c601cd0af8691367b6bd739fccf83"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -1568,7 +1568,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.17.0#0e0acc2e9cb17991b5636b4d75c66acb8700d149"
+source = "git+https://github.com/getlipa/wild?tag=v1.18.0#21727681934c601cd0af8691367b6bd739fccf83"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1754,7 +1754,7 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.17.0#0e0acc2e9cb17991b5636b4d75c66acb8700d149"
+source = "git+https://github.com/getlipa/wild?tag=v1.18.0#21727681934c601cd0af8691367b6bd739fccf83"
 dependencies = [
  "base64 0.21.4",
  "bdk",
@@ -2611,7 +2611,7 @@ dependencies = [
 [[package]]
 name = "parrot"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.17.0#0e0acc2e9cb17991b5636b4d75c66acb8700d149"
+source = "git+https://github.com/getlipa/wild?tag=v1.18.0#21727681934c601cd0af8691367b6bd739fccf83"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -2656,7 +2656,7 @@ checksum = "3637c05577168127568a64e9dc5a6887da720efef07b3d9472d45f63ab191166"
 [[package]]
 name = "perro"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/perro?tag=v1.1.0#82e886983820147721ae5b2480c5310c36d74891"
+source = "git+https://github.com/getlipa/perro?tag=v1.2.0#802eecac36eff298d5dc40895d168eba06c042d1"
 dependencies = [
  "thiserror",
 ]
@@ -3623,7 +3623,7 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 [[package]]
 name = "squirrel"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.17.0#0e0acc2e9cb17991b5636b4d75c66acb8700d149"
+source = "git+https://github.com/getlipa/wild?tag=v1.18.0#21727681934c601cd0af8691367b6bd739fccf83"
 dependencies = [
  "bdk",
  "graphql",
