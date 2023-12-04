@@ -940,6 +940,7 @@ impl LightningNode {
             lsp_fees,
             offer,
             swap,
+            lightning_address: payment_details.ln_address,
         })
     }
 
@@ -998,6 +999,7 @@ impl LightningNode {
             lsp_fees,
             offer: None,
             swap: None,
+            lightning_address: None,
         })
     }
 
@@ -1691,6 +1693,7 @@ mod tests {
                 lsp_fees: None,
                 offer: None,
                 swap: None,
+                lightning_address: None,
             },
             Payment {
                 payment_type: PaymentType::Receiving,
@@ -1737,6 +1740,7 @@ mod tests {
                     error: None,
                 }),
                 swap: None,
+                lightning_address: None,
             },
             Payment {
                 payment_type: PaymentType::Receiving,
@@ -1783,6 +1787,7 @@ mod tests {
                     error: None,
                 }),
                 swap: None,
+                lightning_address: None,
             },
         ];
 
