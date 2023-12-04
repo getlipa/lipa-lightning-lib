@@ -8,13 +8,13 @@ crate-type = ["lib", "staticlib", "cdylib"]
 name = "uniffi_lipalightninglib"
 
 [dependencies]
-chameleon = { git = "https://github.com/getlipa/wild", branch = "feature/terms-conditions-status" }
-crow = { git = "https://github.com/getlipa/wild", branch = "feature/terms-conditions-status" }
-honey-badger = { git = "https://github.com/getlipa/wild", branch = "feature/terms-conditions-status" }
-graphql = { git = "https://github.com/getlipa/wild", branch = "feature/terms-conditions-status" }
-squirrel = { git = "https://github.com/getlipa/wild", branch = "feature/terms-conditions-status" }
-parrot = { git = "https://github.com/getlipa/wild", branch = "feature/terms-conditions-status" }
-perro = { git = "https://github.com/getlipa/perro", tag = "v1.1.0" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.18.0" }
+crow = { git = "https://github.com/getlipa/wild", tag = "v1.18.0" }
+honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.18.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.18.0" }
+squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.18.0" }
+parrot = { git = "https://github.com/getlipa/wild", tag = "v1.18.0" }
+perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.10" }
 

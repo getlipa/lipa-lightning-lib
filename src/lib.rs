@@ -28,7 +28,6 @@ mod limits;
 mod lnurl;
 mod locker;
 mod logger;
-mod macros;
 mod migrations;
 mod offer;
 mod payment;
@@ -101,7 +100,7 @@ use logger::init_logger_once;
 use parrot::AnalyticsClient;
 pub use parrot::PaymentSource;
 use perro::{
-    invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
+    ensure, invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
 use squirrel::RemoteBackupClient;
 use std::cmp::Reverse;
