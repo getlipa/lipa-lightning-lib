@@ -1,5 +1,7 @@
 use crate::{Amount, InvoiceDetails, OfferKind, PayErrorCode, SwapInfo, TzTime};
 
+use breez_sdk_core::PaymentStatus;
+
 #[derive(PartialEq, Eq, Debug, Clone)]
 #[repr(u8)]
 pub enum PaymentType {
@@ -20,6 +22,16 @@ pub enum PaymentState {
     Retried,
     /// The invoice associated with this payment has expired.
     InvoiceExpired,
+}
+
+impl From<PaymentStatus> for PaymentState {
+    fn from(status: PaymentStatus) -> Self {
+        match status {
+            PaymentStatus::Pending => PaymentState::Created,
+            PaymentStatus::Complete => PaymentState::Succeeded,
+            PaymentStatus::Failed => PaymentState::Failed,
+        }
+    }
 }
 
 /// Information about an incoming or outgoing payment.
