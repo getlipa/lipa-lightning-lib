@@ -244,6 +244,10 @@ impl LightningNode {
             &strong_typed_seed,
             environment.backend_url.clone(),
         )?);
+        let async_auth = Arc::new(build_async_auth(
+            &strong_typed_seed,
+            environment.backend_url.clone(),
+        )?);
 
         let device_cert = env!("BREEZ_SDK_PARTNER_CERTIFICATE").as_bytes().to_vec();
         let device_key = env!("BREEZ_SDK_PARTNER_KEY").as_bytes().to_vec();
@@ -275,7 +279,7 @@ impl LightningNode {
         let analytics_client = AnalyticsClient::new(
             environment.backend_url.clone(),
             derive_analytics_keys(&strong_typed_seed)?,
-            Arc::clone(&auth),
+            Arc::clone(&async_auth),
         );
 
         let analytics_interceptor = Arc::new(AnalyticsInterceptor::new(
@@ -344,10 +348,6 @@ impl LightningNode {
             rt.handle(),
         )?;
 
-        let async_auth = Arc::new(build_async_auth(
-            &strong_typed_seed,
-            environment.backend_url.clone(),
-        )?);
         let backup_client =
             RemoteBackupClient::new(environment.backend_url.clone(), Arc::clone(&async_auth));
         let backup_manager = BackupManager::new(
