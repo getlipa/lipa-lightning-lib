@@ -1,7 +1,7 @@
 # lipa-lightning-lib (3L)
 
-> **Warning**
-> This library is not production ready yet.
+> [!IMPORTANT]
+> The library is in beta.
 
 A Rust library that implements the main lightning logic of the lipa wallet app.
 
@@ -23,6 +23,20 @@ Create `.cargo/config.toml` file with desired values (see `.cargo/config.toml.sa
 
 ***
 # Example 3L node
+
+## Setup
+
+Create a new node:
+```sh
+make testregisternode
+```
+
+Copy the mnemonic and put it into `./.cargo/config.toml` under `BREEZ_SDK_MNEMONIC`.
+
+> [!WARNING]
+> Keep the mnemonic secure and safe, it is your local mainnet wallet.
+
+## Run
 
 To start the example node included in this repository, run:
 ```sh
