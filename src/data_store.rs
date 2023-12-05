@@ -100,7 +100,7 @@ impl DataStore {
             let exchanged_at: DateTime<Utc> = updated_at.into();
             tx.execute(
             "\
-                INSERT INTO offers (payment_hash, pocket_id, fiat_currency, rate, exchanged_at, topup_value_minor_units, exchange_fee_minor_units, exchange_fee_rate_permyriad, error, lightning_payout_fee)\
+                INSERT INTO offers (payment_hash, pocket_id, fiat_currency, rate, exchanged_at, topup_value_minor_units, exchange_fee_minor_units, exchange_fee_rate_permyriad, error, lightning_payout_fee_sats)\
                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)\
                 ",
         (
@@ -130,7 +130,7 @@ impl DataStore {
                 " \
             SELECT timezone_id, timezone_utc_offset_secs, payments.fiat_currency, h.rate, h.updated_at,  \
             o.pocket_id, o.fiat_currency, o.rate, o.exchanged_at, o.topup_value_minor_units, \
-			o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad, o.error, o.lightning_payout_fee \
+			o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad, o.error, o.lightning_payout_fee_sats \
             FROM payments \
             LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snaphot_id=h.snapshot_id \
                 AND payments.fiat_currency=h.fiat_currency \
@@ -405,7 +405,7 @@ fn offer_kind_from_row(row: &Row) -> rusqlite::Result<Option<OfferKind>> {
             let topup_value_minor_units: u64 = row.get(9)?;
             let exchange_fee_minor_units: u64 = row.get(10)?;
             let exchange_fee_rate_permyriad: u16 = row.get(11)?;
-            let lightning_payout_fee: u64 = row.get(13)?;
+            let lightning_payout_fee_sats: u64 = row.get(13)?;
 
             let exchange_rate = ExchangeRate {
                 currency_code: fiat_currency,
@@ -413,11 +413,11 @@ fn offer_kind_from_row(row: &Row) -> rusqlite::Result<Option<OfferKind>> {
                 updated_at: exchanged_at,
             };
 
-            let lightning_payout_fee = if lightning_payout_fee == 0 {
+            let lightning_payout_fee = if lightning_payout_fee_sats == 0 {
                 None
             } else {
                 Some(
-                    lightning_payout_fee
+                    lightning_payout_fee_sats
                         .as_sats()
                         .to_amount_up(&Some(exchange_rate.clone())),
                 )

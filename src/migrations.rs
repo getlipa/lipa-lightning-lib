@@ -89,7 +89,7 @@ const MIGRATION_06_PAYMENT_CHANNEL_OPENING_FEES: &str = "
 ";
 
 const MIGRATION_07_OFFER_LIGHTNING_PAYOUT_FEE: &str = "
-    ALTER TABLE offers ADD COLUMN lightning_payout_fee INTEGER;
+    ALTER TABLE offers ADD COLUMN lightning_payout_fee_sats INTEGER;
 ";
 
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
