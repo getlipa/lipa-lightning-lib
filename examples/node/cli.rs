@@ -161,6 +161,10 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "listlightningaddresses" => match node.list_lightning_addresses() {
+                    Ok(list) => println!("{}", list.join("\n")),
+                    Err(message) => eprintln!("{}", format!("{message:#}").red()),
+                },
                 "paymentuuid" => match payment_uuid(node, &mut words) {
                     Ok(uuid) => println!("{uuid}"),
                     Err(message) => eprintln!("{}", format!("{message:#}").red()),
@@ -278,6 +282,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "listpayments ",
     ));
     hints.insert(CommandHint::new(
+        "listlightningaddresses",
+        "listlightningaddresses",
+    ));
+    hints.insert(CommandHint::new(
         "paymentuuid <payment hash>",
         "paymentuuid",
     ));
@@ -324,6 +332,7 @@ fn help() {
     println!("  listoffers");
     println!();
     println!("  listpayments");
+    println!("  listlightningaddresses");
     println!("  paymentuuid <payment hash>");
     println!();
     println!("  sweep <address>");
