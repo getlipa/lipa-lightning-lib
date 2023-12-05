@@ -88,6 +88,10 @@ const MIGRATION_06_PAYMENT_CHANNEL_OPENING_FEES: &str = "
     ALTER TABLE created_invoices ADD COLUMN channel_opening_fees INTEGER
 ";
 
+const MIGRATION_07_OFFER_LIGHTNING_PAYOUT_FEE: &str = "
+    ALTER TABLE offers ADD COLUMN lightning_payout_fee INTEGER;
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -102,6 +106,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_04_CREATED_INVOICES),
         M::up(MIGRATION_05_FIAT_TOPUP_INFO),
         M::up(MIGRATION_06_PAYMENT_CHANNEL_OPENING_FEES),
+        M::up(MIGRATION_07_OFFER_LIGHTNING_PAYOUT_FEE),
     ])
 }
 
