@@ -70,6 +70,16 @@ fn test_decoding() {
         })
     ));
 
+    let lightning_address = "fiatjaf@zbd.gg".to_string();
+    let data = node.decode_data(lightning_address).unwrap();
+    assert!(matches!(data, DecodedData::LnUrlPay { .. }));
+    if let DecodedData::LnUrlPay { lnurl_pay_details } = data {
+        assert_eq!(
+            lnurl_pay_details.request_data.ln_address,
+            Some("fiatjaf@zbd.gg".to_string())
+        );
+    }
+
     // LNURL-pay from https://lnurl.fiatjaf.com/
     let valid_lnurlp = "lightning:LNURL1DP68GURN8GHJ7MRWW4EXCTNXD9SHG6NPVCHXXMMD9AKXUATJDSKHQCTE8AEK2UMND9HKU0FJ89JXXCT989JRGVE3XVMK2ERZXPJX2DECXP3KXV33XQCKVE3C8QMXXD3CVVUXXEPNV3NRWE3HXVUKZWP3XSEX2V3CXEJXGCNRXGUKGUQ0868".to_string();
     let data = node.decode_data(valid_lnurlp).unwrap();

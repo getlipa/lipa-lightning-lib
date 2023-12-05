@@ -65,4 +65,6 @@ pub struct Payment {
     pub offer: Option<OfferKind>,
     /// The swap information of a [`PaymentType::Receiving`] payment if triggered by a swap.
     pub swap: Option<SwapInfo>,
+    /// A lightning address the payment has been sent to.
+    pub lightning_address: Option<String>,
 }

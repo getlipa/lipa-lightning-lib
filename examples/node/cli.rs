@@ -897,6 +897,8 @@ fn list_payments(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) ->
             payment.invoice_details.invoice
         );
         println!("      Offer:            {}", offer_to_string(payment.offer));
+        println!("      Swap:             {:?}", payment.swap);
+        println!("     Lightning Address: {:?}", payment.lightning_address);
     }
 
     Ok(())

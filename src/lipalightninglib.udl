@@ -251,6 +251,7 @@ dictionary Payment {
     Amount? lsp_fees;
     OfferKind? offer;
     SwapInfo? swap;
+    string? lightning_address;
 };
 
 enum PaymentType {
