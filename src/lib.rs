@@ -697,6 +697,39 @@ impl LightningNode {
         Ok(payment_hash)
     }
 
+    /// List lightning addresses from the most recent used.
+    ///
+    /// Returns a list of lightning addresses.
+    pub fn list_lightning_addresses(&self) -> Result<Vec<String>> {
+        let list_payments_request = ListPaymentsRequest {
+            filters: Some(vec![PaymentTypeFilter::Sent]),
+            from_timestamp: None,
+            to_timestamp: None,
+            include_failures: Some(true),
+            limit: None,
+            offset: None,
+        };
+        let to_lightning_address = |p: breez_sdk_core::Payment| match p.details {
+            PaymentDetails::Ln { data } => match data.ln_address {
+                Some(lightning_address) => Some((lightning_address, -p.payment_time)),
+                None => None,
+            },
+            _ => None,
+        };
+        let mut lightning_addresses = self
+            .rt
+            .handle()
+            .block_on(self.sdk.list_payments(list_payments_request))
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
+            .into_iter()
+            .flat_map(to_lightning_address)
+            .collect::<Vec<_>>();
+        lightning_addresses.sort();
+        lightning_addresses.dedup_by_key(|p| p.0.clone());
+        lightning_addresses.sort_by_key(|p| p.1);
+        Ok(lightning_addresses.into_iter().map(|p| p.0).collect())
+    }
+
     /// Withdraw an LNURL-withdraw the provided amount.
     ///
     /// Parameters:
