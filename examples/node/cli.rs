@@ -821,25 +821,23 @@ fn list_offers(node: &LightningNode) -> Result<()> {
                 topup_value_minor_units,
                 exchange_fee_minor_units,
                 exchange_fee_rate_permyriad,
-                lightning_payout_fee,
                 error,
             } => {
                 println!("                   ID:    {id}");
                 println!(
-                    "      Value exchanged:     {:.2} {}",
+                    "      Value exchanged:    {:.2} {}",
                     topup_value_minor_units as f64 / 100f64,
                     exchange_rate.currency_code,
                 );
                 println!(
-                    "      Exchange fee rate:   {}%",
+                    "      Exchange fee rate:  {}%",
                     exchange_fee_rate_permyriad as f64 / 100_f64
                 );
                 println!(
-                    "      Exchange fee value:  {:.2} {}",
+                    "      Exchange fee value: {:.2} {}",
                     exchange_fee_minor_units as f64 / 100f64,
                     exchange_rate.currency_code,
                 );
-                println!("      Lightning fee value: {:?}", lightning_payout_fee,);
                 let exchanged_at: DateTime<Utc> = exchange_rate.updated_at.into();
                 println!(
                     "             Exchange at: {}",
@@ -851,7 +849,7 @@ fn list_offers(node: &LightningNode) -> Result<()> {
                 }
             }
         }
-        println!("      Status:              {:?}", offer.status);
+        println!("      Status:             {:?}", offer.status);
         println!();
     }
 
