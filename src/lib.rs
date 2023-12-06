@@ -1506,6 +1506,12 @@ impl LightningNode {
     ///
     /// Throws an error in case that the necessary information can't be retrieved.
     pub fn log_debug_info(&self) -> Result<()> {
+        let available_lsps = self
+            .rt
+            .handle()
+            .block_on(self.sdk.list_lsps())
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Couldn't list lsps")?;
+
         let peers = self
             .rt
             .handle()
@@ -1526,6 +1532,7 @@ impl LightningNode {
 
         info!("List of peers:\n{}", peers);
         info!("List of peer channels:\n{}", peer_channels);
+        info!("List of available lsps:\n{:?}", available_lsps);
 
         Ok(())
     }
