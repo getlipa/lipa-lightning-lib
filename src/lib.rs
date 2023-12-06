@@ -89,7 +89,7 @@ use breez_sdk_core::{
     PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest, ReceiveOnchainRequest,
     RefundRequest, SendPaymentRequest, SweepRequest,
 };
-use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
+use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo, TopupStatus};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 use data_store::DataStore;
 use email_address::EmailAddress;
@@ -1173,12 +1173,34 @@ impl LightningNode {
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
         let rate = self.get_exchange_rate();
         let latest_payments = self.get_latest_payments(5)?;
-        Ok(
-            filter_out_recently_claimed_topups(topup_infos, latest_payments)
-                .into_iter()
-                .map(|topup_info| OfferInfo::from(topup_info, &rate))
-                .collect(),
-        )
+        filter_out_recently_claimed_topups(topup_infos, latest_payments)
+            .into_iter()
+            .map(|topup_info| {
+                let max_withdrawable = match topup_info.status {
+                    TopupStatus::REFUNDED => None,
+                    _ => Some(
+                        match self.rt.handle().block_on(parse(
+                            &topup_info.lnurlw.clone().ok_or_permanent_failure(
+                                "Uncompleted offer didn't include an lnurlw",
+                            )?,
+                        )) {
+                            Ok(InputType::LnUrlWithdraw { data }) => data,
+                            Ok(input_type) => {
+                                permanent_failure!(
+                            "Invalid input type LNURLw in uncompleted offer: {input_type:?}"
+                        )
+                            }
+                            Err(err) => {
+                                permanent_failure!("Invalid LNURLw in uncompleted offer: {err}")
+                            }
+                        }
+                        .max_withdrawable,
+                    ),
+                };
+
+                Ok(OfferInfo::from(topup_info, max_withdrawable, &rate))
+            })
+            .collect()
     }
 
     /// Request to collect the offer (e.g. a Pocket topup).
@@ -1770,6 +1792,7 @@ mod tests {
                     topup_value_minor_units: 0,
                     exchange_fee_minor_units: 0,
                     exchange_fee_rate_permyriad: 0,
+                    lightning_payout_fee: None,
                     error: None,
                 }),
                 swap: None,
@@ -1817,6 +1840,7 @@ mod tests {
                     topup_value_minor_units: 0,
                     exchange_fee_minor_units: 0,
                     exchange_fee_rate_permyriad: 0,
+                    lightning_payout_fee: None,
                     error: None,
                 }),
                 swap: None,

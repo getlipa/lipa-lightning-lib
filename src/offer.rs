@@ -33,6 +33,8 @@ pub enum OfferKind {
         exchange_fee_minor_units: u64,
         /// The rate of the fee expressed in permyriad (e.g. 1.5% would be 150)
         exchange_fee_rate_permyriad: u16,
+        /// Optional payout fees collected by pocket.
+        lightning_payout_fee: Option<Amount>,
         /// The optional error that might have occurred in the offer withdrawal process
         error: Option<PocketOfferError>,
     },
@@ -56,7 +58,11 @@ pub struct OfferInfo {
 }
 
 impl OfferInfo {
-    pub(crate) fn from(topup_info: TopupInfo, current_rate: &Option<ExchangeRate>) -> OfferInfo {
+    pub(crate) fn from(
+        topup_info: TopupInfo,
+        max_withdrawable: Option<u64>,
+        current_rate: &Option<ExchangeRate>,
+    ) -> OfferInfo {
         let exchange_rate = ExchangeRate {
             currency_code: topup_info.exchange_rate.currency_code,
             rate: topup_info.exchange_rate.sats_per_unit,
@@ -70,6 +76,12 @@ impl OfferInfo {
             TopupStatus::SETTLED => OfferStatus::SETTLED,
         };
 
+        let lightning_payout_fee = max_withdrawable.map(|m| {
+            (topup_info.amount_sat.as_sats().msats - m)
+                .as_msats()
+                .to_amount_up(current_rate)
+        });
+
         OfferInfo {
             offer_kind: OfferKind::Pocket {
                 id: topup_info.id,
@@ -77,6 +89,7 @@ impl OfferInfo {
                 topup_value_minor_units: topup_info.topup_value_minor_units,
                 exchange_fee_minor_units: topup_info.exchange_fee_minor_units,
                 exchange_fee_rate_permyriad: topup_info.exchange_fee_rate_permyriad,
+                lightning_payout_fee,
                 error: topup_info.error,
             },
             amount: topup_info.amount_sat.as_sats().to_amount_down(current_rate),
