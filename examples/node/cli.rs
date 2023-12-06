@@ -5,6 +5,8 @@ use chrono::offset::FixedOffset;
 use chrono::{DateTime, Local, Utc};
 use colored::Colorize;
 use parrot::PaymentSource;
+use qrcode::render::unicode;
+use qrcode::QrCode;
 use rustyline::config::{Builder, CompletionType};
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -498,6 +500,11 @@ fn create_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -
         },
     )?;
     println!("{}", invoice_details.invoice);
+
+    let code = QrCode::new(invoice_details.invoice.to_uppercase())?;
+    let code = code.render::<unicode::Dense1x2>().build();
+    println!("{code}");
+
     Ok(())
 }
 

@@ -728,6 +728,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "checked_int_cast"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17cc5e6b5ab06331c33589842070416baa137e8b0eb912b008cfd4a78ada7919"
+
+[[package]]
 name = "chrono"
 version = "0.4.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1510,7 +1516,7 @@ dependencies = [
  "async-trait",
  "base64 0.21.4",
  "bech32",
- "bitcoin 0.29.2",
+ "bitcoin 0.30.1",
  "bytes",
  "chacha20poly1305",
  "cln-grpc",
@@ -2164,6 +2170,7 @@ dependencies = [
  "num_enum",
  "parrot",
  "perro",
+ "qrcode",
  "rand",
  "reqwest",
  "rusqlite",
@@ -2855,6 +2862,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213622a1460818959ac1181aaeb2dc9c7f63df720db7d788b3e24eacd1983e13"
 dependencies = [
  "prost",
+]
+
+[[package]]
+name = "qrcode"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16d2f1455f3630c6e5107b4f2b94e74d76dea80736de0981fd27644216cff57f"
+dependencies = [
+ "checked_int_cast",
 ]
 
 [[package]]
