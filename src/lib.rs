@@ -1512,6 +1512,15 @@ impl LightningNode {
             .block_on(self.sdk.list_lsps())
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Couldn't list lsps")?;
 
+        let connected_lsp = self
+            .rt
+            .handle()
+            .block_on(self.sdk.lsp_id())
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to get current lsp id",
+            )?;
+
         let peers = self
             .rt
             .handle()
@@ -1533,7 +1542,10 @@ impl LightningNode {
         info!("List of peers:\n{}", peers);
         info!("List of peer channels:\n{}", peer_channels);
         info!("List of available lsps:\n{:?}", available_lsps);
-
+        info!(
+            "Connected lsp id:\n{}",
+            connected_lsp.unwrap_or("<no connection>".to_string())
+        );
         Ok(())
     }
 
