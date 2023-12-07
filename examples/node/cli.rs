@@ -14,12 +14,12 @@ use rustyline::Editor;
 use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
-use uniffi_lipalightninglib::PaymentMetadata;
 use uniffi_lipalightninglib::{
     Amount, DecodedData, ExchangeRate, FiatValue, InvoiceDetails, LightningNode, LiquidityLimit,
     LnUrlPayDetails, MaxRoutingFeeMode, OfferKind, PaymentState, TzConfig,
 };
 use uniffi_lipalightninglib::{InvoiceCreationMetadata, LnUrlWithdrawDetails};
+use uniffi_lipalightninglib::{OfferInfo, PaymentMetadata};
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("{}", "3L Example Node".blue().bold());
@@ -158,6 +158,45 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "calculatelightningpayoutfee" => {
+                    let offer_id = words
+                        .next()
+                        .ok_or_else(|| "<offer id> is required".to_string());
+
+                    let offer_id = match offer_id {
+                        Ok(o) => o.to_string(),
+                        Err(e) => {
+                            println!("{}", e.red());
+                            return;
+                        }
+                    };
+
+                    let uncompleted_offers = node.query_uncompleted_offers().unwrap_or_else(|e| {
+                        println!("Couldn't fetch uncompleted offers: {e:?}");
+                        vec![]
+                    });
+
+                    let offer: Vec<OfferInfo> = uncompleted_offers
+                        .into_iter()
+                        .filter(|o| match &o.offer_kind {
+                            OfferKind::Pocket { id, .. } => id == &offer_id,
+                        })
+                        .collect();
+
+                    match offer.into_iter().next() {
+                        Some(o) => {
+                            if let Err(message) = calculate_lightning_payout_fee(node, o) {
+                                println!("{}", format!("{message:#}").red());
+                            }
+                        }
+                        None => {
+                            println!(
+                                "{}",
+                                format!("Couldn't find offer with id: {offer_id}").red()
+                            );
+                        }
+                    }
+                }
                 "listpayments" => {
                     if let Err(message) = list_payments(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
@@ -278,6 +317,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("resettopup", "resettopup"));
     hints.insert(CommandHint::new("getregisteredtopup", "getregisteredtopup"));
     hints.insert(CommandHint::new("listoffers", "listoffers"));
+    hints.insert(CommandHint::new(
+        "calculatelightningpayoutfee <offer id>",
+        "calculatelightningpayoutfee",
+    ));
 
     hints.insert(CommandHint::new(
         "listpayments [number of payments = 2]",
@@ -332,6 +375,7 @@ fn help() {
     println!("  resettopup");
     println!("  getregisteredtopup");
     println!("  listoffers");
+    println!("  calculatelightningpayoutfee <offer id>");
     println!();
     println!("  listpayments");
     println!("  listlightningaddresses");
@@ -829,6 +873,7 @@ fn list_offers(node: &LightningNode) -> Result<()> {
                 exchange_fee_minor_units,
                 exchange_fee_rate_permyriad,
                 error,
+                ..
             } => {
                 println!("                   ID:    {id}");
                 println!(
@@ -980,6 +1025,16 @@ fn amount_to_string(amount: Amount) -> String {
 fn get_registered_topup(node: &LightningNode) -> Result<()> {
     let topup_info = node.retrieve_latest_fiat_topup_info()?;
     println!("{topup_info:?}");
+
+    Ok(())
+}
+
+fn calculate_lightning_payout_fee(node: &LightningNode, offer: OfferInfo) -> Result<()> {
+    let lightning_payout_fee = node.calculate_lightning_payout_fee(offer)?;
+    println!(
+        "Lightning payout fee: {}",
+        amount_to_string(lightning_payout_fee)
+    );
 
     Ok(())
 }

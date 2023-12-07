@@ -1200,6 +1200,39 @@ impl LightningNode {
         )
     }
 
+    /// Calculates the lightning payout fee for an uncompleted offer.
+    ///
+    /// Parameters:
+    /// * `offer` - An uncompleted offer for which the lightning payout fee should get calculated.
+    pub fn calculate_lightning_payout_fee(&self, offer: OfferInfo) -> Result<Amount> {
+        if offer.status == OfferStatus::REFUNDED || offer.status == OfferStatus::SETTLED {
+            invalid_input!("Provided offer is already completed: {:?}", offer)
+        }
+
+        let max_withdrawable = match self.rt.handle().block_on(parse(
+            &offer
+                .lnurlw
+                .ok_or_permanent_failure("Uncompleted offer didn't include an lnurlw")?,
+        )) {
+            Ok(InputType::LnUrlWithdraw { data }) => data,
+            Ok(input_type) => {
+                permanent_failure!("Invalid input type LNURLw in uncompleted offer: {input_type:?}")
+            }
+            Err(err) => {
+                permanent_failure!("Invalid LNURLw in uncompleted offer: {err}")
+            }
+        }
+        .max_withdrawable;
+
+        let exchange_rate = self.get_exchange_rate();
+
+        Ok(
+            (offer.amount.sats * 1_000 - max_withdrawable.as_msats().msats)
+                .as_msats()
+                .to_amount_up(&exchange_rate),
+        )
+    }
+
     /// Request to collect the offer (e.g. a Pocket topup).
     /// A payment hash will be returned to track incoming payment.
     /// The offer collection might be considered successful once
@@ -1254,7 +1287,15 @@ impl LightningNode {
             ),
         };
 
-        self.store_payment_info(&hash, Some(offer.offer_kind));
+        let mut offer_kind = offer.offer_kind.clone();
+        match offer_kind {
+            OfferKind::Pocket {
+                ref mut lightning_payout_fee,
+                ..
+            } => *lightning_payout_fee = Some(1_u64.as_sats().to_amount_up(&None)),
+        }
+
+        self.store_payment_info(&hash, Some(offer_kind));
 
         Ok(hash)
     }
@@ -1823,6 +1864,7 @@ mod tests {
                     topup_value_minor_units: 0,
                     exchange_fee_minor_units: 0,
                     exchange_fee_rate_permyriad: 0,
+                    lightning_payout_fee: None,
                     error: None,
                 }),
                 swap: None,
@@ -1870,6 +1912,7 @@ mod tests {
                     topup_value_minor_units: 0,
                     exchange_fee_minor_units: 0,
                     exchange_fee_rate_permyriad: 0,
+                    lightning_payout_fee: None,
                     error: None,
                 }),
                 swap: None,

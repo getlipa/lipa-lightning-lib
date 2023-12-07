@@ -92,6 +92,10 @@ const MIGRATION_07_RESET_FUND_MIGRATION_STATUS: &str = "
     INSERT INTO funds_migration_status (status) VALUES (0);
 ";
 
+const MIGRATION_08_OFFER_LIGHTNING_PAYOUT_FEE: &str = "
+    ALTER TABLE offers ADD COLUMN lightning_payout_fee_sats INTEGER;
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -107,6 +111,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_05_FIAT_TOPUP_INFO),
         M::up(MIGRATION_06_PAYMENT_CHANNEL_OPENING_FEES),
         M::up(MIGRATION_07_RESET_FUND_MIGRATION_STATUS),
+        M::up(MIGRATION_08_OFFER_LIGHTNING_PAYOUT_FEE),
     ])
 }
 

@@ -5,7 +5,7 @@ use crate::PocketOfferError;
 use crow::{TopupInfo, TopupStatus};
 use std::time::SystemTime;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum OfferStatus {
     READY,
     /// Claiming the offer failed, but it can be retried.
@@ -33,6 +33,8 @@ pub enum OfferKind {
         exchange_fee_minor_units: u64,
         /// The rate of the fee expressed in permyriad (e.g. 1.5% would be 150)
         exchange_fee_rate_permyriad: u16,
+        /// Optional payout fees collected by pocket.
+        lightning_payout_fee: Option<Amount>,
         /// The optional error that might have occurred in the offer withdrawal process
         error: Option<PocketOfferError>,
     },
@@ -77,6 +79,7 @@ impl OfferInfo {
                 topup_value_minor_units: topup_info.topup_value_minor_units,
                 exchange_fee_minor_units: topup_info.exchange_fee_minor_units,
                 exchange_fee_rate_permyriad: topup_info.exchange_fee_rate_permyriad,
+                lightning_payout_fee: None,
                 error: topup_info.error,
             },
             amount: topup_info.amount_sat.as_sats().to_amount_down(current_rate),
