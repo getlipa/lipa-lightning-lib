@@ -183,6 +183,11 @@ pub struct SweepInfo {
     pub onchain_fee_sat: Amount,
 }
 
+pub struct SweepResponse {
+    pub txid: String,
+    pub created_at: TzTime,
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub(crate) struct UserPreferences {
     fiat_currency: String,
@@ -1341,8 +1346,8 @@ impl LightningNode {
     /// Parameters:
     /// * `sweep_info` - a prepared sweep info that can be obtained using [`LightningNode::prepare_sweep`]
     ///
-    /// Returns the txid of the sweep transaction.
-    pub fn sweep(&self, sweep_info: SweepInfo) -> Result<String> {
+    /// Returns the txid of the sweep transaction and the timestamp when the sweep was requested.
+    pub fn sweep(&self, sweep_info: SweepInfo) -> Result<SweepResponse> {
         let txid = self
             .rt
             .handle()
@@ -1352,7 +1357,16 @@ impl LightningNode {
             }))
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to sweep funds")?
             .txid;
-        Ok(hex::encode(txid))
+
+        let user_preferences = self.user_preferences.lock_unwrap();
+        Ok(SweepResponse {
+            txid: hex::encode(txid),
+            created_at: TzTime {
+                time: SystemTime::now(),
+                timezone_id: user_preferences.timezone_config.timezone_id.clone(),
+                timezone_utc_offset_secs: user_preferences.timezone_config.timezone_utc_offset_secs,
+            },
+        })
     }
 
     /// Generates a Bitcoin on-chain address that can be used to topup the local LN wallet from an

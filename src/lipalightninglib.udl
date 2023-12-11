@@ -89,7 +89,7 @@ interface LightningNode {
     SweepInfo prepare_sweep(string address, u32 onchain_fee_rate);
 
     [Throws=LnError]
-    string sweep(SweepInfo sweep_info);
+    SweepResponse sweep(SweepInfo sweep_info);
 
     [Throws=SwapError]
     SwapAddressInfo generate_swap_address(OpeningFeeParams? lsp_fee_params);
@@ -376,6 +376,11 @@ dictionary SweepInfo {
     string address;
     u32 onchain_fee_rate;
     Amount onchain_fee_sat;
+};
+
+dictionary SweepResponse {
+    string txid;
+    TzTime created_at;
 };
 
 dictionary SwapAddressInfo {

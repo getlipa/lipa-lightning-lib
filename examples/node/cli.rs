@@ -14,12 +14,12 @@ use rustyline::Editor;
 use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
-use uniffi_lipalightninglib::PaymentMetadata;
 use uniffi_lipalightninglib::{
     Amount, DecodedData, ExchangeRate, FiatValue, InvoiceDetails, LightningNode, LiquidityLimit,
     LnUrlPayDetails, MaxRoutingFeeMode, OfferKind, PaymentState, TzConfig,
 };
 use uniffi_lipalightninglib::{InvoiceCreationMetadata, LnUrlWithdrawDetails};
+use uniffi_lipalightninglib::{PaymentMetadata, SweepResponse};
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("{}", "3L Example Node".blue().bold());
@@ -184,9 +184,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         }
                     };
                     match sweep(node, address.clone()) {
-                        Ok(txid) => {
+                        Ok(response) => {
+                            let created_at: DateTime<Local> = response.created_at.time.into();
                             println!();
-                            println!("Transaction Id: {}", txid);
+                            println!("Transaction Id: {}", response.txid);
+                            println!("Created at:   : {}", created_at);
                             println!("Payout address: {}", address)
                         }
                         Err(message) => println!("{}", format!("{message:#}").red()),
@@ -925,7 +927,7 @@ fn payment_uuid(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
     Ok(node.get_payment_uuid(payment_hash.to_string())?)
 }
 
-fn sweep(node: &LightningNode, address: String) -> Result<String> {
+fn sweep(node: &LightningNode, address: String) -> Result<SweepResponse> {
     let fee_rate = node.query_onchain_fee_rate()?;
     let sweep_info = node.prepare_sweep(address, fee_rate)?;
     Ok(node.sweep(sweep_info)?)
