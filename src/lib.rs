@@ -79,15 +79,16 @@ pub use crate::swap::{FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, Sw
 use crate::task_manager::TaskManager;
 use crate::util::unix_timestamp_to_system_time;
 use crate::util::LogIgnoreError;
-use breez_sdk_core::error::LnUrlWithdrawError;
+
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
-use breez_sdk_core::error::ReceiveOnchainError;
+use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 use breez_sdk_core::{
     parse, parse_invoice, BreezServices, GreenlightCredentials, GreenlightNodeConfig, InputType,
     ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
     LnUrlWithdrawRequestData, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails,
     PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest, ReceiveOnchainRequest,
-    RefundRequest, SendPaymentRequest, SweepRequest,
+    RefundRequest, ReportIssueRequest, ReportPaymentFailureDetails, SendPaymentRequest,
+    SweepRequest,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -649,13 +650,27 @@ impl LightningNode {
             self.get_exchange_rate(),
         );
 
-        self.rt
+        let result = self
+            .rt
             .handle()
             .block_on(self.sdk.send_payment(SendPaymentRequest {
                 bolt11: invoice_details.invoice,
                 amount_msat,
-            }))
-            .map_err(map_send_payment_error)?;
+            }));
+
+        if matches!(
+            result,
+            Err(SendPaymentError::Generic { .. }
+                | SendPaymentError::PaymentFailed { .. }
+                | SendPaymentError::PaymentTimeout { .. }
+                | SendPaymentError::RouteNotFound { .. }
+                | SendPaymentError::RouteTooExpensive { .. }
+                | SendPaymentError::ServiceConnectivity { .. })
+        ) {
+            self.report_issue(invoice_details.payment_hash);
+        }
+
+        result.map_err(map_send_payment_error)?;
         Ok(())
     }
 
@@ -687,11 +702,14 @@ impl LightningNode {
                 "LNURL server returned error: {}",
                 data.reason
             ),
-            breez_sdk_core::LnUrlPayResult::PayError { data } => runtime_error!(
-                LnUrlPayErrorCode::PaymentFailed,
-                "Paying invoice for LNURL pay failed: {}",
-                data.reason
-            ),
+            breez_sdk_core::LnUrlPayResult::PayError { data } => {
+                self.report_issue(data.payment_hash);
+                runtime_error!(
+                    LnUrlPayErrorCode::PaymentFailed,
+                    "Paying invoice for LNURL pay failed: {}",
+                    data.reason
+                )
+            }
         }?;
         self.store_payment_info(&payment_hash, None);
         Ok(payment_hash)
@@ -1532,6 +1550,19 @@ impl LightningNode {
         self.data_store
             .lock_unwrap()
             .retrieve_latest_fiat_topup_info()
+    }
+
+    fn report_issue(&self, payment_hash: String) {
+        debug!("Reporting failure for payment {payment_hash}");
+        let data = ReportPaymentFailureDetails {
+            payment_hash,
+            comment: None,
+        };
+        let request = ReportIssueRequest::PaymentFailure { data };
+        self.rt
+            .handle()
+            .block_on(self.sdk.report_issue(request))
+            .log_ignore_error(Level::Warn, "Failed to report issue");
     }
 }
 
