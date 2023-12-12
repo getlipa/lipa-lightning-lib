@@ -667,7 +667,7 @@ impl LightningNode {
                 | SendPaymentError::RouteTooExpensive { .. }
                 | SendPaymentError::ServiceConnectivity { .. })
         ) {
-            self.report_issue(invoice_details.payment_hash);
+            self.report_send_payment_issue(invoice_details.payment_hash);
         }
 
         result.map_err(map_send_payment_error)?;
@@ -703,7 +703,7 @@ impl LightningNode {
                 data.reason
             ),
             breez_sdk_core::LnUrlPayResult::PayError { data } => {
-                self.report_issue(data.payment_hash);
+                self.report_send_payment_issue(data.payment_hash);
                 runtime_error!(
                     LnUrlPayErrorCode::PaymentFailed,
                     "Paying invoice for LNURL pay failed: {}",
@@ -1552,8 +1552,8 @@ impl LightningNode {
             .retrieve_latest_fiat_topup_info()
     }
 
-    fn report_issue(&self, payment_hash: String) {
-        debug!("Reporting failure for payment {payment_hash}");
+    fn report_send_payment_issue(&self, payment_hash: String) {
+        debug!("Reporting failure of payment: {payment_hash}");
         let data = ReportPaymentFailureDetails {
             payment_hash,
             comment: None,
