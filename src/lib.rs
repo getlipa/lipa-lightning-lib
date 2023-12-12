@@ -912,7 +912,30 @@ impl LightningNode {
                         .timezone_config
                         .timezone_utc_offset_secs,
                 };
-                (exchange_rate, time, d.offer)
+
+                let offer = d
+                    .offer
+                    .clone()
+                    .as_mut()
+                    .map(|o| match o {
+                        OfferKind::Pocket {
+                            ref mut lightning_payout_fee,
+                            topup_value_sats,
+                            ..
+                        } => {
+                            if let Some(a) = invoice_details.amount {
+                                *lightning_payout_fee = Some(
+                                    (*topup_value_sats - a.sats)
+                                        .as_sats()
+                                        .to_amount_up(&exchange_rate),
+                                );
+                            }
+                            o
+                        }
+                    })
+                    .cloned();
+
+                (exchange_rate, time, offer)
             }
         };
 
@@ -1205,11 +1228,12 @@ impl LightningNode {
     /// Parameters:
     /// * `offer` - An uncompleted offer for which the lightning payout fee should get calculated.
     pub fn calculate_lightning_payout_fee(&self, offer: OfferInfo) -> Result<Amount> {
-        if offer.status == OfferStatus::REFUNDED || offer.status == OfferStatus::SETTLED {
-            invalid_input!("Provided offer is already completed: {:?}", offer)
-        }
+        ensure!(
+            offer.status == OfferStatus::REFUNDED || offer.status == OfferStatus::SETTLED,
+            invalid_input(format!("Provided offer is already completed: {:?}", offer))
+        );
 
-        let max_withdrawable = match self.rt.handle().block_on(parse(
+        let max_withdrawable_msats = match self.rt.handle().block_on(parse(
             &offer
                 .lnurlw
                 .ok_or_permanent_failure("Uncompleted offer didn't include an lnurlw")?,
@@ -1224,13 +1248,16 @@ impl LightningNode {
         }
         .max_withdrawable;
 
+        ensure!(
+            max_withdrawable_msats <= offer.amount.sats.as_sats().msats,
+            permanent_failure("LNURLw provides more")
+        );
+
         let exchange_rate = self.get_exchange_rate();
 
-        Ok(
-            (offer.amount.sats * 1_000 - max_withdrawable.as_msats().msats)
-                .as_msats()
-                .to_amount_up(&exchange_rate),
-        )
+        Ok((offer.amount.sats.as_sats().msats - max_withdrawable_msats)
+            .as_msats()
+            .to_amount_up(&exchange_rate))
     }
 
     /// Request to collect the offer (e.g. a Pocket topup).
@@ -1287,15 +1314,7 @@ impl LightningNode {
             ),
         };
 
-        let mut offer_kind = offer.offer_kind.clone();
-        match offer_kind {
-            OfferKind::Pocket {
-                ref mut lightning_payout_fee,
-                ..
-            } => *lightning_payout_fee = Some(1_u64.as_sats().to_amount_up(&None)),
-        }
-
-        self.store_payment_info(&hash, Some(offer_kind));
+        self.store_payment_info(&hash, Some(offer.offer_kind));
 
         Ok(hash)
     }
@@ -1862,6 +1881,7 @@ mod tests {
                         updated_at: SystemTime::now(),
                     },
                     topup_value_minor_units: 0,
+                    topup_value_sats: 0,
                     exchange_fee_minor_units: 0,
                     exchange_fee_rate_permyriad: 0,
                     lightning_payout_fee: None,
@@ -1910,6 +1930,7 @@ mod tests {
                         updated_at: SystemTime::now(),
                     },
                     topup_value_minor_units: 0,
+                    topup_value_sats: 0,
                     exchange_fee_minor_units: 0,
                     exchange_fee_rate_permyriad: 0,
                     lightning_payout_fee: None,

@@ -25,17 +25,19 @@ pub enum OfferKind {
     /// The currency code can be found in `exchange_rate`.
     Pocket {
         id: String,
-        /// The exchange rate used by the exchange to exchange fiat to sats
+        /// The exchange rate used by the exchange to exchange fiat to sats.
         exchange_rate: ExchangeRate,
-        /// The original fiat amount sent to the exchange
+        /// The original fiat amount sent to the exchange.
         topup_value_minor_units: u64,
-        /// The fee paid to perform the exchange from fiat to sats
+        /// The sat amount after the exchange.
+        topup_value_sats: u64,
+        /// The fee paid to perform the exchange from fiat to sats.
         exchange_fee_minor_units: u64,
-        /// The rate of the fee expressed in permyriad (e.g. 1.5% would be 150)
+        /// The rate of the fee expressed in permyriad (e.g. 1.5% would be 150).
         exchange_fee_rate_permyriad: u16,
         /// Optional payout fees collected by pocket.
         lightning_payout_fee: Option<Amount>,
-        /// The optional error that might have occurred in the offer withdrawal process
+        /// The optional error that might have occurred in the offer withdrawal process.
         error: Option<PocketOfferError>,
     },
 }
@@ -77,6 +79,7 @@ impl OfferInfo {
                 id: topup_info.id,
                 exchange_rate,
                 topup_value_minor_units: topup_info.topup_value_minor_units,
+                topup_value_sats: topup_info.amount_sat,
                 exchange_fee_minor_units: topup_info.exchange_fee_minor_units,
                 exchange_fee_rate_permyriad: topup_info.exchange_fee_rate_permyriad,
                 lightning_payout_fee: None,

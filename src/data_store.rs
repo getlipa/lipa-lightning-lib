@@ -3,7 +3,6 @@ use crate::fund_migration::MigrationStatus;
 use crate::migrations::migrate;
 use crate::{ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
 
-use crate::amount::{AsSats, ToAmount};
 use crate::fiat_topup::FiatTopupInfo;
 use chrono::{DateTime, Utc};
 use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -91,16 +90,17 @@ impl DataStore {
                     updated_at,
                 },
             topup_value_minor_units,
+            topup_value_sats,
             exchange_fee_minor_units,
             exchange_fee_rate_permyriad,
-            lightning_payout_fee,
             error,
+            ..
         }) = offer
         {
             let exchanged_at: DateTime<Utc> = updated_at.into();
             tx.execute(
             "\
-                INSERT INTO offers (payment_hash, pocket_id, fiat_currency, rate, exchanged_at, topup_value_minor_units, exchange_fee_minor_units, exchange_fee_rate_permyriad, error, lightning_payout_fee_sats)\
+                INSERT INTO offers (payment_hash, pocket_id, fiat_currency, rate, exchanged_at, topup_value_minor_units, exchange_fee_minor_units, exchange_fee_rate_permyriad, error, topup_value_sats)\
                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)\
                 ",
         (
@@ -113,7 +113,7 @@ impl DataStore {
                     exchange_fee_minor_units,
                     exchange_fee_rate_permyriad,
                     from_offer_error(error),
-                    lightning_payout_fee.map_or(0, |f| f.sats),
+                    topup_value_sats,
                 ),
             )
             .map_to_invalid_input("Failed to add new incoming pocket offer to offers db")?;
@@ -130,7 +130,7 @@ impl DataStore {
                 " \
             SELECT timezone_id, timezone_utc_offset_secs, payments.fiat_currency, h.rate, h.updated_at,  \
             o.pocket_id, o.fiat_currency, o.rate, o.exchanged_at, o.topup_value_minor_units, \
-			o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad, o.error, o.lightning_payout_fee_sats \
+			o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad, o.error, o.topup_value_sats \
             FROM payments \
             LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snaphot_id=h.snapshot_id \
                 AND payments.fiat_currency=h.fiat_currency \
@@ -405,7 +405,7 @@ fn offer_kind_from_row(row: &Row) -> rusqlite::Result<Option<OfferKind>> {
             let topup_value_minor_units: u64 = row.get(9)?;
             let exchange_fee_minor_units: u64 = row.get(10)?;
             let exchange_fee_rate_permyriad: u16 = row.get(11)?;
-            let lightning_payout_fee_sats: u64 = row.get(13)?;
+            let topup_value_sats: u64 = row.get(13)?;
 
             let exchange_rate = ExchangeRate {
                 currency_code: fiat_currency,
@@ -417,13 +417,10 @@ fn offer_kind_from_row(row: &Row) -> rusqlite::Result<Option<OfferKind>> {
                 id: pocket_id,
                 exchange_rate: exchange_rate.clone(),
                 topup_value_minor_units,
+                topup_value_sats,
                 exchange_fee_minor_units,
                 exchange_fee_rate_permyriad,
-                lightning_payout_fee: Some(
-                    lightning_payout_fee_sats
-                        .as_sats()
-                        .to_amount_up(&Some(exchange_rate)),
-                ),
+                lightning_payout_fee: None,
                 error: to_offer_error(row.get(12)?),
             }))
         }
@@ -546,7 +543,6 @@ mod tests {
     use crate::fund_migration::MigrationStatus;
     use crate::{ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
 
-    use crate::amount::{AsSats, ToAmount};
     use crate::fiat_topup::FiatTopupInfo;
     use crow::TopupError::TemporaryFailure;
     use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -591,9 +587,10 @@ mod tests {
             id: "id".to_string(),
             exchange_rate: exchange_rate.clone(),
             topup_value_minor_units: 51245,
+            topup_value_sats: 2625281,
             exchange_fee_minor_units: 123,
             exchange_fee_rate_permyriad: 50,
-            lightning_payout_fee: Some(5000_u64.as_sats().to_amount_up(&Some(exchange_rate))),
+            lightning_payout_fee: None,
             error: Some(TemporaryFailure {
                 code: TemporaryFailureCode::NoRoute,
             }),
@@ -608,9 +605,10 @@ mod tests {
             id: "id".to_string(),
             exchange_rate: exchange_rate.clone(),
             topup_value_minor_units: 51245,
+            topup_value_sats: 2625281,
             exchange_fee_minor_units: 123,
             exchange_fee_rate_permyriad: 50,
-            lightning_payout_fee: Some(0_u64.as_sats().to_amount_up(&Some(exchange_rate))),
+            lightning_payout_fee: None,
             error: None,
         };
 
@@ -821,9 +819,10 @@ mod tests {
             id: "id".to_string(),
             exchange_rate: exchange_rate.clone(),
             topup_value_minor_units: 51245,
+            topup_value_sats: 2625281,
             exchange_fee_minor_units: 123,
             exchange_fee_rate_permyriad: 50,
-            lightning_payout_fee: Some(0_u64.as_sats().to_amount_up(&Some(exchange_rate))),
+            lightning_payout_fee: None,
             error: Some(error),
         }
     }

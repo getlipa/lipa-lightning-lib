@@ -989,15 +989,19 @@ fn offer_to_string(offer: Option<OfferKind>) -> String {
             topup_value_minor_units,
             exchange_fee_minor_units,
             exchange_fee_rate_permyriad,
+            lightning_payout_fee,
             ..
         }) => {
             let updated_at: DateTime<Utc> = updated_at.into();
             format!(
-				"Pocket exchange ({id}) of {:.2} {currency_code} at {} at rate {rate} SATS per {currency_code}, fee was {:.2}% or {:.2} {currency_code}",
+				"Pocket exchange ({id}) of {:.2} {currency_code} at {} at rate {rate} SATS per {currency_code}, fee was {:.2}% or {:.2}, payout fee charged {} {currency_code}",
 				topup_value_minor_units as f64 / 100f64,
 				updated_at.format("%d/%m/%Y %T UTC"),
 				exchange_fee_rate_permyriad as f64 / 100f64,
 				exchange_fee_minor_units as f64 / 100f64,
+                lightning_payout_fee
+                    .map(|f| amount_to_string(f.clone()))
+                    .unwrap_or("N/A".to_string()),
 			)
         }
         None => "None".to_string(),
