@@ -1,4 +1,5 @@
 use crate::hinter::{CommandHint, CommandHinter};
+use crate::overview::overview;
 
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::offset::FixedOffset;
@@ -14,12 +15,11 @@ use rustyline::Editor;
 use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
-use uniffi_lipalightninglib::PaymentMetadata;
 use uniffi_lipalightninglib::{
-    Amount, DecodedData, ExchangeRate, FiatValue, InvoiceDetails, LightningNode, LiquidityLimit,
-    LnUrlPayDetails, MaxRoutingFeeMode, OfferKind, PaymentState, TzConfig,
+    Amount, DecodedData, ExchangeRate, FiatValue, InvoiceCreationMetadata, InvoiceDetails,
+    LightningNode, LiquidityLimit, LnUrlPayDetails, LnUrlWithdrawDetails, MaxRoutingFeeMode,
+    OfferKind, PaymentMetadata, PaymentState, TzConfig,
 };
-use uniffi_lipalightninglib::{InvoiceCreationMetadata, LnUrlWithdrawDetails};
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("{}", "3L Example Node".blue().bold());
@@ -163,6 +163,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "overview" => {
+                    if let Err(message) = overview(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "listlightningaddresses" => match node.list_lightning_addresses() {
                     Ok(list) => println!("{}", list.join("\n")),
                     Err(message) => eprintln!("{}", format!("{message:#}").red()),
@@ -279,6 +284,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("getregisteredtopup", "getregisteredtopup"));
     hints.insert(CommandHint::new("listoffers", "listoffers"));
 
+    hints.insert(CommandHint::new(
+        "overview [number of payments = 10] [fun mode = false]",
+        "overview ",
+    ));
     hints.insert(CommandHint::new(
         "listpayments [number of payments = 2]",
         "listpayments ",

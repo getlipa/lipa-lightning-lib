@@ -69,6 +69,7 @@ qrcode = { version ="0.13.0", default-features = false }
 rustyline = { version = "13.0.0", features = ["derive"] }
 serial_test = { version =  "2.0.0", features = ["file_locks"] }
 strip-ansi-escapes = "0.2.0"
+thousands = "0.2.0"
 
 [build-dependencies]
 camino = "1.1.6"
