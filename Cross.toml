@@ -16,4 +16,4 @@ pre-build = [
 ]
 
 [build.env]
-passthrough = ["PROTOC=/opt/protoc/bin/protoc"]
+passthrough = ["PROTOC=/opt/protoc/bin/protoc", "GITHUB_REF"]

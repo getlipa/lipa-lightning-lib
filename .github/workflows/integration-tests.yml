@@ -12,6 +12,9 @@ on:
   schedule:
     - cron: '21 2 * * 1-5' # every weekday at 2:21 AM UTC
 
+env:
+  GITHUB_REF: ${{ github.ref }}
+
 jobs:
   integration:
     name: Integration Tests

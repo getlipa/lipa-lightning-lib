@@ -9,6 +9,9 @@ on:
     tags:
       - 'v*.*.*'
 
+env:
+  GITHUB_REF: ${{ github.ref }}
+
 jobs:
   cross-compile-ios:
     name: cross-compile-ios
