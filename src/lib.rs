@@ -234,6 +234,7 @@ impl LightningNode {
                 &Path::new(&config.local_persistence_path).join(LOGS_DIR),
             )?;
         }
+        info!("3L version: {}", env!("GITHUB_REF"));
 
         let rt = AsyncRuntime::new()?;
 
@@ -1517,6 +1518,7 @@ impl LightningNode {
                 "Couldn't execute `listpeerchannels` command",
             )?;
 
+        info!("3L version: {}", env!("GITHUB_REF"));
         info!("List of peers:\n{}", peers);
         info!("List of peer channels:\n{}", peer_channels);
         info!("List of available lsps:\n{:?}", available_lsps);

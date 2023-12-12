@@ -1,4 +1,6 @@
 [env]
+GITHUB_REF = "local_build"
+
 BACKEND_URL_LOCAL = ""
 BACKEND_URL_DEV = ""
 BACKEND_URL_STAGE = ""

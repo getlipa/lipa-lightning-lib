@@ -14,6 +14,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  GITHUB_REF: ${{ github.ref }}
 
 jobs:
   build:
