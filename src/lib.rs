@@ -913,27 +913,12 @@ impl LightningNode {
                         .timezone_utc_offset_secs,
                 };
 
-                let offer = d
-                    .offer
-                    .clone()
-                    .as_mut()
-                    .map(|o| match o {
-                        OfferKind::Pocket {
-                            ref mut lightning_payout_fee,
-                            topup_value_sats,
-                            ..
-                        } => {
-                            if let Some(a) = invoice_details.amount {
-                                *lightning_payout_fee = Some(
-                                    (*topup_value_sats - a.sats)
-                                        .as_sats()
-                                        .to_amount_up(&exchange_rate),
-                                );
-                            }
-                            o
-                        }
-                    })
-                    .cloned();
+                let offer = match invoice_details.amount {
+                    Some(amount) => d
+                        .offer
+                        .map(|offer| fill_payout_fee(offer, amount.sats.as_sats(), &exchange_rate)),
+                    None => d.offer,
+                };
 
                 (exchange_rate, time, offer)
             }
@@ -1701,6 +1686,38 @@ fn filter_out_recently_claimed_topups(
         .into_iter()
         .filter(|o| !latest_succeeded_payment_offer_ids.contains(&o.id))
         .collect()
+}
+
+fn fill_payout_fee(
+    offer: OfferKind,
+    requested_amount: Sats,
+    rate: &Option<ExchangeRate>,
+) -> OfferKind {
+    match offer {
+        OfferKind::Pocket {
+            id,
+            exchange_rate,
+            topup_value_minor_units,
+            topup_value_sats,
+            exchange_fee_minor_units,
+            exchange_fee_rate_permyriad,
+            lightning_payout_fee: _,
+            error,
+        } => {
+            let lightning_payout_fee = (topup_value_sats - requested_amount.sats).as_sats();
+            let lightning_payout_fee = Some(lightning_payout_fee.to_amount_up(rate));
+            OfferKind::Pocket {
+                id,
+                exchange_rate,
+                topup_value_minor_units,
+                topup_value_sats,
+                exchange_fee_minor_units,
+                exchange_fee_rate_permyriad,
+                lightning_payout_fee,
+                error,
+            }
+        }
+    }
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
