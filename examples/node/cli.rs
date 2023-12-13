@@ -159,42 +159,8 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     }
                 }
                 "calculatelightningpayoutfee" => {
-                    let offer_id = words
-                        .next()
-                        .ok_or_else(|| "<offer id> is required".to_string());
-
-                    let offer_id = match offer_id {
-                        Ok(o) => o.to_string(),
-                        Err(e) => {
-                            println!("{}", e.red());
-                            return;
-                        }
-                    };
-
-                    let uncompleted_offers = node.query_uncompleted_offers().unwrap_or_else(|e| {
-                        println!("Couldn't fetch uncompleted offers: {e:?}");
-                        vec![]
-                    });
-
-                    let offer: Vec<OfferInfo> = uncompleted_offers
-                        .into_iter()
-                        .filter(|o| match &o.offer_kind {
-                            OfferKind::Pocket { id, .. } => id == &offer_id,
-                        })
-                        .collect();
-
-                    match offer.into_iter().next() {
-                        Some(o) => {
-                            if let Err(message) = calculate_lightning_payout_fee(node, o) {
-                                println!("{}", format!("{message:#}").red());
-                            }
-                        }
-                        None => {
-                            println!(
-                                "{}",
-                                format!("Couldn't find offer with id: {offer_id}").red()
-                            );
-                        }
+                    if let Err(message) = calculate_lightning_payout_fee(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "listpayments" => {
@@ -1033,7 +999,28 @@ fn get_registered_topup(node: &LightningNode) -> Result<()> {
     Ok(())
 }
 
-fn calculate_lightning_payout_fee(node: &LightningNode, offer: OfferInfo) -> Result<()> {
+fn calculate_lightning_payout_fee(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<()> {
+    let offer_id = words.next().ok_or(anyhow!("<offer id> is required"))?;
+
+    let uncompleted_offers = node
+        .query_uncompleted_offers()
+        .map_err(|e| anyhow!("Couldn't fetch uncompleted offers: {e:?}"))?;
+
+    let offer: Vec<OfferInfo> = uncompleted_offers
+        .into_iter()
+        .filter(|o| match &o.offer_kind {
+            OfferKind::Pocket { id, .. } => id == &offer_id,
+        })
+        .collect();
+
+    let offer = offer
+        .into_iter()
+        .next()
+        .ok_or(anyhow!("Couldn't find offer with id: {offer_id}"))?;
+
     let lightning_payout_fee = node.calculate_lightning_payout_fee(offer)?;
     println!(
         "Lightning payout fee: {}",
