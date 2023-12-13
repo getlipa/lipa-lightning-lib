@@ -14,12 +14,12 @@ use rustyline::Editor;
 use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
+use uniffi_lipalightninglib::PaymentMetadata;
 use uniffi_lipalightninglib::{
     Amount, DecodedData, ExchangeRate, FiatValue, InvoiceDetails, LightningNode, LiquidityLimit,
     LnUrlPayDetails, MaxRoutingFeeMode, OfferKind, PaymentState, TzConfig,
 };
 use uniffi_lipalightninglib::{InvoiceCreationMetadata, LnUrlWithdrawDetails};
-use uniffi_lipalightninglib::{OfferInfo, PaymentMetadata};
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("{}", "3L Example Node".blue().bold());
@@ -1007,18 +1007,13 @@ fn calculate_lightning_payout_fee(
 
     let uncompleted_offers = node
         .query_uncompleted_offers()
-        .map_err(|e| anyhow!("Couldn't fetch uncompleted offers: {e:?}"))?;
+        .context("Couldn't fetch uncompleted offers")?;
 
-    let offer: Vec<OfferInfo> = uncompleted_offers
+    let offer = uncompleted_offers
         .into_iter()
-        .filter(|o| match &o.offer_kind {
+        .find(|o| match &o.offer_kind {
             OfferKind::Pocket { id, .. } => id == &offer_id,
         })
-        .collect();
-
-    let offer = offer
-        .into_iter()
-        .next()
         .ok_or(anyhow!("Couldn't find offer with id: {offer_id}"))?;
 
     let lightning_payout_fee = node.calculate_lightning_payout_fee(offer)?;
