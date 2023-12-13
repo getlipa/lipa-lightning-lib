@@ -937,7 +937,8 @@ impl LightningNode {
                 ),
                 breez_sdk_core::PaymentType::Received => (
                     PaymentType::Receiving,
-                    (breez_payment.amount_msat - breez_payment.fee_msat)
+                    breez_payment
+                        .amount_msat
                         .as_msats()
                         .to_amount_down(&exchange_rate),
                     breez_payment
