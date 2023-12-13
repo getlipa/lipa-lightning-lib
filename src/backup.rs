@@ -3,6 +3,7 @@ use crate::errors::Result;
 use crate::symmetric_encryption::{decrypt, encrypt};
 use crate::{runtime_error, RuntimeErrorCode};
 use graphql::GraphQlRuntimeErrorCode;
+use log::warn;
 use perro::MapToError;
 use squirrel::{Backup, RemoteBackupClient};
 use std::fs;
@@ -52,10 +53,8 @@ impl BackupManager {
                 code: GraphQlRuntimeErrorCode::ObjectNotFound,
                 ..
             }) => {
-                runtime_error!(
-                    RuntimeErrorCode::BackupNotFound,
-                    "No backup was found in remote"
-                )
+                warn!("No backup was found in remote, recovering without");
+                return Ok(());
             }
             Err(e) => {
                 runtime_error!(
