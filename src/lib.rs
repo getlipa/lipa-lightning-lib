@@ -1503,6 +1503,11 @@ impl LightningNode {
     ///
     /// Throws an error in case that the necessary information can't be retrieved.
     pub fn log_debug_info(&self) -> Result<()> {
+        self.rt
+            .handle()
+            .block_on(self.sdk.sync())
+            .log_ignore_error(Level::Error, "Failed to sync node");
+
         let available_lsps = self
             .rt
             .handle()
@@ -1516,18 +1521,15 @@ impl LightningNode {
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to get current lsp id",
-            )?;
+            )?
+            .unwrap_or("<no connection>".to_string());
 
-        let peers = self
-            .rt
-            .handle()
-            .block_on(self.sdk.execute_dev_command("listpeers".to_string()))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Couldn't execute `listpeers` command",
-            )?;
+        let node_state = self.sdk.node_info().map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to read node info",
+        )?;
 
-        let peer_channels = self
+        let channels = self
             .rt
             .handle()
             .block_on(self.sdk.execute_dev_command("listpeerchannels".to_string()))
@@ -1537,13 +1539,12 @@ impl LightningNode {
             )?;
 
         info!("3L version: {}", env!("GITHUB_REF"));
-        info!("List of peers:\n{}", peers);
-        info!("List of peer channels:\n{}", peer_channels);
-        info!("List of available lsps:\n{:?}", available_lsps);
-        info!(
-            "Connected lsp id:\n{}",
-            connected_lsp.unwrap_or("<no connection>".to_string())
-        );
+        info!("Wallet pubkey id: {:?}", self.get_wallet_pubkey_id());
+        // Print connected peers, balances, inbound/outbound capacities, on-chain funds.
+        info!("Node state:\n{node_state:?}");
+        info!("List of available lsps:\n{available_lsps:?}");
+        info!("Connected lsp id: {connected_lsp}");
+        info!("List of peer channels:\n{channels}");
         Ok(())
     }
 
