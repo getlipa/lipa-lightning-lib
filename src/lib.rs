@@ -41,7 +41,7 @@ mod task_manager;
 mod util;
 
 pub use crate::amount::{Amount, FiatValue};
-use crate::amount::{AsSats, Sats, ToAmount};
+use crate::amount::{AsSats, Msats, Sats, ToAmount};
 use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
 pub use crate::analytics::{InvoiceCreationMetadata, PaymentMetadata};
 use crate::async_runtime::AsyncRuntime;
@@ -914,9 +914,13 @@ impl LightningNode {
                 };
 
                 let offer = match invoice_details.amount {
-                    Some(amount) => d
-                        .offer
-                        .map(|offer| fill_payout_fee(offer, amount.sats.as_sats(), &exchange_rate)),
+                    Some(amount) => d.offer.map(|offer| {
+                        fill_payout_fee(
+                            offer,
+                            (amount.sats.as_sats().msats + breez_payment.fee_msat).as_msats(),
+                            &exchange_rate,
+                        )
+                    }),
                     None => d.offer,
                 };
 
@@ -1690,7 +1694,7 @@ fn filter_out_recently_claimed_topups(
 
 fn fill_payout_fee(
     offer: OfferKind,
-    requested_amount: Sats,
+    requested_amount: Msats,
     rate: &Option<ExchangeRate>,
 ) -> OfferKind {
     match offer {
@@ -1704,7 +1708,8 @@ fn fill_payout_fee(
             lightning_payout_fee: _,
             error,
         } => {
-            let lightning_payout_fee = (topup_value_sats - requested_amount.sats).as_sats();
+            let lightning_payout_fee =
+                (topup_value_sats.as_sats().msats - requested_amount.msats).as_msats();
             let lightning_payout_fee = Some(lightning_payout_fee.to_amount_up(rate));
             OfferKind::Pocket {
                 id,
