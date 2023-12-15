@@ -41,7 +41,7 @@ mod task_manager;
 mod util;
 
 pub use crate::amount::{Amount, FiatValue};
-use crate::amount::{AsSats, Sats, ToAmount};
+use crate::amount::{AsSats, Msats, Sats, ToAmount};
 use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
 pub use crate::analytics::{InvoiceCreationMetadata, PaymentMetadata};
 use crate::async_runtime::AsyncRuntime;
@@ -912,7 +912,19 @@ impl LightningNode {
                         .timezone_config
                         .timezone_utc_offset_secs,
                 };
-                (exchange_rate, time, d.offer)
+
+                let offer = match invoice_details.amount {
+                    Some(amount) => d.offer.map(|offer| {
+                        fill_payout_fee(
+                            offer,
+                            (amount.sats.as_sats().msats + breez_payment.fee_msat).as_msats(),
+                            &exchange_rate,
+                        )
+                    }),
+                    None => d.offer,
+                };
+
+                (exchange_rate, time, offer)
             }
         };
 
@@ -1199,6 +1211,43 @@ impl LightningNode {
                 .map(|topup_info| OfferInfo::from(topup_info, &rate))
                 .collect(),
         )
+    }
+
+    /// Calculates the lightning payout fee for an uncompleted offer.
+    ///
+    /// Parameters:
+    /// * `offer` - An uncompleted offer for which the lightning payout fee should get calculated.
+    pub fn calculate_lightning_payout_fee(&self, offer: OfferInfo) -> Result<Amount> {
+        ensure!(
+            offer.status == OfferStatus::REFUNDED || offer.status == OfferStatus::SETTLED,
+            invalid_input(format!("Provided offer is already completed: {:?}", offer))
+        );
+
+        let max_withdrawable_msats = match self.rt.handle().block_on(parse(
+            &offer
+                .lnurlw
+                .ok_or_permanent_failure("Uncompleted offer didn't include an lnurlw")?,
+        )) {
+            Ok(InputType::LnUrlWithdraw { data }) => data,
+            Ok(input_type) => {
+                permanent_failure!("Invalid input type LNURLw in uncompleted offer: {input_type:?}")
+            }
+            Err(err) => {
+                permanent_failure!("Invalid LNURLw in uncompleted offer: {err}")
+            }
+        }
+        .max_withdrawable;
+
+        ensure!(
+            max_withdrawable_msats <= offer.amount.sats.as_sats().msats,
+            permanent_failure("LNURLw provides more")
+        );
+
+        let exchange_rate = self.get_exchange_rate();
+
+        Ok((offer.amount.sats.as_sats().msats - max_withdrawable_msats)
+            .as_msats()
+            .to_amount_up(&exchange_rate))
     }
 
     /// Request to collect the offer (e.g. a Pocket topup).
@@ -1644,6 +1693,39 @@ fn filter_out_recently_claimed_topups(
         .collect()
 }
 
+fn fill_payout_fee(
+    offer: OfferKind,
+    requested_amount: Msats,
+    rate: &Option<ExchangeRate>,
+) -> OfferKind {
+    match offer {
+        OfferKind::Pocket {
+            id,
+            exchange_rate,
+            topup_value_minor_units,
+            topup_value_sats,
+            exchange_fee_minor_units,
+            exchange_fee_rate_permyriad,
+            lightning_payout_fee: _,
+            error,
+        } => {
+            let lightning_payout_fee =
+                (topup_value_sats.as_sats().msats - requested_amount.msats).as_msats();
+            let lightning_payout_fee = Some(lightning_payout_fee.to_amount_up(rate));
+            OfferKind::Pocket {
+                id,
+                exchange_rate,
+                topup_value_minor_units,
+                topup_value_sats,
+                exchange_fee_minor_units,
+                exchange_fee_rate_permyriad,
+                lightning_payout_fee,
+                error,
+            }
+        }
+    }
+}
+
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
 
 #[cfg(test)]
@@ -1822,8 +1904,10 @@ mod tests {
                         updated_at: SystemTime::now(),
                     },
                     topup_value_minor_units: 0,
+                    topup_value_sats: 0,
                     exchange_fee_minor_units: 0,
                     exchange_fee_rate_permyriad: 0,
+                    lightning_payout_fee: None,
                     error: None,
                 }),
                 swap: None,
@@ -1869,8 +1953,10 @@ mod tests {
                         updated_at: SystemTime::now(),
                     },
                     topup_value_minor_units: 0,
+                    topup_value_sats: 0,
                     exchange_fee_minor_units: 0,
                     exchange_fee_rate_permyriad: 0,
+                    lightning_payout_fee: None,
                     error: None,
                 }),
                 swap: None,

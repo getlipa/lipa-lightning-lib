@@ -158,6 +158,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "calculatelightningpayoutfee" => {
+                    if let Err(message) = calculate_lightning_payout_fee(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "listpayments" => {
                     if let Err(message) = list_payments(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
@@ -278,6 +283,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("resettopup", "resettopup"));
     hints.insert(CommandHint::new("getregisteredtopup", "getregisteredtopup"));
     hints.insert(CommandHint::new("listoffers", "listoffers"));
+    hints.insert(CommandHint::new(
+        "calculatelightningpayoutfee <offer id>",
+        "calculatelightningpayoutfee",
+    ));
 
     hints.insert(CommandHint::new(
         "listpayments [number of payments = 2]",
@@ -332,6 +341,7 @@ fn help() {
     println!("  resettopup");
     println!("  getregisteredtopup");
     println!("  listoffers");
+    println!("  calculatelightningpayoutfee <offer id>");
     println!();
     println!("  listpayments");
     println!("  listlightningaddresses");
@@ -829,6 +839,7 @@ fn list_offers(node: &LightningNode) -> Result<()> {
                 exchange_fee_minor_units,
                 exchange_fee_rate_permyriad,
                 error,
+                ..
             } => {
                 println!("                   ID:    {id}");
                 println!(
@@ -944,15 +955,19 @@ fn offer_to_string(offer: Option<OfferKind>) -> String {
             topup_value_minor_units,
             exchange_fee_minor_units,
             exchange_fee_rate_permyriad,
+            lightning_payout_fee,
             ..
         }) => {
             let updated_at: DateTime<Utc> = updated_at.into();
             format!(
-				"Pocket exchange ({id}) of {:.2} {currency_code} at {} at rate {rate} SATS per {currency_code}, fee was {:.2}% or {:.2} {currency_code}",
+				"Pocket exchange ({id}) of {:.2} {currency_code} at {} at rate {rate} SATS per {currency_code}, fee was {:.2}% or {:.2}, payout fee charged {} {currency_code}",
 				topup_value_minor_units as f64 / 100f64,
 				updated_at.format("%d/%m/%Y %T UTC"),
 				exchange_fee_rate_permyriad as f64 / 100f64,
 				exchange_fee_minor_units as f64 / 100f64,
+                lightning_payout_fee
+                    .map(|f| amount_to_string(f.clone()))
+                    .unwrap_or("N/A".to_string()),
 			)
         }
         None => "None".to_string(),
@@ -980,6 +995,32 @@ fn amount_to_string(amount: Amount) -> String {
 fn get_registered_topup(node: &LightningNode) -> Result<()> {
     let topup_info = node.retrieve_latest_fiat_topup_info()?;
     println!("{topup_info:?}");
+
+    Ok(())
+}
+
+fn calculate_lightning_payout_fee(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<()> {
+    let offer_id = words.next().ok_or(anyhow!("<offer id> is required"))?;
+
+    let uncompleted_offers = node
+        .query_uncompleted_offers()
+        .context("Couldn't fetch uncompleted offers")?;
+
+    let offer = uncompleted_offers
+        .into_iter()
+        .find(|o| match &o.offer_kind {
+            OfferKind::Pocket { id, .. } => id == &offer_id,
+        })
+        .ok_or(anyhow!("Couldn't find offer with id: {offer_id}"))?;
+
+    let lightning_payout_fee = node.calculate_lightning_payout_fee(offer)?;
+    println!(
+        "Lightning payout fee: {}",
+        amount_to_string(lightning_payout_fee)
+    );
 
     Ok(())
 }
