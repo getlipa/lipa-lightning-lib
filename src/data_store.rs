@@ -1,14 +1,13 @@
 use crate::errors::Result;
+use crate::fiat_topup::FiatTopupInfo;
 use crate::fund_migration::MigrationStatus;
 use crate::migrations::migrate;
 use crate::{ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
 
-use crate::fiat_topup::FiatTopupInfo;
 use chrono::{DateTime, Utc};
 use crow::{PermanentFailureCode, TemporaryFailureCode};
 use perro::MapToError;
-use rusqlite::Row;
-use rusqlite::{backup, params, Connection};
+use rusqlite::{backup, params, Connection, Row};
 use std::time::{Duration, SystemTime};
 
 pub(crate) const BACKUP_DB_FILENAME_SUFFIX: &str = ".backup";
@@ -173,8 +172,7 @@ impl DataStore {
         &self,
         number_of_invoices: u32,
     ) -> Result<Vec<CreatedInvoice>> {
-        let mut statement = self
-            .conn
+        self.conn
             .prepare(
                 "\
             SELECT hash, invoice, channel_opening_fees \
@@ -183,9 +181,7 @@ impl DataStore {
             LIMIT ?1;
         ",
             )
-            .map_to_permanent_failure("Failed to retrieve created invoice from local db")?;
-
-        let invoice_iter = statement
+            .map_to_permanent_failure("Failed to retrieve created invoice from local db")?
             .query_map([number_of_invoices], |r| {
                 Ok(CreatedInvoice {
                     hash: r.get(0)?,
@@ -193,13 +189,9 @@ impl DataStore {
                     channel_opening_fees: r.get(2)?,
                 })
             })
-            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
-
-        let mut invoices = Vec::new();
-        for rate in invoice_iter {
-            invoices.push(rate.map_to_permanent_failure("Corrupted db")?);
-        }
-        Ok(invoices)
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?
+            .map(|r| r.map_to_permanent_failure("Corrupted db"))
+            .collect()
     }
 
     pub fn retrieve_created_invoice_by_hash(&self, hash: &str) -> Result<Option<CreatedInvoice>> {
@@ -250,25 +242,18 @@ impl DataStore {
     }
 
     pub fn get_all_exchange_rates(&self) -> Result<Vec<ExchangeRate>> {
-        let mut statement = self
-            .conn
+        self.conn
             .prepare(
                 " \
             SELECT fiat_currency, rate, updated_at \
             FROM exchange_rates \
             ",
             )
-            .map_to_permanent_failure("Failed to prepare SQL query")?;
-
-        let rate_iter = statement
+            .map_to_permanent_failure("Failed to prepare SQL query")?
             .query_map([], exchange_rate_from_row)
-            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?;
-
-        let mut rates = Vec::new();
-        for rate in rate_iter {
-            rates.push(rate.map_to_permanent_failure("Corrupted db")?);
-        }
-        Ok(rates)
+            .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?
+            .map(|r| r.map_to_permanent_failure("Corrupted db"))
+            .collect()
     }
 
     #[allow(dead_code)]
