@@ -1,5 +1,6 @@
 mod cli;
 mod hinter;
+mod overview;
 #[path = "../../tests/print_events_handler/mod.rs"]
 mod print_events_handler;
 
