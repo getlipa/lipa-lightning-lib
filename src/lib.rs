@@ -106,7 +106,7 @@ use perro::{
 use squirrel::RemoteBackupClient;
 use std::cmp::Reverse;
 use std::collections::HashSet;
-use std::ops::Not;
+use std::ops::{Add, Not};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -955,6 +955,7 @@ impl LightningNode {
                         .to_amount_down(&exchange_rate),
                     breez_payment
                         .amount_msat
+                        .add(breez_payment.fee_msat)
                         .as_msats()
                         .to_amount_down(&exchange_rate),
                     None,
