@@ -19,9 +19,13 @@ pub(crate) fn replace_byte_arrays_by_hex_string(original: &str) -> String {
             let byte_array = caps.get(1).unwrap().as_str();
             let hex_data = byte_array
                 .split(',')
-                .map(|byte| u8::from_str(byte.trim()).unwrap())
-                .collect::<Vec<u8>>();
-            format!("\"{}\"", encode(&hex_data))
+                .map(|byte| u8::from_str(byte.trim()))
+                .collect::<Result<Vec<u8>, _>>();
+
+            match hex_data {
+                Ok(data) => format!("\"{}\"", encode(&data)),
+                Err(_) => caps[0].to_string(), // if parsing fails, return original string
+            }
         })
         .to_string()
 }
