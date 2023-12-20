@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use hex::encode;
 use log::{log, Level};
 use regex::Regex;
@@ -18,7 +19,7 @@ pub(crate) fn replace_byte_arrays_by_hex_string(original: &str) -> String {
             let byte_array = caps.get(1).unwrap().as_str();
             let hex_data = byte_array
                 .split(',')
-                .map(|byte| u8::from_str_radix(byte.trim(), 10).unwrap())
+                .map(|byte| u8::from_str(byte.trim()).unwrap())
                 .collect::<Vec<u8>>();
             format!("\"{}\"", encode(&hex_data))
         })
