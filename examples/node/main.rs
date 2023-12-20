@@ -50,9 +50,9 @@ fn main() {
 
     let node = LightningNode::new(config, events).unwrap();
 
-    // Lauch CLI
+    // Launch CLI
     sleep(Duration::from_secs(1));
-    cli::poll_for_user_input(&node, &format!("{base_dir}/{LOG_FILE}"));
+    cli::poll_for_user_input(&node, &format!("{base_dir}/logs/{LOG_FILE}"));
 }
 
 fn read_seed_from_env() -> Vec<u8> {
