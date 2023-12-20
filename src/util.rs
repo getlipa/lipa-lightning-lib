@@ -12,7 +12,7 @@ pub(crate) fn unix_timestamp_to_system_time(timestamp: u64) -> SystemTime {
 // Replaces all occurrences of byte arrays with their hex representation:
 // 'Hello [15, 16, 255] world' -> 'Hello "0f10ff" world'
 pub(crate) fn replace_byte_arrays_by_hex_string(original: &str) -> String {
-    let byte_array_pattern = Regex::new(r"\[([\d\s,]+)\]").unwrap();
+    let byte_array_pattern = Regex::new(r"\[([\d\s,]+)]").unwrap();
 
     byte_array_pattern
         .replace_all(original, |caps: &regex::Captures| {
