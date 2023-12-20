@@ -41,3 +41,46 @@ impl<T, E: std::fmt::Display> LogIgnoreError for Result<T, E> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_replace_byte_arrays_by_hex_string() {
+        let original = "Hello [15, 16, 255] world";
+        let expected = "Hello \"0f10ff\" world";
+        let actual = replace_byte_arrays_by_hex_string(original);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn string_starts_and_ends_with_array_parsed_to_hex() {
+        let original = "[186, 190] make some [192, 255, 238]";
+        let expected = "\"babe\" make some \"c0ffee\"";
+        let actual = replace_byte_arrays_by_hex_string(original);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn arrays_within_words_parsed_to_hex() {
+        let original = "Lipa W[161][30]t";
+        let expected = "Lipa W\"a1\"\"1e\"t";
+        let actual = replace_byte_arrays_by_hex_string(original);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn empty_array_not_parsed_to_hex() {
+        let original = "Hello [] world";
+        let modified = replace_byte_arrays_by_hex_string(original);
+        assert_eq!(original, modified);
+    }
+
+    #[test]
+    fn flawed_byte_array_not_parsed_to_hex() {
+        let original = "Hello [15, 16, 1234] world";
+        let parsed = replace_byte_arrays_by_hex_string(original);
+        assert_eq!(original, parsed);
+    }
+}
