@@ -106,7 +106,7 @@ use perro::{
 use squirrel::RemoteBackupClient;
 use std::cmp::Reverse;
 use std::collections::HashSet;
-use std::ops::Not;
+use std::ops::{Add, Not};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -858,7 +858,7 @@ impl LightningNode {
         breez_payment: breez_sdk_core::Payment,
     ) -> Result<Payment> {
         let payment_details = match breez_payment.details {
-            PaymentDetails::Ln { data } => data,
+            PaymentDetails::Ln { ref data } => data.clone(),
             PaymentDetails::ClosedChannel { .. } => permanent_failure!(
                 "Current interface doesn't support PaymentDetails::ClosedChannel"
             ),
@@ -953,10 +953,7 @@ impl LightningNode {
                         .amount_msat
                         .as_msats()
                         .to_amount_down(&exchange_rate),
-                    breez_payment
-                        .amount_msat
-                        .as_msats()
-                        .to_amount_down(&exchange_rate),
+                    Self::get_requested_amount_for_received_payment(&breez_payment, &exchange_rate),
                     None,
                     Some(
                         breez_payment
@@ -1007,6 +1004,17 @@ impl LightningNode {
             swap,
             lightning_address: payment_details.ln_address,
         })
+    }
+
+    fn get_requested_amount_for_received_payment(
+        payment: &breez_sdk_core::Payment,
+        exchange_rate: &Option<ExchangeRate>,
+    ) -> Amount {
+        payment
+            .amount_msat
+            .add(payment.fee_msat)
+            .as_msats()
+            .to_amount_down(&exchange_rate)
     }
 
     fn payment_from_created_invoice(&self, created_invoice: &CreatedInvoice) -> Result<Payment> {
