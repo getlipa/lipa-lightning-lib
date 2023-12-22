@@ -50,12 +50,12 @@ jobs:
         with:
           path: target/${{ matrix.target }}/release/libuniffi_lipalightninglib.a
           name: build-${{ matrix.target }}
-      - name: Upload bindings file
+      - name: Upload bindings files
         uses: actions/upload-artifact@v4
         if: ${{ matrix.target == 'x86_64-apple-ios' }}
         with:
           path: bindings/swift/lipalightninglib*
-          name: bindings-file-ios
+          name: bindings-files-ios
 
   cross-compile-android:
     name: cross-compile-android
@@ -171,16 +171,11 @@ jobs:
         with:
           path: target/universal/release
           name: build-ios-simulator-universal
-      - name: Download header file
+      - name: Download bindings files
         uses: actions/download-artifact@v4
         with:
           path: bindings/swift/
-          name: header-file
-      - name: Download bindings file
-        uses: actions/download-artifact@v4
-        with:
-          path: bindings/swift/
-          name: bindings-file-ios
+          name: bindings-files-ios
       - name: Create xcframework
         run: |
           git clone git@github.com:getlipa/lipa-lightning-lib-swift.git
