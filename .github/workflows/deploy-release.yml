@@ -55,7 +55,7 @@ jobs:
         if: ${{ matrix.target == 'x86_64-apple-ios' }}
         with:
           path: bindings/swift/lipalightninglib*
-          name: bindings-file
+          name: bindings-file-ios
 
   cross-compile-android:
     name: cross-compile-android
@@ -101,7 +101,7 @@ jobs:
         if: ${{ matrix.target == 'aarch64-linux-android' }}
         with:
           path: bindings/kotlin/uniffi/lipalightninglib/lipalightninglib.kt
-          name: bindings-file
+          name: bindings-file-android
 
   lipo-ios:
     name: lipo-ios
