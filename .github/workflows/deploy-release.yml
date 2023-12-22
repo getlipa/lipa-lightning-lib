@@ -46,20 +46,16 @@ jobs:
           command: build
           args: --release --target ${{ matrix.target }}
       - name: Upload library binaries
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
           path: target/${{ matrix.target }}/release/libuniffi_lipalightninglib.a
           name: build-${{ matrix.target }}
-      - name: Upload header file
-        uses: actions/upload-artifact@master
-        with:
-          path: bindings/swift/lipalightninglibFFI.h
-          name: header-file
       - name: Upload bindings file
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
+        if: ${{ matrix.target == 'x86_64-apple-ios' }}
         with:
-          path: bindings/swift/lipalightninglib.swift
-          name: bindings-file-ios
+          path: bindings/swift/lipalightninglib*
+          name: bindings-file
 
   cross-compile-android:
     name: cross-compile-android
@@ -96,15 +92,16 @@ jobs:
           command: build
           args: --release --target ${{ matrix.target }}
       - name: Upload library binaries
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
           path: target/${{ matrix.target }}/release/libuniffi_lipalightninglib.so
           name: build-${{ matrix.target }}
       - name: Upload bindings file
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
+        if: ${{ matrix.target == 'aarch64-linux-android' }}
         with:
           path: bindings/kotlin/uniffi/lipalightninglib/lipalightninglib.kt
-          name: bindings-file-android
+          name: bindings-file
 
   lipo-ios:
     name: lipo-ios
@@ -112,17 +109,17 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Download x86 bin
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           path: target/x86_64-apple-ios/release
           name: build-x86_64-apple-ios
       - name: Download aarch64 bin
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           path: target/aarch64-apple-ios/release
           name: build-aarch64-apple-ios
       - name: Download aarch64sim bin
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           path: target/aarch64-apple-ios-sim/release
           name: build-aarch64-apple-ios-sim
@@ -133,7 +130,7 @@ jobs:
             target/aarch64-apple-ios-sim/release/libuniffi_lipalightninglib.a \
             target/x86_64-apple-ios/release/libuniffi_lipalightninglib.a
       - name: Upload universal binary
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
           path: target/universal/release/libuniffi_lipalightninglib_simulator.a
           name: build-ios-simulator-universal
@@ -165,22 +162,22 @@ jobs:
           git_user_signingkey: true
           git_commit_gpgsign: true
       - name: Download aarch64 bin
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           path: target/aarch64-apple-ios/release
           name: build-aarch64-apple-ios
       - name: Download simulator universal bin
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           path: target/universal/release
           name: build-ios-simulator-universal
       - name: Download header file
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           path: bindings/swift/
           name: header-file
       - name: Download bindings file
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           path: bindings/swift/
           name: bindings-file-ios
@@ -194,7 +191,7 @@ jobs:
           cd lipa-lightning-lib-swift
           zip -9 -r lipalightninglibFFI.xcframework.zip lipalightninglibFFI.xcframework
       - name: Upload xcframework zip
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
           path: lipa-lightning-lib-swift/lipalightninglibFFI.xcframework.zip
           name: lipalightninglibFFI.xcframework
@@ -268,22 +265,22 @@ jobs:
           git_user_signingkey: true
           git_commit_gpgsign: true
       - name: Download aarch64 bin
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           path: target/aarch64-linux-android/release
           name: build-aarch64-linux-android
       - name: Download armv7 bin
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           path: target/armv7-linux-androideabi/release
           name: build-armv7-linux-androideabi
       - name: Download i686 bin
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           path: target/i686-linux-android/release
           name: build-i686-linux-android
       - name: Download bindings file
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           path: bindings/kotlin/uniffi/lipalightninglib
           name: bindings-file-android
