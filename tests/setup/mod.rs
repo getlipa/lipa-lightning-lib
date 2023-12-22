@@ -32,11 +32,9 @@ macro_rules! wait_for_condition {
 #[macro_export]
 macro_rules! wait_for_condition_default {
     ($cond:expr, $message_if_not_satisfied:expr) => {
-        (|| {
-            let attempts = 1100;
-            let sleep_duration = std::time::Duration::from_millis(100);
-            wait_for_condition!($cond, $message_if_not_satisfied, attempts, sleep_duration)
-        })();
+        let attempts = 1100;
+        let sleep_duration = std::time::Duration::from_millis(100);
+        wait_for_condition!($cond, $message_if_not_satisfied, attempts, sleep_duration)
     };
 }
 

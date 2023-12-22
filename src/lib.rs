@@ -1014,7 +1014,7 @@ impl LightningNode {
             .amount_msat
             .add(payment.fee_msat)
             .as_msats()
-            .to_amount_down(&exchange_rate)
+            .to_amount_down(exchange_rate)
     }
 
     fn payment_from_created_invoice(&self, created_invoice: &CreatedInvoice) -> Result<Payment> {

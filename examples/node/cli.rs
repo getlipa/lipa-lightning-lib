@@ -1021,7 +1021,7 @@ fn calculate_lightning_payout_fee(
     let offer = uncompleted_offers
         .into_iter()
         .find(|o| match &o.offer_kind {
-            OfferKind::Pocket { id, .. } => id == &offer_id,
+            OfferKind::Pocket { id, .. } => id == offer_id,
         })
         .ok_or(anyhow!("Couldn't find offer with id: {offer_id}"))?;
 
