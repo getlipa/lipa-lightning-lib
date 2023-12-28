@@ -1,7 +1,7 @@
-use std::str::FromStr;
 use hex::encode;
 use log::{log, Level};
 use regex::Regex;
+use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 pub(crate) fn unix_timestamp_to_system_time(timestamp: u64) -> SystemTime {
