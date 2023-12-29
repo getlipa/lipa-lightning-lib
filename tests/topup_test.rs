@@ -60,7 +60,7 @@ fn test_topup() {
     uncompleted_offers.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
     assert!(matches!(
-        uncompleted_offers.get(0).unwrap(),
+        uncompleted_offers.first().unwrap(),
         OfferInfo {
             offer_kind: OfferKind::Pocket {
                 topup_value_minor_units: 10,
@@ -87,7 +87,7 @@ fn test_topup() {
     uncompleted_offers.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
     assert!(matches!(
-        uncompleted_offers.get(0).unwrap(),
+        uncompleted_offers.first().unwrap(),
         OfferInfo {
             offer_kind: OfferKind::Pocket {
                 topup_value_minor_units: 100100,
@@ -98,7 +98,7 @@ fn test_topup() {
         }
     ));
 
-    let refunded_topup_id = match &uncompleted_offers.get(0).unwrap().offer_kind {
+    let refunded_topup_id = match &uncompleted_offers.first().unwrap().offer_kind {
         OfferKind::Pocket { id, .. } => id.to_string(),
     };
 

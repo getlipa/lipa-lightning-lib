@@ -1975,6 +1975,6 @@ mod tests {
         let filtered_topups = filter_out_recently_claimed_topups(topups, latest_payments);
 
         assert_eq!(filtered_topups.len(), 1);
-        assert_eq!(filtered_topups.get(0).unwrap().id, "234");
+        assert_eq!(filtered_topups.first().unwrap().id, "234");
     }
 }
