@@ -53,13 +53,19 @@ fn replace_all(
         let m = caps
             .get(0)
             .ok_or_permanent_failure("Captures::get(0) returned None")?;
-        new.push_str(&original[last_match..m.start()]);
+        let subslice = original
+            .get(last_match..m.start())
+            .ok_or_permanent_failure("Indexing the match failed")?;
+        new.push_str(subslice);
         new.push('\"');
         new.push_str(&replacement(&caps)?);
         new.push('\"');
         last_match = m.end();
     }
-    new.push_str(&original[last_match..]);
+    let tail = original
+        .get(last_match..)
+        .ok_or_permanent_failure("Indexing the tail failed")?;
+    new.push_str(tail);
     Ok(new)
 }
 
