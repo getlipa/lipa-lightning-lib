@@ -26,7 +26,7 @@ fn test_payment_fetching() {
     assert_invoice_matches_payment(&invoice, &payment);
 
     let latest_payments = node.get_latest_payments(1).unwrap();
-    let payment_from_list = latest_payments.get(0).unwrap();
+    let payment_from_list = latest_payments.first().unwrap();
     assert_eq!(&payment, payment_from_list);
 }
 
