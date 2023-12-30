@@ -15,7 +15,7 @@ pub(crate) fn unix_timestamp_to_system_time(timestamp: u64) -> SystemTime {
 // 'Hello [15, 16, 255] world' -> 'Hello "0f10ff" world'
 pub(crate) fn replace_byte_arrays_by_hex_string(original: &str) -> String {
     try_replacing_byte_arrays_by_hex_string(original).unwrap_or_else(|e| {
-        error!("Failed to replace byte arrays by hex string: {}", e);
+        error!("Failed to replace byte arrays by hex string: {e}");
         original.to_string()
     })
 }
@@ -35,8 +35,7 @@ fn try_replacing_byte_arrays_by_hex_string(
             .map(|byte| byte.trim().parse::<u8>())
             .collect::<Result<Vec<u8>, _>>()
             .map_to_permanent_failure(format!(
-                "Failed to parse into byte array: {}",
-                bytes_as_string
+                "Failed to parse into byte array: {bytes_as_string}"
             ))?;
 
         Ok(encode(bytes))
