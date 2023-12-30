@@ -440,6 +440,12 @@ dictionary TermsAndConditionsStatus {
     TermsAndConditions terms_and_conditions;
 };
 
+enum BreezHealthCheckStatus {
+    "Operational",
+    "Maintenance",
+    "ServiceDisruption",
+};
+
 //
 // ----------------------------- TOP LEVEL FUNCTIONS + RELATED DEFINITIONS -----------------------------
 //

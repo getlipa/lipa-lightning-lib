@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use colored::Colorize;
 use thousands::Separable;
 use uniffi_lipalightninglib::{
-    Amount, FiatValue, LightningNode, Payment, PaymentState, PaymentType,
+    Amount, BreezHealthCheckStatus, FiatValue, LightningNode, Payment, PaymentState, PaymentType,
 };
 
 pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
@@ -20,6 +20,15 @@ pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
         .unwrap_or("false")
         .parse()
         .context("Fun mode should be true of false")?;
+
+    let health_message = match node.get_health_status()? {
+        BreezHealthCheckStatus::Operational => None,
+        BreezHealthCheckStatus::Maintenance => Some("Maintenance".yellow()),
+        BreezHealthCheckStatus::ServiceDisruption => Some("Service Disruption".red().bold()),
+    };
+    if let Some(health_message) = health_message {
+        println!("{health_message}");
+    }
 
     // Balance
     let line = format!("{:^28}", "Balance".bold());

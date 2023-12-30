@@ -83,6 +83,7 @@ use crate::util::{replace_byte_arrays_by_hex_string, unix_timestamp_to_system_ti
 
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
+pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
 use breez_sdk_core::{
     parse, parse_invoice, BreezServices, GreenlightCredentials, GreenlightNodeConfig, InputType,
     ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
@@ -1655,6 +1656,19 @@ impl LightningNode {
         self.data_store
             .lock_unwrap()
             .retrieve_latest_fiat_topup_info()
+    }
+
+    /// Returns the health check status of Breez and Greenlight services.
+    pub fn get_health_status(&self) -> Result<BreezHealthCheckStatus> {
+        Ok(self
+            .rt
+            .handle()
+            .block_on(self.sdk.service_health_check())
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to get health status",
+            )?
+            .status)
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {

@@ -207,6 +207,10 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "health" => match node.get_health_status() {
+                    Ok(status) => println!("{status:?}"),
+                    Err(message) => println!("{}", format!("{message:#}").red()),
+                },
                 "foreground" => {
                     node.foreground();
                 }
@@ -311,6 +315,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
     hints.insert(CommandHint::new("sweep <address>", "sweep"));
     hints.insert(CommandHint::new("logdebug", "logdebug"));
+    hints.insert(CommandHint::new("health", "health"));
     hints.insert(CommandHint::new("foreground", "foreground"));
     hints.insert(CommandHint::new("background", "background"));
     hints.insert(CommandHint::new("stop", "stop"));
@@ -359,6 +364,7 @@ fn help() {
     println!("  sweep <address>");
     println!();
     println!("  logdebug");
+    println!("  health");
     println!();
     println!("  foreground");
     println!("  background");
