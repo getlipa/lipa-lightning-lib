@@ -77,8 +77,8 @@ pub use crate::recovery::recover_lightning_node;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
 pub use crate::swap::{FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo};
 use crate::task_manager::TaskManager;
-use crate::util::unix_timestamp_to_system_time;
 use crate::util::LogIgnoreError;
+use crate::util::{replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time};
 
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
@@ -1602,7 +1602,10 @@ impl LightningNode {
         info!("Node state:\n{node_state:?}");
         info!("List of available lsps:\n{available_lsps:?}");
         info!("Connected lsp id: {connected_lsp}");
-        info!("List of peer channels:\n{channels}");
+        info!(
+            "List of peer channels:\n{}",
+            replace_byte_arrays_by_hex_string(&channels)
+        );
         Ok(())
     }
 
