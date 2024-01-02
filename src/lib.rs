@@ -1058,7 +1058,7 @@ impl LightningNode {
             .to_amount_down(&exchange_rate);
 
         let mut amount = requested_amount.clone().sats;
-        if let Some(lsp_fees) = lsp_fees.clone() {
+        if let Some(ref lsp_fees) = lsp_fees {
             amount -= lsp_fees.sats;
         }
         let amount = amount.as_sats().to_amount_down(&exchange_rate);
