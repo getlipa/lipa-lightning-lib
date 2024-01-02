@@ -385,7 +385,7 @@ fn calculate_lsp_fee(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
         .parse()
         .context("Amount should be a positive integer number")?;
     let response = node.calculate_lsp_fee(amount)?;
-    println!(" LSP fee: {} SAT", amount_to_string(response.lsp_fee));
+    println!(" LSP fee: {}", amount_to_string(response.lsp_fee));
     Ok(())
 }
 
