@@ -1049,7 +1049,7 @@ impl LightningNode {
         let lsp_fees = created_invoice
             .channel_opening_fees
             .map(|f| f.as_msats().to_amount_up(&exchange_rate));
-        let amount = invoice_details
+        let requested_amount = invoice_details
             .amount
             .clone()
             .ok_or_permanent_failure("Locally created invoice doesn't include an amount")?
@@ -1057,13 +1057,19 @@ impl LightningNode {
             .as_sats()
             .to_amount_down(&exchange_rate);
 
+        let mut amount = requested_amount.clone().sats;
+        if let Some(ref lsp_fees) = lsp_fees {
+            amount -= lsp_fees.sats;
+        }
+        let amount = amount.as_sats().to_amount_down(&exchange_rate);
+
         Ok(Payment {
             payment_type: PaymentType::Receiving,
             payment_state,
             fail_reason: None,
             hash: invoice_details.payment_hash.clone(),
-            amount: amount.clone(),
-            requested_amount: amount,
+            amount,
+            requested_amount,
             invoice_details: invoice_details.clone(),
             created_at: time,
             description: invoice_details.description,

@@ -33,6 +33,6 @@ fn test_payment_fetching() {
 fn assert_invoice_matches_payment(invoice: &InvoiceDetails, payment: &Payment) {
     assert_eq!(invoice, &payment.invoice_details);
     assert_eq!(invoice.payment_hash, payment.hash);
-    assert_eq!(invoice.amount.as_ref().unwrap(), &payment.amount);
+    assert_eq!(invoice.amount.as_ref().unwrap(), &payment.requested_amount);
     assert_eq!(invoice.description, payment.description);
 }
