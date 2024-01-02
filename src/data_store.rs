@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use crow::{PermanentFailureCode, TemporaryFailureCode};
 use perro::MapToError;
 use rusqlite::{backup, params, Connection, Row};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub(crate) const BACKUP_DB_FILENAME_SUFFIX: &str = ".backup";
 
@@ -154,35 +154,49 @@ impl DataStore {
         hash: &str,
         invoice: &str,
         channel_opening_fees: &Option<u64>,
+        invoice_expiry_timestamp: u64,
     ) -> Result<()> {
         self.backup_status = BackupStatus::WaitingForBackup;
         self.conn
             .execute(
                 "\
-            INSERT INTO created_invoices (hash, invoice, channel_opening_fees)\
-            VALUES (?1, ?2, ?3)\
+            INSERT INTO created_invoices (hash, invoice, channel_opening_fees, invoice_expiry_timestamp)\
+            VALUES (?1, ?2, ?3, ?4)\
             ",
-                params![hash, invoice, channel_opening_fees],
+                params![hash, invoice, channel_opening_fees, invoice_expiry_timestamp],
             )
             .map_to_permanent_failure("Failed to store created invoice to local db")?;
         Ok(())
     }
 
+    /// Returns all pending and `number_of_expired_invoices` expired invoices.
     pub fn retrieve_created_invoices(
         &self,
-        number_of_invoices: u32,
+        number_of_expired_invoices: u32,
     ) -> Result<Vec<CreatedInvoice>> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_to_permanent_failure("Time went backwards")?
+            .as_secs();
+
         self.conn
             .prepare(
                 "\
-            SELECT hash, invoice, channel_opening_fees \
-            FROM created_invoices \
-            ORDER BY id DESC \
-            LIMIT ?1;
-        ",
+            SELECT * FROM ( \
+                SELECT hash, invoice, channel_opening_fees \
+                FROM created_invoices \
+                WHERE invoice_expiry_timestamp >= ?1) \
+            UNION \
+            SELECT * FROM ( \
+                SELECT hash, invoice, channel_opening_fees \
+                FROM created_invoices \
+                WHERE invoice_expiry_timestamp < ?1 \
+                ORDER BY id DESC \
+                LIMIT ?2);
+            ",
             )
             .map_to_permanent_failure("Failed to retrieve created invoice from local db")?
-            .query_map([number_of_invoices], |r| {
+            .query_map([now, number_of_expired_invoices as u64], |r| {
                 Ok(CreatedInvoice {
                     hash: r.get(0)?,
                     invoice: r.get(1)?,
@@ -533,7 +547,7 @@ mod tests {
     use crow::{PermanentFailureCode, TemporaryFailureCode};
     use std::fs;
     use std::thread::sleep;
-    use std::time::{Duration, SystemTime};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     const TEST_DB_PATH: &str = ".3l_local_test";
 
@@ -960,12 +974,18 @@ mod tests {
 
         assert!(data_store.retrieve_created_invoices(5).unwrap().is_empty());
 
-        let invoice1 = CreatedInvoice {
+        let future = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 1000;
+
+        let expired_invoice = CreatedInvoice {
             hash: "hash1".to_string(),
             invoice: "invoice1".to_string(),
             channel_opening_fees: Some(25000000),
         };
-        let invoice2 = CreatedInvoice {
+        let pending_invoice = CreatedInvoice {
             hash: "hash2".to_string(),
             invoice: "invoice2".to_string(),
             channel_opening_fees: None,
@@ -973,32 +993,41 @@ mod tests {
 
         data_store
             .store_created_invoice(
-                invoice1.hash.as_str(),
-                invoice1.invoice.as_str(),
-                &invoice1.channel_opening_fees,
+                expired_invoice.hash.as_str(),
+                expired_invoice.invoice.as_str(),
+                &expired_invoice.channel_opening_fees,
+                123,
             )
             .unwrap();
         assert_eq!(
             data_store.retrieve_created_invoices(5).unwrap(),
-            vec![invoice1.clone()]
+            vec![expired_invoice.clone()]
         );
 
         data_store
             .store_created_invoice(
-                invoice2.hash.as_str(),
-                invoice2.invoice.as_str(),
-                &invoice2.channel_opening_fees,
+                pending_invoice.hash.as_str(),
+                pending_invoice.invoice.as_str(),
+                &pending_invoice.channel_opening_fees,
+                future,
             )
             .unwrap();
+        let mut invoices = data_store.retrieve_created_invoices(5).unwrap();
+        invoices.sort_by_key(|i| i.hash.clone());
         assert_eq!(
-            data_store.retrieve_created_invoices(5).unwrap(),
-            vec![invoice2.clone(), invoice1.clone()]
+            invoices,
+            vec![expired_invoice.clone(), pending_invoice.clone()]
         );
 
+        let mut invoices = data_store.retrieve_created_invoices(1).unwrap();
+        invoices.sort_by_key(|i| i.hash.clone());
         assert_eq!(
-            data_store.retrieve_created_invoices(1).unwrap(),
-            vec![invoice2.clone()]
+            invoices,
+            vec![expired_invoice.clone(), pending_invoice.clone()]
         );
+
+        let invoices = data_store.retrieve_created_invoices(0).unwrap();
+        assert_eq!(invoices, vec![pending_invoice.clone()]);
 
         assert!(data_store
             .retrieve_created_invoice_by_hash("hash0")
@@ -1006,15 +1035,15 @@ mod tests {
             .is_none());
         assert_eq!(
             data_store
-                .retrieve_created_invoice_by_hash(invoice1.hash.as_str())
+                .retrieve_created_invoice_by_hash(expired_invoice.hash.as_str())
                 .unwrap(),
-            Some(invoice1)
+            Some(expired_invoice)
         );
         assert_eq!(
             data_store
-                .retrieve_created_invoice_by_hash(invoice2.hash.as_str())
+                .retrieve_created_invoice_by_hash(pending_invoice.hash.as_str())
                 .unwrap(),
-            Some(invoice2)
+            Some(pending_invoice)
         );
     }
 

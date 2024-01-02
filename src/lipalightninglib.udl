@@ -36,7 +36,7 @@ interface LightningNode {
     string pay_lnurlp(LnUrlPayRequestData lnurl_pay_request_data, u64 amount_sat);
 
     [Throws=LnError]
-    sequence<Payment> get_latest_payments(u32 number_of_payments);
+    ListPaymentsResponse get_latest_payments(u32 number_of_payments);
 
     [Throws=LnError]
     Payment get_payment(string hash);
@@ -240,6 +240,11 @@ dictionary LnUrlWithdrawRequestData {
 interface MaxRoutingFeeMode {
     Relative(u16 max_fee_permyriad);
     Absolute(Amount max_fee_amount);
+};
+
+dictionary ListPaymentsResponse {
+    sequence<Payment> pending_payments;
+    sequence<Payment> completed_payments;
 };
 
 dictionary Payment {
