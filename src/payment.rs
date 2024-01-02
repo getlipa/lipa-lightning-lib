@@ -68,3 +68,9 @@ pub struct Payment {
     /// A lightning address the payment has been sent to.
     pub lightning_address: Option<String>,
 }
+
+/// Information about **all** pending and **only** requested completed payments.
+pub struct ListPaymentsResponse {
+    pub pending_payments: Vec<Payment>,
+    pub completed_payments: Vec<Payment>,
+}

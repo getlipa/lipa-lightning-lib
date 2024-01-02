@@ -96,6 +96,10 @@ const MIGRATION_08_OFFER_TOPUP_VALUE: &str = "
     ALTER TABLE offers ADD COLUMN topup_value_sats INTEGER;
 ";
 
+const MIGRATION_09_ADD_INVOICE_EXPIRY: &str = "
+    ALTER TABLE created_invoices ADD COLUMN invoice_expiry_timestamp INTEGER NOT NULL DEFAULT 0;
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -112,6 +116,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_06_PAYMENT_CHANNEL_OPENING_FEES),
         M::up(MIGRATION_07_RESET_FUND_MIGRATION_STATUS),
         M::up(MIGRATION_08_OFFER_TOPUP_VALUE),
+        M::up(MIGRATION_09_ADD_INVOICE_EXPIRY),
     ])
 }
 

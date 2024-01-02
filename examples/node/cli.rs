@@ -18,7 +18,7 @@ use std::time::SystemTime;
 use uniffi_lipalightninglib::{
     Amount, DecodedData, ExchangeRate, FiatValue, InvoiceCreationMetadata, InvoiceDetails,
     LightningNode, LiquidityLimit, LnUrlPayDetails, LnUrlWithdrawDetails, MaxRoutingFeeMode,
-    OfferKind, PaymentMetadata, PaymentState, TzConfig,
+    OfferKind, Payment, PaymentMetadata, PaymentState, TzConfig,
 };
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
@@ -890,53 +890,76 @@ fn list_payments(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) ->
         .parse()
         .context("Number of payments should be a positive integer number")?;
     let payments = node.get_latest_payments(number_of_payments)?;
+    let pending_payments = payments.pending_payments;
+    let completed_payments = payments.completed_payments;
 
-    println!("Total of {} payments", payments.len().to_string().bold());
-    for payment in payments.into_iter().rev() {
-        println!();
-        let payment_type = format!("{:?}", payment.payment_type);
-        let created_at: DateTime<Utc> = payment.created_at.time.into();
-        let timezone = FixedOffset::east_opt(payment.created_at.timezone_utc_offset_secs)
-            .ok_or(anyhow!("east_opt failed"))?;
-        let created_at = created_at.with_timezone(&timezone);
-
-        println!(
-            "{} payment created at {created_at} {}",
-            payment_type.bold(),
-            payment.created_at.timezone_id
-        );
-        println!("      State:            {:?}", payment.payment_state);
-        if payment.payment_state == PaymentState::Failed {
-            println!("      Fail reason:      {:?}", payment.fail_reason);
-        }
-        println!(
-            "      Amount:           {}",
-            amount_to_string(payment.amount)
-        );
-        println!(
-            "      Requested Amount: {}",
-            amount_to_string(payment.requested_amount)
-        );
-        println!(
-            "      Network fees:     {:?}",
-            payment.network_fees.map(amount_to_string)
-        );
-        println!(
-            "      LSP fees:         {:?}",
-            payment.lsp_fees.map(amount_to_string)
-        );
-        println!("      Hash:             {}", payment.hash);
-        println!("      Preimage:         {:?}", payment.preimage);
-        println!("      Description:      {}", payment.description);
-        println!(
-            "      Invoice:          {}",
-            payment.invoice_details.invoice
-        );
-        println!("      Offer:            {}", offer_to_string(payment.offer));
-        println!("      Swap:             {:?}", payment.swap);
-        println!("     Lightning Address: {:?}", payment.lightning_address);
+    let line = format!(
+        " Total of {} {} payments ",
+        completed_payments.len().to_string().bold(),
+        "completed".bold()
+    );
+    println!("{}", line.reversed());
+    for payment in completed_payments.into_iter().rev() {
+        print_payment(payment)?;
     }
 
+    println!();
+    let line = format!(
+        " Total of {} {} payments ",
+        pending_payments.len().to_string().bold(),
+        "pending".bold()
+    );
+    println!("{}", line.reversed());
+    for payment in pending_payments.into_iter().rev() {
+        print_payment(payment)?;
+    }
+
+    Ok(())
+}
+
+fn print_payment(payment: Payment) -> Result<()> {
+    println!();
+    let payment_type = format!("{:?}", payment.payment_type);
+    let created_at: DateTime<Utc> = payment.created_at.time.into();
+    let timezone = FixedOffset::east_opt(payment.created_at.timezone_utc_offset_secs)
+        .ok_or(anyhow!("east_opt failed"))?;
+    let created_at = created_at.with_timezone(&timezone);
+
+    println!(
+        "{} payment created at {created_at} {}",
+        payment_type.bold(),
+        payment.created_at.timezone_id
+    );
+    println!("      State:            {:?}", payment.payment_state);
+    if payment.payment_state == PaymentState::Failed {
+        println!("      Fail reason:      {:?}", payment.fail_reason);
+    }
+    println!(
+        "      Amount:           {}",
+        amount_to_string(payment.amount)
+    );
+    println!(
+        "      Requested Amount: {}",
+        amount_to_string(payment.requested_amount)
+    );
+    println!(
+        "      Network fees:     {:?}",
+        payment.network_fees.map(amount_to_string)
+    );
+    println!(
+        "      LSP fees:         {:?}",
+        payment.lsp_fees.map(amount_to_string)
+    );
+    println!("      Hash:             {}", payment.hash);
+    println!("      Preimage:         {:?}", payment.preimage);
+    println!("      Description:      {}", payment.description);
+    println!(
+        "      Invoice:          {}",
+        payment.invoice_details.invoice
+    );
+    println!("      Offer:            {}", offer_to_string(payment.offer));
+    println!("      Swap:             {:?}", payment.swap);
+    println!("     Lightning Address: {:?}", payment.lightning_address);
     Ok(())
 }
 

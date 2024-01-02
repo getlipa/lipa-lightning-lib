@@ -72,6 +72,7 @@ pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 pub use crate::lnurl::{LnUrlPayDetails, LnUrlWithdrawDetails};
 use crate::locker::Locker;
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
+pub use crate::payment::ListPaymentsResponse;
 pub use crate::payment::{Payment, PaymentState, PaymentType};
 pub use crate::recovery::recover_lightning_node;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
@@ -86,9 +87,9 @@ use breez_sdk_core::{
     parse, parse_invoice, BreezServices, GreenlightCredentials, GreenlightNodeConfig, InputType,
     ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
     LnUrlWithdrawRequestData, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails,
-    PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest, ReceiveOnchainRequest,
-    RefundRequest, ReportIssueRequest, ReportPaymentFailureDetails, SendPaymentRequest,
-    SweepRequest,
+    PaymentStatus, PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest,
+    ReceiveOnchainRequest, RefundRequest, ReportIssueRequest, ReportPaymentFailureDetails,
+    SendPaymentRequest, SweepRequest,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -528,6 +529,7 @@ impl LightningNode {
                 &response.ln_invoice.payment_hash,
                 &response.ln_invoice.bolt11,
                 &response.opening_fee_msat,
+                response.ln_invoice.timestamp + response.ln_invoice.expiry,
             )
             .map_to_permanent_failure("Failed to persist created invoice")?;
 
@@ -785,14 +787,18 @@ impl LightningNode {
     /// Get a list of the latest payments
     ///
     /// Parameters:
-    /// * `number_of_payments` - the maximum number of payments that will be returned
-    pub fn get_latest_payments(&self, number_of_payments: u32) -> Result<Vec<Payment>> {
+    /// * `number_of_completed_payments` - the maximum number of completed payments that will be returned
+    pub fn get_latest_payments(
+        &self,
+        number_of_completed_payments: u32,
+    ) -> Result<ListPaymentsResponse> {
+        const LEEWAY_FOR_PENDING_OUTGOING_PAYMENTS: u32 = 10;
         let list_payments_request = ListPaymentsRequest {
             filters: Some(vec![PaymentTypeFilter::Sent, PaymentTypeFilter::Received]),
             from_timestamp: None,
             to_timestamp: None,
             include_failures: Some(true),
-            limit: Some(number_of_payments),
+            limit: Some(number_of_completed_payments + LEEWAY_FOR_PENDING_OUTGOING_PAYMENTS),
             offset: None,
         };
         let breez_payments = self
@@ -802,29 +808,40 @@ impl LightningNode {
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
             .into_iter()
             .map(|p| self.payment_from_breez_payment(p))
-            .collect::<Result<Vec<Payment>>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
-        let breez_payment_hashes: HashSet<String> = breez_payments
+        // Query created invoices, filter out ones which are in the breez db.
+        let breez_payment_hashes: HashSet<_> = breez_payments
             .iter()
-            .map(|p| p.invoice_details.payment_hash.clone())
+            .map(|p| p.invoice_details.payment_hash.as_ref())
             .collect();
         let created_invoices = self
             .data_store
             .lock_unwrap()
-            .retrieve_created_invoices(number_of_payments)?;
-        let mut pending_inbound_payments = created_invoices
+            .retrieve_created_invoices(number_of_completed_payments)?;
+        let created_invoices = created_invoices
             .into_iter()
             .filter(|i| !breez_payment_hashes.contains(i.hash.as_str()))
             .map(|i| self.payment_from_created_invoice(&i))
-            .collect::<Result<Vec<Payment>>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
-        let mut payments = breez_payments;
-        payments.append(&mut pending_inbound_payments);
-        payments.sort_by_key(|p| Reverse(p.created_at.time));
-        Ok(payments
-            .into_iter()
-            .take(number_of_payments as usize)
-            .collect())
+        // Split by state.
+        let mut pending_payments = Vec::new();
+        let mut completed_payments = Vec::new();
+        for payment in breez_payments.into_iter().chain(created_invoices) {
+            match payment.payment_state {
+                PaymentState::Created | PaymentState::Retried => pending_payments.push(payment),
+                _ => completed_payments.push(payment),
+            }
+        }
+
+        pending_payments.sort_by_key(|p| Reverse(p.created_at.time));
+        completed_payments.sort_by_key(|p| Reverse(p.created_at.time));
+        completed_payments.truncate(number_of_completed_payments as usize);
+        Ok(ListPaymentsResponse {
+            pending_payments,
+            completed_payments,
+        })
     }
 
     /// Get a payment given its payment hash
@@ -1212,7 +1229,25 @@ impl LightningNode {
             .query_uncompleted_topups()
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
         let rate = self.get_exchange_rate();
-        let latest_payments = self.get_latest_payments(5)?;
+
+        let list_payments_request = ListPaymentsRequest {
+            filters: Some(vec![PaymentTypeFilter::Received]),
+            from_timestamp: None,
+            to_timestamp: None,
+            include_failures: Some(false),
+            limit: Some(5),
+            offset: None,
+        };
+        let latest_payments = self
+            .rt
+            .handle()
+            .block_on(self.sdk.list_payments(list_payments_request))
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
+            .into_iter()
+            .filter(|p| p.status == PaymentStatus::Complete)
+            .map(|p| self.payment_from_breez_payment(p))
+            .collect::<Result<Vec<_>>>()?;
+
         Ok(
             filter_out_recently_claimed_topups(topup_infos, latest_payments)
                 .into_iter()
