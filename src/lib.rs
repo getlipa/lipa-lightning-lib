@@ -292,8 +292,9 @@ impl LightningNode {
             rt.handle(),
         ));
 
+        let events_callback = Arc::new(events_callback);
         let event_listener = Box::new(LipaEventListener::new(
-            events_callback,
+            Arc::clone(&events_callback),
             Arc::clone(&analytics_interceptor),
         ));
 
@@ -366,6 +367,7 @@ impl LightningNode {
             Arc::clone(&data_store),
             Arc::clone(&sdk),
             backup_manager,
+            events_callback,
         )?));
         task_manager.lock_unwrap().foreground();
 
