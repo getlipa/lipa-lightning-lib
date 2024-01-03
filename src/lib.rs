@@ -1268,7 +1268,7 @@ impl LightningNode {
     /// * `offer` - An uncompleted offer for which the lightning payout fee should get calculated.
     pub fn calculate_lightning_payout_fee(&self, offer: OfferInfo) -> Result<Amount> {
         ensure!(
-            offer.status == OfferStatus::REFUNDED || offer.status == OfferStatus::SETTLED,
+            offer.status != OfferStatus::REFUNDED && offer.status != OfferStatus::SETTLED,
             invalid_input(format!("Provided offer is already completed: {:?}", offer))
         );
 
@@ -1320,12 +1320,13 @@ impl LightningNode {
             }
             Err(err) => permanent_failure!("Invalid LNURLw in offer: {err}"),
         };
+        let collectable_amount = lnurlw_data.max_withdrawable;
         let hash = match self
             .rt
             .handle()
             .block_on(self.sdk.lnurl_withdraw(LnUrlWithdrawRequest {
                 data: lnurlw_data,
-                amount_msat: offer.amount.sats.as_sats().msats,
+                amount_msat: collectable_amount,
                 description: None,
             })) {
             Ok(breez_sdk_core::LnUrlWithdrawResult::Ok { data }) => data.invoice.payment_hash,
