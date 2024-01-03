@@ -1268,7 +1268,7 @@ impl LightningNode {
     /// * `offer` - An uncompleted offer for which the lightning payout fee should get calculated.
     pub fn calculate_lightning_payout_fee(&self, offer: OfferInfo) -> Result<Amount> {
         ensure!(
-            offer.status == OfferStatus::REFUNDED || offer.status == OfferStatus::SETTLED,
+            offer.status != OfferStatus::REFUNDED && offer.status != OfferStatus::SETTLED,
             invalid_input(format!("Provided offer is already completed: {:?}", offer))
         );
 
