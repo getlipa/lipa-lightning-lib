@@ -1320,12 +1320,13 @@ impl LightningNode {
             }
             Err(err) => permanent_failure!("Invalid LNURLw in offer: {err}"),
         };
+        let collectable_amount = lnurlw_data.max_withdrawable;
         let hash = match self
             .rt
             .handle()
             .block_on(self.sdk.lnurl_withdraw(LnUrlWithdrawRequest {
                 data: lnurlw_data,
-                amount_msat: offer.amount.sats.as_sats().msats,
+                amount_msat: collectable_amount,
                 description: None,
             })) {
             Ok(breez_sdk_core::LnUrlWithdrawResult::Ok { data }) => data.invoice.payment_hash,
