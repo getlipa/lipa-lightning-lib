@@ -205,6 +205,18 @@ pub enum DecodedData {
     },
 }
 
+/// Invoice affordability returned by [`LightningNode::get_invoice_affordability`].
+#[derive(Debug)]
+pub enum InvoiceAffordability {
+    /// Not enough funds available to pay the requested amount.
+    NotEnoughFunds,
+    /// Not enough funds available to pay the requested amount and the max routing fees.
+    /// There might be a route that is affordable enough but it is unknown until tried.
+    UnaffordableFees,
+    /// Enough funds for the invoice and routing fees are available.
+    Affordable,
+}
+
 const MAX_FEE_PERMYRIAD: u16 = 50;
 const EXEMPT_FEE: Sats = Sats::new(21);
 
@@ -601,6 +613,39 @@ impl LightningNode {
     /// Get the max routing fee mode that will be employed to restrict the fees for paying a given amount in sats
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
         get_payment_max_routing_fee_mode(amount_sat, &self.get_exchange_rate())
+    }
+
+    /// Checks if the given amount could be spent on an invoice.
+    ///
+    /// Parameters:
+    /// * `amount` - The to be spent amount.
+    pub fn get_invoice_affordability(&self, amount_sat: u64) -> Result<InvoiceAffordability> {
+        let amount = amount_sat.as_sats();
+
+        let routing_fee_mode = self.get_payment_max_routing_fee_mode(amount_sat);
+
+        let max_fee_msats = match routing_fee_mode {
+            MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
+                (amount_sat * (max_fee_permyriad as u64) / 10000).as_sats()
+            }
+            MaxRoutingFeeMode::Absolute { max_fee_amount } => max_fee_amount.sats.as_sats(),
+        }
+        .msats;
+
+        let node_state = self.sdk.node_info().map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to read node info",
+        )?;
+
+        if amount.msats > node_state.max_payable_msat {
+            return Ok(InvoiceAffordability::NotEnoughFunds);
+        }
+
+        if amount.msats + max_fee_msats > node_state.max_payable_msat {
+            return Ok(InvoiceAffordability::UnaffordableFees);
+        }
+
+        Ok(InvoiceAffordability::Affordable)
     }
 
     /// Start an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.

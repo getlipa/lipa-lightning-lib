@@ -26,6 +26,9 @@ interface LightningNode {
 
     MaxRoutingFeeMode get_payment_max_routing_fee_mode(u64 amount_sat);
 
+    [Throws=LnError]
+    InvoiceAffordability get_invoice_affordability(u64 amount_sat);
+
     [Throws=PayError]
     void pay_invoice(InvoiceDetails invoice_details, PaymentMetadata metadata);
 
@@ -448,6 +451,12 @@ enum BreezHealthCheckStatus {
     "Operational",
     "Maintenance",
     "ServiceDisruption",
+};
+
+enum InvoiceAffordability {
+    "NotEnoughFunds",
+    "UnaffordableFees",
+    "Affordable",
 };
 
 //
