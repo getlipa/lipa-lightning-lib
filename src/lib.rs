@@ -205,6 +205,18 @@ pub enum DecodedData {
     },
 }
 
+/// Invoice affordability returned by [`LightningNode::get_invoice_affordability`].
+#[derive(Debug)]
+pub enum InvoiceAffordability {
+    /// Not enough funds available to pay the requested amount.
+    NotEnoughFunds,
+    /// Not enough funds available to pay the requested amount and the max routing fees.
+    /// There might be a route that is affordable enough but it is unknown until tried.
+    UnaffordableFees,
+    /// Enough funds for the invoice and routing fees are available.
+    Affordable,
+}
+
 const MAX_FEE_PERMYRIAD: u16 = 50;
 const EXEMPT_FEE: Sats = Sats::new(21);
 
@@ -601,6 +613,45 @@ impl LightningNode {
     /// Get the max routing fee mode that will be employed to restrict the fees for paying a given amount in sats
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
         get_payment_max_routing_fee_mode(amount_sat, &self.get_exchange_rate())
+    }
+
+    /// Get the affordability status of an invoice. Throws an error if the invoice doesn't have a
+    /// requested amount.
+    ///
+    /// Parameters:
+    /// * `invoice_details` - The invoice details of an invoice with a requested amount,
+    /// can be obtained using [`LightningNode::decode_data`].
+    pub fn get_invoice_affordability(
+        &self,
+        invoice_details: InvoiceDetails,
+    ) -> Result<InvoiceAffordability> {
+        let invoice_amount = invoice_details
+            .amount
+            .ok_or_invalid_input("Invoice doesn't contain requested amount")?;
+
+        let routing_fee_mode = self.get_payment_max_routing_fee_mode(invoice_amount.sats);
+
+        let max_fee_sats = match routing_fee_mode {
+            MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
+                invoice_amount.sats / 10000 * (max_fee_permyriad as u64)
+            }
+            MaxRoutingFeeMode::Absolute { max_fee_amount } => max_fee_amount.sats,
+        };
+
+        let node_state = self.sdk.node_info().map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to read node info",
+        )?;
+
+        if invoice_amount.sats > node_state.max_payable_msat {
+            return Ok(InvoiceAffordability::NotEnoughFunds);
+        }
+
+        if invoice_amount.sats + max_fee_sats > node_state.max_payable_msat {
+            return Ok(InvoiceAffordability::UnaffordableFees);
+        }
+
+        Ok(InvoiceAffordability::Affordable)
     }
 
     /// Start an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.

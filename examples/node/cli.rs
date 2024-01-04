@@ -103,6 +103,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "getinvoiceaffordability" => {
+                    if let Err(message) = get_invoice_affordability(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "payinvoice" => {
                     if let Err(message) = pay_invoice(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
@@ -264,6 +269,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "getmaxroutingfeemode <payment amount in SAT>",
         "getmaxroutingfeemode ",
     ));
+    hints.insert(CommandHint::new(
+        "getinvoiceaffordability <invoice>",
+        "getinvoiceaffordability",
+    ));
     hints.insert(CommandHint::new("payinvoice <invoice>", "payinvoice "));
     hints.insert(CommandHint::new(
         "payopeninvoice <invoice> <amount in SAT>",
@@ -342,6 +351,7 @@ fn help() {
     println!("  invoice <amount in SAT> [description]");
     println!("  decodedata <data>");
     println!("  getmaxroutingfeemode <payment amount in SAT>");
+    println!("  getinvoiceaffordability <invoice>");
     println!("  payinvoice <invoice>");
     println!("  payopeninvoice <invoice> <amount in SAT>");
     println!("  paylnurlp <lnurlp> <amount in SAT>");
@@ -648,6 +658,30 @@ fn get_max_routing_fee_mode(
             );
         }
     }
+
+    Ok(())
+}
+
+fn get_invoice_affordability(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<()> {
+    let invoice = words.next().ok_or(anyhow!("Invoice is required"))?;
+
+    let data = node
+        .decode_data(invoice.to_string())
+        .context("Couldn't decode invoice")?;
+
+    let invoice_details = match data {
+        DecodedData::Bolt11Invoice { invoice_details } => Ok(invoice_details),
+        _ => Err(anyhow!("Expected bolt11 invoice")),
+    }?;
+
+    let invoice_affordability = node
+        .get_invoice_affordability(invoice_details)
+        .context("Couldn't get invoice affordability")?;
+
+    println!("{:?}", invoice_affordability);
 
     Ok(())
 }
