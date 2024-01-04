@@ -1,3 +1,5 @@
+use crate::BreezHealthCheckStatus;
+
 /// Asynchronous events that the consumer of this library might be interested in handling are delivered through this interface.
 /// These callbacks will only be called once per event.
 pub trait EventsCallback: Send + Sync {
@@ -31,4 +33,10 @@ pub trait EventsCallback: Send + Sync {
     /// Parameters:
     /// * `payment_hash` - the hash of the payment can be used to cross-reference this event to the payment that has failed
     fn payment_failed(&self, payment_hash: String);
+
+    /// This callback will be called when a change to the Breez services health is noticed
+    ///
+    /// Parameters:
+    /// * `status` - the new status
+    fn breez_health_status_changed_to(&self, status: BreezHealthCheckStatus);
 }

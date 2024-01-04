@@ -1,4 +1,4 @@
-use uniffi_lipalightninglib::EventsCallback;
+use uniffi_lipalightninglib::{BreezHealthCheckStatus, EventsCallback};
 
 pub struct PrintEventsHandler {}
 
@@ -17,5 +17,9 @@ impl EventsCallback for PrintEventsHandler {
 
     fn payment_failed(&self, payment_hash: String) {
         println!("An outgoing payment has failed! Its hash is {payment_hash}");
+    }
+
+    fn breez_health_status_changed_to(&self, status: BreezHealthCheckStatus) {
+        println!("The Breez SDK health status changed to {status:?}");
     }
 }

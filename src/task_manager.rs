@@ -3,7 +3,7 @@ use crate::data_store::{BackupStatus, DataStore};
 use crate::errors::Result;
 use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProvider};
 use crate::locker::Locker;
-use crate::RuntimeErrorCode;
+use crate::{BreezHealthCheckStatus, EventsCallback, RuntimeErrorCode};
 use std::env;
 
 use crate::backup::BackupManager;
@@ -19,6 +19,7 @@ pub(crate) struct TaskPeriods {
     pub update_lsp_fee: Option<Duration>,
     pub redeem_swaps: Option<Duration>,
     pub backup: Option<Duration>,
+    pub health_status_check: Option<Duration>,
 }
 
 pub(crate) struct TaskManager {
@@ -29,6 +30,8 @@ pub(crate) struct TaskManager {
     sdk: Arc<BreezServices>,
     lsp_fee: Arc<Mutex<Option<OpeningFeeParams>>>,
     backup_manager: Arc<BackupManager>,
+    events_callback: Arc<Box<dyn EventsCallback>>,
+    breez_health_status: Arc<Mutex<Option<BreezHealthCheckStatus>>>,
 
     task_handles: Vec<RepeatingTaskHandle>,
 }
@@ -39,6 +42,7 @@ const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_lsp_fee: Some(Duration::from_secs(10 * 60)),
     redeem_swaps: Some(Duration::from_secs(10 * 60)),
     backup: Some(Duration::from_secs(30)),
+    health_status_check: Some(Duration::from_secs(30)),
 };
 
 const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
@@ -47,6 +51,7 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_lsp_fee: None,
     redeem_swaps: None,
     backup: None,
+    health_status_check: None,
 };
 impl TaskManager {
     pub fn new(
@@ -55,6 +60,7 @@ impl TaskManager {
         data_store: Arc<Mutex<DataStore>>,
         sdk: Arc<BreezServices>,
         backup_manager: BackupManager,
+        events_callback: Arc<Box<dyn EventsCallback>>,
     ) -> Result<Self> {
         let exchange_rates = data_store.lock_unwrap().get_all_exchange_rates()?;
 
@@ -66,6 +72,8 @@ impl TaskManager {
             sdk,
             lsp_fee: Arc::new(Mutex::new(None)),
             backup_manager: Arc::new(backup_manager),
+            events_callback,
+            breez_health_status: Arc::new(Mutex::new(None)),
             task_handles: Vec::new(),
         })
     }
@@ -122,6 +130,12 @@ impl TaskManager {
         // Backup local db
         if let Some(period) = periods.backup {
             self.task_handles.push(self.start_backup_local_db(period));
+        }
+
+        // Health status check
+        if let Some(period) = periods.health_status_check {
+            self.task_handles
+                .push(self.start_health_status_check(period));
         }
     }
 
@@ -253,6 +267,42 @@ impl TaskManager {
             }
         })
     }
+
+    fn start_health_status_check(&self, period: Duration) -> RepeatingTaskHandle {
+        let sdk = Arc::clone(&self.sdk);
+        let status = Arc::clone(&self.breez_health_status);
+        let events_callback = Arc::clone(&self.events_callback);
+        self.runtime_handle.spawn_repeating_task(period, move || {
+            let sdk = Arc::clone(&sdk);
+            let status = Arc::clone(&status);
+            let events_callback = Arc::clone(&events_callback);
+            async move {
+                debug!("Starting health status check task");
+                let new_status = match sdk.service_health_check().await {
+                    Ok(status) => {
+                        debug!("Breez Health Status: {status:?}");
+                        status.status
+                    }
+                    Err(e) => {
+                        error!("Failed to call service_health_check(): {e}");
+                        return;
+                    }
+                };
+
+                let mut status = status.lock_unwrap();
+
+                if let Some(status) = &*status {
+                    if *status != new_status {
+                        events_callback.breez_health_status_changed_to(new_status.clone());
+                    }
+                } else {
+                    events_callback.breez_health_status_changed_to(new_status.clone());
+                }
+
+                *status = Some(new_status);
+            }
+        })
+    }
 }
 
 fn persist_exchange_rates(data_store: &Arc<Mutex<DataStore>>, rates: &[ExchangeRate]) {
@@ -280,6 +330,7 @@ fn get_foreground_periods() -> TaskPeriods {
                 update_lsp_fee: Some(period),
                 redeem_swaps: Some(period),
                 backup: Some(period),
+                health_status_check: Some(period),
             }
         }
         Err(_) => FOREGROUND_PERIODS,

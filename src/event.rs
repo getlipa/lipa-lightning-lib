@@ -4,13 +4,13 @@ use breez_sdk_core::{BreezEvent, EventListener, PaymentDetails};
 use std::sync::Arc;
 
 pub(crate) struct LipaEventListener {
-    events_callback: Box<dyn EventsCallback>,
+    events_callback: Arc<Box<dyn EventsCallback>>,
     analytics_interceptor: Arc<AnalyticsInterceptor>,
 }
 
 impl LipaEventListener {
     pub fn new(
-        events_callback: Box<dyn EventsCallback>,
+        events_callback: Arc<Box<dyn EventsCallback>>,
         analytics_interceptor: Arc<AnalyticsInterceptor>,
     ) -> Self {
         Self {
