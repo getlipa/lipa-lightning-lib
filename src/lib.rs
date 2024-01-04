@@ -626,7 +626,7 @@ impl LightningNode {
 
         let max_fee_msats = match routing_fee_mode {
             MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
-                (amount_sat / 10000 * (max_fee_permyriad as u64)).as_sats()
+                (amount_sat * (max_fee_permyriad as u64) / 10000).as_sats()
             }
             MaxRoutingFeeMode::Absolute { max_fee_amount } => max_fee_amount.sats.as_sats(),
         }
