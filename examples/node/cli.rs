@@ -270,7 +270,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "getmaxroutingfeemode ",
     ));
     hints.insert(CommandHint::new(
-        "getinvoiceaffordability <invoice>",
+        "getinvoiceaffordability <amount in SAT>",
         "getinvoiceaffordability",
     ));
     hints.insert(CommandHint::new("payinvoice <invoice>", "payinvoice "));
@@ -351,7 +351,7 @@ fn help() {
     println!("  invoice <amount in SAT> [description]");
     println!("  decodedata <data>");
     println!("  getmaxroutingfeemode <payment amount in SAT>");
-    println!("  getinvoiceaffordability <invoice>");
+    println!("  getinvoiceaffordability <amount in SAT>");
     println!("  payinvoice <invoice>");
     println!("  payopeninvoice <invoice> <amount in SAT>");
     println!("  paylnurlp <lnurlp> <amount in SAT>");
@@ -666,19 +666,14 @@ fn get_invoice_affordability(
     node: &LightningNode,
     words: &mut dyn Iterator<Item = &str>,
 ) -> Result<()> {
-    let invoice = words.next().ok_or(anyhow!("Invoice is required"))?;
-
-    let data = node
-        .decode_data(invoice.to_string())
-        .context("Couldn't decode invoice")?;
-
-    let invoice_details = match data {
-        DecodedData::Bolt11Invoice { invoice_details } => Ok(invoice_details),
-        _ => Err(anyhow!("Expected bolt11 invoice")),
-    }?;
+    let amount_sat: u64 = words
+        .next()
+        .ok_or(anyhow!("Amount is required"))?
+        .parse()
+        .context("Couldn't parse amount as u64")?;
 
     let invoice_affordability = node
-        .get_invoice_affordability(invoice_details)
+        .get_invoice_affordability(amount_sat)
         .context("Couldn't get invoice affordability")?;
 
     println!("{:?}", invoice_affordability);

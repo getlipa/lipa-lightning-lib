@@ -615,39 +615,33 @@ impl LightningNode {
         get_payment_max_routing_fee_mode(amount_sat, &self.get_exchange_rate())
     }
 
-    /// Get the affordability status of an invoice. Throws an error if the invoice doesn't have a
-    /// requested amount.
+    /// Checks if the given amount could be spent on an invoice.
     ///
     /// Parameters:
-    /// * `invoice_details` - The invoice details of an invoice with a requested amount,
-    /// can be obtained using [`LightningNode::decode_data`].
-    pub fn get_invoice_affordability(
-        &self,
-        invoice_details: InvoiceDetails,
-    ) -> Result<InvoiceAffordability> {
-        let invoice_amount = invoice_details
-            .amount
-            .ok_or_invalid_input("Invoice doesn't contain requested amount")?;
+    /// * `amount` - The to be spent amount.
+    pub fn get_invoice_affordability(&self, amount_sat: u64) -> Result<InvoiceAffordability> {
+        let amount = amount_sat.as_sats();
 
-        let routing_fee_mode = self.get_payment_max_routing_fee_mode(invoice_amount.sats);
+        let routing_fee_mode = self.get_payment_max_routing_fee_mode(amount_sat);
 
-        let max_fee_sats = match routing_fee_mode {
+        let max_fee_msats = match routing_fee_mode {
             MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
-                invoice_amount.sats / 10000 * (max_fee_permyriad as u64)
+                (amount_sat / 10000 * (max_fee_permyriad as u64)).as_sats()
             }
-            MaxRoutingFeeMode::Absolute { max_fee_amount } => max_fee_amount.sats,
-        };
+            MaxRoutingFeeMode::Absolute { max_fee_amount } => max_fee_amount.sats.as_sats(),
+        }
+        .msats;
 
         let node_state = self.sdk.node_info().map_to_runtime_error(
             RuntimeErrorCode::NodeUnavailable,
             "Failed to read node info",
         )?;
 
-        if invoice_amount.sats > node_state.max_payable_msat {
+        if amount.msats > node_state.max_payable_msat {
             return Ok(InvoiceAffordability::NotEnoughFunds);
         }
 
-        if invoice_amount.sats + max_fee_sats > node_state.max_payable_msat {
+        if amount.msats + max_fee_msats > node_state.max_payable_msat {
             return Ok(InvoiceAffordability::UnaffordableFees);
         }
 
