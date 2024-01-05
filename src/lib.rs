@@ -929,8 +929,10 @@ impl LightningNode {
             ),
         };
 
-        let invoice = parse_invoice(&payment_details.bolt11)
-            .map_to_permanent_failure("Invalid invoice provided by the Breez SDK")?;
+        let invoice = parse_invoice(&payment_details.bolt11).map_to_permanent_failure(format!(
+            "Invalid invoice provided by the Breez SDK: {}",
+            payment_details.bolt11
+        ))?;
         let invoice_details = InvoiceDetails::from_ln_invoice(invoice.clone(), &None);
 
         let local_payment_data = self
@@ -1083,8 +1085,11 @@ impl LightningNode {
     }
 
     fn payment_from_created_invoice(&self, created_invoice: &CreatedInvoice) -> Result<Payment> {
-        let invoice = parse_invoice(created_invoice.invoice.as_str())
-            .map_to_permanent_failure("Invalid invoice provided by the Breez SDK")?;
+        let invoice =
+            parse_invoice(created_invoice.invoice.as_str()).map_to_permanent_failure(format!(
+                "Invalid invoice obtained from local db: {}",
+                created_invoice.invoice
+            ))?;
         let invoice_details = InvoiceDetails::from_ln_invoice(invoice.clone(), &None);
 
         let payment_state = if SystemTime::now() > invoice_details.expiry_timestamp {
