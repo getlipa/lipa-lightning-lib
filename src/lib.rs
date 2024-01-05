@@ -86,9 +86,9 @@ use breez_sdk_core::{
     parse, parse_invoice, BreezServices, GreenlightCredentials, GreenlightNodeConfig, InputType,
     ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
     LnUrlWithdrawRequestData, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails,
-    PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest, ReceiveOnchainRequest,
-    RefundRequest, ReportIssueRequest, ReportPaymentFailureDetails, SendPaymentRequest,
-    SweepRequest,
+    PaymentStatus, PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest,
+    ReceiveOnchainRequest, RefundRequest, ReportIssueRequest, ReportPaymentFailureDetails,
+    SendPaymentRequest, SweepRequest,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -96,7 +96,7 @@ use data_store::DataStore;
 use email_address::EmailAddress;
 use honey_badger::{Auth, TermsAndConditions, TermsAndConditionsStatus};
 use iban::Iban;
-use log::{debug, info, Level};
+use log::{debug, error, info, Level};
 use logger::init_logger_once;
 use parrot::AnalyticsClient;
 pub use parrot::PaymentSource;
@@ -802,7 +802,8 @@ impl LightningNode {
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
             .into_iter()
             .map(|p| self.payment_from_breez_payment(p))
-            .collect::<Result<Vec<Payment>>>()?;
+            .filter_map(filter_out_and_log_corrupted_payments)
+            .collect::<Vec<_>>();
 
         let breez_payment_hashes: HashSet<String> = breez_payments
             .iter()
@@ -816,7 +817,8 @@ impl LightningNode {
             .into_iter()
             .filter(|i| !breez_payment_hashes.contains(i.hash.as_str()))
             .map(|i| self.payment_from_created_invoice(&i))
-            .collect::<Result<Vec<Payment>>>()?;
+            .filter_map(filter_out_and_log_corrupted_payments)
+            .collect::<Vec<_>>();
 
         let mut payments = breez_payments;
         payments.append(&mut pending_inbound_payments);
@@ -1212,7 +1214,26 @@ impl LightningNode {
             .query_uncompleted_topups()
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
         let rate = self.get_exchange_rate();
-        let latest_payments = self.get_latest_payments(5)?;
+
+        let list_payments_request = ListPaymentsRequest {
+            filters: Some(vec![PaymentTypeFilter::Received]),
+            from_timestamp: None,
+            to_timestamp: None,
+            include_failures: Some(false),
+            limit: Some(5),
+            offset: None,
+        };
+        let latest_payments = self
+            .rt
+            .handle()
+            .block_on(self.sdk.list_payments(list_payments_request))
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
+            .into_iter()
+            .filter(|p| p.status == PaymentStatus::Complete)
+            .map(|p| self.payment_from_breez_payment(p))
+            .filter_map(filter_out_and_log_corrupted_payments)
+            .collect::<Vec<_>>();
+
         Ok(
             filter_out_recently_claimed_topups(topup_infos, latest_payments)
                 .into_iter()
@@ -1734,6 +1755,19 @@ fn fill_payout_fee(
                 error,
             }
         }
+    }
+}
+
+// TODO provide corrupted payment information partially instead of hiding them
+fn filter_out_and_log_corrupted_payments(r: Result<Payment>) -> Option<Payment> {
+    if r.is_ok() {
+        r.ok()
+    } else {
+        error!(
+            "Corrupted payment data, ignoring payment: {}",
+            r.expect_err("Expected error, received ok")
+        );
+        None
     }
 }
 
