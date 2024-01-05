@@ -4,16 +4,17 @@ use chrono::{DateTime, Utc};
 use colored::Colorize;
 use thousands::Separable;
 use uniffi_lipalightninglib::{
-    Amount, BreezHealthCheckStatus, FiatValue, LightningNode, Payment, PaymentState, PaymentType,
+    Amount, BreezHealthCheckStatus, ChannelClose, FiatValue, LightningNode, Movement, Payment,
+    PaymentState, PaymentType,
 };
 
 pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
-    let number_of_payments: u32 = words
+    let number_of_movements: u32 = words
         .next()
         .unwrap_or("10")
         .parse()
-        .context("Number of payments should be a positive integer number")?;
-    let payments = node.get_latest_payments(number_of_payments)?;
+        .context("Number of movements should be a positive integer number")?;
+    let movements = node.get_latest_movements(number_of_movements)?;
 
     let fun: bool = words
         .next()
@@ -68,17 +69,29 @@ pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
 
     let line = format!("{:^28}", "Pending Activities".bold());
     println!("{}", line.reversed());
-    for payment in payments.pending_payments {
-        print_payment(payment)?;
+    for movement in movements.pending_movements {
+        print_movement(movement)?;
     }
     println!();
 
     let line = format!("{:^28}", "Completed Activities".bold());
     println!("{}", line.reversed());
-    for payment in payments.completed_payments {
-        print_payment(payment)?;
+    for movement in movements.completed_movements {
+        print_movement(movement)?;
     }
 
+    Ok(())
+}
+
+fn print_movement(movement: Movement) -> Result<()> {
+    match movement {
+        Movement::Payment { payment } => print_payment(payment),
+        Movement::ChannelClose { channel_close } => print_channel_close(channel_close),
+    }
+}
+
+fn print_channel_close(_channel_close: ChannelClose) -> Result<()> {
+    // TODO: implement
     Ok(())
 }
 

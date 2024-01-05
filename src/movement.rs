@@ -1,4 +1,5 @@
 use crate::{Amount, InvoiceDetails, OfferKind, PayErrorCode, SwapInfo, TzTime};
+use std::time::SystemTime;
 
 use breez_sdk_core::PaymentStatus;
 
@@ -69,8 +70,45 @@ pub struct Payment {
     pub lightning_address: Option<String>,
 }
 
-/// Information about **all** pending and **only** requested completed payments.
-pub struct ListPaymentsResponse {
-    pub pending_payments: Vec<Payment>,
-    pub completed_payments: Vec<Payment>,
+/// Information about **all** pending and **only** requested completed movements.
+pub struct ListMovementsResponse {
+    pub pending_movements: Vec<Movement>,
+    pub completed_movements: Vec<Movement>,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, PartialEq)]
+pub enum Movement {
+    Payment { payment: Payment },
+    ChannelClose { channel_close: ChannelClose },
+}
+
+impl Movement {
+    pub(crate) fn get_time(&self) -> SystemTime {
+        match self {
+            Movement::Payment { payment } => payment.created_at.time,
+            Movement::ChannelClose { channel_close } => channel_close
+                .closed_at
+                .clone()
+                .map(|t| t.time)
+                .unwrap_or(SystemTime::now()),
+        }
+    }
+}
+
+/// Information about a closed channel.
+#[derive(Debug, PartialEq)]
+pub struct ChannelClose {
+    /// Our balance on the channel that got closed.
+    pub amount: Amount,
+    pub state: ChannelCloseState,
+    /// When the channel closing tx got confirmed. For pending channel closes, this will be empty.
+    pub closed_at: Option<TzTime>,
+    pub closing_tx_id: String,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ChannelCloseState {
+    Pending,
+    Confirmed,
 }

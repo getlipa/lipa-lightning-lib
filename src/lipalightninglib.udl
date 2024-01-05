@@ -39,7 +39,7 @@ interface LightningNode {
     string pay_lnurlp(LnUrlPayRequestData lnurl_pay_request_data, u64 amount_sat);
 
     [Throws=LnError]
-    ListPaymentsResponse get_latest_payments(u32 number_of_payments);
+    ListMovementsResponse get_latest_movements(u32 number_of_movements);
 
     [Throws=LnError]
     Payment get_payment(string hash);
@@ -274,9 +274,27 @@ interface MaxRoutingFeeMode {
     Absolute(Amount max_fee_amount);
 };
 
-dictionary ListPaymentsResponse {
-    sequence<Payment> pending_payments;
-    sequence<Payment> completed_payments;
+[Enum]
+interface Movement {
+    Payment(Payment payment);
+    ChannelClose(ChannelClose channel_close);
+};
+
+dictionary ListMovementsResponse {
+    sequence<Movement> pending_movements;
+    sequence<Movement> completed_movements;
+};
+
+dictionary ChannelClose {
+    Amount amount;
+    ChannelCloseState state;
+    TzTime? closed_at;
+    string closing_tx_id;
+};
+
+enum ChannelCloseState {
+    "Pending",
+    "Confirmed",
 };
 
 dictionary Payment {
