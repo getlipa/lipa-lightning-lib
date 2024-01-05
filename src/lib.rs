@@ -98,7 +98,7 @@ use data_store::DataStore;
 use email_address::EmailAddress;
 use honey_badger::{Auth, TermsAndConditions, TermsAndConditionsStatus};
 use iban::Iban;
-use log::{debug, info, Level};
+use log::{debug, error, info, Level};
 use logger::init_logger_once;
 use parrot::AnalyticsClient;
 pub use parrot::PaymentSource;
@@ -856,7 +856,8 @@ impl LightningNode {
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
             .into_iter()
             .map(|p| self.payment_from_breez_payment(p))
-            .collect::<Result<Vec<_>>>()?;
+            .filter_map(filter_out_and_log_corrupted_payments)
+            .collect::<Vec<_>>();
 
         // Query created invoices, filter out ones which are in the breez db.
         let breez_payment_hashes: HashSet<_> = breez_payments
@@ -871,7 +872,8 @@ impl LightningNode {
             .into_iter()
             .filter(|i| !breez_payment_hashes.contains(i.hash.as_str()))
             .map(|i| self.payment_from_created_invoice(&i))
-            .collect::<Result<Vec<_>>>()?;
+            .filter_map(filter_out_and_log_corrupted_payments)
+            .collect::<Vec<_>>();
 
         // Split by state.
         let mut pending_payments = Vec::new();
@@ -1305,7 +1307,8 @@ impl LightningNode {
             .into_iter()
             .filter(|p| p.status == PaymentStatus::Complete)
             .map(|p| self.payment_from_breez_payment(p))
-            .collect::<Result<Vec<_>>>()?;
+            .filter_map(filter_out_and_log_corrupted_payments)
+            .collect::<Vec<_>>();
 
         Ok(
             filter_out_recently_claimed_topups(topup_infos, latest_payments)
@@ -1855,6 +1858,19 @@ fn fill_payout_fee(
                 error,
             }
         }
+    }
+}
+
+// TODO provide corrupted payment information partially instead of hiding them
+fn filter_out_and_log_corrupted_payments(r: Result<Payment>) -> Option<Payment> {
+    if r.is_ok() {
+        r.ok()
+    } else {
+        error!(
+            "Corrupted payment data, ignoring payment: {}",
+            r.expect_err("Expected error, received ok")
+        );
+        None
     }
 }
 
