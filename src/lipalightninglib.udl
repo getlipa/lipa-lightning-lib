@@ -120,6 +120,15 @@ interface LightningNode {
 
     [Throws=LnError]
     BreezHealthCheckStatus get_health_status();
+
+    [Throws=LnError]
+    boolean is_clear_wallet_feasible();
+
+    [Throws=LnError]
+    ClearWalletInfo prepare_clear_wallet();
+
+    [Throws=LnError]
+    void clear_wallet(ClearWalletInfo clear_wallet_info, BitcoinAddressData destination_onchain_address_data);
 };
 
 dictionary Config {
@@ -211,6 +220,7 @@ interface DecodedData {
     Bolt11Invoice(InvoiceDetails invoice_details);
     LnUrlPay(LnUrlPayDetails lnurl_pay_details);
     LnUrlWithdraw(LnUrlWithdrawDetails lnurl_withdraw_details);
+    OnchainAddress(BitcoinAddressData onchain_address_details);
 };
 
 dictionary LnUrlPayDetails {
@@ -241,6 +251,21 @@ dictionary LnUrlWithdrawRequestData {
     string default_description;
     u64 min_withdrawable;
     u64 max_withdrawable;
+};
+
+dictionary BitcoinAddressData {
+    string address;
+    Network network;
+    u64? amount_sat;
+    string? label;
+    string? message;
+};
+
+enum Network {
+    "Bitcoin",
+    "Testnet",
+    "Signet",
+    "Regtest",
 };
 
 [Enum]
@@ -457,6 +482,14 @@ enum InvoiceAffordability {
     "NotEnoughFunds",
     "UnaffordableFees",
     "Affordable",
+};
+
+dictionary ClearWalletInfo {
+    Amount clear_amount;
+    Amount total_estimated_fees;
+    Amount onchain_fee;
+    Amount swap_fee;
+    string fees_hash;
 };
 
 //

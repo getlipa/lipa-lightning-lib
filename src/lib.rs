@@ -85,12 +85,13 @@ pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
 use breez_sdk_core::{
-    parse, parse_invoice, BreezServices, GreenlightCredentials, GreenlightNodeConfig, InputType,
-    ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
-    LnUrlWithdrawRequestData, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails,
-    PaymentStatus, PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest,
-    ReceiveOnchainRequest, RefundRequest, ReportIssueRequest, ReportPaymentFailureDetails,
-    SendPaymentRequest, SweepRequest,
+    parse, parse_invoice, BitcoinAddressData, BreezServices, GreenlightCredentials,
+    GreenlightNodeConfig, InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData,
+    LnUrlWithdrawRequest, LnUrlWithdrawRequestData, Network, NodeConfig, OpenChannelFeeRequest,
+    OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRefundRequest,
+    PrepareSweepRequest, ReceiveOnchainRequest, RefundRequest, ReportIssueRequest,
+    ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest, SendPaymentRequest,
+    SweepRequest,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -203,6 +204,9 @@ pub enum DecodedData {
     LnUrlWithdraw {
         lnurl_withdraw_details: LnUrlWithdrawDetails,
     },
+    OnchainAddress {
+        onchain_address_details: BitcoinAddressData,
+    },
 }
 
 /// Invoice affordability returned by [`LightningNode::get_invoice_affordability`].
@@ -215,6 +219,21 @@ pub enum InvoiceAffordability {
     UnaffordableFees,
     /// Enough funds for the invoice and routing fees are available.
     Affordable,
+}
+
+/// Information about a wallet clearance operation as returned by
+/// [`LightningNode::prepare_clear_wallet`].
+pub struct ClearWalletInfo {
+    /// The total amount available to be cleared. The amount sent will be smaller due to fees.
+    pub clear_amount: Amount,
+    /// Total fee estimate. Can differ from that fees that are charged when clearing the wallet.
+    pub total_estimated_fees: Amount,
+    /// Estimate for the total that will be paid in onchain fees (lockup + claim txs).
+    pub onchain_fee: Amount,
+    /// Estimate for the fee paid to the swap service.
+    pub swap_fee: Amount,
+    /// Hash that shouldn't be altered.
+    pub fees_hash: String,
 }
 
 const MAX_FEE_PERMYRIAD: u16 = 150;
@@ -1738,6 +1757,112 @@ impl LightningNode {
                 "Failed to get health status",
             )?
             .status)
+    }
+
+    /// Check if clearing the wallet is feasible.
+    ///
+    /// If not feasible, it means the balance is either too high or too low for a reverse-swap to
+    /// be used.
+    pub fn is_clear_wallet_feasible(&self) -> Result<bool> {
+        let amount_sat = self
+            .rt
+            .handle()
+            .block_on(self.sdk.max_reverse_swap_amount())
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to get max reverse swap amount",
+            )?
+            .total_sat;
+
+        let reverse_swap_info = self
+            .rt
+            .handle()
+            .block_on(self.sdk.fetch_reverse_swap_fees(ReverseSwapFeesRequest {
+                send_amount_sat: None,
+            }))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to fetch reverse swap fees",
+            )?;
+
+        Ok(amount_sat >= reverse_swap_info.min && amount_sat <= reverse_swap_info.max)
+    }
+
+    /// Prepares a reverse swap that sends all funds in LN channels. This is possible because the
+    /// route to the swap service is known, so fees can be known in advance.
+    ///
+    /// The return includes fee estimates and must be provided to [`LightningNode::clear_wallet`] in
+    /// order to execute the clear operation.
+    ///
+    /// This can fail if the balance is either too low or too high for it to be reverse-swapped.
+    /// The method [`LightningNode::is_clear_wallet_feasible`] can be used to check if the balance
+    /// is within the required range.
+    pub fn prepare_clear_wallet(&self) -> Result<ClearWalletInfo> {
+        let amount_sat = self
+            .rt
+            .handle()
+            .block_on(self.sdk.max_reverse_swap_amount())
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to get max reverse swap amount",
+            )?
+            .total_sat;
+
+        let reverse_swap_info = self
+            .rt
+            .handle()
+            .block_on(self.sdk.fetch_reverse_swap_fees(ReverseSwapFeesRequest {
+                send_amount_sat: Some(amount_sat),
+            }))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to fetch reverse swap fees",
+            )?;
+
+        let total_fees_sat = reverse_swap_info
+            .total_estimated_fees
+            .ok_or_permanent_failure(
+                "No total reverse swap fee estimation provided when amount was present",
+            )?;
+        let onchain_fee_sat = reverse_swap_info.fees_claim + reverse_swap_info.fees_lockup;
+        let swap_fee_sat =
+            ((amount_sat as f64) * reverse_swap_info.fees_percentage / 100_f64) as u64;
+        let exchange_rate = self.get_exchange_rate();
+
+        Ok(ClearWalletInfo {
+            clear_amount: amount_sat.as_sats().to_amount_up(&exchange_rate),
+            total_estimated_fees: total_fees_sat.as_sats().to_amount_up(&exchange_rate),
+            onchain_fee: onchain_fee_sat.as_sats().to_amount_up(&exchange_rate),
+            swap_fee: swap_fee_sat.as_sats().to_amount_up(&exchange_rate),
+            fees_hash: reverse_swap_info.fees_hash,
+        })
+    }
+
+    /// Starts a reverse swap that sends all funds in LN channels to the provided onchain address.
+    ///
+    /// Parameters:
+    /// * `clear_wallet_info` - An instance of [`ClearWalletInfo`] obtained using
+    /// [`LightningNode::prepare_clear_wallet`].
+    /// * `destination_onchain_address_data` - An onchain address data instance. Can be obtained
+    /// using [`LightningNode::decode_data`].
+    pub fn clear_wallet(
+        &self,
+        clear_wallet_info: ClearWalletInfo,
+        destination_onchain_address_data: BitcoinAddressData,
+    ) -> Result<()> {
+        self.rt
+            .handle()
+            .block_on(self.sdk.send_onchain(SendOnchainRequest {
+                amount_sat: clear_wallet_info.clear_amount.sats,
+                onchain_recipient_address: destination_onchain_address_data.address,
+                pair_hash: clear_wallet_info.fees_hash,
+                sat_per_vbyte: self.query_onchain_fee_rate()?,
+            }))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to start reverse swap",
+            )?;
+        Ok(())
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {
