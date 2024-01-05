@@ -1691,6 +1691,15 @@ impl LightningNode {
                 "Couldn't execute `listpeerchannels` command",
             )?;
 
+        let payments = self
+            .rt
+            .handle()
+            .block_on(self.sdk.execute_dev_command("listpayments".to_string()))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Couldn't execute `listpayments` command",
+            )?;
+
         info!("3L version: {}", env!("GITHUB_REF"));
         info!("Wallet pubkey id: {:?}", self.get_wallet_pubkey_id());
         // Print connected peers, balances, inbound/outbound capacities, on-chain funds.
@@ -1700,6 +1709,10 @@ impl LightningNode {
         info!(
             "List of peer channels:\n{}",
             replace_byte_arrays_by_hex_string(&channels)
+        );
+        info!(
+            "List of payments:\n{}",
+            replace_byte_arrays_by_hex_string(&payments)
         );
         Ok(())
     }
