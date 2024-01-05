@@ -1875,7 +1875,10 @@ mod tests {
 
     #[test]
     fn test_get_payment_max_routing_fee_mode_absolute() {
-        let max_routing_mode = get_payment_max_routing_fee_mode(3_900, &None);
+        let max_routing_mode = get_payment_max_routing_fee_mode(
+            EXEMPT_FEE.msats / ((MAX_FEE_PERMYRIAD as u64) / 10) - 1,
+            &None,
+        );
 
         match max_routing_mode {
             MaxRoutingFeeMode::Absolute { max_fee_amount } => {
