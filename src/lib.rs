@@ -217,7 +217,7 @@ pub enum InvoiceAffordability {
     Affordable,
 }
 
-const MAX_FEE_PERMYRIAD: u16 = 50;
+const MAX_FEE_PERMYRIAD: u16 = 150;
 const EXEMPT_FEE: Sats = Sats::new(21);
 
 /// The main class/struct of this library. Constructing an instance will initiate the Lightning node and
