@@ -29,8 +29,8 @@ pub enum OfferKind {
         exchange_rate: ExchangeRate,
         /// The original fiat amount sent to the exchange.
         topup_value_minor_units: u64,
-        /// The sat amount after the exchange.
-        topup_value_sats: u64,
+        /// The sat amount after the exchange. Isn't available for topups collected before version v0.30.0-beta.
+        topup_value_sats: Option<u64>,
         /// The fee paid to perform the exchange from fiat to sats.
         exchange_fee_minor_units: u64,
         /// The rate of the fee expressed in permyriad (e.g. 1.5% would be 150).
@@ -79,7 +79,7 @@ impl OfferInfo {
                 id: topup_info.id,
                 exchange_rate,
                 topup_value_minor_units: topup_info.topup_value_minor_units,
-                topup_value_sats: topup_info.amount_sat,
+                topup_value_sats: Some(topup_info.amount_sat),
                 exchange_fee_minor_units: topup_info.exchange_fee_minor_units,
                 exchange_fee_rate_permyriad: topup_info.exchange_fee_rate_permyriad,
                 lightning_payout_fee: None,

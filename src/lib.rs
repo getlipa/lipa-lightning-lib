@@ -1844,9 +1844,12 @@ fn fill_payout_fee(
             lightning_payout_fee: _,
             error,
         } => {
-            let lightning_payout_fee =
-                (topup_value_sats.as_sats().msats - requested_amount.msats).as_msats();
-            let lightning_payout_fee = Some(lightning_payout_fee.to_amount_up(rate));
+            let lightning_payout_fee = topup_value_sats.map(|v| {
+                (v.as_sats().msats - requested_amount.msats)
+                    .as_msats()
+                    .to_amount_up(rate)
+            });
+
             OfferKind::Pocket {
                 id,
                 exchange_rate,
@@ -2055,7 +2058,7 @@ mod tests {
                         updated_at: SystemTime::now(),
                     },
                     topup_value_minor_units: 0,
-                    topup_value_sats: 0,
+                    topup_value_sats: Some(0),
                     exchange_fee_minor_units: 0,
                     exchange_fee_rate_permyriad: 0,
                     lightning_payout_fee: None,
@@ -2104,7 +2107,7 @@ mod tests {
                         updated_at: SystemTime::now(),
                     },
                     topup_value_minor_units: 0,
-                    topup_value_sats: 0,
+                    topup_value_sats: Some(0),
                     exchange_fee_minor_units: 0,
                     exchange_fee_rate_permyriad: 0,
                     lightning_payout_fee: None,

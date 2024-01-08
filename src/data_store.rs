@@ -404,7 +404,7 @@ fn offer_kind_from_row(row: &Row) -> rusqlite::Result<Option<OfferKind>> {
             let topup_value_minor_units: u64 = row.get(9)?;
             let exchange_fee_minor_units: u64 = row.get(10)?;
             let exchange_fee_rate_permyriad: u16 = row.get(11)?;
-            let topup_value_sats: u64 = row.get(13)?;
+            let topup_value_sats: Option<u64> = row.get(13)?;
 
             let exchange_rate = ExchangeRate {
                 currency_code: fiat_currency,
@@ -586,7 +586,7 @@ mod tests {
             id: "id".to_string(),
             exchange_rate: exchange_rate.clone(),
             topup_value_minor_units: 51245,
-            topup_value_sats: 2625281,
+            topup_value_sats: Some(2625281),
             exchange_fee_minor_units: 123,
             exchange_fee_rate_permyriad: 50,
             lightning_payout_fee: None,
@@ -604,7 +604,7 @@ mod tests {
             id: "id".to_string(),
             exchange_rate: exchange_rate.clone(),
             topup_value_minor_units: 51245,
-            topup_value_sats: 2625281,
+            topup_value_sats: Some(2625281),
             exchange_fee_minor_units: 123,
             exchange_fee_rate_permyriad: 50,
             lightning_payout_fee: None,
@@ -818,7 +818,7 @@ mod tests {
             id: "id".to_string(),
             exchange_rate: exchange_rate.clone(),
             topup_value_minor_units: 51245,
-            topup_value_sats: 2625281,
+            topup_value_sats: Some(2625281),
             exchange_fee_minor_units: 123,
             exchange_fee_rate_permyriad: 50,
             lightning_payout_fee: None,
