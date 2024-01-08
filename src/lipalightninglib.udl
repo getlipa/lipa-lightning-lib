@@ -424,6 +424,7 @@ dictionary SwapAddressInfo {
     string address;
     Amount min_deposit;
     Amount max_deposit;
+    Amount swap_fee;
 };
 
 dictionary ResolveFailedSwapInfo {

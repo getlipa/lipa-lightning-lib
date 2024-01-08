@@ -19,6 +19,8 @@ pub struct SwapAddressInfo {
     pub min_deposit: Amount,
     /// Maximum amount to be sent to `address`
     pub max_deposit: Amount,
+    /// Estimate for the fee paid to the swap service. For now this will always be `0`.
+    pub swap_fee: Amount,
 }
 
 /// Information about a failed swap

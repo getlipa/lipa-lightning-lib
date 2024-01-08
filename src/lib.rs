@@ -1574,8 +1574,13 @@ impl LightningNode {
 
         Ok(SwapAddressInfo {
             address: swap_info.bitcoin_address,
-            min_deposit: ((swap_info.min_allowed_deposit as u64).as_sats()).to_amount_up(&rate),
-            max_deposit: ((swap_info.max_allowed_deposit as u64).as_sats()).to_amount_down(&rate),
+            min_deposit: (swap_info.min_allowed_deposit as u64)
+                .as_sats()
+                .to_amount_up(&rate),
+            max_deposit: (swap_info.max_allowed_deposit as u64)
+                .as_sats()
+                .to_amount_down(&rate),
+            swap_fee: 0_u64.as_sats().to_amount_up(&rate),
         })
     }
 
