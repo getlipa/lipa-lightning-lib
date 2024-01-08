@@ -362,7 +362,7 @@ interface OfferKind {
         string id,
         ExchangeRate exchange_rate,
         u64 topup_value_minor_units,
-        u64 topup_value_sats,
+        u64? topup_value_sats,
         u64 exchange_fee_minor_units,
         u16 exchange_fee_rate_permyriad,
         Amount? lightning_payout_fee,
