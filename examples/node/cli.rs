@@ -2,6 +2,7 @@ use crate::hinter::{CommandHint, CommandHinter};
 use crate::overview::overview;
 
 use anyhow::{anyhow, bail, Context, Result};
+use breez_sdk_core::BitcoinAddressData;
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Local, Utc};
 use colored::Colorize;
@@ -207,6 +208,16 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         Err(message) => println!("{}", format!("{message:#}").red()),
                     }
                 }
+                "clearwalletinfo" => {
+                    if let Err(message) = clear_wallet_info(node) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
+                "clearwallet" => {
+                    if let Err(message) = clear_wallet(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "logdebug" => {
                     if let Err(message) = node.log_debug_info() {
                         println!("{}", format!("{message:#}").red());
@@ -323,6 +334,8 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "paymentuuid",
     ));
     hints.insert(CommandHint::new("sweep <address>", "sweep"));
+    hints.insert(CommandHint::new("clearwalletinfo", "clearwalletinfo"));
+    hints.insert(CommandHint::new("clearwallet <address>", "clearwallet "));
     hints.insert(CommandHint::new("logdebug", "logdebug"));
     hints.insert(CommandHint::new("health", "health"));
     hints.insert(CommandHint::new("foreground", "foreground"));
@@ -372,6 +385,8 @@ fn help() {
     println!("  paymentuuid <payment hash>");
     println!();
     println!("  sweep <address>");
+    println!("  clearwalletinfo");
+    println!("  clearwallet <address>");
     println!();
     println!("  logdebug");
     println!("  health");
@@ -552,6 +567,9 @@ fn decode_data(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
         DecodedData::LnUrlWithdraw {
             lnurl_withdraw_details,
         } => print_lnurl_withdraw_details(lnurl_withdraw_details),
+        DecodedData::OnchainAddress {
+            onchain_address_details,
+        } => print_bitcoin_address_data(onchain_address_details),
     }
 
     Ok(())
@@ -630,6 +648,18 @@ fn print_lnurl_withdraw_details(lnurl_withdraw_details: LnUrlWithdrawDetails) {
         "  Default Description   {}",
         lnurl_withdraw_details.request_data.default_description
     );
+}
+
+fn print_bitcoin_address_data(bitcoin_address_data: BitcoinAddressData) {
+    println!("Bitcoin Address data:");
+    println!("  Address               {}", bitcoin_address_data.address);
+    println!("  Network               {}", bitcoin_address_data.network);
+    println!(
+        "  Amount SAT            {:?}",
+        bitcoin_address_data.amount_sat
+    );
+    println!("  Message               {:?}", bitcoin_address_data.message);
+    println!("  Label                 {:?}", bitcoin_address_data.label);
 }
 
 fn get_max_routing_fee_mode(
@@ -806,6 +836,9 @@ fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Re
         Ok(DecodedData::Bolt11Invoice { .. }) => {
             bail!("A BOLT-11 invoice was provided instead of an LNURL-pay")
         }
+        Ok(DecodedData::OnchainAddress { .. }) => {
+            bail!("A onchain address was provided instead of an LNURL-pay")
+        }
         Err(_) => bail!("Invalid lnurlp"),
     };
 
@@ -833,6 +866,9 @@ fn withdraw_lnurlw(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
         }
         Ok(DecodedData::Bolt11Invoice { .. }) => {
             bail!("A BOLT-11 invoice was provided instead of an LNURL-Withdraw")
+        }
+        Ok(DecodedData::OnchainAddress { .. }) => {
+            bail!("A onchain address was provided instead of an LNURL-Withdraw")
         }
         Err(_) => bail!("Invalid lnurlw"),
     };
@@ -1007,6 +1043,55 @@ fn sweep(node: &LightningNode, address: String) -> Result<String> {
     let fee_rate = node.query_onchain_fee_rate()?;
     let sweep_info = node.prepare_sweep(address, fee_rate)?;
     Ok(node.sweep(sweep_info)?)
+}
+
+fn clear_wallet_info(node: &LightningNode) -> Result<()> {
+    if !node.is_clear_wallet_feasible()? {
+        return Err(anyhow!(
+            "Clearing the wallet isn't feasible at the moment due to the available funds being \
+        either too low or too high"
+        ));
+    }
+
+    let clear_wallet_info = node.prepare_clear_wallet()?;
+
+    println!("Clear Wallet Information:");
+    println!(
+        "      Total Amount to be Cleared: {}",
+        amount_to_string(clear_wallet_info.clear_amount)
+    );
+    println!(
+        "      Total Estimated Fees: {}",
+        amount_to_string(clear_wallet_info.total_estimated_fees)
+    );
+    println!(
+        "      Total Onchain Fees: {}",
+        amount_to_string(clear_wallet_info.onchain_fee)
+    );
+    println!(
+        "      Swap Fee: {}",
+        amount_to_string(clear_wallet_info.swap_fee)
+    );
+
+    Ok(())
+}
+
+fn clear_wallet(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let address = words.next().ok_or(anyhow!("Address is required"))?;
+
+    let clear_wallet_info = node.prepare_clear_wallet()?;
+
+    let result = node.decode_data(address.to_string())?;
+    if let DecodedData::OnchainAddress {
+        onchain_address_details,
+    } = result
+    {
+        node.clear_wallet(clear_wallet_info, onchain_address_details)?;
+    } else {
+        bail!("Provided data is not an onchain address");
+    }
+
+    Ok(())
 }
 
 fn offer_to_string(offer: Option<OfferKind>) -> String {
