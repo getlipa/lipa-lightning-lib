@@ -112,6 +112,9 @@ interface LightningNode {
     [Throws=LnError]
     ChannelCloseResolvingFees get_channel_close_resolving_fees();
 
+    [Throws=SwapError]
+    string swap_onchain_to_lightning(u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_params);
+
     [Throws=LnError]
     void hide_topup(string id);
 
@@ -500,6 +503,7 @@ dictionary ClearWalletInfo {
 dictionary ChannelCloseResolvingFees {
     SwapToLightningFees? swap_fees;
     Amount onchain_fees;
+    u32 sat_per_vbyte;
 };
 
 dictionary SwapToLightningFees {
@@ -507,6 +511,7 @@ dictionary SwapToLightningFees {
     Amount onchain_fee;
     Amount channel_opening_fee;
     Amount total_fees;
+    OpeningFeeParams? lsp_fee_params;
 };
 
 //

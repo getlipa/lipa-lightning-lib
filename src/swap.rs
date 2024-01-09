@@ -1,6 +1,7 @@
 use crate::amount::Amount;
 use crate::config::TzTime;
 
+use breez_sdk_core::OpeningFeeParams;
 use std::time::SystemTime;
 
 /// Information about a successful swap.
@@ -53,4 +54,5 @@ pub struct SwapToLightningFees {
     pub onchain_fee: Amount,
     pub channel_opening_fee: Amount,
     pub total_fees: Amount,
+    pub lsp_fee_params: Option<OpeningFeeParams>,
 }

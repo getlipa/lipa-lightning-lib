@@ -260,11 +260,14 @@ pub struct LightningNode {
 
 /// Contains the fee information for the options to resolve on-chain funds from channel closes.
 pub struct ChannelCloseResolvingFees {
-    /// Fees to swap the funds back to lightning.
+    /// Fees to swap the funds back to lightning using [`LightningNode::swap_onchain_to_lightning`]
     /// Only available if enough funds are there to swap.
     pub swap_fees: Option<SwapToLightningFees>,
-    /// The fees for sending the funds on-chain.
+    /// The fees for sending the funds on-chain using [`LightningNode::sweep`]
     pub onchain_fees: Amount,
+    /// Used internally to sweep with the given on-chain fees.
+    /// See [`LightningNode::prepare_sweep`] and [`LightningNode::swap_onchain_to_lightning`]
+    pub sat_per_vbyte: u32,
 }
 
 impl LightningNode {
@@ -1735,6 +1738,7 @@ impl LightningNode {
             return Ok(ChannelCloseResolvingFees {
                 swap_fees: None,
                 onchain_fees: prepared_sweep.onchain_fee_sat,
+                sat_per_vbyte,
             });
         }
 
@@ -1742,27 +1746,53 @@ impl LightningNode {
 
         let prepared_sweep = self.prepare_sweep(swap_info.bitcoin_address, sat_per_vbyte)?;
 
-        let lsp_fees = self
-            .calculate_lsp_fee(
-                onchain_balance.msats.as_msats().to_amount_up(&None).sats
-                    - prepared_sweep.onchain_fee_sat.sats,
-            )?
-            .lsp_fee;
+        let lsp_fees = self.calculate_lsp_fee(
+            onchain_balance.msats.as_msats().to_amount_up(&None).sats
+                - prepared_sweep.onchain_fee_sat.sats,
+        )?;
 
         let swap_fee = 0_u64.as_sats();
         let swap_to_lightning_fees = SwapToLightningFees {
             swap_fee: swap_fee.sats.as_sats().to_amount_up(&rate),
             onchain_fee: prepared_sweep.clone().onchain_fee_sat,
-            channel_opening_fee: lsp_fees.clone(),
-            total_fees: (swap_fee.sats + prepared_sweep.amount.sats + lsp_fees.sats)
+            channel_opening_fee: lsp_fees.lsp_fee.clone(),
+            total_fees: (swap_fee.sats + prepared_sweep.amount.sats + lsp_fees.lsp_fee.sats)
                 .as_sats()
                 .to_amount_up(&rate),
+            lsp_fee_params: lsp_fees.lsp_fee_params,
         };
 
         Ok(ChannelCloseResolvingFees {
             swap_fees: Some(swap_to_lightning_fees),
             onchain_fees: prepared_sweep.onchain_fee_sat,
+            sat_per_vbyte,
         })
+    }
+
+    /// Automatically swaps on-chain funds back to lightning.
+    ///
+    /// If a swap is in progress, this method will return an error.
+    ///
+    /// Parameters:
+    /// * `sat_per_vbyte` - the fee rate to use for the on-chain transaction.
+    /// Can be obtained with [`LightningNode::get_channel_close_resolving_fees`].
+    /// * `lsp_fee_params` - the lsp fee params for opening a new channel if necessary.
+    /// Can be obtained with [`LightningNode::get_channel_close_resolving_fees`].
+    ///
+    /// Returns the txid of the sweeping tx.
+    pub fn swap_onchain_to_lightning(
+        &self,
+        sat_per_vbyte: u32,
+        lsp_fee_params: Option<OpeningFeeParams>,
+    ) -> std::result::Result<String, ReceiveOnchainError> {
+        let swap_address_info = self.generate_swap_address(lsp_fee_params)?;
+
+        let sweep_result = self.rt.handle().block_on(self.sdk.sweep(SweepRequest {
+            to_address: swap_address_info.address,
+            sat_per_vbyte,
+        }))?;
+
+        Ok(hex::encode(sweep_result.txid))
     }
 
     /// Prints additional debug information to the logs.

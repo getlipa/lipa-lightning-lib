@@ -187,6 +187,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     Ok(uuid) => println!("{uuid}"),
                     Err(message) => eprintln!("{}", format!("{message:#}").red()),
                 },
+                "swaponchaintolightning" => {
+                    if let Err(message) = swap_onchain_to_lightning(node) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "getchannelcloseresolvingfees" => {
                     if let Err(message) = get_channel_close_resolving_fees(node) {
                         println!("{}", format!("{message:#}").red());
@@ -345,6 +350,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "getchannelcloseresolvingfees",
         "getchannelcloseresolvingfees",
     ));
+    hints.insert(CommandHint::new(
+        "swaponchaintolightning",
+        "swaponchaintolightning",
+    ));
     hints.insert(CommandHint::new("logdebug", "logdebug"));
     hints.insert(CommandHint::new("health", "health"));
     hints.insert(CommandHint::new("foreground", "foreground"));
@@ -397,6 +406,7 @@ fn help() {
     println!("  clearwalletinfo");
     println!("  clearwallet <address>");
     println!("  getchannelcloseresolvingfees");
+    println!("  swaponchaintolightning");
     println!();
     println!("  logdebug");
     println!("  health");
@@ -1210,6 +1220,21 @@ fn get_channel_close_resolving_fees(node: &LightningNode) -> Result<()> {
         }
         None => println!("Swap fees: Unavailable"),
     }
+
+    Ok(())
+}
+
+fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
+    let resolving_fees = node.get_channel_close_resolving_fees()?;
+
+    let swap_fees = resolving_fees
+        .swap_fees
+        .ok_or(anyhow!("Swap isn't available, not enough on-chain funds"))?;
+
+    let txid =
+        node.swap_onchain_to_lightning(resolving_fees.sat_per_vbyte, swap_fees.lsp_fee_params)?;
+
+    println!("Sweeping transaction: {}", txid);
 
     Ok(())
 }
