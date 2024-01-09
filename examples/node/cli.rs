@@ -16,7 +16,8 @@ use rustyline::Editor;
 use std::cmp::min;
 use std::collections::HashSet;
 use std::path::Path;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
+use std::{thread, time};
 use uniffi_lipalightninglib::{
     Activity, Amount, ChannelClose, ChannelCloseState, DecodedData, ExchangeRate, FiatValue,
     InvoiceCreationMetadata, InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails,
@@ -239,6 +240,9 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     Ok(status) => println!("{status:?}"),
                     Err(message) => println!("{}", format!("{message:#}").red()),
                 },
+                "latency" => {
+                    measure_latency(node);
+                }
                 "foreground" => {
                     node.foreground();
                 }
@@ -365,6 +369,8 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "swaponchaintolightning",
         "swaponchaintolightning",
     ));
+    hints.insert(CommandHint::new("sweep <address>", "sweep"));
+    hints.insert(CommandHint::new("latency", "latency"));
     hints.insert(CommandHint::new("logdebug", "logdebug"));
     hints.insert(CommandHint::new("health", "health"));
     hints.insert(CommandHint::new("foreground", "foreground"));
@@ -423,6 +429,7 @@ fn help() {
     println!();
     println!("  logdebug");
     println!("  health");
+    println!("  latency");
     println!();
     println!("  foreground");
     println!("  background");
@@ -1289,4 +1296,56 @@ fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
     println!("Sweeping transaction: {}", txid);
 
     Ok(())
+}
+
+fn measure_latency(node: &LightningNode) {
+    let amount_of_calls = 100;
+
+    measure_endpoint("Retrieving node info", amount_of_calls, || {
+        node.node_info_uncached().unwrap();
+    });
+
+    measure_endpoint("Retrieving channels list", amount_of_calls, || {
+        node.get_channels_list().unwrap();
+    });
+
+    measure_endpoint("Retrieving payments list", amount_of_calls, || {
+        node.get_payments_list().unwrap();
+    });
+}
+
+fn measure_endpoint<F>(action_name: &str, amount_of_calls: usize, call: F)
+where
+    F: Fn(),
+{
+    let attempts = spam_api(amount_of_calls, call);
+
+    let median = attempts[amount_of_calls / 2 - 1];
+    let average = attempts.iter().sum::<u128>() / amount_of_calls as u128;
+    let min = attempts[0];
+    let max = attempts[amount_of_calls - 1];
+    println!("{action_name} {amount_of_calls} times: [ median: {median} ms, avg: {average} ms, min: {min} ms, max: {max} ms ]");
+}
+
+fn spam_api<F>(amount_of_calls: usize, call: F) -> Vec<u128>
+where
+    F: Fn(),
+{
+    let mut durations = Vec::new();
+
+    for _ in 0..amount_of_calls {
+        let start_time = Instant::now();
+        call();
+        let end = Instant::now();
+        let duration = end - start_time;
+        durations.push(duration.as_millis());
+
+        // The goal is _not_ to perform a load testing, but to get various values for the latency
+        // So give Greenlight a break.
+        thread::sleep(time::Duration::from_millis(500));
+    }
+
+    durations.sort();
+
+    durations
 }

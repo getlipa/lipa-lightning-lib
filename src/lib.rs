@@ -1946,6 +1946,36 @@ impl LightningNode {
         Ok(hex::encode(sweep_result.txid))
     }
 
+    pub fn node_info_uncached(&self) -> Result<String> {
+        self.rt
+            .handle()
+            .block_on(self.sdk.execute_dev_command("getinfo".to_string()))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Couldn't execute `getinfo` command",
+            )
+    }
+
+    pub fn get_channels_list(&self) -> Result<String> {
+        self.rt
+            .handle()
+            .block_on(self.sdk.execute_dev_command("listpeerchannels".to_string()))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Couldn't execute `listpeerchannels` command",
+            )
+    }
+
+    pub fn get_payments_list(&self) -> Result<String> {
+        self.rt
+            .handle()
+            .block_on(self.sdk.execute_dev_command("listpayments".to_string()))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Couldn't execute `listpayments` command",
+            )
+    }
+
     /// Prints additional debug information to the logs.
     ///
     /// Throws an error in case that the necessary information can't be retrieved.
@@ -1976,23 +2006,8 @@ impl LightningNode {
             "Failed to read node info",
         )?;
 
-        let channels = self
-            .rt
-            .handle()
-            .block_on(self.sdk.execute_dev_command("listpeerchannels".to_string()))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Couldn't execute `listpeerchannels` command",
-            )?;
-
-        let payments = self
-            .rt
-            .handle()
-            .block_on(self.sdk.execute_dev_command("listpayments".to_string()))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Couldn't execute `listpayments` command",
-            )?;
+        let channels = self.get_channels_list()?;
+        let payments = self.get_payments_list()?;
 
         info!("3L version: {}", env!("GITHUB_REF"));
         info!("Wallet pubkey id: {:?}", self.get_wallet_pubkey_id());
