@@ -45,3 +45,12 @@ pub struct ResolveFailedSwapInfo {
     /// The onchain fee rate that will be applied. This fee rate results in the `onchain_fee`.
     pub onchain_fee_rate: u32,
 }
+
+/// Information about fees related to swap of own on-chain funds back to lightning.
+#[derive(Debug)]
+pub struct SwapToLightningFees {
+    pub swap_fee: Amount,
+    pub onchain_fee: Amount,
+    pub channel_opening_fee: Amount,
+    pub total_fees: Amount,
+}

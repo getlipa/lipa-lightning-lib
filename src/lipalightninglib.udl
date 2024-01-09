@@ -110,6 +110,9 @@ interface LightningNode {
     string resolve_failed_swap(ResolveFailedSwapInfo resolve_failed_swap_info);
 
     [Throws=LnError]
+    ChannelCloseResolvingFees get_channel_close_resolving_fees();
+
+    [Throws=LnError]
     void hide_topup(string id);
 
     [Throws=LnError]
@@ -418,6 +421,7 @@ dictionary SweepInfo {
     string address;
     u32 onchain_fee_rate;
     Amount onchain_fee_sat;
+    Amount amount;
 };
 
 dictionary SwapAddressInfo {
@@ -493,6 +497,18 @@ dictionary ClearWalletInfo {
     string fees_hash;
 };
 
+dictionary ChannelCloseResolvingFees {
+    SwapToLightningFees? swap_fees;
+    Amount onchain_fees;
+};
+
+dictionary SwapToLightningFees {
+    Amount swap_fee;
+    Amount onchain_fee;
+    Amount channel_opening_fee;
+    Amount total_fees;
+};
+
 //
 // ----------------------------- TOP LEVEL FUNCTIONS + RELATED DEFINITIONS -----------------------------
 //
@@ -553,6 +569,7 @@ enum RuntimeErrorCode {
     "LspServiceUnavailable",
     "BackupServiceUnavailable",
     "BackupNotFound",
+    "NoOnChainFundsToResolve",
     "NodeUnavailable",
     "FailedFundMigration",
 };

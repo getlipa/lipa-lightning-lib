@@ -187,6 +187,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     Ok(uuid) => println!("{uuid}"),
                     Err(message) => eprintln!("{}", format!("{message:#}").red()),
                 },
+                "getchannelcloseresolvingfees" => {
+                    if let Err(message) = get_channel_close_resolving_fees(node) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "sweep" => {
                     let address = words
                         .next()
@@ -336,6 +341,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("sweep <address>", "sweep"));
     hints.insert(CommandHint::new("clearwalletinfo", "clearwalletinfo"));
     hints.insert(CommandHint::new("clearwallet <address>", "clearwallet "));
+    hints.insert(CommandHint::new(
+        "getchannelcloseresolvingfees",
+        "getchannelcloseresolvingfees",
+    ));
     hints.insert(CommandHint::new("logdebug", "logdebug"));
     hints.insert(CommandHint::new("health", "health"));
     hints.insert(CommandHint::new("foreground", "foreground"));
@@ -387,6 +396,7 @@ fn help() {
     println!("  sweep <address>");
     println!("  clearwalletinfo");
     println!("  clearwallet <address>");
+    println!("  getchannelcloseresolvingfees");
     println!();
     println!("  logdebug");
     println!("  health");
@@ -1173,6 +1183,33 @@ fn calculate_lightning_payout_fee(
         "Lightning payout fee: {}",
         amount_to_string(lightning_payout_fee)
     );
+
+    Ok(())
+}
+
+fn get_channel_close_resolving_fees(node: &LightningNode) -> Result<()> {
+    let resolving_fees = node.get_channel_close_resolving_fees()?;
+
+    println!(
+        "On-chain fees: {}",
+        amount_to_string(resolving_fees.onchain_fees)
+    );
+
+    match resolving_fees.swap_fees {
+        Some(f) => {
+            println!("Swap fees: {}", amount_to_string(f.total_fees));
+            println!("    Swap fee:             {}", amount_to_string(f.swap_fee));
+            println!(
+                "    On-chain fee:         {}",
+                amount_to_string(f.onchain_fee)
+            );
+            println!(
+                "    Channel opening fee:  {}",
+                amount_to_string(f.channel_opening_fee)
+            );
+        }
+        None => println!("Swap fees: Unavailable"),
+    }
 
     Ok(())
 }
