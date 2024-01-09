@@ -652,7 +652,7 @@ fn print_lnurl_withdraw_details(lnurl_withdraw_details: LnUrlWithdrawDetails) {
 
 fn print_bitcoin_address_data(bitcoin_address_data: BitcoinAddressData) {
     println!("Bitcoin Address data:");
-    println!("  Adress                {}", bitcoin_address_data.address);
+    println!("  Address               {}", bitcoin_address_data.address);
     println!("  Network               {}", bitcoin_address_data.network);
     println!(
         "  Amount SAT            {:?}",
