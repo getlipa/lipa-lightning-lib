@@ -14,7 +14,7 @@ const LOCAL_PERSISTENCE_PATH: &str = ".3l_local_test";
 
 #[test]
 #[ignore = "We do not want to register a ton of nodes"]
-#[file_serial(key, "/tmp/3l-int-tests-lock")]
+#[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn test_register_node() {
     std::env::set_var("TESTING_TASK_PERIODS", "5");
     let _ = fs::remove_dir_all(LOCAL_PERSISTENCE_PATH);

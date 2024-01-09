@@ -8,7 +8,7 @@ use serial_test::file_serial;
 use std::str::FromStr;
 
 #[test]
-#[file_serial(key, "/tmp/3l-int-tests-lock")]
+#[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn test_get_node_info() {
     let node = start_alice().unwrap();
     let node_info = node.get_node_info().unwrap();

@@ -9,7 +9,7 @@ use serial_test::file_serial;
 use uniffi_lipalightninglib::{OfferInfo, OfferKind, OfferStatus};
 
 #[test]
-#[file_serial(key, "/tmp/3l-int-tests-lock")]
+#[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn test_topup() {
     let node = start_alice().unwrap();
 
