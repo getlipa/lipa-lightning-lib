@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 use uniffi_lipalightninglib::{DecodeDataError, DecodedData, InvoiceDetails, UnsupportedDataType};
 
 #[test]
-#[file_serial(key, "/tmp/3l-int-tests-lock")]
+#[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn test_decoding() {
     let node = start_alice().unwrap();
 

@@ -6,7 +6,7 @@ use crate::setup::start_alice;
 use serial_test::file_serial;
 
 #[test]
-#[file_serial(key, "/tmp/3l-int-tests-lock")]
+#[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn test_receive_onchain() {
     let node = start_alice().unwrap();
 
