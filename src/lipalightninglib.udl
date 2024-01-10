@@ -502,7 +502,7 @@ dictionary ClearWalletInfo {
 
 dictionary ChannelCloseResolvingFees {
     SwapToLightningFees? swap_fees;
-    Amount onchain_fees;
+    Amount sweep_onchain_fee_estimate;
     u32 sat_per_vbyte;
 };
 

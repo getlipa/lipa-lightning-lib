@@ -263,8 +263,9 @@ pub struct ChannelCloseResolvingFees {
     /// Fees to swap the funds back to lightning using [`LightningNode::swap_onchain_to_lightning`]
     /// Only available if enough funds are there to swap.
     pub swap_fees: Option<SwapToLightningFees>,
-    /// The fees for sending the funds on-chain using [`LightningNode::sweep`]
-    pub onchain_fees: Amount,
+    /// Estimate of the fees for sending the funds on-chain using [`LightningNode::sweep`].
+    /// The exact fees will be known when calling [`LightningNode::prepare_sweep`].
+    pub sweep_onchain_fee_estimate: Amount,
     /// Used internally to sweep with the given on-chain fees.
     /// See [`LightningNode::prepare_sweep`] and [`LightningNode::swap_onchain_to_lightning`]
     pub sat_per_vbyte: u32,
@@ -1535,12 +1536,27 @@ impl LightningNode {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to prepare sweep transaction",
             )?;
+
+        let onchain_balance_sat = self
+            .sdk
+            .node_info()
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to fetch on-chain balance",
+            )?
+            .onchain_balance_msat
+            .as_msats()
+            .to_amount_down(&None)
+            .sats;
+
         let rate = self.get_exchange_rate();
         Ok(SweepInfo {
             address,
             onchain_fee_rate,
             onchain_fee_sat: res.sweep_tx_fee_sat.as_sats().to_amount_up(&rate),
-            amount: res.sweep_tx_fee_sat.as_sats().to_amount_up(&rate),
+            amount: (onchain_balance_sat - res.sweep_tx_fee_sat)
+                .as_sats()
+                .to_amount_up(&rate),
         })
     }
 
@@ -1730,36 +1746,26 @@ impl LightningNode {
 
         let sat_per_vbyte = self.query_onchain_fee_rate()?;
 
-        if swap_info.is_none()
-            || onchain_balance.msats
-                < (swap_info.clone().unwrap().min_allowed_deposit as u64)
-                    .as_sats()
-                    .msats
-            || onchain_balance.msats
-                > (swap_info.clone().unwrap().max_allowed_deposit as u64)
-                    .as_sats()
-                    .msats
-        {
-            let prepared_sweep = self.prepare_sweep(
-                "1BitcoinEaterAddressDontSendf59kuE".to_string(),
-                sat_per_vbyte,
-            )?;
+        let prepared_sweep = self.prepare_sweep(
+            swap_info
+                .clone()
+                .map(|s| s.bitcoin_address)
+                .unwrap_or("1BitcoinEaterAddressDontSendf59kuE".to_string()),
+            sat_per_vbyte,
+        )?;
 
+        if swap_info.is_none()
+            || prepared_sweep.amount.sats < (swap_info.clone().unwrap().min_allowed_deposit as u64)
+            || prepared_sweep.amount.sats > (swap_info.clone().unwrap().max_allowed_deposit as u64)
+        {
             return Ok(ChannelCloseResolvingFees {
                 swap_fees: None,
-                onchain_fees: prepared_sweep.onchain_fee_sat,
+                sweep_onchain_fee_estimate: prepared_sweep.onchain_fee_sat,
                 sat_per_vbyte,
             });
         }
 
-        let swap_info = swap_info.unwrap();
-
-        let prepared_sweep = self.prepare_sweep(swap_info.bitcoin_address, sat_per_vbyte)?;
-
-        let lsp_fees = self.calculate_lsp_fee(
-            onchain_balance.msats.as_msats().to_amount_up(&None).sats
-                - prepared_sweep.onchain_fee_sat.sats,
-        )?;
+        let lsp_fees = self.calculate_lsp_fee(prepared_sweep.amount.sats)?;
 
         let swap_fee = 0_u64.as_sats();
         let swap_to_lightning_fees = SwapToLightningFees {
@@ -1774,7 +1780,7 @@ impl LightningNode {
 
         Ok(ChannelCloseResolvingFees {
             swap_fees: Some(swap_to_lightning_fees),
-            onchain_fees: prepared_sweep.onchain_fee_sat,
+            sweep_onchain_fee_estimate: prepared_sweep.onchain_fee_sat,
             sat_per_vbyte,
         })
     }

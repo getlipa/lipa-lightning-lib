@@ -402,11 +402,11 @@ fn help() {
     println!("  listlightningaddresses");
     println!("  paymentuuid <payment hash>");
     println!();
+    println!("  getchannelcloseresolvingfees");
     println!("  sweep <address>");
+    println!("  swaponchaintolightning");
     println!("  clearwalletinfo");
     println!("  clearwallet <address>");
-    println!("  getchannelcloseresolvingfees");
-    println!("  swaponchaintolightning");
     println!();
     println!("  logdebug");
     println!("  health");
@@ -1201,20 +1201,20 @@ fn get_channel_close_resolving_fees(node: &LightningNode) -> Result<()> {
     let resolving_fees = node.get_channel_close_resolving_fees()?;
 
     println!(
-        "On-chain fees: {}",
-        amount_to_string(resolving_fees.onchain_fees)
+        "Sweep on-chain fees: {}",
+        amount_to_string(resolving_fees.sweep_onchain_fee_estimate)
     );
 
     match resolving_fees.swap_fees {
         Some(f) => {
-            println!("Swap fees: {}", amount_to_string(f.total_fees));
-            println!("    Swap fee:             {}", amount_to_string(f.swap_fee));
+            println!("Swap-to-lightning fees: {}", amount_to_string(f.total_fees));
             println!(
-                "    On-chain fee:         {}",
-                amount_to_string(f.onchain_fee)
+                "    Swap fee:              {}",
+                amount_to_string(f.swap_fee)
             );
+            println!("    On-chain fee: {}", amount_to_string(f.onchain_fee));
             println!(
-                "    Channel opening fee:  {}",
+                "    Channel opening fee:   {}",
                 amount_to_string(f.channel_opening_fee)
             );
         }
