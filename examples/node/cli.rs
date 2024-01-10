@@ -1299,7 +1299,7 @@ fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
 }
 
 fn measure_latency(node: &LightningNode) {
-    let amount_of_calls = 100;
+    let amount_of_calls = 30;
 
     measure_endpoint("Retrieving node info", amount_of_calls, || {
         node.node_info_uncached().unwrap();
@@ -1360,7 +1360,7 @@ where
 
         // The goal is _not_ to perform a load testing, but to get various values for the latency
         // So give Greenlight a break.
-        thread::sleep(time::Duration::from_millis(500));
+        thread::sleep(time::Duration::from_millis(2000));
     }
 
     durations.sort();
