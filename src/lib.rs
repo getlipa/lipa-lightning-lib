@@ -1720,16 +1720,26 @@ impl LightningNode {
         let lsp_fees =
             self.calculate_lsp_fee(onchain_balance.msats.as_msats().to_amount_up(&None).sats)?;
 
-        let swap_info =
-            self.rt
-                .handle()
-                .block_on(self.sdk.receive_onchain(ReceiveOnchainRequest {
-                    opening_fee_params: lsp_fees.lsp_fee_params,
-                }));
+        let swap_info = self
+            .rt
+            .handle()
+            .block_on(self.sdk.receive_onchain(ReceiveOnchainRequest {
+                opening_fee_params: lsp_fees.lsp_fee_params,
+            }))
+            .ok();
 
         let sat_per_vbyte = self.query_onchain_fee_rate()?;
 
-        if swap_info.is_err() {
+        if swap_info.is_none()
+            || onchain_balance.msats
+                < (swap_info.clone().unwrap().min_allowed_deposit as u64)
+                    .as_sats()
+                    .msats
+            || onchain_balance.msats
+                > (swap_info.clone().unwrap().max_allowed_deposit as u64)
+                    .as_sats()
+                    .msats
+        {
             let prepared_sweep = self.prepare_sweep(
                 "1BitcoinEaterAddressDontSendf59kuE".to_string(),
                 sat_per_vbyte,
@@ -1773,6 +1783,9 @@ impl LightningNode {
     ///
     /// If a swap is in progress, this method will return an error.
     ///
+    /// If the current balance doesn't fulfill the limits, this method will return an error.
+    /// Before using this method use [`LightningNode::get_channel_close_resolving_fees`] to validate a swap is available.
+    ///
     /// Parameters:
     /// * `sat_per_vbyte` - the fee rate to use for the on-chain transaction.
     /// Can be obtained with [`LightningNode::get_channel_close_resolving_fees`].
@@ -1785,7 +1798,29 @@ impl LightningNode {
         sat_per_vbyte: u32,
         lsp_fee_params: Option<OpeningFeeParams>,
     ) -> std::result::Result<String, ReceiveOnchainError> {
+        let onchain_balance = self.sdk.node_info()?.onchain_balance_msat.as_msats();
+
         let swap_address_info = self.generate_swap_address(lsp_fee_params)?;
+
+        if swap_address_info.min_deposit.sats.as_sats().msats > onchain_balance.msats {
+            return Err(ReceiveOnchainError::Generic {
+                err: format!(
+                    "Not enough funds ({} msats) available for swap ({} msats)",
+                    onchain_balance.msats,
+                    swap_address_info.min_deposit.sats.as_sats().msats,
+                ),
+            });
+        }
+
+        if swap_address_info.max_deposit.sats.as_sats().msats < onchain_balance.msats {
+            return Err(ReceiveOnchainError::Generic {
+                err: format!(
+                    "Available funds ({} msats) exceed limit for swap ({} msats)",
+                    onchain_balance.msats,
+                    swap_address_info.max_deposit.sats.as_sats().msats,
+                ),
+            });
+        }
 
         let sweep_result = self.rt.handle().block_on(self.sdk.sweep(SweepRequest {
             to_address: swap_address_info.address,
