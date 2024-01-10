@@ -1312,6 +1312,24 @@ fn measure_latency(node: &LightningNode) {
     measure_endpoint("Retrieving payments list", amount_of_calls, || {
         node.get_payments_list().unwrap();
     });
+
+    measure_endpoint("Creating invoice", amount_of_calls, || {
+        node.create_invoice(
+            12345,
+            None,
+            "description".into(),
+            InvoiceCreationMetadata {
+                request_currency: "EUR".into(),
+            },
+        )
+        .unwrap();
+    });
+
+    measure_endpoint("Paying lnurlp", amount_of_calls, || {
+        if let DecodedData::LnUrlPay { lnurl_pay_details } = node.decode_data("LNURL1DP68GURN8GHJ7MR9VAJKUEPWD3HXY6T5WVHXXMMD9AKXUATJD3CZ76J52ATHXUSG8F530".to_string()).unwrap() {
+            let _ = node.pay_lnurlp(lnurl_pay_details.request_data.clone(), 1);
+        }
+    });
 }
 
 fn measure_endpoint<F>(action_name: &str, amount_of_calls: usize, call: F)
