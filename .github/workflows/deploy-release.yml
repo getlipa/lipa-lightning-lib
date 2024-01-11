@@ -340,6 +340,7 @@ jobs:
           curl -s -m 30 https://jitpack.io/com/github/getlipa/lipa-lightning-lib-android/${{ env.RELEASE_VERSION }} || true
 
   build-docs:
+    if: ${{ env.BRANCH == 'main' }}
     name: build-docs
     needs:
       - deploy-ios
@@ -378,6 +379,7 @@ jobs:
           path: './target/doc'
 
   deploy-docs:
+    if: ${{ env.BRANCH == 'main' }}
     name: deploy-docs
     needs: build-docs
     permissions:
