@@ -187,6 +187,16 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     Ok(uuid) => println!("{uuid}"),
                     Err(message) => eprintln!("{}", format!("{message:#}").red()),
                 },
+                "swaponchaintolightning" => {
+                    if let Err(message) = swap_onchain_to_lightning(node) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
+                "getchannelcloseresolvingfees" => {
+                    if let Err(message) = get_channel_close_resolving_fees(node) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "sweep" => {
                     let address = words
                         .next()
@@ -336,6 +346,14 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("sweep <address>", "sweep"));
     hints.insert(CommandHint::new("clearwalletinfo", "clearwalletinfo"));
     hints.insert(CommandHint::new("clearwallet <address>", "clearwallet "));
+    hints.insert(CommandHint::new(
+        "getchannelcloseresolvingfees",
+        "getchannelcloseresolvingfees",
+    ));
+    hints.insert(CommandHint::new(
+        "swaponchaintolightning",
+        "swaponchaintolightning",
+    ));
     hints.insert(CommandHint::new("logdebug", "logdebug"));
     hints.insert(CommandHint::new("health", "health"));
     hints.insert(CommandHint::new("foreground", "foreground"));
@@ -384,7 +402,9 @@ fn help() {
     println!("  listlightningaddresses");
     println!("  paymentuuid <payment hash>");
     println!();
+    println!("  getchannelcloseresolvingfees");
     println!("  sweep <address>");
+    println!("  swaponchaintolightning");
     println!("  clearwalletinfo");
     println!("  clearwallet <address>");
     println!();
@@ -1173,6 +1193,48 @@ fn calculate_lightning_payout_fee(
         "Lightning payout fee: {}",
         amount_to_string(lightning_payout_fee)
     );
+
+    Ok(())
+}
+
+fn get_channel_close_resolving_fees(node: &LightningNode) -> Result<()> {
+    let resolving_fees = node.get_channel_close_resolving_fees()?;
+
+    println!(
+        "Sweep on-chain fees: {}",
+        amount_to_string(resolving_fees.sweep_onchain_fee_estimate)
+    );
+
+    match resolving_fees.swap_fees {
+        Some(f) => {
+            println!("Swap-to-lightning fees: {}", amount_to_string(f.total_fees));
+            println!(
+                "    Swap fee:              {}",
+                amount_to_string(f.swap_fee)
+            );
+            println!("    On-chain fee: {}", amount_to_string(f.onchain_fee));
+            println!(
+                "    Channel opening fee:   {}",
+                amount_to_string(f.channel_opening_fee)
+            );
+        }
+        None => println!("Swap fees: Unavailable"),
+    }
+
+    Ok(())
+}
+
+fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
+    let resolving_fees = node.get_channel_close_resolving_fees()?;
+
+    let swap_fees = resolving_fees
+        .swap_fees
+        .ok_or(anyhow!("Swap isn't available, not enough on-chain funds"))?;
+
+    let txid =
+        node.swap_onchain_to_lightning(resolving_fees.sat_per_vbyte, swap_fees.lsp_fee_params)?;
+
+    println!("Sweeping transaction: {}", txid);
 
     Ok(())
 }

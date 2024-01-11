@@ -1,6 +1,7 @@
 use crate::amount::Amount;
 use crate::config::TzTime;
 
+use breez_sdk_core::OpeningFeeParams;
 use std::time::SystemTime;
 
 /// Information about a successful swap.
@@ -19,6 +20,8 @@ pub struct SwapAddressInfo {
     pub min_deposit: Amount,
     /// Maximum amount to be sent to `address`
     pub max_deposit: Amount,
+    /// Estimate for the fee paid to the swap service. For now this will always be `0`.
+    pub swap_fee: Amount,
 }
 
 /// Information about a failed swap
@@ -42,4 +45,14 @@ pub struct ResolveFailedSwapInfo {
     pub to_address: String,
     /// The onchain fee rate that will be applied. This fee rate results in the `onchain_fee`.
     pub onchain_fee_rate: u32,
+}
+
+/// Information about fees related to swap of own on-chain funds back to lightning.
+#[derive(Debug)]
+pub struct SwapToLightningFees {
+    pub swap_fee: Amount,
+    pub onchain_fee: Amount,
+    pub channel_opening_fee: Amount,
+    pub total_fees: Amount,
+    pub lsp_fee_params: Option<OpeningFeeParams>,
 }

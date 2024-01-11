@@ -15,6 +15,8 @@ pub enum RuntimeErrorCode {
     BackupServiceUnavailable,
     /// No backup was found for the provided mnemonic.
     BackupNotFound,
+    /// No on-chain funds are available to resolve.
+    NoOnChainFundsToResolve,
 
     // Breez runtime errors
     /// Information about the remote node isn't cached and couldn't be accessed. Could be a network error.
