@@ -3,8 +3,8 @@ mod setup;
 
 use crate::print_events_handler::PrintEventsHandler;
 
-use uniffi_lipalightninglib::LightningNode;
 use uniffi_lipalightninglib::{generate_secret, Config, TzConfig};
+use uniffi_lipalightninglib::{BreezLightningNode, LightningNode};
 
 use serial_test::file_serial;
 use std::fs;
@@ -37,7 +37,7 @@ fn test_register_node() {
     };
 
     let events_handler = PrintEventsHandler {};
-    let node = LightningNode::new(config, Box::new(events_handler)).unwrap();
+    let node = BreezLightningNode::new(config, Box::new(events_handler)).unwrap();
     // Wait for the the P2P background task to connect to the LSP
     wait_for!(!node.get_node_info().unwrap().peers.is_empty());
 }

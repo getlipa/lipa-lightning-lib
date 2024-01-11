@@ -1,8 +1,8 @@
 use crate::print_events_handler::PrintEventsHandler;
 use crate::wait_for;
 
-use uniffi_lipalightninglib::{mnemonic_to_secret, Config, TzConfig};
-use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
+use uniffi_lipalightninglib::{mnemonic_to_secret, Config, LightningNode, TzConfig};
+use uniffi_lipalightninglib::{BreezLightningNode, RuntimeErrorCode};
 
 use std::fs;
 use std::string::ToString;
@@ -47,16 +47,16 @@ macro_rules! wait_for {
 }
 
 #[allow(dead_code)]
-pub fn start_alice() -> Result<LightningNode> {
+pub fn start_alice() -> Result<BreezLightningNode> {
     start_node("ALICE")
 }
 
 #[allow(dead_code)]
-pub fn start_bob() -> Result<LightningNode> {
+pub fn start_bob() -> Result<BreezLightningNode> {
     start_node("BOB")
 }
 
-fn start_node(node_name: &str) -> Result<LightningNode> {
+fn start_node(node_name: &str) -> Result<BreezLightningNode> {
     std::env::set_var("TESTING_TASK_PERIODS", "5");
 
     let local_persistence_path = format!("{LOCAL_PERSISTENCE_PATH}/{node_name}");
@@ -81,7 +81,7 @@ fn start_node(node_name: &str) -> Result<LightningNode> {
     };
 
     let events_handler = PrintEventsHandler {};
-    let node = LightningNode::new(config, Box::new(events_handler))?;
+    let node = BreezLightningNode::new(config, Box::new(events_handler))?;
 
     // Wait for the the P2P background task to connect to the LSP
     wait_for!(!node.get_node_info().unwrap().peers.is_empty());

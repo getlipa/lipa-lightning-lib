@@ -43,7 +43,7 @@ pub enum OfferKind {
 }
 
 /// Information on a funds offer that can be claimed
-/// using [`crate::LightningNode::request_offer_collection`].
+/// using [`crate::BreezLightningNode::request_offer_collection`].
 #[derive(Debug)]
 pub struct OfferInfo {
     pub offer_kind: OfferKind,

@@ -6,7 +6,7 @@ use perro::Error::InvalidInput;
 use std::time::Duration;
 
 use serial_test::file_serial;
-use uniffi_lipalightninglib::{OfferInfo, OfferKind, OfferStatus};
+use uniffi_lipalightninglib::{LightningNode, OfferInfo, OfferKind, OfferStatus};
 
 #[test]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]

@@ -4,7 +4,7 @@ mod setup;
 use crate::setup::start_alice;
 
 use serial_test::file_serial;
-use uniffi_lipalightninglib::{Activity, InvoiceCreationMetadata, InvoiceDetails, Payment};
+use uniffi_lipalightninglib::{Activity, InvoiceCreationMetadata, InvoiceDetails, LightningNode, Payment};
 
 #[test]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]

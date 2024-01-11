@@ -5,7 +5,9 @@ use crate::setup::start_alice;
 
 use serial_test::file_serial;
 use std::time::{Duration, SystemTime};
-use uniffi_lipalightninglib::{DecodeDataError, DecodedData, InvoiceDetails, UnsupportedDataType};
+use uniffi_lipalightninglib::{
+    DecodeDataError, DecodedData, InvoiceDetails, LightningNode, UnsupportedDataType,
+};
 
 #[test]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]

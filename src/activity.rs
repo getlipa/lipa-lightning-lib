@@ -36,7 +36,7 @@ impl From<PaymentStatus> for PaymentState {
 }
 
 /// Information about an incoming or outgoing payment.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Payment {
     pub payment_type: PaymentType,
     pub payment_state: PaymentState,

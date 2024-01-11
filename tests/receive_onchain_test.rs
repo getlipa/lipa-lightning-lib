@@ -4,6 +4,7 @@ mod setup;
 use crate::setup::start_alice;
 
 use serial_test::file_serial;
+use uniffi_lipalightninglib::LightningNode;
 
 #[test]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]

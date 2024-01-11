@@ -8,7 +8,7 @@ use uniffi_lipalightninglib::{
     PaymentState, PaymentType,
 };
 
-pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+pub fn overview(node: &impl LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let number_of_activities: u32 = words
         .next()
         .unwrap_or("10")

@@ -2,7 +2,7 @@
 //!
 //! This crate implements all the main business logic of the lipa wallet.
 //!
-//! Most functionality can be accessed by creating an instance of [`LightningNode`] and using its methods.
+//! Most functionality can be accessed by creating an instance of [`BreezLightningNode`] and using its methods.
 
 #![allow(clippy::let_unit_value)]
 
@@ -30,6 +30,7 @@ mod lnurl;
 mod locker;
 mod logger;
 mod migrations;
+pub mod mock;
 mod offer;
 mod random;
 mod recovery;
@@ -134,11 +135,11 @@ pub struct LspFee {
     pub channel_fee_permyriad: u64,
 }
 
-/// The type returned by [`LightningNode::calculate_lsp_fee`].
+/// The type returned by [`BreezLightningNode::calculate_lsp_fee`].
 pub struct CalculateLspFeeResponse {
     /// Indicates the amount that will be charged.
     pub lsp_fee: Amount,
-    /// An internal struct is not supposed to be inspected, but only passed to [`LightningNode::create_invoice`].
+    /// An internal struct is not supposed to be inspected, but only passed to [`BreezLightningNode::create_invoice`].
     pub lsp_fee_params: Option<OpeningFeeParams>,
 }
 
@@ -198,7 +199,7 @@ pub(crate) struct UserPreferences {
     timezone_config: TzConfig,
 }
 
-/// Decoded data that can be obtained using [`LightningNode::decode_data`].
+/// Decoded data that can be obtained using [`BreezLightningNode::decode_data`].
 pub enum DecodedData {
     Bolt11Invoice {
         invoice_details: InvoiceDetails,
@@ -214,7 +215,7 @@ pub enum DecodedData {
     },
 }
 
-/// Invoice affordability returned by [`LightningNode::get_invoice_affordability`].
+/// Invoice affordability returned by [`BreezLightningNode::get_invoice_affordability`].
 #[derive(Debug)]
 pub enum InvoiceAffordability {
     /// Not enough funds available to pay the requested amount.
@@ -227,7 +228,7 @@ pub enum InvoiceAffordability {
 }
 
 /// Information about a wallet clearance operation as returned by
-/// [`LightningNode::prepare_clear_wallet`].
+/// [`BreezLightningNode::prepare_clear_wallet`].
 pub struct ClearWalletInfo {
     /// The total amount available to be cleared. The amount sent will be smaller due to fees.
     pub clear_amount: Amount,
@@ -247,7 +248,7 @@ const EXEMPT_FEE: Sats = Sats::new(21);
 /// The main class/struct of this library. Constructing an instance will initiate the Lightning node and
 /// run it in the background. As long as an instance of `LightningNode` is held, the node will continue to run
 /// in the background. Dropping the instance will start a deinit process.  
-pub struct LightningNode {
+pub struct BreezLightningNode {
     user_preferences: Arc<Mutex<UserPreferences>>,
     sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
@@ -258,6 +259,377 @@ pub struct LightningNode {
     task_manager: Arc<Mutex<TaskManager>>,
     analytics_interceptor: Arc<AnalyticsInterceptor>,
     environment: Environment,
+}
+
+pub trait LightningNode: Send + Sync {
+    /// Request some basic info about the node
+    fn get_node_info(&self) -> Result<NodeInfo>;
+
+    /// When *receiving* payments, a new channel MAY be required. A fee will be charged to the user.
+    /// This does NOT impact *sending* payments.
+    /// Get information about the fee charged by the LSP for opening new channels
+    /// Please keep in mind that this method doesn't make any network calls. It simply retrieves
+    /// previously fetched values that are frequently updated by a background task.
+    fn query_lsp_fee(&self) -> Result<LspFee>;
+
+    /// Calculate the actual LSP fee for the given amount of an incoming payment.
+    /// If the already existing inbound capacity is enough, no new channel is required.
+    ///
+    /// Parameters:
+    /// * `amount_sat` - amount in sats to compute LSP fee for
+    ///
+    /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
+    /// provided to [`BreezLightningNode::create_invoice`]
+    fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse>;
+
+    /// Get the current limits for the amount that can be transferred in a single payment.
+    /// Currently there are only limits for receiving payments.
+    /// The limits (partly) depend on the channel situation of the node, so it should be called
+    /// again every time the user is about to receive a payment.
+    /// The limits stay the same regardless of what amount wants to receive (= no changes while
+    /// he's typing the amount)
+    fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits>;
+
+    /// Create an invoice to receive a payment with.
+    ///
+    /// Parameters:
+    /// * `amount_sat` - the smallest amount of sats required for the node to accept the incoming
+    /// payment (sender will have to pay fees on top of that amount)
+    /// * `lsp_fee_params` - the params that will be used to determine the lsp fee.
+    /// Can be obtained from [`BreezLightningNode::calculate_lsp_fee`] to guarantee predicted fees
+    /// are the ones charged.
+    /// * `description` - a description to be embedded into the created invoice
+    /// * `metadata` - additional data about the invoice creation used for analytics purposes,
+    /// used to improve the user experience
+    fn create_invoice(
+        &self,
+        amount_sat: u64,
+        lsp_fee_params: Option<OpeningFeeParams>,
+        description: String,
+        metadata: InvoiceCreationMetadata,
+    ) -> Result<InvoiceDetails>;
+
+    /// Decode a user-provided string (usually obtained from QR-code or pasted).
+    fn decode_data(&self, data: String) -> std::result::Result<DecodedData, DecodeDataError>;
+
+    /// Get the max routing fee mode that will be employed to restrict the fees for paying a given amount in sats
+    fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode;
+
+    /// Checks if the given amount could be spent on an invoice.
+    ///
+    /// Parameters:
+    /// * `amount` - The to be spent amount.
+    fn get_invoice_affordability(&self, amount_sat: u64) -> Result<InvoiceAffordability>;
+
+    /// Start an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.
+    /// If successful, it doesn't mean that the payment itself was successful (funds received by the payee).
+    /// After this method returns, the consumer of this library will learn about a successful/failed payment through the
+    /// callbacks [`EventsCallback::payment_sent`] and [`EventsCallback::payment_failed`].
+    ///
+    /// Parameters:
+    /// * `invoice_details` - details of an invoice decode by [`BreezLightningNode::decode_data`]
+    /// * `metadata` - additional meta information about the payment, used by analytics to improve the user experience.
+    fn pay_invoice(
+        &self,
+        invoice_details: InvoiceDetails,
+        metadata: PaymentMetadata,
+    ) -> PayResult<()>;
+
+    /// Similar to [`BreezLightningNode::pay_invoice`] with the difference that the passed in invoice
+    /// does not have any payment amount specified, and allows the caller of the method to
+    /// specify an amount instead.
+    ///
+    /// Additional Parameters:
+    /// * `amount_sat` - amount in sats to be paid
+    fn pay_open_invoice(
+        &self,
+        invoice_details: InvoiceDetails,
+        amount_sat: u64,
+        metadata: PaymentMetadata,
+    ) -> PayResult<()>;
+
+    /// Pay an LNURL-pay the provided amount.
+    ///
+    /// Parameters:
+    /// * `lnurl_pay_request_data` - LNURL-pay request data as obtained from [`BreezLightningNode::decode_data`]
+    /// * `amount_sat` - amount to be paid
+    ///
+    /// Returns the payment hash of the payment.
+    fn pay_lnurlp(
+        &self,
+        lnurl_pay_request_data: LnUrlPayRequestData,
+        amount_sat: u64,
+    ) -> LnUrlPayResult<String>;
+
+    /// List lightning addresses from the most recent used.
+    ///
+    /// Returns a list of lightning addresses.
+    fn list_lightning_addresses(&self) -> Result<Vec<String>>;
+
+    /// Withdraw an LNURL-withdraw the provided amount.
+    ///
+    /// Parameters:
+    /// * `lnurl_withdraw_request_data` - LNURL-withdraw request data as obtained from [`BreezLightningNode::decode_data`]
+    /// * `amount_sat` - amount to be withdraw
+    ///
+    /// Returns the payment hash of the payment.
+    fn withdraw_lnurlw(
+        &self,
+        lnurl_withdraw_request_data: LnUrlWithdrawRequestData,
+        amount_sat: u64,
+    ) -> LnUrlWithdrawResult<String>;
+
+    /// Get a list of the latest payments
+    ///
+    /// Parameters:
+    /// * `number_of_completed_payments` - the maximum number of completed payments that will be returned
+    fn get_latest_payments(
+        &self,
+        number_of_completed_payments: u32,
+    ) -> Result<ListPaymentsResponse>;
+
+    /// Get a payment given its payment hash
+    ///
+    /// Parameters:
+    /// * `hash` - hex representation of payment hash
+    fn get_payment(&self, hash: String) -> Result<Payment>;
+
+    /// Call the method when the app goes to foreground, such that the user can interact with it.
+    /// The library starts running the background tasks more frequently to improve user experience.
+    fn foreground(&self);
+
+    /// Call the method when the app goes to background, such that the user can not interact with it.
+    /// The library stops running some unnecessary tasks and runs necessary tasks less frequently.
+    /// It should save battery and internet traffic.
+    fn background(&self);
+
+    /// List codes of supported fiat currencies.
+    /// Please keep in mind that this method doesn't make any network calls. It simply retrieves
+    /// previously fetched values that are frequently updated by a background task.
+    ///
+    /// The fetched list will be persisted across restarts to alleviate the consequences of a
+    /// slow or unresponsive exchange rate service.
+    /// The method will return an empty list if there is nothing persisted yet and
+    /// the values are not yet fetched from the service.
+    fn list_currency_codes(&self) -> Vec<String>;
+
+    /// Get exchange rate on the BTC/default currency pair
+    /// Please keep in mind that this method doesn't make any network calls. It simply retrieves
+    /// previously fetched values that are frequently updated by a background task.
+    ///
+    /// The fetched exchange rates will be persisted across restarts to alleviate the consequences of a
+    /// slow or unresponsive exchange rate service.
+    ///
+    /// The return value is an optional to deal with the possibility
+    /// of no exchange rate values being known.
+    fn get_exchange_rate(&self) -> Option<ExchangeRate>;
+
+    /// Change the fiat currency (ISO 4217 currency code) - not all are supported
+    /// The method [`BreezLightningNode::list_currency_codes`] can used to list supported codes.
+    fn change_fiat_currency(&self, fiat_currency: String);
+
+    /// Change the timezone config.
+    ///
+    /// Parameters:
+    /// * `timezone_config` - the user's current timezone
+    fn change_timezone_config(&self, timezone_config: TzConfig);
+
+    fn accept_pocket_terms_and_conditions(&self) -> Result<()>;
+
+    /// Similar to [`get_terms_and_conditions_status`] with the difference that this method is pre-filling
+    /// the environment and seed based on the node configuration.
+    fn get_terms_and_conditions_status(
+        &self,
+        terms_and_conditions: TermsAndConditions,
+    ) -> Result<TermsAndConditionsStatus>;
+
+    /// Register for fiat topups. Returns information that can be used by the user to transfer fiat
+    /// to the 3rd party exchange service. Once the 3rd party exchange receives funds, the user will
+    /// be able to withdraw sats using LNURL-w.
+    ///
+    /// Parameters:
+    /// * `email` - this email will be used to send status information about different topups
+    /// * `user_iban` - the user will send fiat from this iban
+    /// * `user_currency` - the fiat currency (ISO 4217 currency code) that will be sent for
+    /// exchange. Not all are supported. A consumer of this library should find out about available
+    /// ones using other sources.
+    fn register_fiat_topup(
+        &self,
+        email: Option<String>,
+        user_iban: String,
+        user_currency: String,
+    ) -> Result<FiatTopupInfo>;
+
+    fn reset_fiat_topup(&self) -> Result<()>;
+
+    /// Hides the topup with the given id. Can be called on expired topups so that they stop being returned
+    /// by [`BreezLightningNode::query_uncompleted_offers`].
+    ///
+    /// Topup id can be obtained from [`OfferKind::Pocket`].
+    fn hide_topup(&self, id: String) -> Result<()>;
+
+    /// Get a list of unclaimed fund offers
+    fn query_uncompleted_offers(&self) -> Result<Vec<OfferInfo>>;
+
+    /// Calculates the lightning payout fee for an uncompleted offer.
+    ///
+    /// Parameters:
+    /// * `offer` - An uncompleted offer for which the lightning payout fee should get calculated.
+    fn calculate_lightning_payout_fee(&self, offer: OfferInfo) -> Result<Amount>;
+
+    /// Request to collect the offer (e.g. a Pocket topup).
+    /// A payment hash will be returned to track incoming payment.
+    /// The offer collection might be considered successful once
+    /// [`EventsCallback::payment_received`] is called,
+    /// or the [`PaymentState`] of the respective payment becomes [`PaymentState::Succeeded`].
+    ///
+    /// Parameters:
+    /// * `offer` - An offer that is still valid for collection. Must have its `lnurlw` field
+    /// filled in.
+    fn request_offer_collection(&self, offer: OfferInfo) -> Result<String>;
+
+    /// Registers a new notification token. If a token has already been registered, it will be updated.
+    fn register_notification_token(
+        &self,
+        notification_token: String,
+        language_iso_639_1: String,
+        country_iso_3166_1_alpha_2: String,
+    ) -> Result<()>;
+
+    /// Get the wallet UUID v5 from the wallet pubkey
+    ///
+    /// Returns an optional value. If the auth flow has never succeeded in this Auth instance,
+    /// the wallet UUID v5 is unknown and None is returned. Otherwise, this method will always
+    /// return the wallet UUID v5.
+    ///
+    /// This method does not require network access
+    fn get_wallet_pubkey_id(&self) -> Option<String>;
+
+    /// Get the payment UUID v5 from the payment hash
+    ///
+    /// Returns a UUID v5 derived from the payment hash. This will always return the same output
+    /// given the same input.
+    ///
+    /// Parameters:
+    /// * `payment_hash` - a payment hash represented in hex
+    fn get_payment_uuid(&self, payment_hash: String) -> Result<String>;
+
+    /// Query the current recommended on-chain fee rate.
+    ///
+    /// This is useful to obtain a fee rate to be used for [`BreezLightningNode::sweep`]
+    fn query_onchain_fee_rate(&self) -> Result<u32>;
+
+    /// Prepares a sweep of all available on-chain funds to the provided on-chain address.
+    ///
+    /// Parameters:
+    /// * `address` - the funds will be sweeped to this address
+    /// * `onchain_fee_rate` - the fee rate that should be applied for the transaction.
+    /// The recommended on-chain fee rate can be queried using [`BreezLightningNode::query_onchain_fee_rate`]
+    ///
+    /// Returns information on the prepared sweep, including the exact fee that results from
+    /// using the provided fee rate. The method [`BreezLightningNode::sweep`] can be used to broadcast
+    /// the sweep transaction.
+    fn prepare_sweep(&self, address: String, onchain_fee_rate: u32) -> Result<SweepInfo>;
+
+    /// Sweeps all available on-chain funds to the specified on-chain address.
+    ///
+    /// Parameters:
+    /// * `sweep_info` - a prepared sweep info that can be obtained using [`BreezLightningNode::prepare_sweep`]
+    ///
+    /// Returns the txid of the sweep transaction.
+    fn sweep(&self, sweep_info: SweepInfo) -> Result<String>;
+
+    /// Generates a Bitcoin on-chain address that can be used to topup the local LN wallet from an
+    /// external on-chain wallet.
+    ///
+    /// Funds sent to this address should conform to the min and max values provided within
+    /// [`SwapAddressInfo`].
+    ///
+    /// If a swap is in progress, this method will return an error.
+    ///
+    /// Parameters:
+    /// * `lsp_fee_params` - the lsp fee parameters to be used if a new channel needs to
+    /// be opened. Can be obtained using [`BreezLightningNode::calculate_lsp_fee`].
+    fn generate_swap_address(
+        &self,
+        lsp_fee_params: Option<OpeningFeeParams>,
+    ) -> std::result::Result<SwapAddressInfo, ReceiveOnchainError>;
+
+    /// Lists all unresolved failed swaps. Each individual failed swap can be recovered
+    /// using [`BreezLightningNode::resolve_failed_swap`].
+    fn get_unresolved_failed_swaps(&self) -> Result<Vec<FailedSwapInfo>>;
+
+    /// Prepares the resolution of a failed swap in order to know how much will be recovered and how much
+    /// will be paid in onchain fees.
+    ///
+    /// Parameters:
+    /// * `failed_swap_info` - the failed swap that will be prepared
+    /// * `to_address` - the destination address to which funds will be sent
+    /// * `onchain_fee_rate` - the fee rate that will be applied. The recommended one can be fetched
+    /// using [`BreezLightningNode::query_onchain_fee_rate`]
+    fn prepare_resolve_failed_swap(
+        &self,
+        failed_swap_info: FailedSwapInfo,
+        to_address: String,
+        onchain_fee_rate: u32,
+    ) -> Result<ResolveFailedSwapInfo>;
+
+    /// Creates and broadcasts a resolving transaction to recover funds from a failed swap. Existing
+    /// failed swaps can be listed using [`BreezLightningNode::get_unresolved_failed_swaps`] and preparing
+    /// the resolution of a failed swap can be done using [`BreezLightningNode::prepare_resolve_failed_swap`].
+    ///
+    /// Parameters:
+    /// * `resolve_failed_swap_info` - Information needed to resolve the failed swap. Can be obtained
+    /// using [`BreezLightningNode::prepare_resolve_failed_swap`].
+    ///
+    /// Returns the txid of the resolving transaction.
+    ///
+    /// Paid on-chain fees can be known in advance using [`BreezLightningNode::prepare_resolve_failed_swap`].
+    fn resolve_failed_swap(
+        &self,
+        resolve_failed_swap_info: ResolveFailedSwapInfo,
+    ) -> Result<String>;
+
+    /// Prints additional debug information to the logs.
+    ///
+    /// Throws an error in case that the necessary information can't be retrieved.
+    fn log_debug_info(&self) -> Result<()>;
+
+    /// Returns the latest [`FiatTopupInfo`] if the user has registered for the fiat topup.
+    fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupInfo>>;
+
+    /// Returns the health check status of Breez and Greenlight services.
+    fn get_health_status(&self) -> Result<BreezHealthCheckStatus>;
+
+    /// Check if clearing the wallet is feasible.
+    ///
+    /// If not feasible, it means the balance is either too high or too low for a reverse-swap to
+    /// be used.
+    fn is_clear_wallet_feasible(&self) -> Result<bool>;
+
+    /// Prepares a reverse swap that sends all funds in LN channels. This is possible because the
+    /// route to the swap service is known, so fees can be known in advance.
+    ///
+    /// The return includes fee estimates and must be provided to [`BreezLightningNode::clear_wallet`] in
+    /// order to execute the clear operation.
+    ///
+    /// This can fail if the balance is either too low or too high for it to be reverse-swapped.
+    /// The method [`BreezLightningNode::is_clear_wallet_feasible`] can be used to check if the balance
+    /// is within the required range.
+    fn prepare_clear_wallet(&self) -> Result<ClearWalletInfo>;
+
+    /// Starts a reverse swap that sends all funds in LN channels to the provided onchain address.
+    ///
+    /// Parameters:
+    /// * `clear_wallet_info` - An instance of [`ClearWalletInfo`] obtained using
+    /// [`BreezLightningNode::prepare_clear_wallet`].
+    /// * `destination_onchain_address_data` - An onchain address data instance. Can be obtained
+    /// using [`BreezLightningNode::decode_data`].
+    fn clear_wallet(
+        &self,
+        clear_wallet_info: ClearWalletInfo,
+        destination_onchain_address_data: BitcoinAddressData,
+    ) -> Result<()>;
 }
 
 /// Contains the fee information for the options to resolve on-chain funds from channel closes.
@@ -273,7 +645,7 @@ pub struct ChannelCloseResolvingFees {
     pub sat_per_vbyte: u32,
 }
 
-impl LightningNode {
+impl BreezLightningNode {
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         enable_backtrace();
         fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
@@ -432,7 +804,7 @@ impl LightningNode {
         )
         .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
 
-        Ok(LightningNode {
+        Ok(BreezLightningNode {
             user_preferences,
             sdk,
             auth,
@@ -446,8 +818,266 @@ impl LightningNode {
         })
     }
 
+    fn payment_from_breez_payment(
+        &self,
+        breez_payment: breez_sdk_core::Payment,
+    ) -> Result<Payment> {
+        let payment_details = match breez_payment.details {
+            PaymentDetails::Ln { ref data } => data.clone(),
+            PaymentDetails::ClosedChannel { .. } => permanent_failure!(
+                "Current interface doesn't support PaymentDetails::ClosedChannel"
+            ),
+        };
+
+        let invoice = parse_invoice(&payment_details.bolt11).map_to_permanent_failure(format!(
+            "Invalid invoice provided by the Breez SDK: {}",
+            payment_details.bolt11
+        ))?;
+        let invoice_details = InvoiceDetails::from_ln_invoice(invoice.clone(), &None);
+
+        let local_payment_data = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_payment_info(&payment_details.payment_hash)?;
+
+        // Use invoice timestamp for receiving payments and breez_payment.payment_time for sending ones
+        // Reasoning: for receiving payments, Breez returns the time the invoice was paid. Given that
+        // now we show pending invoices, this can result in a receiving payment jumping around in the
+        // list when it gets paid.
+        let time = match breez_payment.payment_type {
+            breez_sdk_core::PaymentType::Sent => {
+                unix_timestamp_to_system_time(breez_payment.payment_time as u64)
+            }
+            breez_sdk_core::PaymentType::Received => invoice_details.creation_timestamp,
+            breez_sdk_core::PaymentType::ClosedChannel => {
+                permanent_failure!(
+                    "Current interface doesn't support PaymentDetails::ClosedChannel"
+                )
+            }
+        };
+        let (exchange_rate, time, offer) = match local_payment_data {
+            None => {
+                let exchange_rate = self.get_exchange_rate();
+                let user_preferences = self.user_preferences.lock_unwrap();
+                let time = TzTime {
+                    time,
+                    timezone_id: user_preferences.timezone_config.timezone_id.clone(),
+                    timezone_utc_offset_secs: user_preferences
+                        .timezone_config
+                        .timezone_utc_offset_secs,
+                };
+                let offer = None;
+                (exchange_rate, time, offer)
+            } // TODO: change interface to accommodate for local payment data being non-existent
+            Some(d) => {
+                let exchange_rate = Some(d.exchange_rate);
+                let time = TzTime {
+                    time,
+                    timezone_id: d.user_preferences.timezone_config.timezone_id,
+                    timezone_utc_offset_secs: d
+                        .user_preferences
+                        .timezone_config
+                        .timezone_utc_offset_secs,
+                };
+
+                let offer = match invoice_details.amount {
+                    Some(amount) => d.offer.map(|offer| {
+                        fill_payout_fee(
+                            offer,
+                            (amount.sats.as_sats().msats + breez_payment.fee_msat).as_msats(),
+                            &exchange_rate,
+                        )
+                    }),
+                    None => d.offer,
+                };
+
+                (exchange_rate, time, offer)
+            }
+        };
+
+        let (payment_type, amount, requested_amount, network_fees, lsp_fees) =
+            match breez_payment.payment_type {
+                breez_sdk_core::PaymentType::Sent => (
+                    PaymentType::Sending,
+                    (breez_payment.amount_msat + breez_payment.fee_msat)
+                        .as_msats()
+                        .to_amount_up(&exchange_rate),
+                    breez_payment
+                        .amount_msat
+                        .as_msats()
+                        .to_amount_up(&exchange_rate),
+                    Some(
+                        breez_payment
+                            .fee_msat
+                            .as_msats()
+                            .to_amount_up(&exchange_rate),
+                    ),
+                    None,
+                ),
+                breez_sdk_core::PaymentType::Received => (
+                    PaymentType::Receiving,
+                    breez_payment
+                        .amount_msat
+                        .as_msats()
+                        .to_amount_down(&exchange_rate),
+                    Self::get_requested_amount_for_received_payment(&breez_payment, &exchange_rate),
+                    None,
+                    Some(
+                        breez_payment
+                            .fee_msat
+                            .as_msats()
+                            .to_amount_up(&exchange_rate),
+                    ),
+                ),
+                breez_sdk_core::PaymentType::ClosedChannel => permanent_failure!(
+                    "Current interface doesn't support PaymentDetails::ClosedChannel"
+                ),
+            };
+
+        let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
+
+        let description = invoice_details.description.clone();
+
+        let user_preferences = self.user_preferences.lock_unwrap();
+        let swap = payment_details.swap_info.map(|s| SwapInfo {
+            bitcoin_address: s.bitcoin_address,
+            created_at: TzTime {
+                // TODO: Persist SwapInfo in local db on state change, requires https://github.com/breez/breez-sdk/issues/518
+                time: unix_timestamp_to_system_time(s.created_at as u64),
+                timezone_id: user_preferences.timezone_config.timezone_id.clone(),
+                timezone_utc_offset_secs: user_preferences.timezone_config.timezone_utc_offset_secs,
+            },
+            paid_sats: s.paid_sats,
+        });
+
+        Ok(Payment {
+            payment_type,
+            payment_state: breez_payment.status.into(),
+            fail_reason: None, // TODO: Request SDK to store and provide reason for failed payments - issue: https://github.com/breez/breez-sdk/issues/626
+            hash: payment_details.payment_hash,
+            amount,
+            requested_amount,
+            invoice_details,
+            created_at: time,
+            description,
+            preimage: payment_details
+                .payment_preimage
+                .is_empty()
+                .not()
+                .then_some(payment_details.payment_preimage),
+            network_fees,
+            lsp_fees,
+            offer,
+            swap,
+            lightning_address: payment_details.ln_address,
+        })
+    }
+
+    fn get_requested_amount_for_received_payment(
+        payment: &breez_sdk_core::Payment,
+        exchange_rate: &Option<ExchangeRate>,
+    ) -> Amount {
+        payment
+            .amount_msat
+            .add(payment.fee_msat)
+            .as_msats()
+            .to_amount_down(exchange_rate)
+    }
+
+    fn payment_from_created_invoice(&self, created_invoice: &CreatedInvoice) -> Result<Payment> {
+        let invoice =
+            parse_invoice(created_invoice.invoice.as_str()).map_to_permanent_failure(format!(
+                "Invalid invoice obtained from local db: {}",
+                created_invoice.invoice
+            ))?;
+        let invoice_details = InvoiceDetails::from_ln_invoice(invoice.clone(), &None);
+
+        let payment_state = if SystemTime::now() > invoice_details.expiry_timestamp {
+            PaymentState::InvoiceExpired
+        } else {
+            PaymentState::Created
+        };
+
+        let local_payment_data = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_payment_info(&invoice_details.payment_hash)?
+            .ok_or_permanent_failure("Locally created invoice doesn't have local payment data")?;
+        let exchange_rate = Some(local_payment_data.exchange_rate);
+        let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
+        let time = TzTime {
+            time: invoice_details.creation_timestamp, // for receiving payments, we use the invoice timestamp
+            timezone_id: local_payment_data
+                .user_preferences
+                .timezone_config
+                .timezone_id,
+            timezone_utc_offset_secs: local_payment_data
+                .user_preferences
+                .timezone_config
+                .timezone_utc_offset_secs,
+        };
+        let lsp_fees = created_invoice
+            .channel_opening_fees
+            .map(|f| f.as_msats().to_amount_up(&exchange_rate));
+        let requested_amount = invoice_details
+            .amount
+            .clone()
+            .ok_or_permanent_failure("Locally created invoice doesn't include an amount")?
+            .sats
+            .as_sats()
+            .to_amount_down(&exchange_rate);
+
+        let mut amount = requested_amount.clone().sats;
+        if let Some(ref lsp_fees) = lsp_fees {
+            amount -= lsp_fees.sats;
+        }
+        let amount = amount.as_sats().to_amount_down(&exchange_rate);
+
+        Ok(Payment {
+            payment_type: PaymentType::Receiving,
+            payment_state,
+            fail_reason: None,
+            hash: invoice_details.payment_hash.clone(),
+            amount,
+            requested_amount,
+            invoice_details: invoice_details.clone(),
+            created_at: time,
+            description: invoice_details.description,
+            preimage: None,
+            network_fees: None,
+            lsp_fees,
+            offer: None,
+            swap: None,
+            lightning_address: None,
+        })
+    }
+
+    fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) {
+        let user_preferences = self.user_preferences.lock_unwrap().clone();
+        let exchange_rates = self.task_manager.lock_unwrap().get_exchange_rates();
+        self.data_store
+            .lock_unwrap()
+            .store_payment_info(hash, user_preferences, exchange_rates, offer)
+            .log_ignore_error(Level::Error, "Failed to persist payment info")
+    }
+
+    fn report_send_payment_issue(&self, payment_hash: String) {
+        debug!("Reporting failure of payment: {payment_hash}");
+        let data = ReportPaymentFailureDetails {
+            payment_hash,
+            comment: None,
+        };
+        let request = ReportIssueRequest::PaymentFailure { data };
+        self.rt
+            .handle()
+            .block_on(self.sdk.report_issue(request))
+            .log_ignore_error(Level::Warn, "Failed to report issue");
+    }
+}
+
+impl LightningNode for BreezLightningNode {
     /// Request some basic info about the node
-    pub fn get_node_info(&self) -> Result<NodeInfo> {
+    fn get_node_info(&self) -> Result<NodeInfo> {
         let node_state = self.sdk.node_info().map_to_runtime_error(
             RuntimeErrorCode::NodeUnavailable,
             "Failed to read node info",
@@ -480,7 +1110,7 @@ impl LightningNode {
     /// Get information about the fee charged by the LSP for opening new channels
     /// Please keep in mind that this method doesn't make any network calls. It simply retrieves
     /// previously fetched values that are frequently updated by a background task.
-    pub fn query_lsp_fee(&self) -> Result<LspFee> {
+    fn query_lsp_fee(&self) -> Result<LspFee> {
         let exchange_rate = self.get_exchange_rate();
         let lsp_fee = self.task_manager.lock_unwrap().get_lsp_fee()?;
         Ok(LspFee {
@@ -496,8 +1126,8 @@ impl LightningNode {
     /// * `amount_sat` - amount in sats to compute LSP fee for
     ///
     /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
-    /// provided to [`LightningNode::create_invoice`]
-    pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
+    /// provided to [`BreezLightningNode::create_invoice`]
+    fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
         let req = OpenChannelFeeRequest {
             amount_msat: amount_sat.as_sats().msats,
             expiry: None,
@@ -525,7 +1155,7 @@ impl LightningNode {
     /// again every time the user is about to receive a payment.
     /// The limits stay the same regardless of what amount wants to receive (= no changes while
     /// he's typing the amount)
-    pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
+    fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
         // TODO: try to move this logic inside the SDK
         let lsp_min_fee_amount = self.query_lsp_fee()?.channel_minimum_fee;
         let max_inbound_amount = self.get_node_info()?.channels_info.inbound_capacity;
@@ -542,12 +1172,12 @@ impl LightningNode {
     /// * `amount_sat` - the smallest amount of sats required for the node to accept the incoming
     /// payment (sender will have to pay fees on top of that amount)
     /// * `lsp_fee_params` - the params that will be used to determine the lsp fee.
-    /// Can be obtained from [`LightningNode::calculate_lsp_fee`] to guarantee predicted fees
+    /// Can be obtained from [`BreezLightningNode::calculate_lsp_fee`] to guarantee predicted fees
     /// are the ones charged.
     /// * `description` - a description to be embedded into the created invoice
     /// * `metadata` - additional data about the invoice creation used for analytics purposes,
     /// used to improve the user experience
-    pub fn create_invoice(
+    fn create_invoice(
         &self,
         amount_sat: u64,
         lsp_fee_params: Option<OpeningFeeParams>,
@@ -597,7 +1227,7 @@ impl LightningNode {
     }
 
     /// Decode a user-provided string (usually obtained from QR-code or pasted).
-    pub fn decode_data(&self, data: String) -> std::result::Result<DecodedData, DecodeDataError> {
+    fn decode_data(&self, data: String) -> std::result::Result<DecodedData, DecodeDataError> {
         match self.rt.handle().block_on(parse(&data)) {
             Ok(InputType::Bolt11 { invoice }) => {
                 ensure!(
@@ -648,7 +1278,7 @@ impl LightningNode {
     }
 
     /// Get the max routing fee mode that will be employed to restrict the fees for paying a given amount in sats
-    pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
+    fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
         get_payment_max_routing_fee_mode(amount_sat, &self.get_exchange_rate())
     }
 
@@ -656,7 +1286,7 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `amount` - The to be spent amount.
-    pub fn get_invoice_affordability(&self, amount_sat: u64) -> Result<InvoiceAffordability> {
+    fn get_invoice_affordability(&self, amount_sat: u64) -> Result<InvoiceAffordability> {
         let amount = amount_sat.as_sats();
 
         let routing_fee_mode = self.get_payment_max_routing_fee_mode(amount_sat);
@@ -691,9 +1321,9 @@ impl LightningNode {
     /// callbacks [`EventsCallback::payment_sent`] and [`EventsCallback::payment_failed`].
     ///
     /// Parameters:
-    /// * `invoice_details` - details of an invoice decode by [`LightningNode::decode_data`]
+    /// * `invoice_details` - details of an invoice decode by [`BreezLightningNode::decode_data`]
     /// * `metadata` - additional meta information about the payment, used by analytics to improve the user experience.
-    pub fn pay_invoice(
+    fn pay_invoice(
         &self,
         invoice_details: InvoiceDetails,
         metadata: PaymentMetadata,
@@ -701,13 +1331,13 @@ impl LightningNode {
         self.pay_open_invoice(invoice_details, 0, metadata)
     }
 
-    /// Similar to [`LightningNode::pay_invoice`] with the difference that the passed in invoice
+    /// Similar to [`BreezLightningNode::pay_invoice`] with the difference that the passed in invoice
     /// does not have any payment amount specified, and allows the caller of the method to
     /// specify an amount instead.
     ///
     /// Additional Parameters:
     /// * `amount_sat` - amount in sats to be paid
-    pub fn pay_open_invoice(
+    fn pay_open_invoice(
         &self,
         invoice_details: InvoiceDetails,
         amount_sat: u64,
@@ -765,11 +1395,11 @@ impl LightningNode {
     /// Pay an LNURL-pay the provided amount.
     ///
     /// Parameters:
-    /// * `lnurl_pay_request_data` - LNURL-pay request data as obtained from [`LightningNode::decode_data`]
+    /// * `lnurl_pay_request_data` - LNURL-pay request data as obtained from [`BreezLightningNode::decode_data`]
     /// * `amount_sat` - amount to be paid
     ///
     /// Returns the payment hash of the payment.
-    pub fn pay_lnurlp(
+    fn pay_lnurlp(
         &self,
         lnurl_pay_request_data: LnUrlPayRequestData,
         amount_sat: u64,
@@ -806,7 +1436,7 @@ impl LightningNode {
     /// List lightning addresses from the most recent used.
     ///
     /// Returns a list of lightning addresses.
-    pub fn list_lightning_addresses(&self) -> Result<Vec<String>> {
+    fn list_lightning_addresses(&self) -> Result<Vec<String>> {
         let list_payments_request = ListPaymentsRequest {
             filters: Some(vec![PaymentTypeFilter::Sent]),
             from_timestamp: None,
@@ -839,11 +1469,11 @@ impl LightningNode {
     /// Withdraw an LNURL-withdraw the provided amount.
     ///
     /// Parameters:
-    /// * `lnurl_withdraw_request_data` - LNURL-withdraw request data as obtained from [`LightningNode::decode_data`]
+    /// * `lnurl_withdraw_request_data` - LNURL-withdraw request data as obtained from [`BreezLightningNode::decode_data`]
     /// * `amount_sat` - amount to be withdraw
     ///
     /// Returns the payment hash of the payment.
-    pub fn withdraw_lnurlw(
+    fn withdraw_lnurlw(
         &self,
         lnurl_withdraw_request_data: LnUrlWithdrawRequestData,
         amount_sat: u64,
@@ -873,7 +1503,7 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `number_of_completed_activities` - the maximum number of completed activities that will be returned
-    pub fn get_latest_activities(
+    fn get_latest_activities(
         &self,
         number_of_completed_activities: u32,
     ) -> Result<ListActivitiesResponse> {
@@ -961,7 +1591,7 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `hash` - hex representation of payment hash
-    pub fn get_payment(&self, hash: String) -> Result<Payment> {
+    fn get_payment(&self, hash: String) -> Result<Payment> {
         let optional_invoice = self
             .data_store
             .lock_unwrap()
@@ -1275,14 +1905,14 @@ impl LightningNode {
 
     /// Call the method when the app goes to foreground, such that the user can interact with it.
     /// The library starts running the background tasks more frequently to improve user experience.
-    pub fn foreground(&self) {
+    fn foreground(&self) {
         self.task_manager.lock_unwrap().foreground();
     }
 
     /// Call the method when the app goes to background, such that the user can not interact with it.
     /// The library stops running some unnecessary tasks and runs necessary tasks less frequently.
     /// It should save battery and internet traffic.
-    pub fn background(&self) {
+    fn background(&self) {
         self.task_manager.lock_unwrap().background();
     }
 
@@ -1294,7 +1924,7 @@ impl LightningNode {
     /// slow or unresponsive exchange rate service.
     /// The method will return an empty list if there is nothing persisted yet and
     /// the values are not yet fetched from the service.
-    pub fn list_currency_codes(&self) -> Vec<String> {
+    fn list_currency_codes(&self) -> Vec<String> {
         let rates = self.task_manager.lock_unwrap().get_exchange_rates();
         rates.iter().map(|r| r.currency_code.clone()).collect()
     }
@@ -1308,7 +1938,7 @@ impl LightningNode {
     ///
     /// The return value is an optional to deal with the possibility
     /// of no exchange rate values being known.
-    pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
+    fn get_exchange_rate(&self) -> Option<ExchangeRate> {
         let rates = self.task_manager.lock_unwrap().get_exchange_rates();
         let currency_code = self.user_preferences.lock_unwrap().fiat_currency.clone();
         rates
@@ -1318,8 +1948,8 @@ impl LightningNode {
     }
 
     /// Change the fiat currency (ISO 4217 currency code) - not all are supported
-    /// The method [`LightningNode::list_currency_codes`] can used to list supported codes.
-    pub fn change_fiat_currency(&self, fiat_currency: String) {
+    /// The method [`BreezLightningNode::list_currency_codes`] can used to list supported codes.
+    fn change_fiat_currency(&self, fiat_currency: String) {
         self.user_preferences.lock_unwrap().fiat_currency = fiat_currency;
     }
 
@@ -1327,11 +1957,11 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `timezone_config` - the user's current timezone
-    pub fn change_timezone_config(&self, timezone_config: TzConfig) {
+    fn change_timezone_config(&self, timezone_config: TzConfig) {
         self.user_preferences.lock_unwrap().timezone_config = timezone_config;
     }
 
-    pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
+    fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
         self.auth
             .accept_terms_and_conditions(TermsAndConditions::Pocket)
             .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
@@ -1339,7 +1969,7 @@ impl LightningNode {
 
     /// Similar to [`get_terms_and_conditions_status`] with the difference that this method is pre-filling
     /// the environment and seed based on the node configuration.
-    pub fn get_terms_and_conditions_status(
+    fn get_terms_and_conditions_status(
         &self,
         terms_and_conditions: TermsAndConditions,
     ) -> Result<TermsAndConditionsStatus> {
@@ -1358,7 +1988,7 @@ impl LightningNode {
     /// * `user_currency` - the fiat currency (ISO 4217 currency code) that will be sent for
     /// exchange. Not all are supported. A consumer of this library should find out about available
     /// ones using other sources.
-    pub fn register_fiat_topup(
+    fn register_fiat_topup(
         &self,
         email: Option<String>,
         user_iban: String,
@@ -1388,22 +2018,22 @@ impl LightningNode {
         Ok(topup_info)
     }
 
-    pub fn reset_fiat_topup(&self) -> Result<()> {
+    fn reset_fiat_topup(&self) -> Result<()> {
         self.data_store.lock_unwrap().clear_fiat_topup_info()
     }
 
     /// Hides the topup with the given id. Can be called on expired topups so that they stop being returned
-    /// by [`LightningNode::query_uncompleted_offers`].
+    /// by [`BreezLightningNode::query_uncompleted_offers`].
     ///
     /// Topup id can be obtained from [`OfferKind::Pocket`].
-    pub fn hide_topup(&self, id: String) -> Result<()> {
+    fn hide_topup(&self, id: String) -> Result<()> {
         self.offer_manager
             .hide_topup(id)
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)
     }
 
     /// Get a list of unclaimed fund offers
-    pub fn query_uncompleted_offers(&self) -> Result<Vec<OfferInfo>> {
+    fn query_uncompleted_offers(&self) -> Result<Vec<OfferInfo>> {
         let topup_infos = self
             .offer_manager
             .query_uncompleted_topups()
@@ -1445,7 +2075,7 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `offer` - An uncompleted offer for which the lightning payout fee should get calculated.
-    pub fn calculate_lightning_payout_fee(&self, offer: OfferInfo) -> Result<Amount> {
+    fn calculate_lightning_payout_fee(&self, offer: OfferInfo) -> Result<Amount> {
         ensure!(
             offer.status != OfferStatus::REFUNDED && offer.status != OfferStatus::SETTLED,
             invalid_input(format!("Provided offer is already completed: {:?}", offer))
@@ -1487,7 +2117,7 @@ impl LightningNode {
     /// Parameters:
     /// * `offer` - An offer that is still valid for collection. Must have its `lnurlw` field
     /// filled in.
-    pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
+    fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
         let lnurlw_data = match self.rt.handle().block_on(parse(
             &offer
                 .lnurlw
@@ -1539,7 +2169,7 @@ impl LightningNode {
     }
 
     /// Registers a new notification token. If a token has already been registered, it will be updated.
-    pub fn register_notification_token(
+    fn register_notification_token(
         &self,
         notification_token: String,
         language_iso_639_1: String,
@@ -1562,7 +2192,7 @@ impl LightningNode {
     /// return the wallet UUID v5.
     ///
     /// This method does not require network access
-    pub fn get_wallet_pubkey_id(&self) -> Option<String> {
+    fn get_wallet_pubkey_id(&self) -> Option<String> {
         self.auth.get_wallet_pubkey_id()
     }
 
@@ -1573,23 +2203,14 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `payment_hash` - a payment hash represented in hex
-    pub fn get_payment_uuid(&self, payment_hash: String) -> Result<String> {
+    fn get_payment_uuid(&self, payment_hash: String) -> Result<String> {
         get_payment_uuid(payment_hash)
-    }
-
-    fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) {
-        let user_preferences = self.user_preferences.lock_unwrap().clone();
-        let exchange_rates = self.task_manager.lock_unwrap().get_exchange_rates();
-        self.data_store
-            .lock_unwrap()
-            .store_payment_info(hash, user_preferences, exchange_rates, offer)
-            .log_ignore_error(Level::Error, "Failed to persist payment info")
     }
 
     /// Query the current recommended on-chain fee rate.
     ///
-    /// This is useful to obtain a fee rate to be used for [`LightningNode::sweep`]
-    pub fn query_onchain_fee_rate(&self) -> Result<u32> {
+    /// This is useful to obtain a fee rate to be used for [`BreezLightningNode::sweep`]
+    fn query_onchain_fee_rate(&self) -> Result<u32> {
         let recommended_fees = self
             .rt
             .handle()
@@ -1607,12 +2228,12 @@ impl LightningNode {
     /// Parameters:
     /// * `address` - the funds will be sweeped to this address
     /// * `onchain_fee_rate` - the fee rate that should be applied for the transaction.
-    /// The recommended on-chain fee rate can be queried using [`LightningNode::query_onchain_fee_rate`]
+    /// The recommended on-chain fee rate can be queried using [`BreezLightningNode::query_onchain_fee_rate`]
     ///
     /// Returns information on the prepared sweep, including the exact fee that results from
-    /// using the provided fee rate. The method [`LightningNode::sweep`] can be used to broadcast
+    /// using the provided fee rate. The method [`BreezLightningNode::sweep`] can be used to broadcast
     /// the sweep transaction.
-    pub fn prepare_sweep(&self, address: String, onchain_fee_rate: u32) -> Result<SweepInfo> {
+    fn prepare_sweep(&self, address: String, onchain_fee_rate: u32) -> Result<SweepInfo> {
         let res = self
             .rt
             .handle()
@@ -1651,10 +2272,10 @@ impl LightningNode {
     /// Sweeps all available on-chain funds to the specified on-chain address.
     ///
     /// Parameters:
-    /// * `sweep_info` - a prepared sweep info that can be obtained using [`LightningNode::prepare_sweep`]
+    /// * `sweep_info` - a prepared sweep info that can be obtained using [`BreezLightningNode::prepare_sweep`]
     ///
     /// Returns the txid of the sweep transaction.
-    pub fn sweep(&self, sweep_info: SweepInfo) -> Result<String> {
+    fn sweep(&self, sweep_info: SweepInfo) -> Result<String> {
         let txid = self
             .rt
             .handle()
@@ -1677,8 +2298,8 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `lsp_fee_params` - the lsp fee parameters to be used if a new channel needs to
-    /// be opened. Can be obtained using [`LightningNode::calculate_lsp_fee`].
-    pub fn generate_swap_address(
+    /// be opened. Can be obtained using [`BreezLightningNode::calculate_lsp_fee`].
+    fn generate_swap_address(
         &self,
         lsp_fee_params: Option<OpeningFeeParams>,
     ) -> std::result::Result<SwapAddressInfo, ReceiveOnchainError> {
@@ -1703,8 +2324,8 @@ impl LightningNode {
     }
 
     /// Lists all unresolved failed swaps. Each individual failed swap can be recovered
-    /// using [`LightningNode::resolve_failed_swap`].
-    pub fn get_unresolved_failed_swaps(&self) -> Result<Vec<FailedSwapInfo>> {
+    /// using [`BreezLightningNode::resolve_failed_swap`].
+    fn get_unresolved_failed_swaps(&self) -> Result<Vec<FailedSwapInfo>> {
         Ok(self
             .rt
             .handle()
@@ -1732,8 +2353,8 @@ impl LightningNode {
     /// * `failed_swap_info` - the failed swap that will be prepared
     /// * `to_address` - the destination address to which funds will be sent
     /// * `onchain_fee_rate` - the fee rate that will be applied. The recommended one can be fetched
-    /// using [`LightningNode::query_onchain_fee_rate`]
-    pub fn prepare_resolve_failed_swap(
+    /// using [`BreezLightningNode::query_onchain_fee_rate`]
+    fn prepare_resolve_failed_swap(
         &self,
         failed_swap_info: FailedSwapInfo,
         to_address: String,
@@ -1768,17 +2389,17 @@ impl LightningNode {
     }
 
     /// Creates and broadcasts a resolving transaction to recover funds from a failed swap. Existing
-    /// failed swaps can be listed using [`LightningNode::get_unresolved_failed_swaps`] and preparing
-    /// the resolution of a failed swap can be done using [`LightningNode::prepare_resolve_failed_swap`].
+    /// failed swaps can be listed using [`BreezLightningNode::get_unresolved_failed_swaps`] and preparing
+    /// the resolution of a failed swap can be done using [`BreezLightningNode::prepare_resolve_failed_swap`].
     ///
     /// Parameters:
     /// * `resolve_failed_swap_info` - Information needed to resolve the failed swap. Can be obtained
-    /// using [`LightningNode::prepare_resolve_failed_swap`].
+    /// using [`BreezLightningNode::prepare_resolve_failed_swap`].
     ///
     /// Returns the txid of the resolving transaction.
     ///
-    /// Paid on-chain fees can be known in advance using [`LightningNode::prepare_resolve_failed_swap`].
-    pub fn resolve_failed_swap(
+    /// Paid on-chain fees can be known in advance using [`BreezLightningNode::prepare_resolve_failed_swap`].
+    fn resolve_failed_swap(
         &self,
         resolve_failed_swap_info: ResolveFailedSwapInfo,
     ) -> Result<String> {
@@ -1927,7 +2548,7 @@ impl LightningNode {
     /// Prints additional debug information to the logs.
     ///
     /// Throws an error in case that the necessary information can't be retrieved.
-    pub fn log_debug_info(&self) -> Result<()> {
+    fn log_debug_info(&self) -> Result<()> {
         self.rt
             .handle()
             .block_on(self.sdk.sync())
@@ -1990,14 +2611,14 @@ impl LightningNode {
     }
 
     /// Returns the latest [`FiatTopupInfo`] if the user has registered for the fiat topup.
-    pub fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupInfo>> {
+    fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupInfo>> {
         self.data_store
             .lock_unwrap()
             .retrieve_latest_fiat_topup_info()
     }
 
     /// Returns the health check status of Breez and Greenlight services.
-    pub fn get_health_status(&self) -> Result<BreezHealthCheckStatus> {
+    fn get_health_status(&self) -> Result<BreezHealthCheckStatus> {
         Ok(self
             .rt
             .handle()
@@ -2013,7 +2634,7 @@ impl LightningNode {
     ///
     /// If not feasible, it means the balance is either too high or too low for a reverse-swap to
     /// be used.
-    pub fn is_clear_wallet_feasible(&self) -> Result<bool> {
+    fn is_clear_wallet_feasible(&self) -> Result<bool> {
         let amount_sat = self
             .rt
             .handle()
@@ -2041,13 +2662,13 @@ impl LightningNode {
     /// Prepares a reverse swap that sends all funds in LN channels. This is possible because the
     /// route to the swap service is known, so fees can be known in advance.
     ///
-    /// The return includes fee estimates and must be provided to [`LightningNode::clear_wallet`] in
+    /// The return includes fee estimates and must be provided to [`BreezLightningNode::clear_wallet`] in
     /// order to execute the clear operation.
     ///
     /// This can fail if the balance is either too low or too high for it to be reverse-swapped.
-    /// The method [`LightningNode::is_clear_wallet_feasible`] can be used to check if the balance
+    /// The method [`BreezLightningNode::is_clear_wallet_feasible`] can be used to check if the balance
     /// is within the required range.
-    pub fn prepare_clear_wallet(&self) -> Result<ClearWalletInfo> {
+    fn prepare_clear_wallet(&self) -> Result<ClearWalletInfo> {
         let amount_sat = self
             .rt
             .handle()
@@ -2092,10 +2713,10 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `clear_wallet_info` - An instance of [`ClearWalletInfo`] obtained using
-    /// [`LightningNode::prepare_clear_wallet`].
+    /// [`BreezLightningNode::prepare_clear_wallet`].
     /// * `destination_onchain_address_data` - An on-chain address data instance. Can be obtained
-    /// using [`LightningNode::decode_data`].
-    pub fn clear_wallet(
+    /// using [`BreezLightningNode::decode_data`].
+    fn clear_wallet(
         &self,
         clear_wallet_info: ClearWalletInfo,
         destination_onchain_address_data: BitcoinAddressData,
@@ -2114,22 +2735,9 @@ impl LightningNode {
             )?;
         Ok(())
     }
-
-    fn report_send_payment_issue(&self, payment_hash: String) {
-        debug!("Reporting failure of payment: {payment_hash}");
-        let data = ReportPaymentFailureDetails {
-            payment_hash,
-            comment: None,
-        };
-        let request = ReportIssueRequest::PaymentFailure { data };
-        self.rt
-            .handle()
-            .block_on(self.sdk.report_issue(request))
-            .log_ignore_error(Level::Warn, "Failed to report issue");
-    }
 }
 
-/// Accept lipa's terms and conditions. Should be called before instantiating a [`LightningNode`]
+/// Accept lipa's terms and conditions. Should be called before instantiating a [`BreezLightningNode`]
 /// for the first time.
 pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) -> Result<()> {
     enable_backtrace();

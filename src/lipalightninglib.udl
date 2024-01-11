@@ -2,9 +2,10 @@
 // ----------------------------- LN NODE INTERFACE + RELATED DEFINITIONS -----------------------------
 //
 
+[Trait]
 interface LightningNode {
-    [Throws=LnError]
-    constructor(Config config, EventsCallback events_callback);
+    //[Throws=LnError]
+    //constructor(Config config, EventsCallback events_callback);
 
     [Throws=LnError]
     NodeInfo get_node_info();

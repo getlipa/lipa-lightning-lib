@@ -6,6 +6,7 @@ use crate::setup::start_alice;
 use bitcoin::secp256k1::PublicKey;
 use serial_test::file_serial;
 use std::str::FromStr;
+use uniffi_lipalightninglib::LightningNode;
 
 #[test]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]

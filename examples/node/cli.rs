@@ -23,7 +23,7 @@ use uniffi_lipalightninglib::{
     TzConfig,
 };
 
-pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
+pub(crate) fn poll_for_user_input(node: &impl LightningNode, log_file_path: &str) {
     println!("{}", "3L Example Node".blue().bold());
     println!("Detailed logs are available at {}", log_file_path);
     println!("To stop the node, please type \"stop\" for a graceful shutdown.");
@@ -418,7 +418,7 @@ fn help() {
     println!("  stop");
 }
 
-fn lsp_fee(node: &LightningNode) {
+fn lsp_fee(node: &impl LightningNode) {
     let lsp_fee = node.query_lsp_fee().unwrap();
     println!(
         " Min fee: {}",
@@ -430,7 +430,10 @@ fn lsp_fee(node: &LightningNode) {
     );
 }
 
-fn calculate_lsp_fee(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+fn calculate_lsp_fee(
+    node: &impl LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<()> {
     let amount: u64 = words
         .next()
         .ok_or(anyhow!("Amount in SAT is required"))?
@@ -441,7 +444,7 @@ fn calculate_lsp_fee(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
     Ok(())
 }
 
-fn payment_amount_limits(node: &LightningNode) {
+fn payment_amount_limits(node: &impl LightningNode) {
     let limits = node.get_payment_amount_limits().unwrap();
 
     println!(
@@ -466,7 +469,7 @@ fn payment_amount_limits(node: &LightningNode) {
     }
 }
 
-fn node_info(node: &LightningNode) {
+fn node_info(node: &impl LightningNode) {
     let node_info = match node.get_node_info() {
         Ok(n) => n,
         Err(e) => {
@@ -500,14 +503,14 @@ fn node_info(node: &LightningNode) {
     );
 }
 
-fn wallet_pubkey_id(node: &LightningNode) {
+fn wallet_pubkey_id(node: &impl LightningNode) {
     match node.get_wallet_pubkey_id() {
         Some(wallet_pubkey_id) => println!("{wallet_pubkey_id}"),
         None => eprintln!("Wallet PubKey Id is currently unavailable."),
     }
 }
 
-fn get_exchange_rate(node: &LightningNode) {
+fn get_exchange_rate(node: &impl LightningNode) {
     match node.get_exchange_rate() {
         Some(r) => {
             let dt: DateTime<Utc> = r.updated_at.into();
@@ -524,16 +527,16 @@ fn get_exchange_rate(node: &LightningNode) {
     }
 }
 
-fn list_currency_codes(node: &LightningNode) {
+fn list_currency_codes(node: &impl LightningNode) {
     let codes = node.list_currency_codes();
     println!("Supported currencies: {codes:?}");
 }
 
-fn change_currency(node: &LightningNode, fiat_currency: &str) {
+fn change_currency(node: &impl LightningNode, fiat_currency: &str) {
     node.change_fiat_currency(String::from(fiat_currency));
 }
 
-fn change_timezone(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+fn change_timezone(node: &impl LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let timezone_utc_offset_mins: i32 = words
         .next()
         .unwrap_or("0")
@@ -555,7 +558,7 @@ fn change_timezone(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
     Ok(())
 }
 
-fn create_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+fn create_invoice(node: &impl LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let amount: u64 = words
         .next()
         .ok_or(anyhow!("Amount in SAT is required"))?
@@ -579,7 +582,7 @@ fn create_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -
     Ok(())
 }
 
-fn decode_data(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+fn decode_data(node: &impl LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let data = words.next().ok_or(anyhow!("Data is required"))?;
 
     match node.decode_data(data.to_string())? {
@@ -684,7 +687,7 @@ fn print_bitcoin_address_data(bitcoin_address_data: BitcoinAddressData) {
 }
 
 fn get_max_routing_fee_mode(
-    node: &LightningNode,
+    node: &impl LightningNode,
     words: &mut dyn Iterator<Item = &str>,
 ) -> Result<()> {
     let amount: u64 = words
@@ -714,7 +717,7 @@ fn get_max_routing_fee_mode(
 }
 
 fn get_invoice_affordability(
-    node: &LightningNode,
+    node: &impl LightningNode,
     words: &mut dyn Iterator<Item = &str>,
 ) -> Result<()> {
     let amount_sat: u64 = words
@@ -732,7 +735,7 @@ fn get_invoice_affordability(
     Ok(())
 }
 
-fn pay_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+fn pay_invoice(node: &impl LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let invoice = words.next().ok_or(anyhow!("Invoice is required"))?;
 
     if words.next().is_some() {
@@ -755,7 +758,10 @@ fn pay_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
     Ok(())
 }
 
-fn pay_open_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+fn pay_open_invoice(
+    node: &impl LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<()> {
     let invoice = words.next().ok_or(anyhow!("Invoice is required"))?;
 
     let amount: u64 = words
@@ -781,7 +787,7 @@ fn pay_open_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>)
     Ok(())
 }
 
-fn get_swap_address(node: &LightningNode) -> Result<()> {
+fn get_swap_address(node: &impl LightningNode) -> Result<()> {
     let swap_address_info = node.generate_swap_address(None)?;
 
     println!("Swap Address Information:");
@@ -798,7 +804,7 @@ fn get_swap_address(node: &LightningNode) -> Result<()> {
     Ok(())
 }
 
-fn list_failed_swaps(node: &LightningNode) -> Result<()> {
+fn list_failed_swaps(node: &impl LightningNode) -> Result<()> {
     let failed_swaps = node.get_unresolved_failed_swaps()?;
 
     println!(
@@ -815,7 +821,10 @@ fn list_failed_swaps(node: &LightningNode) -> Result<()> {
     Ok(())
 }
 
-fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+fn refund_failed_swap(
+    node: &impl LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<()> {
     let swap_address = words.next().ok_or(anyhow!("Swap address is required"))?;
     let to_address = words.next().ok_or(anyhow!("To address is required"))?;
 
@@ -840,7 +849,7 @@ fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str
 
     Ok(())
 }
-fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+fn pay_lnurlp(node: &impl LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let lnurlp = words.next().ok_or(anyhow!("LNURL pay is required"))?;
 
     let amount: u64 = words
@@ -869,7 +878,7 @@ fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Re
     Ok(())
 }
 
-fn withdraw_lnurlw(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+fn withdraw_lnurlw(node: &impl LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let lnurlw = words.next().ok_or(anyhow!("LNURL withdraw is required"))?;
 
     let amount: u64 = words
@@ -900,7 +909,7 @@ fn withdraw_lnurlw(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
     Ok(())
 }
 
-fn register_topup(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+fn register_topup(node: &impl LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let iban = words.next().ok_or(anyhow!("IBAN is required"))?;
 
     let currency = words.next().ok_or(anyhow!("Currency is required"))?;
@@ -913,7 +922,7 @@ fn register_topup(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -
     Ok(())
 }
 
-fn list_offers(node: &LightningNode) -> Result<()> {
+fn list_offers(node: &impl LightningNode) -> Result<()> {
     let offers = node.query_uncompleted_offers()?;
 
     println!("Total of {} offers\n", offers.len().to_string().bold());
@@ -975,7 +984,7 @@ fn list_offers(node: &LightningNode) -> Result<()> {
     Ok(())
 }
 
-fn list_activities(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+fn list_activities(node: &impl LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let number_of_activities: u32 = words
         .next()
         .unwrap_or("2")
@@ -1083,18 +1092,21 @@ fn print_channel_close(channel_close: ChannelClose) -> Result<()> {
     Ok(())
 }
 
-fn payment_uuid(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<String> {
+fn payment_uuid(
+    node: &impl LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<String> {
     let payment_hash = words.next().ok_or(anyhow!("Payment Hash is required"))?;
     Ok(node.get_payment_uuid(payment_hash.to_string())?)
 }
 
-fn sweep(node: &LightningNode, address: String) -> Result<String> {
+fn sweep(node: &impl LightningNode, address: String) -> Result<String> {
     let fee_rate = node.query_onchain_fee_rate()?;
     let sweep_info = node.prepare_sweep(address, fee_rate)?;
     Ok(node.sweep(sweep_info)?)
 }
 
-fn clear_wallet_info(node: &LightningNode) -> Result<()> {
+fn clear_wallet_info(node: &impl LightningNode) -> Result<()> {
     if !node.is_clear_wallet_feasible()? {
         return Err(anyhow!(
             "Clearing the wallet isn't feasible at the moment due to the available funds being \
@@ -1125,7 +1137,7 @@ fn clear_wallet_info(node: &LightningNode) -> Result<()> {
     Ok(())
 }
 
-fn clear_wallet(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+fn clear_wallet(node: &impl LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let address = words.next().ok_or(anyhow!("Address is required"))?;
 
     let clear_wallet_info = node.prepare_clear_wallet()?;
@@ -1193,7 +1205,7 @@ fn amount_to_string(amount: Amount) -> String {
     format!("{} SAT ({fiat})", amount.sats)
 }
 
-fn get_registered_topup(node: &LightningNode) -> Result<()> {
+fn get_registered_topup(node: &impl LightningNode) -> Result<()> {
     let topup_info = node.retrieve_latest_fiat_topup_info()?;
     println!("{topup_info:?}");
 
@@ -1201,7 +1213,7 @@ fn get_registered_topup(node: &LightningNode) -> Result<()> {
 }
 
 fn calculate_lightning_payout_fee(
-    node: &LightningNode,
+    node: &impl LightningNode,
     words: &mut dyn Iterator<Item = &str>,
 ) -> Result<()> {
     let offer_id = words.next().ok_or(anyhow!("<offer id> is required"))?;

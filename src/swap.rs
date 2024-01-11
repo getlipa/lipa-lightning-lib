@@ -5,7 +5,7 @@ use breez_sdk_core::OpeningFeeParams;
 use std::time::SystemTime;
 
 /// Information about a successful swap.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SwapInfo {
     pub bitcoin_address: String,
     pub created_at: TzTime,
