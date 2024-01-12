@@ -1326,7 +1326,7 @@ fn measure_latency(node: &LightningNode) {
     });
 
     measure_endpoint("Paying lnurlp", amount_of_calls, || {
-        if let DecodedData::LnUrlPay { lnurl_pay_details } = node.decode_data("LNURL1DP68GURN8GHJ7MR9VAJKUEPWD3HXY6T5WVHXXMMD9AKXUATJD3CZ76J52ATHXUSG8F530".to_string()).unwrap() {
+        if let DecodedData::LnUrlPay { lnurl_pay_details } = node.decode_data("lnurl1dp68gurn8ghj7ampd3kx2ar0veekzar0wd5xjtnrdakj7tnhv4kxctttdehhwm30d3h82unvwqhhxctswpuk2erhv9exgdp5ncqq2e".to_string()).unwrap() {
             let _ = node.pay_lnurlp(lnurl_pay_details.request_data.clone(), 1);
         }
     });
