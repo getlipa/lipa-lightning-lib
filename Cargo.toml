@@ -7,6 +7,11 @@ edition = "2021"
 crate-type = ["lib", "staticlib", "cdylib"]
 name = "uniffi_lipalightninglib"
 
+[features]
+mock = []
+prod = []
+dev = ["mock"]
+
 [dependencies]
 chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.18.1" }
 crow = { git = "https://github.com/getlipa/wild", tag = "v1.18.1" }

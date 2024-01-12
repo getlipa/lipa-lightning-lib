@@ -1,8 +1,10 @@
 use breez_sdk_core::{EnvironmentType, Network};
 
 /// A code of the environment for the node to run.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EnvironmentCode {
+    // TODO LN-1658 I haven't figured our a way to change the udl in a nice way to remove the Mock EnvCode from "prod" builds
+    Mock,
     Local,
     Dev,
     Stage,
@@ -26,6 +28,13 @@ impl Environment {
         let backend_health_url = format!("{base_url}/healthz");
 
         match environment {
+            EnvironmentCode::Mock => Self {
+                network: Network::Bitcoin,
+                environment_type: EnvironmentType::Production,
+                backend_url,
+                backend_health_url,
+                pocket_url: "https://pocket.mock".to_string(),
+            },
             EnvironmentCode::Local => Self {
                 network: Network::Bitcoin,
                 environment_type: EnvironmentType::Production,
@@ -60,6 +69,7 @@ impl Environment {
 
 fn get_backend_base_url(environment: EnvironmentCode) -> &'static str {
     match environment {
+        EnvironmentCode::Mock => "https://lipa.mock",
         EnvironmentCode::Local => env!("BACKEND_URL_LOCAL"),
         EnvironmentCode::Dev => env!("BACKEND_URL_DEV"),
         EnvironmentCode::Stage => env!("BACKEND_URL_STAGE"),

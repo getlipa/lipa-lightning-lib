@@ -148,6 +148,7 @@ dictionary Config {
 };
 
 enum EnvironmentCode {
+    "Mock",
     "Local",
     "Dev",
     "Stage",

@@ -46,7 +46,7 @@ fmt-check:
 
 .PHONY: clippy
 clippy:
-	cargo clippy -- -D warnings
+	cargo clippy --all-features -- -D warnings
 
 .PHONY: udeps
 udeps:
@@ -72,4 +72,4 @@ pr: fmt buildall test clippy check-mod-test check-udl doc
 .PHONY: run-node
 run-node: ARGS =
 run-node:
-	cargo run --example node -- $(ARGS)
+	cargo run --example node -F dev -- $(ARGS)

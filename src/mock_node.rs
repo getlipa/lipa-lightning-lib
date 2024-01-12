@@ -1,6 +1,8 @@
 use crate::amount::{AsSats, ToAmount};
 use crate::async_runtime::AsyncRuntime;
+
 use crate::errors::LnUrlWithdrawResult;
+
 use crate::{
     Amount, BreezHealthCheckStatus, CalculateLspFeeResponse, ChannelsInfo, ClearWalletInfo,
     DecodeDataError, DecodedData, EventsCallback, ExchangeRate, FailedSwapInfo, FiatTopupInfo,
@@ -15,11 +17,23 @@ use breez_sdk_core::{
     BitcoinAddressData, LnUrlPayRequestData, LnUrlWithdrawRequestData, OpeningFeeParams,
 };
 use honey_badger::{TermsAndConditions, TermsAndConditionsStatus};
+
 use perro::{invalid_input, runtime_error};
+
 use std::ops::Add;
+
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
+
+#[macro_export]
+macro_rules! mock {
+    ($cond:expr, $mock:expr) => {
+        if $cond {
+            return Ok($mock());
+        }
+    };
+}
 
 pub struct MockLightningNode {
     rt: AsyncRuntime,
@@ -89,7 +103,7 @@ impl LightningNode for MockLightningNode {
         todo!()
     }
 
-    fn calculate_lsp_fee(&self, amount_sat: u64) -> crate::Result<CalculateLspFeeResponse> {
+    fn calculate_lsp_fee(&self, _amount_sat: u64) -> crate::Result<CalculateLspFeeResponse> {
         todo!()
     }
 
@@ -104,7 +118,7 @@ impl LightningNode for MockLightningNode {
         description: String,
         _metadata: InvoiceCreationMetadata,
     ) -> crate::Result<InvoiceDetails> {
-        // TODO how to mock both successful and failed invoices
+        // TODO mock external inputs based on amount e.g. invoice amount of 4321 results in a failure after 30 secs, 1000 gets payed after 30secs,
 
         let events_callback = Arc::clone(&self.events_callback);
         let _handle = self.rt.handle().spawn(async move {
@@ -147,11 +161,11 @@ impl LightningNode for MockLightningNode {
         }
     }
 
-    fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
+    fn get_payment_max_routing_fee_mode(&self, _amount_sat: u64) -> MaxRoutingFeeMode {
         todo!()
     }
 
-    fn get_invoice_affordability(&self, amount_sat: u64) -> crate::Result<InvoiceAffordability> {
+    fn get_invoice_affordability(&self, _amount_sat: u64) -> crate::Result<InvoiceAffordability> {
         todo!()
     }
 
@@ -171,17 +185,17 @@ impl LightningNode for MockLightningNode {
 
     fn pay_open_invoice(
         &self,
-        invoice_details: InvoiceDetails,
-        amount_sat: u64,
-        metadata: PaymentMetadata,
+        _invoice_details: InvoiceDetails,
+        _amount_sat: u64,
+        _metadata: PaymentMetadata,
     ) -> PayResult<()> {
         todo!()
     }
 
     fn pay_lnurlp(
         &self,
-        lnurl_pay_request_data: LnUrlPayRequestData,
-        amount_sat: u64,
+        _lnurl_pay_request_data: LnUrlPayRequestData,
+        _amount_sat: u64,
     ) -> LnUrlPayResult<String> {
         todo!()
     }
@@ -192,8 +206,8 @@ impl LightningNode for MockLightningNode {
 
     fn withdraw_lnurlw(
         &self,
-        lnurl_withdraw_request_data: LnUrlWithdrawRequestData,
-        amount_sat: u64,
+        _lnurl_withdraw_request_data: LnUrlWithdrawRequestData,
+        _amount_sat: u64,
     ) -> LnUrlWithdrawResult<String> {
         todo!()
     }
@@ -233,11 +247,11 @@ impl LightningNode for MockLightningNode {
         todo!()
     }
 
-    fn change_fiat_currency(&self, fiat_currency: String) {
+    fn change_fiat_currency(&self, _fiat_currency: String) {
         todo!()
     }
 
-    fn change_timezone_config(&self, timezone_config: TzConfig) {
+    fn change_timezone_config(&self, _timezone_config: TzConfig) {
         todo!()
     }
 
@@ -247,16 +261,16 @@ impl LightningNode for MockLightningNode {
 
     fn get_terms_and_conditions_status(
         &self,
-        terms_and_conditions: TermsAndConditions,
+        _terms_and_conditions: TermsAndConditions,
     ) -> crate::Result<TermsAndConditionsStatus> {
         todo!()
     }
 
     fn register_fiat_topup(
         &self,
-        email: Option<String>,
-        user_iban: String,
-        user_currency: String,
+        _email: Option<String>,
+        _user_iban: String,
+        _user_currency: String,
     ) -> crate::Result<FiatTopupInfo> {
         todo!()
     }
@@ -265,7 +279,7 @@ impl LightningNode for MockLightningNode {
         todo!()
     }
 
-    fn hide_topup(&self, id: String) -> crate::Result<()> {
+    fn hide_topup(&self, _id: String) -> crate::Result<()> {
         todo!()
     }
 
@@ -273,19 +287,19 @@ impl LightningNode for MockLightningNode {
         todo!()
     }
 
-    fn calculate_lightning_payout_fee(&self, offer: OfferInfo) -> crate::Result<Amount> {
+    fn calculate_lightning_payout_fee(&self, _offer: OfferInfo) -> crate::Result<Amount> {
         todo!()
     }
 
-    fn request_offer_collection(&self, offer: OfferInfo) -> crate::Result<String> {
+    fn request_offer_collection(&self, _offer: OfferInfo) -> crate::Result<String> {
         todo!()
     }
 
     fn register_notification_token(
         &self,
-        notification_token: String,
-        language_iso_639_1: String,
-        country_iso_3166_1_alpha_2: String,
+        _notification_token: String,
+        _language_iso_639_1: String,
+        _country_iso_3166_1_alpha_2: String,
     ) -> crate::Result<()> {
         todo!()
     }
@@ -294,7 +308,7 @@ impl LightningNode for MockLightningNode {
         todo!()
     }
 
-    fn get_payment_uuid(&self, payment_hash: String) -> crate::Result<String> {
+    fn get_payment_uuid(&self, _payment_hash: String) -> crate::Result<String> {
         todo!()
     }
 
@@ -302,17 +316,17 @@ impl LightningNode for MockLightningNode {
         todo!()
     }
 
-    fn prepare_sweep(&self, address: String, onchain_fee_rate: u32) -> crate::Result<SweepInfo> {
+    fn prepare_sweep(&self, _address: String, _onchain_fee_rate: u32) -> crate::Result<SweepInfo> {
         todo!()
     }
 
-    fn sweep(&self, sweep_info: SweepInfo) -> crate::Result<String> {
+    fn sweep(&self, _sweep_info: SweepInfo) -> crate::Result<String> {
         todo!()
     }
 
     fn generate_swap_address(
         &self,
-        lsp_fee_params: Option<OpeningFeeParams>,
+        _lsp_fee_params: Option<OpeningFeeParams>,
     ) -> Result<SwapAddressInfo, ReceiveOnchainError> {
         todo!()
     }
@@ -323,16 +337,16 @@ impl LightningNode for MockLightningNode {
 
     fn prepare_resolve_failed_swap(
         &self,
-        failed_swap_info: FailedSwapInfo,
-        to_address: String,
-        onchain_fee_rate: u32,
+        _failed_swap_info: FailedSwapInfo,
+        _to_address: String,
+        _onchain_fee_rate: u32,
     ) -> crate::Result<ResolveFailedSwapInfo> {
         todo!()
     }
 
     fn resolve_failed_swap(
         &self,
-        resolve_failed_swap_info: ResolveFailedSwapInfo,
+        _resolve_failed_swap_info: ResolveFailedSwapInfo,
     ) -> crate::Result<String> {
         todo!()
     }
@@ -359,8 +373,8 @@ impl LightningNode for MockLightningNode {
 
     fn clear_wallet(
         &self,
-        clear_wallet_info: ClearWalletInfo,
-        destination_onchain_address_data: BitcoinAddressData,
+        _clear_wallet_info: ClearWalletInfo,
+        _destination_onchain_address_data: BitcoinAddressData,
     ) -> crate::Result<()> {
         todo!()
     }

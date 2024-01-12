@@ -4,10 +4,14 @@ use crate::environment::Environment;
 use crate::errors::Result;
 use crate::key_derivation::derive_persistence_encryption_key;
 use crate::logger::init_logger_once;
+#[cfg(feature = "mock")]
+use crate::mock;
 use crate::{
     build_async_auth, permanent_failure, sanitize_input, EnvironmentCode, DB_FILENAME, LOGS_DIR,
     LOG_LEVEL,
 };
+#[cfg(feature = "mock")]
+use log::info;
 use squirrel::RemoteBackupClient;
 use std::path::Path;
 use std::sync::Arc;
@@ -21,6 +25,11 @@ pub fn recover_lightning_node(
     local_persistence_path: String,
     enable_file_logging: bool,
 ) -> Result<()> {
+    #[cfg(feature = "mock")]
+    mock!(environment == EnvironmentCode::Mock, {
+        || info!("Mocking lightning node recovery")
+    });
+
     if enable_file_logging {
         init_logger_once(
             LOG_LEVEL,

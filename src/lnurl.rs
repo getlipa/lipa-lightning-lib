@@ -6,7 +6,7 @@ use breez_sdk_core::{LnUrlPayRequestData, LnUrlWithdrawRequestData};
 pub struct LnUrlPayDetails {
     pub min_sendable: Amount,
     pub max_sendable: Amount,
-    /// An internal struct is not supposed to be inspected, but only passed to [`crate::BreezLightningNode::pay_lnurlp`].
+    /// An internal struct is not supposed to be inspected, but only passed to [`crate::LightningNode::pay_lnurlp`].
     pub request_data: LnUrlPayRequestData,
 }
 
@@ -33,7 +33,7 @@ impl LnUrlPayDetails {
 pub struct LnUrlWithdrawDetails {
     pub min_withdrawable: Amount,
     pub max_withdrawable: Amount,
-    /// An internal struct is not supposed to be inspected, but only passed to [`crate::BreezLightningNode::withdraw_lnurlw`].
+    /// An internal struct is not supposed to be inspected, but only passed to [`crate::LightningNode::withdraw_lnurlw`].
     pub request_data: LnUrlWithdrawRequestData,
 }
 

@@ -2,13 +2,14 @@ use anyhow::{anyhow, Context, Result};
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
+
 use thousands::Separable;
 use uniffi_lipalightninglib::{
     Activity, Amount, BreezHealthCheckStatus, ChannelClose, FiatValue, LightningNode, Payment,
     PaymentState, PaymentType,
 };
 
-pub fn overview(node: &impl LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+pub fn overview(node: &dyn LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let number_of_activities: u32 = words
         .next()
         .unwrap_or("10")

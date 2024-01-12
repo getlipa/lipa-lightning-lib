@@ -40,7 +40,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.7.0
       - name: Build
-        run: cargo build --verbose
+        run: cargo build --verbose --all-features
       - name: Run unit tests
         run: make test
   build-ios:
@@ -48,6 +48,7 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
+        features: [ prod, dev ]
         target: [ x86_64-apple-ios, aarch64-apple-ios, aarch64-apple-ios-sim ]
     steps:
       - name: Install rust
@@ -78,12 +79,13 @@ jobs:
         with:
           use-cross: false
           command: build
-          args: --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }} --feature ${{ matrix.features }}
   build-android:
     name: Build for Android targets
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        features: [ prod, dev ]
         target: [ aarch64-linux-android, armv7-linux-androideabi, i686-linux-android ]
     steps:
       - name: Install rust
@@ -112,4 +114,4 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }} --feature ${{ matrix.features }}

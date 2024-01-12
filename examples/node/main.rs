@@ -6,14 +6,13 @@ mod print_events_handler;
 
 use crate::print_events_handler::PrintEventsHandler;
 
-use uniffi_lipalightninglib::{mnemonic_to_secret, recover_lightning_node, BreezLightningNode};
+use uniffi_lipalightninglib::{build_lightning_node, mnemonic_to_secret, recover_lightning_node};
 use uniffi_lipalightninglib::{Config, EnvironmentCode, TzConfig};
 
 use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, fs};
-use uniffi_lipalightninglib::mock::MockLightningNode;
 
 static BASE_DIR: &str = ".3l_node";
 static LOG_FILE: &str = "logs.txt";
@@ -49,12 +48,12 @@ fn main() {
         enable_file_logging: true,
     };
 
-    //let node = BreezLightningNode::new(config, events).unwrap();
-    let node = MockLightningNode::new(events).unwrap();
+    let node = build_lightning_node(config, events).unwrap();
+    let node = node.as_ref();
 
     // Launch CLI
     sleep(Duration::from_secs(1));
-    cli::poll_for_user_input(&node, &format!("{base_dir}/logs/{LOG_FILE}"));
+    cli::poll_for_user_input(node, &format!("{base_dir}/logs/{LOG_FILE}"));
 }
 
 fn read_seed_from_env() -> Vec<u8> {
@@ -65,6 +64,7 @@ fn read_seed_from_env() -> Vec<u8> {
 
 fn map_environment_code(code: &str) -> EnvironmentCode {
     match code {
+        "mock" => EnvironmentCode::Mock,
         "local" => EnvironmentCode::Local,
         "dev" => EnvironmentCode::Dev,
         "stage" => EnvironmentCode::Stage,

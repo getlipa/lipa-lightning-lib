@@ -37,6 +37,7 @@ impl Secret {
 }
 
 /// Generate a new mnemonic with an optional passphrase. Provide an empty string to use no passphrase.
+// TODO LN-1658 requires mock implementation
 pub fn generate_secret(passphrase: String) -> std::result::Result<Secret, SimpleError> {
     let entropy = generate_random_bytes::<U32>().map_err(|e| SimpleError::Simple {
         msg: format!("Failed to generate random bytes: {e}"),
@@ -49,6 +50,7 @@ pub fn generate_secret(passphrase: String) -> std::result::Result<Secret, Simple
 }
 
 /// Generate a Secret object (containing the seed). Provide an empty string to use no passphrase.
+// TODO LN-1658 requires mock implementation
 pub fn mnemonic_to_secret(
     mnemonic_string: Vec<String>,
     passphrase: String,
@@ -59,6 +61,7 @@ pub fn mnemonic_to_secret(
 
 /// Return a list of valid BIP-39 English words starting with the prefix.
 /// Calling this function with empty prefix will return the full list of BIP-39 words.
+// TODO LN-1658 requires mock implementation
 pub fn words_by_prefix(prefix: String) -> Vec<String> {
     Language::English
         .words_by_prefix(&prefix)
