@@ -8,7 +8,7 @@ use bitcoin::bip32::{ChildNumber, ExtendedPrivKey};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::{Message, PublicKey, SecretKey, SECP256K1};
 use bitcoin::Network;
-use breez_sdk_core::{BreezServices, OpeningFeeParams};
+use breez_sdk_core::{BreezServices, OpenChannelFeeRequest, OpeningFeeParams};
 use graphql::schema::{migrate_funds, migration_balance, MigrateFunds, MigrationBalance};
 use graphql::{build_client, post_blocking};
 use honey_badger::Auth;
@@ -70,18 +70,33 @@ pub(crate) fn migrate_funds(
         RuntimeErrorCode::LspServiceUnavailable,
         "Failed to get LSP info",
     )?;
-    let lsp_fee = lsp_info
+    let lsp_fee_params = lsp_info
         .opening_fee_params_list
         .get_cheapest_opening_fee_params()
         .map_to_permanent_failure("Failed to get LSP fees")?;
-    let amount_to_request = add_lsp_fees(balance_msat, &lsp_fee).as_msats();
+
+    let lsp_fee_msat = rt
+        .block_on(sdk.open_channel_fee(OpenChannelFeeRequest {
+            amount_msat: balance_msat,
+            expiry: None,
+        }))
+        .map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to calculate lsp fee for fund migration amount",
+        )?
+        .fee_msat;
+    let amount_to_request = if lsp_fee_msat > 0 {
+        add_lsp_fees(balance_msat, &lsp_fee_params).as_msats()
+    } else {
+        balance_msat.as_msats()
+    };
 
     let invoice = rt
         .block_on(sdk.receive_payment(breez_sdk_core::ReceivePaymentRequest {
             amount_msat: amount_to_request.msats,
             description: MIGRATION_DESCRIPTION.to_string(),
             preimage: None,
-            opening_fee_params: Some(lsp_fee),
+            opening_fee_params: Some(lsp_fee_params),
             use_description_hash: None,
             expiry: None,
             cltv: None,
