@@ -940,10 +940,10 @@ impl LightningNode {
         let breez_payment_hashes: HashSet<_> = breez_activities
             .iter()
             .filter_map(|m| match m {
-                Activity::Payment { payment } => {
+                Activity::PaymentActivity { payment } => {
                     Some(payment.invoice_details.payment_hash.as_ref())
                 }
-                Activity::ChannelClose { .. } => None,
+                Activity::ChannelCloseActivity { .. } => None,
             })
             .collect();
         let mut activities = local_created_invoices
@@ -951,7 +951,7 @@ impl LightningNode {
             .filter(|i| !breez_payment_hashes.contains(i.hash.as_str()))
             .map(|i| self.payment_from_created_invoice(&i))
             .filter_map(filter_out_and_log_corrupted_payments)
-            .map(|p| Activity::Payment { payment: p })
+            .map(|p| Activity::PaymentActivity { payment: p })
             .collect::<Vec<_>>();
         activities.extend(breez_activities);
         activities
@@ -976,8 +976,8 @@ impl LightningNode {
             )?
         {
             match self.activity_from_breez_payment(breez_payment)? {
-                Activity::Payment { payment } => Ok(payment),
-                Activity::ChannelClose { .. } => {
+                Activity::PaymentActivity { payment } => Ok(payment),
+                Activity::ChannelCloseActivity { .. } => {
                     permanent_failure!(
                         "Searching a Breez payment by hash returned a channel close payment"
                     );
@@ -1130,7 +1130,7 @@ impl LightningNode {
             paid_sats: s.paid_sats,
         });
 
-        Ok(Activity::Payment {
+        Ok(Activity::PaymentActivity {
             payment: Payment {
                 payment_type,
                 payment_state: breez_payment.status.into(),
@@ -1184,7 +1184,7 @@ impl LightningNode {
         // According to the docs, it can only be empty for older closed channels.
         let closing_tx_id = details.closing_txid.clone().unwrap_or_default();
 
-        Ok(Activity::ChannelClose {
+        Ok(Activity::ChannelCloseActivity {
             channel_close: ChannelClose {
                 amount,
                 state,
@@ -1428,8 +1428,8 @@ impl LightningNode {
             .map(|p| self.activity_from_breez_payment(p))
             .filter_map(filter_out_and_log_corrupted_activities)
             .filter_map(|m| match m {
-                Activity::Payment { payment } => Some(payment),
-                Activity::ChannelClose { .. } => None,
+                Activity::PaymentActivity { payment } => Some(payment),
+                Activity::ChannelCloseActivity { .. } => None,
             })
             .collect::<Vec<_>>();
 

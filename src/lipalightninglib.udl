@@ -282,8 +282,8 @@ interface MaxRoutingFeeMode {
 
 [Enum]
 interface Activity {
-    Payment(Payment payment);
-    ChannelClose(ChannelClose channel_close);
+    PaymentActivity(Payment payment);
+    ChannelCloseActivity(ChannelClose channel_close);
 };
 
 dictionary ListActivitiesResponse {
