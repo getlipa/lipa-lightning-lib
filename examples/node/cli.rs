@@ -292,7 +292,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
     hints.insert(CommandHint::new(
         "getinvoiceaffordability <amount in SAT>",
-        "getinvoiceaffordability",
+        "getinvoiceaffordability ",
     ));
     hints.insert(CommandHint::new("payinvoice <invoice>", "payinvoice "));
     hints.insert(CommandHint::new(
@@ -324,7 +324,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("listoffers", "listoffers"));
     hints.insert(CommandHint::new(
         "calculatelightningpayoutfee <offer id>",
-        "calculatelightningpayoutfee",
+        "calculatelightningpayoutfee ",
     ));
 
     hints.insert(CommandHint::new(
@@ -341,9 +341,9 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
     hints.insert(CommandHint::new(
         "paymentuuid <payment hash>",
-        "paymentuuid",
+        "paymentuuid ",
     ));
-    hints.insert(CommandHint::new("sweep <address>", "sweep"));
+    hints.insert(CommandHint::new("sweep <address>", "sweep "));
     hints.insert(CommandHint::new("clearwalletinfo", "clearwalletinfo"));
     hints.insert(CommandHint::new("clearwallet <address>", "clearwallet "));
     hints.insert(CommandHint::new(
