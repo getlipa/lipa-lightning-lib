@@ -94,6 +94,19 @@ impl Movement {
                 .unwrap_or(SystemTime::now()),
         }
     }
+
+    pub(crate) fn is_pending(&self) -> bool {
+        match self {
+            Movement::Payment { payment } => matches!(
+                payment.payment_state,
+                PaymentState::Created | PaymentState::Retried
+            ),
+            Movement::ChannelClose { channel_close } => match channel_close.state {
+                ChannelCloseState::Pending => true,
+                ChannelCloseState::Confirmed => false,
+            },
+        }
+    }
 }
 
 /// Information about a closed channel.

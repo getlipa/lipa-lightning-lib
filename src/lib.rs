@@ -885,6 +885,42 @@ impl LightningNode {
             .collect::<Vec<_>>();
 
         // Query created invoices, filter out ones which are in the breez db.
+        let created_invoices = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_created_invoices(number_of_completed_movements)?;
+
+        let movements = self.multiplex_movements(breez_movements, created_invoices);
+
+        // Split by state.
+        let mut pending_movements = Vec::new();
+        let mut completed_movements = Vec::new();
+        movements.into_iter().for_each(|m| {
+            if m.is_pending() {
+                pending_movements.push(m)
+            } else {
+                completed_movements.push(m)
+            }
+        });
+
+        pending_movements.sort_by_key(|m| Reverse(m.get_time()));
+        completed_movements.sort_by_key(|m| Reverse(m.get_time()));
+        completed_movements.truncate(number_of_completed_movements as usize);
+        Ok(ListMovementsResponse {
+            pending_movements,
+            completed_movements,
+        })
+    }
+
+    /// Combines a list of movements with a list of locally created invoices
+    /// into a single movement list.
+    ///
+    /// Duplicates are removed.
+    fn multiplex_movements(
+        &self,
+        breez_movements: Vec<Movement>,
+        local_created_invoices: Vec<CreatedInvoice>,
+    ) -> Vec<Movement> {
         let breez_payment_hashes: HashSet<_> = breez_movements
             .iter()
             .filter_map(|m| match m {
@@ -894,43 +930,15 @@ impl LightningNode {
                 Movement::ChannelClose { .. } => None,
             })
             .collect();
-        let created_invoices = self
-            .data_store
-            .lock_unwrap()
-            .retrieve_created_invoices(number_of_completed_movements)?;
-        let unpaid_invoice_movements = created_invoices
+        let mut movements = local_created_invoices
             .into_iter()
             .filter(|i| !breez_payment_hashes.contains(i.hash.as_str()))
             .map(|i| self.payment_from_created_invoice(&i))
             .filter_map(filter_out_and_log_corrupted_payments)
             .map(|p| Movement::Payment { payment: p })
             .collect::<Vec<_>>();
-
-        // Split by state.
-        let mut pending_movements = Vec::new();
-        let mut completed_movements = Vec::new();
-        for movement in breez_movements.into_iter().chain(unpaid_invoice_movements) {
-            match &movement {
-                Movement::Payment { payment } => match payment.payment_state {
-                    PaymentState::Created | PaymentState::Retried => {
-                        pending_movements.push(movement)
-                    }
-                    _ => completed_movements.push(movement),
-                },
-                Movement::ChannelClose { channel_close } => match channel_close.state {
-                    ChannelCloseState::Pending => pending_movements.push(movement),
-                    ChannelCloseState::Confirmed => completed_movements.push(movement),
-                },
-            }
-        }
-
-        pending_movements.sort_by_key(|m| Reverse(m.get_time()));
-        completed_movements.sort_by_key(|m| Reverse(m.get_time()));
-        completed_movements.truncate(number_of_completed_movements as usize);
-        Ok(ListMovementsResponse {
-            pending_movements,
-            completed_movements,
-        })
+        movements.extend(breez_movements);
+        movements
     }
 
     /// Get a payment given its payment hash
