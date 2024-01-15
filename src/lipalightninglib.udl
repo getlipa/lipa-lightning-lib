@@ -39,7 +39,7 @@ interface LightningNode {
     string pay_lnurlp(LnUrlPayRequestData lnurl_pay_request_data, u64 amount_sat);
 
     [Throws=LnError]
-    ListMovementsResponse get_latest_movements(u32 number_of_movements);
+    ListActivitiesResponse get_latest_activities(u32 number_of_activities);
 
     [Throws=LnError]
     Payment get_payment(string hash);
@@ -275,14 +275,14 @@ interface MaxRoutingFeeMode {
 };
 
 [Enum]
-interface Movement {
+interface Activity {
     Payment(Payment payment);
     ChannelClose(ChannelClose channel_close);
 };
 
-dictionary ListMovementsResponse {
-    sequence<Movement> pending_movements;
-    sequence<Movement> completed_movements;
+dictionary ListActivitiesResponse {
+    sequence<Activity> pending_activities;
+    sequence<Activity> completed_activities;
 };
 
 dictionary ChannelClose {

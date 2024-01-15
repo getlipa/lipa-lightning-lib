@@ -70,24 +70,24 @@ pub struct Payment {
     pub lightning_address: Option<String>,
 }
 
-/// Information about **all** pending and **only** requested completed movements.
-pub struct ListMovementsResponse {
-    pub pending_movements: Vec<Movement>,
-    pub completed_movements: Vec<Movement>,
+/// Information about **all** pending and **only** requested completed activities.
+pub struct ListActivitiesResponse {
+    pub pending_activities: Vec<Activity>,
+    pub completed_activities: Vec<Activity>,
 }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
-pub enum Movement {
+pub enum Activity {
     Payment { payment: Payment },
     ChannelClose { channel_close: ChannelClose },
 }
 
-impl Movement {
+impl Activity {
     pub(crate) fn get_time(&self) -> SystemTime {
         match self {
-            Movement::Payment { payment } => payment.created_at.time,
-            Movement::ChannelClose { channel_close } => channel_close
+            Activity::Payment { payment } => payment.created_at.time,
+            Activity::ChannelClose { channel_close } => channel_close
                 .closed_at
                 .clone()
                 .map(|t| t.time)
@@ -97,11 +97,11 @@ impl Movement {
 
     pub(crate) fn is_pending(&self) -> bool {
         match self {
-            Movement::Payment { payment } => matches!(
+            Activity::Payment { payment } => matches!(
                 payment.payment_state,
                 PaymentState::Created | PaymentState::Retried
             ),
-            Movement::ChannelClose { channel_close } => match channel_close.state {
+            Activity::ChannelClose { channel_close } => match channel_close.state {
                 ChannelCloseState::Pending => true,
                 ChannelCloseState::Confirmed => false,
             },

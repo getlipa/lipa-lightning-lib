@@ -4,7 +4,7 @@ mod setup;
 use crate::setup::start_alice;
 
 use serial_test::file_serial;
-use uniffi_lipalightninglib::{InvoiceCreationMetadata, InvoiceDetails, Movement, Payment};
+use uniffi_lipalightninglib::{Activity, InvoiceCreationMetadata, InvoiceDetails, Payment};
 
 #[test]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
@@ -25,9 +25,9 @@ fn test_payment_fetching() {
     let payment = node.get_payment(invoice.payment_hash.clone()).unwrap();
     assert_invoice_matches_payment(&invoice, &payment);
 
-    let latest_movements = node.get_latest_movements(1).unwrap();
-    let movement_from_list = latest_movements.pending_movements.first().unwrap();
-    assert_eq!(&Movement::Payment { payment }, movement_from_list);
+    let latest_activities = node.get_latest_activities(1).unwrap();
+    let activity_from_list = latest_activities.pending_activities.first().unwrap();
+    assert_eq!(&Activity::Payment { payment }, activity_from_list);
 }
 
 fn assert_invoice_matches_payment(invoice: &InvoiceDetails, payment: &Payment) {

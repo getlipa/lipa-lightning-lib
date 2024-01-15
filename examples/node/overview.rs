@@ -4,17 +4,17 @@ use chrono::{DateTime, Utc};
 use colored::Colorize;
 use thousands::Separable;
 use uniffi_lipalightninglib::{
-    Amount, BreezHealthCheckStatus, ChannelClose, FiatValue, LightningNode, Movement, Payment,
+    Activity, Amount, BreezHealthCheckStatus, ChannelClose, FiatValue, LightningNode, Payment,
     PaymentState, PaymentType,
 };
 
 pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
-    let number_of_movements: u32 = words
+    let number_of_activities: u32 = words
         .next()
         .unwrap_or("10")
         .parse()
-        .context("Number of movements should be a positive integer number")?;
-    let movements = node.get_latest_movements(number_of_movements)?;
+        .context("Number of activities should be a positive integer number")?;
+    let activities = node.get_latest_activities(number_of_activities)?;
 
     let fun: bool = words
         .next()
@@ -69,24 +69,24 @@ pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
 
     let line = format!("{:^28}", "Pending Activities".bold());
     println!("{}", line.reversed());
-    for movement in movements.pending_movements {
-        print_movement(movement)?;
+    for activity in activities.pending_activities {
+        print_activity(activity)?;
     }
     println!();
 
     let line = format!("{:^28}", "Completed Activities".bold());
     println!("{}", line.reversed());
-    for movement in movements.completed_movements {
-        print_movement(movement)?;
+    for activity in activities.completed_activities {
+        print_activity(activity)?;
     }
 
     Ok(())
 }
 
-fn print_movement(movement: Movement) -> Result<()> {
-    match movement {
-        Movement::Payment { payment } => print_payment(payment),
-        Movement::ChannelClose { channel_close } => print_channel_close(channel_close),
+fn print_activity(activity: Activity) -> Result<()> {
+    match activity {
+        Activity::Payment { payment } => print_payment(payment),
+        Activity::ChannelClose { channel_close } => print_channel_close(channel_close),
     }
 }
 

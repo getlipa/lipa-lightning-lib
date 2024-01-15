@@ -17,10 +17,10 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
 use uniffi_lipalightninglib::{
-    Amount, ChannelClose, ChannelCloseState, DecodedData, ExchangeRate, FiatValue,
+    Activity, Amount, ChannelClose, ChannelCloseState, DecodedData, ExchangeRate, FiatValue,
     InvoiceCreationMetadata, InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails,
-    LnUrlWithdrawDetails, MaxRoutingFeeMode, Movement, OfferKind, Payment, PaymentMetadata,
-    PaymentState, TzConfig,
+    LnUrlWithdrawDetails, MaxRoutingFeeMode, OfferKind, Payment, PaymentMetadata, PaymentState,
+    TzConfig,
 };
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
@@ -170,8 +170,8 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
-                "listmovements" => {
-                    if let Err(message) = list_movements(node, &mut words) {
+                "listactivities" => {
+                    if let Err(message) = list_activities(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
@@ -319,12 +319,12 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
 
     hints.insert(CommandHint::new(
-        "overview [number of movements = 10] [fun mode = false]",
+        "overview [number of activities = 10] [fun mode = false]",
         "overview ",
     ));
     hints.insert(CommandHint::new(
-        "listmovements [number of movements = 2]",
-        "listmovements ",
+        "listactivities [number of activities = 2]",
+        "listactivities ",
     ));
     hints.insert(CommandHint::new(
         "listlightningaddresses",
@@ -381,7 +381,7 @@ fn help() {
     println!("  listoffers");
     println!("  calculatelightningpayoutfee <offer id>");
     println!();
-    println!("  listmovements");
+    println!("  listactivities");
     println!("  listlightningaddresses");
     println!("  paymentuuid <payment hash>");
     println!();
@@ -955,44 +955,44 @@ fn list_offers(node: &LightningNode) -> Result<()> {
     Ok(())
 }
 
-fn list_movements(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
-    let number_of_movements: u32 = words
+fn list_activities(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let number_of_activities: u32 = words
         .next()
         .unwrap_or("2")
         .parse()
-        .context("Number of movements should be a positive integer number")?;
-    let movements = node.get_latest_movements(number_of_movements)?;
-    let pending_movements = movements.pending_movements;
-    let completed_movements = movements.completed_movements;
+        .context("Number of activities should be a positive integer number")?;
+    let activities = node.get_latest_activities(number_of_activities)?;
+    let pending_activities = activities.pending_activities;
+    let completed_activities = activities.completed_activities;
 
     let line = format!(
-        " Total of {} {} movements ",
-        completed_movements.len().to_string().bold(),
+        " Total of {} {} activities ",
+        completed_activities.len().to_string().bold(),
         "completed".bold()
     );
     println!("{}", line.reversed());
-    for movement in completed_movements.into_iter().rev() {
-        print_movement(movement)?;
+    for activity in completed_activities.into_iter().rev() {
+        print_activity(activity)?;
     }
 
     println!();
     let line = format!(
-        " Total of {} {} movements ",
-        pending_movements.len().to_string().bold(),
+        " Total of {} {} activities ",
+        pending_activities.len().to_string().bold(),
         "pending".bold()
     );
     println!("{}", line.reversed());
-    for movement in pending_movements.into_iter().rev() {
-        print_movement(movement)?;
+    for activity in pending_activities.into_iter().rev() {
+        print_activity(activity)?;
     }
 
     Ok(())
 }
 
-fn print_movement(movement: Movement) -> Result<()> {
-    match movement {
-        Movement::Payment { payment } => print_payment(payment),
-        Movement::ChannelClose { channel_close } => print_channel_close(channel_close),
+fn print_activity(activity: Activity) -> Result<()> {
+    match activity {
+        Activity::Payment { payment } => print_payment(payment),
+        Activity::ChannelClose { channel_close } => print_channel_close(channel_close),
     }
 }
 

@@ -8,6 +8,7 @@
 
 extern crate core;
 
+mod activity;
 mod amount;
 mod analytics;
 mod async_runtime;
@@ -29,7 +30,6 @@ mod lnurl;
 mod locker;
 mod logger;
 mod migrations;
-mod movement;
 mod offer;
 mod random;
 mod recovery;
@@ -40,6 +40,10 @@ mod symmetric_encryption;
 mod task_manager;
 mod util;
 
+pub use crate::activity::ListActivitiesResponse;
+pub use crate::activity::{
+    Activity, ChannelClose, ChannelCloseState, Payment, PaymentState, PaymentType,
+};
 pub use crate::amount::{Amount, FiatValue};
 use crate::amount::{AsSats, Msats, Sats, ToAmount};
 use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
@@ -71,10 +75,6 @@ use crate::key_derivation::derive_persistence_encryption_key;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 pub use crate::lnurl::{LnUrlPayDetails, LnUrlWithdrawDetails};
 use crate::locker::Locker;
-pub use crate::movement::ListMovementsResponse;
-pub use crate::movement::{
-    ChannelClose, ChannelCloseState, Movement, Payment, PaymentState, PaymentType,
-};
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
 pub use crate::recovery::recover_lightning_node;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
@@ -853,14 +853,14 @@ impl LightningNode {
         Ok(payment_hash)
     }
 
-    /// Get a list of the latest movements
+    /// Get a list of the latest activities
     ///
     /// Parameters:
-    /// * `number_of_completed_movements` - the maximum number of completed movements that will be returned
-    pub fn get_latest_movements(
+    /// * `number_of_completed_activities` - the maximum number of completed activities that will be returned
+    pub fn get_latest_activities(
         &self,
-        number_of_completed_movements: u32,
-    ) -> Result<ListMovementsResponse> {
+        number_of_completed_activities: u32,
+    ) -> Result<ListActivitiesResponse> {
         const LEEWAY_FOR_PENDING_PAYMENTS: u32 = 10;
         let list_payments_request = ListPaymentsRequest {
             filters: Some(vec![
@@ -871,74 +871,74 @@ impl LightningNode {
             from_timestamp: None,
             to_timestamp: None,
             include_failures: Some(true),
-            limit: Some(number_of_completed_movements + LEEWAY_FOR_PENDING_PAYMENTS),
+            limit: Some(number_of_completed_activities + LEEWAY_FOR_PENDING_PAYMENTS),
             offset: None,
         };
-        let breez_movements = self
+        let breez_activities = self
             .rt
             .handle()
             .block_on(self.sdk.list_payments(list_payments_request))
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
             .into_iter()
-            .map(|p| self.movement_from_breez_payment(p))
-            .filter_map(filter_out_and_log_corrupted_movements)
+            .map(|p| self.activity_from_breez_payment(p))
+            .filter_map(filter_out_and_log_corrupted_activities)
             .collect::<Vec<_>>();
 
         // Query created invoices, filter out ones which are in the breez db.
         let created_invoices = self
             .data_store
             .lock_unwrap()
-            .retrieve_created_invoices(number_of_completed_movements)?;
+            .retrieve_created_invoices(number_of_completed_activities)?;
 
-        let movements = self.multiplex_movements(breez_movements, created_invoices);
+        let activities = self.multiplex_activities(breez_activities, created_invoices);
 
         // Split by state.
-        let mut pending_movements = Vec::new();
-        let mut completed_movements = Vec::new();
-        movements.into_iter().for_each(|m| {
+        let mut pending_activities = Vec::new();
+        let mut completed_activities = Vec::new();
+        activities.into_iter().for_each(|m| {
             if m.is_pending() {
-                pending_movements.push(m)
+                pending_activities.push(m)
             } else {
-                completed_movements.push(m)
+                completed_activities.push(m)
             }
         });
 
-        pending_movements.sort_by_key(|m| Reverse(m.get_time()));
-        completed_movements.sort_by_key(|m| Reverse(m.get_time()));
-        completed_movements.truncate(number_of_completed_movements as usize);
-        Ok(ListMovementsResponse {
-            pending_movements,
-            completed_movements,
+        pending_activities.sort_by_key(|m| Reverse(m.get_time()));
+        completed_activities.sort_by_key(|m| Reverse(m.get_time()));
+        completed_activities.truncate(number_of_completed_activities as usize);
+        Ok(ListActivitiesResponse {
+            pending_activities,
+            completed_activities,
         })
     }
 
-    /// Combines a list of movements with a list of locally created invoices
-    /// into a single movement list.
+    /// Combines a list of activities with a list of locally created invoices
+    /// into a single activity list.
     ///
     /// Duplicates are removed.
-    fn multiplex_movements(
+    fn multiplex_activities(
         &self,
-        breez_movements: Vec<Movement>,
+        breez_activities: Vec<Activity>,
         local_created_invoices: Vec<CreatedInvoice>,
-    ) -> Vec<Movement> {
-        let breez_payment_hashes: HashSet<_> = breez_movements
+    ) -> Vec<Activity> {
+        let breez_payment_hashes: HashSet<_> = breez_activities
             .iter()
             .filter_map(|m| match m {
-                Movement::Payment { payment } => {
+                Activity::Payment { payment } => {
                     Some(payment.invoice_details.payment_hash.as_ref())
                 }
-                Movement::ChannelClose { .. } => None,
+                Activity::ChannelClose { .. } => None,
             })
             .collect();
-        let mut movements = local_created_invoices
+        let mut activities = local_created_invoices
             .into_iter()
             .filter(|i| !breez_payment_hashes.contains(i.hash.as_str()))
             .map(|i| self.payment_from_created_invoice(&i))
             .filter_map(filter_out_and_log_corrupted_payments)
-            .map(|p| Movement::Payment { payment: p })
+            .map(|p| Activity::Payment { payment: p })
             .collect::<Vec<_>>();
-        movements.extend(breez_movements);
-        movements
+        activities.extend(breez_activities);
+        activities
     }
 
     /// Get a payment given its payment hash
@@ -959,9 +959,9 @@ impl LightningNode {
                 "Failed to get payment by hash",
             )?
         {
-            match self.movement_from_breez_payment(breez_payment)? {
-                Movement::Payment { payment } => Ok(payment),
-                Movement::ChannelClose { .. } => {
+            match self.activity_from_breez_payment(breez_payment)? {
+                Activity::Payment { payment } => Ok(payment),
+                Activity::ChannelClose { .. } => {
                     permanent_failure!(
                         "Searching a Breez payment by hash returned a channel close payment"
                     );
@@ -974,25 +974,25 @@ impl LightningNode {
         }
     }
 
-    fn movement_from_breez_payment(
+    fn activity_from_breez_payment(
         &self,
         breez_payment: breez_sdk_core::Payment,
-    ) -> Result<Movement> {
+    ) -> Result<Activity> {
         match &breez_payment.details {
             PaymentDetails::Ln { data } => {
-                self.movement_from_breez_ln_payment(&breez_payment, data)
+                self.activity_from_breez_ln_payment(&breez_payment, data)
             }
             PaymentDetails::ClosedChannel { data } => {
-                self.movement_from_breez_closed_channel_payment(&breez_payment, data)
+                self.activity_from_breez_closed_channel_payment(&breez_payment, data)
             }
         }
     }
 
-    fn movement_from_breez_ln_payment(
+    fn activity_from_breez_ln_payment(
         &self,
         breez_payment: &breez_sdk_core::Payment,
         payment_details: &LnPaymentDetails,
-    ) -> Result<Movement> {
+    ) -> Result<Activity> {
         let invoice = parse_invoice(&payment_details.bolt11).map_to_permanent_failure(format!(
             "Invalid invoice provided by the Breez SDK: {}",
             payment_details.bolt11
@@ -1114,7 +1114,7 @@ impl LightningNode {
             paid_sats: s.paid_sats,
         });
 
-        Ok(Movement::Payment {
+        Ok(Activity::Payment {
             payment: Payment {
                 payment_type,
                 payment_state: breez_payment.status.into(),
@@ -1139,11 +1139,11 @@ impl LightningNode {
         })
     }
 
-    fn movement_from_breez_closed_channel_payment(
+    fn activity_from_breez_closed_channel_payment(
         &self,
         breez_payment: &breez_sdk_core::Payment,
         details: &ClosedChannelPaymentDetails,
-    ) -> Result<Movement> {
+    ) -> Result<Activity> {
         let amount = breez_payment
             .amount_msat
             .as_msats()
@@ -1168,7 +1168,7 @@ impl LightningNode {
         // According to the docs, it can only be empty for older closed channels.
         let closing_tx_id = details.closing_txid.clone().unwrap_or_default();
 
-        Ok(Movement::ChannelClose {
+        Ok(Activity::ChannelClose {
             channel_close: ChannelClose {
                 amount,
                 state,
@@ -1409,11 +1409,11 @@ impl LightningNode {
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
             .into_iter()
             .filter(|p| p.status == PaymentStatus::Complete)
-            .map(|p| self.movement_from_breez_payment(p))
-            .filter_map(filter_out_and_log_corrupted_movements)
+            .map(|p| self.activity_from_breez_payment(p))
+            .filter_map(filter_out_and_log_corrupted_activities)
             .filter_map(|m| match m {
-                Movement::Payment { payment } => Some(payment),
-                Movement::ChannelClose { .. } => None,
+                Activity::Payment { payment } => Some(payment),
+                Activity::ChannelClose { .. } => None,
             })
             .collect::<Vec<_>>();
 
@@ -2077,13 +2077,13 @@ fn fill_payout_fee(
     }
 }
 
-// TODO provide corrupted movement information partially instead of hiding it
-fn filter_out_and_log_corrupted_movements(r: Result<Movement>) -> Option<Movement> {
+// TODO provide corrupted acticity information partially instead of hiding it
+fn filter_out_and_log_corrupted_activities(r: Result<Activity>) -> Option<Activity> {
     if r.is_ok() {
         r.ok()
     } else {
         error!(
-            "Corrupted movement data, ignoring movement: {}",
+            "Corrupted activity data, ignoring activity: {}",
             r.expect_err("Expected error, received ok")
         );
         None
