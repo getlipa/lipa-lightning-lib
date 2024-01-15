@@ -37,9 +37,9 @@ pub struct FailedSwapInfo {
 pub struct ResolveFailedSwapInfo {
     /// The address of the failed swap.
     pub swap_address: String,
-    /// The amount that will be sent (swap amount - onchain fee).
+    /// The amount that will be sent (swap amount - on-chain fee).
     pub recovered_amount: Amount,
-    /// The amount that will be paid in onchain fees.
+    /// The amount that will be paid in on-chain fees.
     pub onchain_fee: Amount,
     /// The address to which recovered funds will be sent.
     pub to_address: String,

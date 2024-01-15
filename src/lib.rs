@@ -231,7 +231,7 @@ pub struct ClearWalletInfo {
     pub clear_amount: Amount,
     /// Total fee estimate. Can differ from that fees that are charged when clearing the wallet.
     pub total_estimated_fees: Amount,
-    /// Estimate for the total that will be paid in onchain fees (lockup + claim txs).
+    /// Estimate for the total that will be paid in on-chain fees (lockup + claim txs).
     pub onchain_fee: Amount,
     /// Estimate for the fee paid to the swap service.
     pub swap_fee: Amount,
@@ -1638,7 +1638,7 @@ impl LightningNode {
     }
 
     /// Prepares the resolution of a failed swap in order to know how much will be recovered and how much
-    /// will be paid in onchain fees.
+    /// will be paid in on-chain fees.
     ///
     /// Parameters:
     /// * `failed_swap_info` - the failed swap that will be prepared
@@ -2000,12 +2000,12 @@ impl LightningNode {
         })
     }
 
-    /// Starts a reverse swap that sends all funds in LN channels to the provided onchain address.
+    /// Starts a reverse swap that sends all funds in LN channels to the provided on-chain address.
     ///
     /// Parameters:
     /// * `clear_wallet_info` - An instance of [`ClearWalletInfo`] obtained using
     /// [`LightningNode::prepare_clear_wallet`].
-    /// * `destination_onchain_address_data` - An onchain address data instance. Can be obtained
+    /// * `destination_onchain_address_data` - An on-chain address data instance. Can be obtained
     /// using [`LightningNode::decode_data`].
     pub fn clear_wallet(
         &self,
