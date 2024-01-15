@@ -27,7 +27,7 @@ fn test_payment_fetching() {
 
     let latest_activities = node.get_latest_activities(1).unwrap();
     let activity_from_list = latest_activities.pending_activities.first().unwrap();
-    assert_eq!(&Activity::Payment { payment }, activity_from_list);
+    assert_eq!(&Activity::PaymentActivity { payment }, activity_from_list);
 }
 
 fn assert_invoice_matches_payment(invoice: &InvoiceDetails, payment: &Payment) {

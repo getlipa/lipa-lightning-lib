@@ -79,15 +79,15 @@ pub struct ListActivitiesResponse {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum Activity {
-    Payment { payment: Payment },
-    ChannelClose { channel_close: ChannelClose },
+    PaymentActivity { payment: Payment },
+    ChannelCloseActivity { channel_close: ChannelClose },
 }
 
 impl Activity {
     pub(crate) fn get_time(&self) -> SystemTime {
         match self {
-            Activity::Payment { payment } => payment.created_at.time,
-            Activity::ChannelClose { channel_close } => channel_close
+            Activity::PaymentActivity { payment } => payment.created_at.time,
+            Activity::ChannelCloseActivity { channel_close } => channel_close
                 .closed_at
                 .clone()
                 .map(|t| t.time)
@@ -97,11 +97,11 @@ impl Activity {
 
     pub(crate) fn is_pending(&self) -> bool {
         match self {
-            Activity::Payment { payment } => matches!(
+            Activity::PaymentActivity { payment } => matches!(
                 payment.payment_state,
                 PaymentState::Created | PaymentState::Retried
             ),
-            Activity::ChannelClose { channel_close } => match channel_close.state {
+            Activity::ChannelCloseActivity { channel_close } => match channel_close.state {
                 ChannelCloseState::Pending => true,
                 ChannelCloseState::Confirmed => false,
             },

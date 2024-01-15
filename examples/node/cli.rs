@@ -1011,8 +1011,8 @@ fn list_activities(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
 
 fn print_activity(activity: Activity) -> Result<()> {
     match activity {
-        Activity::Payment { payment } => print_payment(payment),
-        Activity::ChannelClose { channel_close } => print_channel_close(channel_close),
+        Activity::PaymentActivity { payment } => print_payment(payment),
+        Activity::ChannelCloseActivity { channel_close } => print_channel_close(channel_close),
     }
 }
 
