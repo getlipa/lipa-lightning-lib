@@ -8,6 +8,7 @@
 
 extern crate core;
 
+mod activity;
 mod amount;
 mod analytics;
 mod async_runtime;
@@ -30,7 +31,6 @@ mod locker;
 mod logger;
 mod migrations;
 mod offer;
-mod payment;
 mod random;
 mod recovery;
 mod sanitize_input;
@@ -40,6 +40,10 @@ mod symmetric_encryption;
 mod task_manager;
 mod util;
 
+pub use crate::activity::ListActivitiesResponse;
+pub use crate::activity::{
+    Activity, ChannelClose, ChannelCloseState, Payment, PaymentState, PaymentType,
+};
 pub use crate::amount::{Amount, FiatValue};
 use crate::amount::{AsSats, Msats, Sats, ToAmount};
 use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
@@ -72,8 +76,6 @@ pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 pub use crate::lnurl::{LnUrlPayDetails, LnUrlWithdrawDetails};
 use crate::locker::Locker;
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
-pub use crate::payment::ListPaymentsResponse;
-pub use crate::payment::{Payment, PaymentState, PaymentType};
 pub use crate::recovery::recover_lightning_node;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
 pub use crate::swap::{FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo};
@@ -86,13 +88,13 @@ pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
 use breez_sdk_core::{
-    parse, parse_invoice, BitcoinAddressData, BreezServices, GreenlightCredentials,
-    GreenlightNodeConfig, InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData,
-    LnUrlWithdrawRequest, LnUrlWithdrawRequestData, Network, NodeConfig, OpenChannelFeeRequest,
-    OpeningFeeParams, PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRefundRequest,
-    PrepareSweepRequest, ReceiveOnchainRequest, RefundRequest, ReportIssueRequest,
-    ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest, SendPaymentRequest,
-    SweepRequest,
+    parse, parse_invoice, BitcoinAddressData, BreezServices, ClosedChannelPaymentDetails,
+    GreenlightCredentials, GreenlightNodeConfig, InputType, ListPaymentsRequest, LnPaymentDetails,
+    LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest, LnUrlWithdrawRequestData, Network,
+    NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails, PaymentStatus,
+    PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest, ReceiveOnchainRequest,
+    RefundRequest, ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest,
+    SendOnchainRequest, SendPaymentRequest, SweepRequest,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -867,66 +869,92 @@ impl LightningNode {
         Ok(payment_hash)
     }
 
-    /// Get a list of the latest payments
+    /// Get a list of the latest activities
     ///
     /// Parameters:
-    /// * `number_of_completed_payments` - the maximum number of completed payments that will be returned
-    pub fn get_latest_payments(
+    /// * `number_of_completed_activities` - the maximum number of completed activities that will be returned
+    pub fn get_latest_activities(
         &self,
-        number_of_completed_payments: u32,
-    ) -> Result<ListPaymentsResponse> {
-        const LEEWAY_FOR_PENDING_OUTGOING_PAYMENTS: u32 = 10;
+        number_of_completed_activities: u32,
+    ) -> Result<ListActivitiesResponse> {
+        const LEEWAY_FOR_PENDING_PAYMENTS: u32 = 10;
         let list_payments_request = ListPaymentsRequest {
-            filters: Some(vec![PaymentTypeFilter::Sent, PaymentTypeFilter::Received]),
+            filters: Some(vec![
+                PaymentTypeFilter::Sent,
+                PaymentTypeFilter::Received,
+                PaymentTypeFilter::ClosedChannel,
+            ]),
             from_timestamp: None,
             to_timestamp: None,
             include_failures: Some(true),
-            limit: Some(number_of_completed_payments + LEEWAY_FOR_PENDING_OUTGOING_PAYMENTS),
+            limit: Some(number_of_completed_activities + LEEWAY_FOR_PENDING_PAYMENTS),
             offset: None,
         };
-        let breez_payments = self
+        let breez_activities = self
             .rt
             .handle()
             .block_on(self.sdk.list_payments(list_payments_request))
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
             .into_iter()
-            .map(|p| self.payment_from_breez_payment(p))
-            .filter_map(filter_out_and_log_corrupted_payments)
+            .map(|p| self.activity_from_breez_payment(p))
+            .filter_map(filter_out_and_log_corrupted_activities)
             .collect::<Vec<_>>();
 
         // Query created invoices, filter out ones which are in the breez db.
-        let breez_payment_hashes: HashSet<_> = breez_payments
-            .iter()
-            .map(|p| p.invoice_details.payment_hash.as_ref())
-            .collect();
         let created_invoices = self
             .data_store
             .lock_unwrap()
-            .retrieve_created_invoices(number_of_completed_payments)?;
-        let created_invoices = created_invoices
+            .retrieve_created_invoices(number_of_completed_activities)?;
+
+        let activities = self.multiplex_activities(breez_activities, created_invoices);
+
+        // Split by state.
+        let mut pending_activities = Vec::new();
+        let mut completed_activities = Vec::new();
+        activities.into_iter().for_each(|m| {
+            if m.is_pending() {
+                pending_activities.push(m)
+            } else {
+                completed_activities.push(m)
+            }
+        });
+
+        pending_activities.sort_by_key(|m| Reverse(m.get_time()));
+        completed_activities.sort_by_key(|m| Reverse(m.get_time()));
+        completed_activities.truncate(number_of_completed_activities as usize);
+        Ok(ListActivitiesResponse {
+            pending_activities,
+            completed_activities,
+        })
+    }
+
+    /// Combines a list of activities with a list of locally created invoices
+    /// into a single activity list.
+    ///
+    /// Duplicates are removed.
+    fn multiplex_activities(
+        &self,
+        breez_activities: Vec<Activity>,
+        local_created_invoices: Vec<CreatedInvoice>,
+    ) -> Vec<Activity> {
+        let breez_payment_hashes: HashSet<_> = breez_activities
+            .iter()
+            .filter_map(|m| match m {
+                Activity::Payment { payment } => {
+                    Some(payment.invoice_details.payment_hash.as_ref())
+                }
+                Activity::ChannelClose { .. } => None,
+            })
+            .collect();
+        let mut activities = local_created_invoices
             .into_iter()
             .filter(|i| !breez_payment_hashes.contains(i.hash.as_str()))
             .map(|i| self.payment_from_created_invoice(&i))
             .filter_map(filter_out_and_log_corrupted_payments)
+            .map(|p| Activity::Payment { payment: p })
             .collect::<Vec<_>>();
-
-        // Split by state.
-        let mut pending_payments = Vec::new();
-        let mut completed_payments = Vec::new();
-        for payment in breez_payments.into_iter().chain(created_invoices) {
-            match payment.payment_state {
-                PaymentState::Created | PaymentState::Retried => pending_payments.push(payment),
-                _ => completed_payments.push(payment),
-            }
-        }
-
-        pending_payments.sort_by_key(|p| Reverse(p.created_at.time));
-        completed_payments.sort_by_key(|p| Reverse(p.created_at.time));
-        completed_payments.truncate(number_of_completed_payments as usize);
-        Ok(ListPaymentsResponse {
-            pending_payments,
-            completed_payments,
-        })
+        activities.extend(breez_activities);
+        activities
     }
 
     /// Get a payment given its payment hash
@@ -947,7 +975,14 @@ impl LightningNode {
                 "Failed to get payment by hash",
             )?
         {
-            self.payment_from_breez_payment(breez_payment)
+            match self.activity_from_breez_payment(breez_payment)? {
+                Activity::Payment { payment } => Ok(payment),
+                Activity::ChannelClose { .. } => {
+                    permanent_failure!(
+                        "Searching a Breez payment by hash returned a channel close payment"
+                    );
+                }
+            }
         } else if let Some(invoice) = optional_invoice {
             self.payment_from_created_invoice(&invoice)
         } else {
@@ -955,17 +990,25 @@ impl LightningNode {
         }
     }
 
-    fn payment_from_breez_payment(
+    fn activity_from_breez_payment(
         &self,
         breez_payment: breez_sdk_core::Payment,
-    ) -> Result<Payment> {
-        let payment_details = match breez_payment.details {
-            PaymentDetails::Ln { ref data } => data.clone(),
-            PaymentDetails::ClosedChannel { .. } => permanent_failure!(
-                "Current interface doesn't support PaymentDetails::ClosedChannel"
-            ),
-        };
+    ) -> Result<Activity> {
+        match &breez_payment.details {
+            PaymentDetails::Ln { data } => {
+                self.activity_from_breez_ln_payment(&breez_payment, data)
+            }
+            PaymentDetails::ClosedChannel { data } => {
+                self.activity_from_breez_closed_channel_payment(&breez_payment, data)
+            }
+        }
+    }
 
+    fn activity_from_breez_ln_payment(
+        &self,
+        breez_payment: &breez_sdk_core::Payment,
+        payment_details: &LnPaymentDetails,
+    ) -> Result<Activity> {
         let invoice = parse_invoice(&payment_details.bolt11).map_to_permanent_failure(format!(
             "Invalid invoice provided by the Breez SDK: {}",
             payment_details.bolt11
@@ -1057,7 +1100,7 @@ impl LightningNode {
                         .amount_msat
                         .as_msats()
                         .to_amount_down(&exchange_rate),
-                    Self::get_requested_amount_for_received_payment(&breez_payment, &exchange_rate),
+                    Self::get_requested_amount_for_received_payment(breez_payment, &exchange_rate),
                     None,
                     Some(
                         breez_payment
@@ -1076,7 +1119,7 @@ impl LightningNode {
         let description = invoice_details.description.clone();
 
         let user_preferences = self.user_preferences.lock_unwrap();
-        let swap = payment_details.swap_info.map(|s| SwapInfo {
+        let swap = payment_details.swap_info.clone().map(|s| SwapInfo {
             bitcoin_address: s.bitcoin_address,
             created_at: TzTime {
                 // TODO: Persist SwapInfo in local db on state change, requires https://github.com/breez/breez-sdk/issues/518
@@ -1087,26 +1130,67 @@ impl LightningNode {
             paid_sats: s.paid_sats,
         });
 
-        Ok(Payment {
-            payment_type,
-            payment_state: breez_payment.status.into(),
-            fail_reason: None, // TODO: Request SDK to store and provide reason for failed payments - issue: https://github.com/breez/breez-sdk/issues/626
-            hash: payment_details.payment_hash,
-            amount,
-            requested_amount,
-            invoice_details,
-            created_at: time,
-            description,
-            preimage: payment_details
-                .payment_preimage
-                .is_empty()
-                .not()
-                .then_some(payment_details.payment_preimage),
-            network_fees,
-            lsp_fees,
-            offer,
-            swap,
-            lightning_address: payment_details.ln_address,
+        Ok(Activity::Payment {
+            payment: Payment {
+                payment_type,
+                payment_state: breez_payment.status.into(),
+                fail_reason: None, // TODO: Request SDK to store and provide reason for failed payments - issue: https://github.com/breez/breez-sdk/issues/626
+                hash: payment_details.payment_hash.clone(),
+                amount,
+                requested_amount,
+                invoice_details,
+                created_at: time,
+                description,
+                preimage: payment_details
+                    .payment_preimage
+                    .is_empty()
+                    .not()
+                    .then_some(payment_details.payment_preimage.clone()),
+                network_fees,
+                lsp_fees,
+                offer,
+                swap,
+                lightning_address: payment_details.ln_address.clone(),
+            },
+        })
+    }
+
+    fn activity_from_breez_closed_channel_payment(
+        &self,
+        breez_payment: &breez_sdk_core::Payment,
+        details: &ClosedChannelPaymentDetails,
+    ) -> Result<Activity> {
+        let amount = breez_payment
+            .amount_msat
+            .as_msats()
+            .to_amount_up(&self.get_exchange_rate());
+
+        let user_preferences = self.user_preferences.lock_unwrap();
+
+        let time = TzTime {
+            time: unix_timestamp_to_system_time(breez_payment.payment_time as u64),
+            timezone_id: user_preferences.timezone_config.timezone_id.clone(),
+            timezone_utc_offset_secs: user_preferences.timezone_config.timezone_utc_offset_secs,
+        };
+
+        let (closed_at, state) = match breez_payment.status {
+            PaymentStatus::Pending => (None, ChannelCloseState::Pending),
+            PaymentStatus::Complete => (Some(time), ChannelCloseState::Confirmed),
+            PaymentStatus::Failed => {
+                permanent_failure!("A channel close Breez Payment has status *Failed*");
+            }
+        };
+
+        // According to the docs, it can only be empty for older closed channels.
+        let closing_tx_id = details.closing_txid.clone().unwrap_or_default();
+
+        Ok(Activity::ChannelClose {
+            channel_close: ChannelClose {
+                amount,
+                state,
+                closed_at,
+                closing_tx_id,
+            },
         })
     }
 
@@ -1341,8 +1425,12 @@ impl LightningNode {
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
             .into_iter()
             .filter(|p| p.status == PaymentStatus::Complete)
-            .map(|p| self.payment_from_breez_payment(p))
-            .filter_map(filter_out_and_log_corrupted_payments)
+            .map(|p| self.activity_from_breez_payment(p))
+            .filter_map(filter_out_and_log_corrupted_activities)
+            .filter_map(|m| match m {
+                Activity::Payment { payment } => Some(payment),
+                Activity::ChannelClose { .. } => None,
+            })
             .collect::<Vec<_>>();
 
         Ok(
@@ -2151,7 +2239,20 @@ fn fill_payout_fee(
     }
 }
 
-// TODO provide corrupted payment information partially instead of hiding them
+// TODO provide corrupted acticity information partially instead of hiding it
+fn filter_out_and_log_corrupted_activities(r: Result<Activity>) -> Option<Activity> {
+    if r.is_ok() {
+        r.ok()
+    } else {
+        error!(
+            "Corrupted activity data, ignoring activity: {}",
+            r.expect_err("Expected error, received ok")
+        );
+        None
+    }
+}
+
+// TODO provide corrupted payment information partially instead of hiding it
 fn filter_out_and_log_corrupted_payments(r: Result<Payment>) -> Option<Payment> {
     if r.is_ok() {
         r.ok()

@@ -1,4 +1,5 @@
 use crate::{Amount, InvoiceDetails, OfferKind, PayErrorCode, SwapInfo, TzTime};
+use std::time::SystemTime;
 
 use breez_sdk_core::PaymentStatus;
 
@@ -69,8 +70,58 @@ pub struct Payment {
     pub lightning_address: Option<String>,
 }
 
-/// Information about **all** pending and **only** requested completed payments.
-pub struct ListPaymentsResponse {
-    pub pending_payments: Vec<Payment>,
-    pub completed_payments: Vec<Payment>,
+/// Information about **all** pending and **only** requested completed activities.
+pub struct ListActivitiesResponse {
+    pub pending_activities: Vec<Activity>,
+    pub completed_activities: Vec<Activity>,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, PartialEq)]
+pub enum Activity {
+    Payment { payment: Payment },
+    ChannelClose { channel_close: ChannelClose },
+}
+
+impl Activity {
+    pub(crate) fn get_time(&self) -> SystemTime {
+        match self {
+            Activity::Payment { payment } => payment.created_at.time,
+            Activity::ChannelClose { channel_close } => channel_close
+                .closed_at
+                .clone()
+                .map(|t| t.time)
+                .unwrap_or(SystemTime::now()),
+        }
+    }
+
+    pub(crate) fn is_pending(&self) -> bool {
+        match self {
+            Activity::Payment { payment } => matches!(
+                payment.payment_state,
+                PaymentState::Created | PaymentState::Retried
+            ),
+            Activity::ChannelClose { channel_close } => match channel_close.state {
+                ChannelCloseState::Pending => true,
+                ChannelCloseState::Confirmed => false,
+            },
+        }
+    }
+}
+
+/// Information about a closed channel.
+#[derive(Debug, PartialEq)]
+pub struct ChannelClose {
+    /// Our balance on the channel that got closed.
+    pub amount: Amount,
+    pub state: ChannelCloseState,
+    /// When the channel closing tx got confirmed. For pending channel closes, this will be empty.
+    pub closed_at: Option<TzTime>,
+    pub closing_tx_id: String,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ChannelCloseState {
+    Pending,
+    Confirmed,
 }

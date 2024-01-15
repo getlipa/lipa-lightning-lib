@@ -17,9 +17,10 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
 use uniffi_lipalightninglib::{
-    Amount, DecodedData, ExchangeRate, FiatValue, InvoiceCreationMetadata, InvoiceDetails,
-    LightningNode, LiquidityLimit, LnUrlPayDetails, LnUrlWithdrawDetails, MaxRoutingFeeMode,
-    OfferKind, Payment, PaymentMetadata, PaymentState, TzConfig,
+    Activity, Amount, ChannelClose, ChannelCloseState, DecodedData, ExchangeRate, FiatValue,
+    InvoiceCreationMetadata, InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails,
+    LnUrlWithdrawDetails, MaxRoutingFeeMode, OfferKind, Payment, PaymentMetadata, PaymentState,
+    TzConfig,
 };
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
@@ -169,8 +170,8 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
-                "listpayments" => {
-                    if let Err(message) = list_payments(node, &mut words) {
+                "listactivities" => {
+                    if let Err(message) = list_activities(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
@@ -328,12 +329,12 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
 
     hints.insert(CommandHint::new(
-        "overview [number of payments = 10] [fun mode = false]",
+        "overview [number of activities = 10] [fun mode = false]",
         "overview ",
     ));
     hints.insert(CommandHint::new(
-        "listpayments [number of payments = 2]",
-        "listpayments ",
+        "listactivities [number of activities = 2]",
+        "listactivities ",
     ));
     hints.insert(CommandHint::new(
         "listlightningaddresses",
@@ -398,7 +399,7 @@ fn help() {
     println!("  listoffers");
     println!("  calculatelightningpayoutfee <offer id>");
     println!();
-    println!("  listpayments");
+    println!("  listactivities");
     println!("  listlightningaddresses");
     println!("  paymentuuid <payment hash>");
     println!();
@@ -974,38 +975,45 @@ fn list_offers(node: &LightningNode) -> Result<()> {
     Ok(())
 }
 
-fn list_payments(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
-    let number_of_payments: u32 = words
+fn list_activities(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let number_of_activities: u32 = words
         .next()
         .unwrap_or("2")
         .parse()
-        .context("Number of payments should be a positive integer number")?;
-    let payments = node.get_latest_payments(number_of_payments)?;
-    let pending_payments = payments.pending_payments;
-    let completed_payments = payments.completed_payments;
+        .context("Number of activities should be a positive integer number")?;
+    let activities = node.get_latest_activities(number_of_activities)?;
+    let pending_activities = activities.pending_activities;
+    let completed_activities = activities.completed_activities;
 
     let line = format!(
-        " Total of {} {} payments ",
-        completed_payments.len().to_string().bold(),
+        " Total of {} {} activities ",
+        completed_activities.len().to_string().bold(),
         "completed".bold()
     );
     println!("{}", line.reversed());
-    for payment in completed_payments.into_iter().rev() {
-        print_payment(payment)?;
+    for activity in completed_activities.into_iter().rev() {
+        print_activity(activity)?;
     }
 
     println!();
     let line = format!(
-        " Total of {} {} payments ",
-        pending_payments.len().to_string().bold(),
+        " Total of {} {} activities ",
+        pending_activities.len().to_string().bold(),
         "pending".bold()
     );
     println!("{}", line.reversed());
-    for payment in pending_payments.into_iter().rev() {
-        print_payment(payment)?;
+    for activity in pending_activities.into_iter().rev() {
+        print_activity(activity)?;
     }
 
     Ok(())
+}
+
+fn print_activity(activity: Activity) -> Result<()> {
+    match activity {
+        Activity::Payment { payment } => print_payment(payment),
+        Activity::ChannelClose { channel_close } => print_channel_close(channel_close),
+    }
 }
 
 fn print_payment(payment: Payment) -> Result<()> {
@@ -1051,6 +1059,27 @@ fn print_payment(payment: Payment) -> Result<()> {
     println!("      Offer:            {}", offer_to_string(payment.offer));
     println!("      Swap:             {:?}", payment.swap);
     println!("     Lightning Address: {:?}", payment.lightning_address);
+    Ok(())
+}
+
+fn print_channel_close(channel_close: ChannelClose) -> Result<()> {
+    match channel_close.state {
+        ChannelCloseState::Pending => println!("\nUnconfirmed channel close"),
+        ChannelCloseState::Confirmed => {
+            let closed_at = channel_close.closed_at.ok_or(anyhow!(
+                "Confirmed channel close doesn't have closed_at time"
+            ))?;
+            let datetime: DateTime<Utc> = closed_at.time.into();
+            let timezone = FixedOffset::east_opt(closed_at.timezone_utc_offset_secs)
+                .ok_or(anyhow!("east_opt failed"))?;
+            println!("\nChannel closed at {}", datetime.with_timezone(&timezone))
+        }
+    };
+    println!(
+        "      Amount:           {}",
+        amount_to_string(channel_close.amount)
+    );
+    println!("      Closing txid:     {}", channel_close.closing_tx_id);
     Ok(())
 }
 
