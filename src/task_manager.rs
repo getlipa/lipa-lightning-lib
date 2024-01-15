@@ -289,17 +289,11 @@ impl TaskManager {
                     }
                 };
 
-                let mut status = status.lock_unwrap();
-
-                if let Some(status) = &*status {
-                    if *status != new_status {
-                        events_callback.breez_health_status_changed_to(new_status.clone());
-                    }
-                } else {
-                    events_callback.breez_health_status_changed_to(new_status.clone());
+                let some_new_status = Some(new_status.clone());
+                if *status.lock_unwrap() != some_new_status {
+                    *status.lock_unwrap() = some_new_status;
+                    events_callback.breez_health_status_changed_to(new_status);
                 }
-
-                *status = Some(new_status);
             }
         })
     }
