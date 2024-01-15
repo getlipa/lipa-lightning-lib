@@ -857,7 +857,7 @@ fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Re
             bail!("A BOLT-11 invoice was provided instead of an LNURL-pay")
         }
         Ok(DecodedData::OnchainAddress { .. }) => {
-            bail!("A onchain address was provided instead of an LNURL-pay")
+            bail!("An on-chain address was provided instead of an LNURL-pay")
         }
         Err(_) => bail!("Invalid lnurlp"),
     };
@@ -888,7 +888,7 @@ fn withdraw_lnurlw(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
             bail!("A BOLT-11 invoice was provided instead of an LNURL-Withdraw")
         }
         Ok(DecodedData::OnchainAddress { .. }) => {
-            bail!("A onchain address was provided instead of an LNURL-Withdraw")
+            bail!("An on-chain address was provided instead of an LNURL-Withdraw")
         }
         Err(_) => bail!("Invalid lnurlw"),
     };
@@ -1085,7 +1085,7 @@ fn clear_wallet_info(node: &LightningNode) -> Result<()> {
         amount_to_string(clear_wallet_info.total_estimated_fees)
     );
     println!(
-        "      Total Onchain Fees: {}",
+        "      Total On-chain Fees: {}",
         amount_to_string(clear_wallet_info.onchain_fee)
     );
     println!(
@@ -1108,7 +1108,7 @@ fn clear_wallet(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
     {
         node.clear_wallet(clear_wallet_info, onchain_address_details)?;
     } else {
-        bail!("Provided data is not an onchain address");
+        bail!("Provided data is not an on-chain address");
     }
 
     Ok(())
