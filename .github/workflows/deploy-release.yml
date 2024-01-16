@@ -339,12 +339,38 @@ jobs:
         run: |
           curl -s -m 30 https://jitpack.io/com/github/getlipa/lipa-lightning-lib-android/${{ env.RELEASE_VERSION }} || true
 
-  build-docs:
-    if: github.ref == 'refs/heads/main'
-    name: build-docs
+  determine-branch:
+    name: determine-branch
     needs:
       - deploy-ios
       - deploy-android
+    runs-on: ubuntu-latest
+    outputs:
+      is_main: ${{ steps.set-var.outputs.is_main }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Get Branch Name
+        id: get-branch
+        run: |
+          BRANCH_NAMES=$(git branch -r --contains ${GITHUB_REF_NAME} | grep origin | sed 's/origin\///' | sed 's/ //g')
+          echo "Branch names: $BRANCH_NAMES"
+      - name: Set Output Variable
+        id: set-var
+        run: |
+          if [ "$BRANCH_NAMES" == *"main"* ]; then
+            echo "::set-output name=is_main::true"
+          else
+            echo "::set-output name=is_main::false"
+          fi
+
+  build-docs:
+    name: build-docs
+    needs:
+      - determine-branch
+    if: needs.determine-branch.outputs.is_main == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -379,7 +405,6 @@ jobs:
           path: './target/doc'
 
   deploy-docs:
-    if: github.ref == 'refs/heads/main'
     name: deploy-docs
     needs: build-docs
     permissions:
