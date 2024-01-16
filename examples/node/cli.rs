@@ -1233,7 +1233,7 @@ fn calculate_lightning_payout_fee(
     Ok(())
 }
 
-fn get_channel_close_resolving_fees(node: &LightningNode) -> Result<()> {
+fn get_channel_close_resolving_fees(node: &dyn LightningNode) -> Result<()> {
     let resolving_fees = node.get_channel_close_resolving_fees()?;
 
     println!(
@@ -1260,7 +1260,7 @@ fn get_channel_close_resolving_fees(node: &LightningNode) -> Result<()> {
     Ok(())
 }
 
-fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
+fn swap_onchain_to_lightning(node: &dyn LightningNode) -> Result<()> {
     let resolving_fees = node.get_channel_close_resolving_fees()?;
 
     let swap_fees = resolving_fees

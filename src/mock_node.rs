@@ -4,11 +4,11 @@ use crate::async_runtime::AsyncRuntime;
 use crate::errors::LnUrlWithdrawResult;
 
 use crate::{
-    Amount, BreezHealthCheckStatus, CalculateLspFeeResponse, ChannelsInfo, ClearWalletInfo,
-    DecodeDataError, DecodedData, EventsCallback, ExchangeRate, FailedSwapInfo, FiatTopupInfo,
-    InvoiceAffordability, InvoiceCreationMetadata, InvoiceDetails, LightningNode,
-    ListPaymentsResponse, LnUrlPayResult, LspFee, MaxRoutingFeeMode, NodeInfo, OfferInfo,
-    PayResult, Payment, PaymentAmountLimits, PaymentMetadata, PaymentState, PaymentType,
+    Activity, Amount, BreezHealthCheckStatus, CalculateLspFeeResponse, ChannelCloseResolvingFees,
+    ChannelsInfo, ClearWalletInfo, DecodeDataError, DecodedData, EventsCallback, ExchangeRate,
+    FailedSwapInfo, FiatTopupInfo, InvoiceAffordability, InvoiceCreationMetadata, InvoiceDetails,
+    LightningNode, ListActivitiesResponse, LnUrlPayResult, LspFee, MaxRoutingFeeMode, NodeInfo,
+    OfferInfo, PayResult, Payment, PaymentAmountLimits, PaymentMetadata, PaymentState, PaymentType,
     ResolveFailedSwapInfo, RuntimeErrorCode, SwapAddressInfo, SweepInfo, TzConfig, TzTime,
     UnsupportedDataType,
 };
@@ -212,15 +212,21 @@ impl LightningNode for MockLightningNode {
         todo!()
     }
 
-    fn get_latest_payments(
+    fn get_latest_activities(
         &self,
         number_of_completed_payments: u32,
-    ) -> crate::Result<ListPaymentsResponse> {
-        let mut completed_payments = self.payments.to_vec();
-        completed_payments.truncate(number_of_completed_payments as usize);
-        Ok(ListPaymentsResponse {
-            pending_payments: vec![],
-            completed_payments,
+    ) -> crate::Result<ListActivitiesResponse> {
+        let mut completed_activities = self
+            .payments
+            .clone()
+            .into_iter()
+            .map(|p| Activity::PaymentActivity { payment: p })
+            .collect::<Vec<_>>();
+
+        completed_activities.truncate(number_of_completed_payments as usize);
+        Ok(ListActivitiesResponse {
+            pending_activities: vec![],
+            completed_activities,
         })
     }
 
@@ -348,6 +354,18 @@ impl LightningNode for MockLightningNode {
         &self,
         _resolve_failed_swap_info: ResolveFailedSwapInfo,
     ) -> crate::Result<String> {
+        todo!()
+    }
+
+    fn get_channel_close_resolving_fees(&self) -> crate::Result<ChannelCloseResolvingFees> {
+        todo!()
+    }
+
+    fn swap_onchain_to_lightning(
+        &self,
+        _sat_per_vbyte: u32,
+        _lsp_fee_params: Option<OpeningFeeParams>,
+    ) -> std::result::Result<String, ReceiveOnchainError> {
         todo!()
     }
 
