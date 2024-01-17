@@ -1058,7 +1058,7 @@ fn print_payment(payment: Payment) -> Result<()> {
     );
     println!("      Offer:            {}", offer_to_string(payment.offer));
     println!("      Swap:             {:?}", payment.swap);
-    println!("     Lightning Address: {:?}", payment.lightning_address);
+    println!("      Recipient:        {:?}", payment.recipient);
     Ok(())
 }
 
