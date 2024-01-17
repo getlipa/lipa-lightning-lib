@@ -360,10 +360,12 @@ jobs:
       - name: Set Output Variable
         id: set-var
         run: |
-          if [ "$BRANCH_NAMES" == *"main"* ]; then
+          if [[ $BRANCH_NAMES == *'main'* ]]; then
             echo "::set-output name=is_main::true"
+            echo "Setting is_main to true"
           else
             echo "::set-output name=is_main::false"
+            echo "Setting is_main to false"
           fi
 
   build-docs:
