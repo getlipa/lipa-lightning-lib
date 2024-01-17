@@ -83,6 +83,7 @@ use crate::task_manager::TaskManager;
 use crate::util::LogIgnoreError;
 use crate::util::{replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time};
 
+pub use crate::activity::Recipient;
 use crate::swap::SwapToLightningFees;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
@@ -1131,6 +1132,14 @@ impl LightningNode {
             paid_sats: s.paid_sats,
         });
 
+        let recipient = match &payment_details.ln_address {
+            None => match breez_payment.payment_type {
+                breez_sdk_core::PaymentType::Sent => Some(Recipient::Unknown),
+                _ => None,
+            },
+            Some(a) => Some(Recipient::LightningAddress { address: a.clone() }),
+        };
+
         Ok(Activity::PaymentActivity {
             payment: Payment {
                 payment_type,
@@ -1151,7 +1160,7 @@ impl LightningNode {
                 lsp_fees,
                 offer,
                 swap,
-                lightning_address: payment_details.ln_address.clone(),
+                recipient,
             },
         })
     }
@@ -1270,7 +1279,7 @@ impl LightningNode {
             lsp_fees,
             offer: None,
             swap: None,
-            lightning_address: None,
+            recipient: None,
         })
     }
 
@@ -2405,7 +2414,7 @@ mod tests {
                 lsp_fees: None,
                 offer: None,
                 swap: None,
-                lightning_address: None,
+                recipient: None,
             },
             Payment {
                 payment_type: PaymentType::Receiving,
@@ -2454,7 +2463,7 @@ mod tests {
                     error: None,
                 }),
                 swap: None,
-                lightning_address: None,
+                recipient: None,
             },
             Payment {
                 payment_type: PaymentType::Receiving,
@@ -2503,7 +2512,7 @@ mod tests {
                     error: None,
                 }),
                 swap: None,
-                lightning_address: None,
+                recipient: None,
             },
         ];
 

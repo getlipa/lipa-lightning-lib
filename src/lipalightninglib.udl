@@ -318,7 +318,7 @@ dictionary Payment {
     Amount? lsp_fees;
     OfferKind? offer;
     SwapInfo? swap;
-    string? lightning_address;
+    Recipient? recipient;
 };
 
 enum PaymentType {
@@ -531,6 +531,13 @@ dictionary SwapToLightningFees {
     Amount total_fees;
     OpeningFeeParams? lsp_fee_params;
 };
+
+[Enum]
+interface Recipient {
+    LightningAddress(string address);
+    Unknown();
+};
+
 
 //
 // ----------------------------- TOP LEVEL FUNCTIONS + RELATED DEFINITIONS -----------------------------

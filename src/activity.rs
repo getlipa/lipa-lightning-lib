@@ -66,8 +66,15 @@ pub struct Payment {
     pub offer: Option<OfferKind>,
     /// The swap information of a [`PaymentType::Receiving`] payment if triggered by a swap.
     pub swap: Option<SwapInfo>,
-    /// A lightning address the payment has been sent to.
-    pub lightning_address: Option<String>,
+    /// Information about a payment's recipient. Will only be present for outgoing payments.
+    pub recipient: Option<Recipient>,
+}
+
+/// User-friendly representation of an outgoing payment's recipient.
+#[derive(PartialEq, Debug)]
+pub enum Recipient {
+    LightningAddress { address: String },
+    Unknown,
 }
 
 /// Information about **all** pending and **only** requested completed activities.

@@ -5,7 +5,7 @@ use colored::Colorize;
 use thousands::Separable;
 use uniffi_lipalightninglib::{
     Activity, Amount, BreezHealthCheckStatus, ChannelClose, FiatValue, LightningNode, Payment,
-    PaymentState, PaymentType,
+    PaymentState, PaymentType, Recipient,
 };
 
 pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
@@ -121,9 +121,9 @@ fn print_payment(payment: Payment) -> Result<()> {
         println!("{lsp_fees}");
     }
 
-    let (icon, title) = match payment.lightning_address {
-        Some(lightning_address) => (" @".bold(), lightning_address),
-        None => ("🧾".normal(), "Invoice".to_string()),
+    let (icon, title) = match payment.recipient {
+        Some(Recipient::LightningAddress { address }) => (" @".bold(), address),
+        Some(Recipient::Unknown) | None => ("🧾".normal(), "Invoice".to_string()),
     };
 
     let amount = payment.requested_amount.sats.separate_with_commas();
