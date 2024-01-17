@@ -356,6 +356,7 @@ jobs:
         id: get-branch
         run: |
           BRANCH_NAMES=$(git branch -r --contains ${GITHUB_REF_NAME} | grep origin | sed 's/origin\///' | sed 's/ //g')
+          echo "BRANCH_NAMES=$BRANCH_NAMES" >> "$GITHUB_ENV"
           echo "Branch names: $BRANCH_NAMES"
       - name: Set Output Variable
         id: set-var
