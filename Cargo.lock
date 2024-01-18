@@ -563,6 +563,13 @@ dependencies = [
 [[package]]
 name = "breez-sdk-core"
 version = "0.2.12"
+dependencies = [
+ "breez-sdk-core 0.2.12 (git+https://github.com/breez/breez-sdk?tag=0.2.12)",
+]
+
+[[package]]
+name = "breez-sdk-core"
+version = "0.2.12"
 source = "git+https://github.com/breez/breez-sdk?tag=0.2.12#8a13493fc16b9e173b852d7b6ab8e37f7a7e6bc9"
 dependencies = [
  "aes",
@@ -2117,7 +2124,7 @@ dependencies = [
  "anyhow",
  "bip39",
  "bitcoin 0.30.1",
- "breez-sdk-core",
+ "breez-sdk-core 0.2.12",
  "camino",
  "chameleon",
  "chrono",
