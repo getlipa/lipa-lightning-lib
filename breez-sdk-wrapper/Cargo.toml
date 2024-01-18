@@ -1,0 +1,13 @@
+[package]
+name = "breez-sdk-core"
+version = "0.2.12"
+edition = "2021"
+
+[lib]
+name = "breez_sdk_core"
+
+[dependencies]
+breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.12" }
+
+[features]
+mocked-sdk = []
