@@ -4,6 +4,9 @@ use breez_sdk_core::{LnUrlPayRequestData, LnUrlWithdrawRequestData};
 
 /// Information about an LNURL-pay.
 pub struct LnUrlPayDetails {
+    /// The domain of the LNURL-pay service, to be shown to the user when asking for
+    /// payment input, as per LUD-06 spec.
+    pub domain: String,
     pub min_sendable: Amount,
     pub max_sendable: Amount,
     /// An internal struct is not supposed to be inspected, but only passed to [`crate::LightningNode::pay_lnurlp`].
@@ -16,6 +19,7 @@ impl LnUrlPayDetails {
         exchange_rate: &Option<ExchangeRate>,
     ) -> Self {
         Self {
+            domain: request_data.domain.clone(),
             min_sendable: request_data
                 .min_sendable
                 .as_msats()

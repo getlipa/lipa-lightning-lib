@@ -13,6 +13,7 @@ use rustyline::config::{Builder, CompletionType};
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use rustyline::Editor;
+use std::cmp::min;
 use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
@@ -617,21 +618,28 @@ fn print_invoice_details(invoice_details: InvoiceDetails) {
 
 fn print_lnurl_pay_details(lnurl_pay_details: LnUrlPayDetails) {
     println!("LNURL-pay details:");
-    println!(
-        "  Callback              {}",
-        lnurl_pay_details.request_data.callback
-    );
-    println!(
-        "  Max Sendable          {}",
-        amount_to_string(lnurl_pay_details.max_sendable)
-    );
+    println!("  Domain                {}", lnurl_pay_details.domain);
     println!(
         "  Min Sendable          {}",
         amount_to_string(lnurl_pay_details.min_sendable)
     );
     println!(
-        "  Metadata              {}",
-        lnurl_pay_details.request_data.metadata_str
+        "  Max Sendable          {}",
+        amount_to_string(lnurl_pay_details.max_sendable)
+    );
+    println!("---- Internal request_data struct ----");
+    println!(
+        "  Callback              {}",
+        lnurl_pay_details.request_data.callback
+    );
+    let len = min(lnurl_pay_details.request_data.metadata_str.len(), 50);
+    println!(
+        "  Metadata              {}...",
+        lnurl_pay_details
+            .request_data
+            .metadata_str
+            .get(0..len)
+            .expect("String is shorter than itself")
     );
     println!(
         "  Comment Allowed       {:?}",
