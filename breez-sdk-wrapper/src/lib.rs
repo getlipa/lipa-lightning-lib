@@ -1,3 +1,4 @@
+#[cfg(feature = "mocked-sdk")]
 #[allow(unused_imports)]
 mod mock;
 

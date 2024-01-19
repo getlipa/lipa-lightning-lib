@@ -73,3 +73,8 @@ pr: fmt buildall test clippy check-mod-test check-udl doc
 run-node: ARGS =
 run-node:
 	cargo run --example node -- $(ARGS)
+
+.PHONY: run-node-mocked
+run-node-mocked: ARGS =
+run-node-mocked:
+	cargo run --example node --features mocked-breez-sdk -- $(ARGS)
