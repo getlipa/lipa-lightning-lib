@@ -1341,9 +1341,13 @@ impl LightningNode {
         self.user_preferences.lock_unwrap().timezone_config = timezone_config;
     }
 
-    pub fn accept_pocket_terms_and_conditions(&self) -> Result<()> {
+    /// Accepts Pocket's T&C.
+    ///
+    /// Parameters:
+    /// * `version` - the version number being accepted.
+    pub fn accept_pocket_terms_and_conditions(&self, version: i64) -> Result<()> {
         self.auth
-            .accept_terms_and_conditions(TermsAndConditions::Pocket)
+            .accept_terms_and_conditions(TermsAndConditions::Pocket, version)
             .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
     }
 
@@ -2141,12 +2145,21 @@ impl LightningNode {
 
 /// Accept lipa's terms and conditions. Should be called before instantiating a [`LightningNode`]
 /// for the first time.
-pub fn accept_terms_and_conditions(environment: EnvironmentCode, seed: Vec<u8>) -> Result<()> {
+///
+/// Parameters:
+/// * `environment` - the [`EnvironmentCode`] of the intended environment.
+/// * `seed` - the seed from the wallet for which the T&C will be accepted.
+/// * `version` - the version number being accepted.
+pub fn accept_terms_and_conditions(
+    environment: EnvironmentCode,
+    seed: Vec<u8>,
+    version: i64,
+) -> Result<()> {
     enable_backtrace();
     let environment = Environment::load(environment);
     let seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = build_auth(&seed, environment.backend_url)?;
-    auth.accept_terms_and_conditions(TermsAndConditions::Lipa)
+    auth.accept_terms_and_conditions(TermsAndConditions::Lipa, version)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
 

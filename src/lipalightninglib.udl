@@ -60,7 +60,7 @@ interface LightningNode {
     void change_timezone_config(TzConfig timezone_config);
 
     [Throws=LnError]
-    void accept_pocket_terms_and_conditions();
+    void accept_pocket_terms_and_conditions(i64 version);
 
     [Throws=LnError]
     TermsAndConditionsStatus get_terms_and_conditions_status(TermsAndConditions terms_and_conditions);
@@ -497,6 +497,7 @@ enum TermsAndConditions {
 dictionary TermsAndConditionsStatus {
     timestamp? accepted_at;
     TermsAndConditions terms_and_conditions;
+    i64 version;
 };
 
 enum BreezHealthCheckStatus {
@@ -554,7 +555,7 @@ namespace lipalightninglib {
     sequence<string> words_by_prefix(string prefix);
 
     [Throws=LnError]
-    void accept_terms_and_conditions(EnvironmentCode environment, bytes seed);
+    void accept_terms_and_conditions(EnvironmentCode environment, bytes seed, i64 version);
 
     [Throws=LnError]
     TermsAndConditionsStatus get_terms_and_conditions_status(EnvironmentCode environment, bytes seed, TermsAndConditions terms_and_conditions);
