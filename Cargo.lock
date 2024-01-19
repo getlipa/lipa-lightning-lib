@@ -722,7 +722,7 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.18.1#06307d6dda04362314da30d6dcc9011df7df73c0"
+source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562387f73574e1f39e076"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -889,7 +889,7 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.18.1#06307d6dda04362314da30d6dcc9011df7df73c0"
+source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562387f73574e1f39e076"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -1539,7 +1539,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.18.1#06307d6dda04362314da30d6dcc9011df7df73c0"
+source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562387f73574e1f39e076"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1725,7 +1725,7 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.18.1#06307d6dda04362314da30d6dcc9011df7df73c0"
+source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562387f73574e1f39e076"
 dependencies = [
  "base64 0.21.4",
  "bdk",
@@ -2543,7 +2543,7 @@ dependencies = [
 [[package]]
 name = "parrot"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.18.1#06307d6dda04362314da30d6dcc9011df7df73c0"
+source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562387f73574e1f39e076"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -3530,7 +3530,7 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 [[package]]
 name = "squirrel"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.18.1#06307d6dda04362314da30d6dcc9011df7df73c0"
+source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562387f73574e1f39e076"
 dependencies = [
  "bdk",
  "graphql",
