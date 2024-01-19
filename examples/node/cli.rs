@@ -639,7 +639,7 @@ fn print_lnurl_pay_details(lnurl_pay_details: LnUrlPayDetails) {
             .request_data
             .metadata_str
             .get(0..len)
-            .expect("String is shorte than itself")
+            .expect("String is shorter than itself")
     );
     println!(
         "  Comment Allowed       {:?}",
