@@ -71,6 +71,7 @@ rustyline = { version = "13.0.0", features = ["derive"] }
 serial_test = { version =  "3.0.0", features = ["file_locks"] }
 strip-ansi-escapes = "0.2.0"
 thousands = "0.2.0"
+unicode-display-width = "0.3"
 
 [build-dependencies]
 camino = "1.1.6"

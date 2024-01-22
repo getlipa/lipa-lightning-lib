@@ -41,9 +41,9 @@ mod symmetric_encryption;
 mod task_manager;
 mod util;
 
-pub use crate::activity::ListActivitiesResponse;
 pub use crate::activity::{
-    Activity, ChannelClose, ChannelCloseState, Payment, PaymentState, PaymentType,
+    Activity, ChannelClose, ChannelCloseState, ListActivitiesResponse, Payment, PaymentState,
+    PaymentType, Recipient,
 };
 pub use crate::amount::{Amount, FiatValue};
 use crate::amount::{AsSats, Msats, Sats, ToAmount};
@@ -77,15 +77,16 @@ pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 pub use crate::lnurl::{LnUrlPayDetails, LnUrlWithdrawDetails};
 use crate::locker::Locker;
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
+use crate::recipient::RecipientDecoder;
+pub use crate::recipient::{Provider, RecipientNode, ServiceKind};
 pub use crate::recovery::recover_lightning_node;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
+use crate::swap::SwapToLightningFees;
 pub use crate::swap::{FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo};
 use crate::task_manager::TaskManager;
 use crate::util::LogIgnoreError;
 use crate::util::{replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time};
 
-pub use crate::activity::Recipient;
-use crate::swap::SwapToLightningFees;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
@@ -112,8 +113,6 @@ pub use parrot::PaymentSource;
 use perro::{
     ensure, invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
-use recipient::RecipientDecoder;
-pub use recipient::{Provider, RecipientNode};
 use squirrel::RemoteBackupClient;
 use std::cmp::Reverse;
 use std::collections::HashSet;

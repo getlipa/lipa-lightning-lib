@@ -1,14 +1,25 @@
 use breez_sdk_core::LNInvoice;
 
 #[derive(Clone, Debug)]
+pub enum ServiceKind {
+    BusinessWallet,
+    ConsumerWallet,
+    Exchange,
+    Lsp,
+    Unknown,
+}
+
+#[derive(Clone, Debug)]
 pub struct Provider {
+    pub service: ServiceKind,
     pub name: String,
     pub node_ids: Vec<String>,
 }
 
 impl Provider {
-    pub fn new(name: &str, ids: Vec<&str>) -> Provider {
+    pub fn new(service: ServiceKind, name: &str, ids: Vec<&str>) -> Provider {
         Provider {
+            service,
             name: name.to_string(),
             node_ids: ids.into_iter().map(String::from).collect(),
         }
@@ -32,18 +43,46 @@ pub(crate) struct RecipientDecoder {
 impl RecipientDecoder {
     pub fn new() -> RecipientDecoder {
         let voltage = Provider::new(
+            ServiceKind::Lsp,
             "Voltage Flow 2.0",
             vec!["03aefa43fbb4009b21a4129d05953974b7dbabbbfb511921410080860fca8ee1f0"],
         );
         let custodians = vec![
             Provider::new(
-                "Wallet of Satoshi",
+                ServiceKind::Exchange,
+                "Kraken",
+                vec!["02f1a8c87607f415c8f22c00593002775941dea48869ce23096af27b0cfdcc0b69"],
+            ),
+            Provider::new(
+                ServiceKind::Exchange,
+                "Bitstamp",
+                vec!["02a04446caa81636d60d63b066f2814cbd3a6b5c258e3172cbdded7a16e2cfff4c"],
+            ),
+            Provider::new(
+                ServiceKind::Exchange,
+                "Okcoin",
+                vec!["036b53093df5a932deac828cca6d663472dbc88322b05eec1d42b26ab9b16caa1c"],
+            ),
+            Provider::new(
+                ServiceKind::Exchange,
+                "OKX",
+                vec!["0294ac3e099def03c12a37e30fe5364b1223fd60069869142ef96580c8439c2e0a"],
+            ),
+            Provider::new(
+                ServiceKind::Exchange,
+                "Binance",
+                vec!["03a1f3afd646d77bdaf545cceaf079bab6057eae52c6319b63b5803d0989d6a72f"],
+            ),
+            Provider::new(
+                ServiceKind::Exchange,
+                "Bitfinex",
                 vec![
-                    "0324ba2392e25bff76abd0b1f7e4b53b5f82aa53fddc3419b051b6c801db9e2247",
-                    "035e4ff418fc8b5554c5d9eea66396c227bd429a3251c8cbc711002ba215bfc226",
+                    "033d8656219478701227199cbd6f670335c8d408a92ae88b962c49d4dc0e83e025",
+                    "03cde60a6323f7122d5178255766e38114b4722ede08f7c9e0c5df9b912cc201d6",
                 ],
             ),
             Provider::new(
+                ServiceKind::ConsumerWallet,
                 "River Financial",
                 vec![
                     "03037dc08e9ac63b82581f79b662a4d0ceca8a8ca162b1af3551595b8f2d97b70a",
@@ -51,21 +90,32 @@ impl RecipientDecoder {
                 ],
             ),
             Provider::new(
-                "getalby.com",
+                ServiceKind::ConsumerWallet,
+                "Wallet of Satoshi",
+                vec![
+                    "0324ba2392e25bff76abd0b1f7e4b53b5f82aa53fddc3419b051b6c801db9e2247",
+                    "035e4ff418fc8b5554c5d9eea66396c227bd429a3251c8cbc711002ba215bfc226",
+                ],
+            ),
+            Provider::new(
+                ServiceKind::ConsumerWallet,
+                "Alby",
                 vec![
                     "0265791d3c9e14c69ebc2ea0f2b40c35c1a46b8db3c971bd51d1966206a42215af",
                     "030a58b8653d32b99200a2334cfe913e51dc7d155aa0116c176657a4f1722677a3",
                 ],
             ),
             Provider::new(
-                "lipa.swiss",
+                ServiceKind::BusinessWallet,
+                "lipa for Business",
                 vec![
                     "020333076e35e398a0c14c8a0211563bbcdce5087cb300342cba09414e9b5f3605",
                     "02ba3ad33666de22b4c22f5ff9fac0dc5d18ae9b6ce38c0a06d9e171494c39255a",
                 ],
             ),
             Provider::new(
-                "strike",
+                ServiceKind::ConsumerWallet,
+                "Strike.me",
                 vec![
                     "02535215135eb832df0f9858ff775bd4ae0b8911c59e2828ff7d03b535b333e149",
                     "027cd974e47086291bb8a5b0160a889c738f2712a703b8ea939985fd16f3aae67e",
@@ -75,55 +125,81 @@ impl RecipientDecoder {
                 ],
             ),
             Provider::new(
+                ServiceKind::BusinessWallet,
                 "OpenNode.com",
                 vec![
-					"0248841dd4a94e902ede85285e67b5527afe5c46d6a3ff27955d63d18c70035757",
+                    "0248841dd4a94e902ede85285e67b5527afe5c46d6a3ff27955d63d18c70035757",
                     "028d98b9969fbed53784a36617eb489a59ab6dc9b9d77fcdca9ff55307cd98e3c4",
                     "03abf6f44c355dec0d5aa155bdbdd6e0c8fefe318eff402de65c6eb2e1be55dc3e",
                 ],
             ),
             Provider::new(
+                ServiceKind::ConsumerWallet,
                 "Blink",
                 vec![
                     "02fcc5bfc48e83f06c04483a2985e1c390cb0f35058baa875ad2053858b8e80dbd",
                     "0325bb9bda523a85dc834b190289b7e25e8d92615ab2f2abffbe97983f0bb12ffb",
                 ],
             ),
+            Provider::new(
+                ServiceKind::ConsumerWallet,
+                "ZEBEDEE",
+                vec![
+                    "0251fff168b58b74e9b476af5a515b91fe0540a3681bc97fbb65379a807aea5f66",
+                    "02c3b0963276dc5f031a9147c3df203d6a03e194aa2934a821fa7709adc926263a",
+                    "02c3e01efd4f1944e9a50939f34cb275716fcd438769cbc0126b015677fa3b187e",
+                    "033e514ff30be0ea421f9512da0ed1aea52ea541275654d034bde3470a61269285", // klnd1
+                    "0349cb2f33d5542432b016405a22dfda18617d87abe4718e61c45909b8a5449329",
+                    "03ac0cf6da1916725f86d49ab35275b7b362054845e85c33ac181118aac266ebb7",
+                    "03b6f613e88bd874177c28c6ad83b3baba43c4c656f56be1f8df84669556054b79", // klnd0
+                    "03bf2ff8699e5528f65d41656d405c4002dd2415e4491e945fd465890bc3a9ce23",
+                    "03d506016e3e0e540ac26d557a412520ea24990ca9405d410c24122f648752b830",
+                    "03d6b14390cd178d670aa2d57c93d9519feaae7d1e34264d8bbb7932d47b75a50d",
+                ],
+            ),
             // Cashapp
+            // Chivo (River Financial?)
+            // Other custodial wallets from https://lightningaddress.com/#providers
         ];
         let lsps = vec![
             Provider::new(
-                // breez.diem.lsp
-                "lipa",
+                ServiceKind::ConsumerWallet,
+                "lipa", // breez.diem.lsp
                 vec!["0264a62a4307d701c04a46994ce5f5323b1ca28c80c66b73c631dbcb0990d6e835"],
             ),
             Provider::new(
+                ServiceKind::Lsp,
                 "c=",
                 vec!["027100442c3b79f606f80f322d98d499eefcb060599efc5d4ecb00209c2cb54190"],
             ),
             Provider::new(
+                ServiceKind::ConsumerWallet,
                 "Breez",
                 vec!["031015a7839468a3c266d662d5bb21ea4cea24226936e2864a7ca4f2c3939836e0"],
             ),
             Provider::new(
+                ServiceKind::Lsp,
                 "Breez-C",
                 vec!["02c811e575be2df47d8b48dab3d3f1c9b0f6e16d0d40b5ed78253308fc2bd7170d"],
             ),
             Provider::new(
-                "OLYMPUS by ZEUS",
+                ServiceKind::ConsumerWallet,
+                "Zeus",
                 vec!["031b301307574bbe9b9ac7b79cbe1700e31e544513eae0b5d7497483083f99e581"],
             ),
             Provider::new(
-                "ACINQ",
+                ServiceKind::ConsumerWallet,
+                "Phoenix",
                 vec!["03864ef025fde8fb587d989186ce6a4a186895ee44a926bfc370e2c366597a3f8f"],
             ),
             Provider::new(
-                // Bitkit
-                "Blocktank",
+                ServiceKind::ConsumerWallet,
+                "Bitkit",
                 vec!["0296b2db342fcf87ea94d981757fdf4d3e545bd5cef4919f58b5d38dfdd73bf5c9"],
             ),
             Provider::new(
-                "Blixt Wallet",
+                ServiceKind::ConsumerWallet,
+                "Blixt",
                 vec!["0230a5bca558e6741460c13dd34e636da28e52afd91cf93db87ed1b0392a7466eb"],
             ),
             voltage.clone(),
@@ -197,7 +273,7 @@ mod tests {
     #[test]
     fn test_decode_recipient() {
         let invoice = "lnbc1431800n1pjcgm4epp5hxr22je783fzcr37d4xp0gn5042pnz48u79lnvj76quu36nv0gmshp5fp66r97zwxcrs33jcc8l6rr3803rp8z3h30pevqevt0fqp203p7scqzzsxqyz5vqsp5jg45hhcmchvagsa8fn05nkyptp99cazgtvgchjcs5j3v7xu53rcq9qyyssq6m74fcnv704y0k2e50sqp6wc7wjhxmrhtjndyzutgzw8rplk8w3yg07wdraur2qh37wj67xkcwrv238s965dfdn90vfj75hm65xyf2sppxh5xw";
-        assert_eq!(decode(invoice), "getalby.com");
+        assert_eq!(decode(invoice), "Alby");
 
         let invoice = "lnbc1u1pj62kd6pp557unu8u02cg7nqnsj5rnrgsrzctw7f85g9wr6wu3hhwa5qacmhtqdqqcqzzsxqyz5vqsp5arf47cesn7xyjc7wgq7fl288rczl45j4wql5un4tam8jcuchmh2s9qyyssqmzxkcqk9cpau6fu6zv5n5rz9znuuwwevxz073y8f37yv3qrpp3dpwhruf47206q3rv2st2d7jc2v8nxy7pa6ad7s8rsh9zzq5g33t3qq7d5huu";
         assert_eq!(decode(invoice), "Wallet of Satoshi");

@@ -622,18 +622,21 @@ fn decode_recipient(node: &LightningNode, words: &mut dyn Iterator<Item = &str>)
     match node.decode_recipient(invoice.to_string())? {
         RecipientNode::Custodial { custodian } => {
             println!(
-                "User of a custodial wallet {}",
-                custodian.name.bold().bright_red()
+                "Custodial {:?} {}",
+                custodian.service,
+                custodian.name.bold()
             )
         }
         RecipientNode::NonCustodial { id, lsp } => println!(
-            "User of a non-custodial wallet {} with id {}",
-            lsp.name.bold().blue(),
+            "Non-custodial {:?} {} with id {}",
+            lsp.service,
+            lsp.name.bold(),
             id.bold()
         ),
         RecipientNode::NonCustodialWrapped { lsp } => println!(
-            "User of a non-custodial wallet {} using {}",
-            lsp.name.bold().blue(),
+            "Non-custodial {:?} {} using {}",
+            lsp.service,
+            lsp.name.bold(),
             "wrapped invoices".bold(),
         ),
         RecipientNode::Unknown => println!("User of unknown wallet"),

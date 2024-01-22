@@ -3,9 +3,10 @@ use chrono::offset::FixedOffset;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use thousands::Separable;
+use unicode_display_width::width;
 use uniffi_lipalightninglib::{
     Activity, Amount, BreezHealthCheckStatus, ChannelClose, FiatValue, LightningNode, Payment,
-    PaymentState, PaymentType, Recipient,
+    PaymentState, PaymentType, Recipient, RecipientNode, ServiceKind,
 };
 
 pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
@@ -70,22 +71,22 @@ pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
     let line = format!("{:^28}", "Pending Activities".bold());
     println!("{}", line.reversed());
     for activity in activities.pending_activities {
-        print_activity(activity)?;
+        print_activity(node, activity)?;
     }
     println!();
 
     let line = format!("{:^28}", "Completed Activities".bold());
     println!("{}", line.reversed());
     for activity in activities.completed_activities {
-        print_activity(activity)?;
+        print_activity(node, activity)?;
     }
 
     Ok(())
 }
 
-fn print_activity(activity: Activity) -> Result<()> {
+fn print_activity(node: &LightningNode, activity: Activity) -> Result<()> {
     match activity {
-        Activity::PaymentActivity { payment } => print_payment(payment),
+        Activity::PaymentActivity { payment } => print_payment(node, payment),
         Activity::ChannelCloseActivity { channel_close } => print_channel_close(channel_close),
     }
 }
@@ -95,7 +96,41 @@ fn print_channel_close(_channel_close: ChannelClose) -> Result<()> {
     Ok(())
 }
 
-fn print_payment(payment: Payment) -> Result<()> {
+fn icon(service: &ServiceKind) -> &'static str {
+    match service {
+        ServiceKind::BusinessWallet => "🏪",
+        ServiceKind::ConsumerWallet => "🏦",
+        ServiceKind::Exchange => "💱",
+        ServiceKind::Lsp => "LSP",
+        ServiceKind::Unknown => "?",
+    }
+}
+
+fn format_recipient(recipient: &RecipientNode) -> String {
+    match recipient {
+        RecipientNode::Custodial { custodian } => {
+            format!("{} {}", icon(&custodian.service), custodian.name)
+        }
+        RecipientNode::NonCustodial { id, lsp } => format!("👤 {}@{}", &id[0..4], lsp.name),
+        RecipientNode::NonCustodialWrapped { lsp } => format!("👛 {}", lsp.name),
+        RecipientNode::Unknown => "Recipient".to_string(),
+    }
+}
+
+fn format_line(link: &str, icon: &str, title: &str, amount: &str) -> String {
+    let head = format!("{link}{icon} ");
+    let remaining_len = (26 - width(&head) - width(amount) - 1) as usize;
+    let title_len = width(title) as usize;
+    let title = if title_len > remaining_len {
+        format!("{}…", title.get(0..remaining_len + 1).unwrap())
+    } else {
+        let space = " ".repeat(remaining_len - title_len);
+        format!("{title}{space}")
+    };
+    format!("{head}{title} {amount}")
+}
+
+fn print_payment(node: &LightningNode, payment: Payment) -> Result<()> {
     let (link_1, link_2, lsp_fees) = match payment.lsp_fees {
         Some(lsp_fees) if lsp_fees.sats > 0 && payment.payment_state == PaymentState::Succeeded => {
             let icon = "💧";
@@ -111,7 +146,7 @@ fn print_payment(payment: Payment) -> Result<()> {
             let fiat = lsp_fees.fiat.map_or(String::new(), format_fiat);
             let line = format!("│   {time:<13} {fiat:>9}").dimmed();
 
-            let lsp_fees = format!("{link}{icon} {title:<15} {amount:>7}");
+            let lsp_fees = format_line(&link, icon, title, &amount);
             let lsp_fees = format!("{lsp_fees}\n{line}");
             ("└".dimmed(), " ".dimmed(), lsp_fees)
         }
@@ -121,9 +156,14 @@ fn print_payment(payment: Payment) -> Result<()> {
         println!("{lsp_fees}");
     }
 
-    let (icon, title) = match payment.recipient {
-        Some(Recipient::LightningAddress { address }) => (" @".bold(), address),
-        Some(Recipient::Unknown) | None => ("🧾".normal(), "Invoice".to_string()),
+    let (icon, title) = match (payment.recipient, &payment.payment_type) {
+        (Some(Recipient::LightningAddress { address }), _) => (" @".bold(), address),
+        (_, PaymentType::Sending) => {
+            let recipient = node.decode_recipient(payment.invoice_details.invoice)?;
+            let recipient = format_recipient(&recipient);
+            ("🧾".normal(), recipient)
+        }
+        (_, PaymentType::Receiving) => ("🧾".normal(), "Invoice".to_string()),
     };
 
     let amount = payment.requested_amount.sats.separate_with_commas();
@@ -132,7 +172,7 @@ fn print_payment(payment: Payment) -> Result<()> {
         PaymentType::Sending => format!("−{amount}").normal(),
     };
 
-    let line = format!("{icon} {title:<15} {amount:>7}");
+    let line = format_line(&" ", &icon, &title, &amount);
     let line = match payment.payment_state {
         PaymentState::Succeeded => line.normal(),
         PaymentState::Created | PaymentState::Retried => line.italic().dimmed(),
