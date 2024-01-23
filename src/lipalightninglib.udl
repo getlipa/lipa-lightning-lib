@@ -231,6 +231,8 @@ interface DecodedData {
 
 dictionary LnUrlPayDetails {
     string domain;
+    string short_description;
+    string? long_description;
     Amount min_sendable;
     Amount max_sendable;
     LnUrlPayRequestData request_data;

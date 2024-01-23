@@ -622,7 +622,7 @@ impl LightningNode {
                 lnurl_pay_details: LnUrlPayDetails::from_lnurl_pay_request_data(
                     data,
                     &self.get_exchange_rate(),
-                ),
+                )?,
             }),
             Ok(InputType::BitcoinAddress { .. }) => Err(DecodeDataError::Unsupported {
                 typ: UnsupportedDataType::BitcoinAddress,

@@ -620,6 +620,14 @@ fn print_lnurl_pay_details(lnurl_pay_details: LnUrlPayDetails) {
     println!("LNURL-pay details:");
     println!("  Domain                {}", lnurl_pay_details.domain);
     println!(
+        "  Short Description     {}",
+        lnurl_pay_details.short_description
+    );
+    println!(
+        "  Long Description      {:?}",
+        lnurl_pay_details.long_description
+    );
+    println!(
         "  Min Sendable          {}",
         amount_to_string(lnurl_pay_details.min_sendable)
     );
@@ -627,14 +635,14 @@ fn print_lnurl_pay_details(lnurl_pay_details: LnUrlPayDetails) {
         "  Max Sendable          {}",
         amount_to_string(lnurl_pay_details.max_sendable)
     );
-    println!("---- Internal request_data struct ----");
+    println!("---- Internal LnUrlPayRequestData struct ----");
     println!(
         "  Callback              {}",
         lnurl_pay_details.request_data.callback
     );
     let len = min(lnurl_pay_details.request_data.metadata_str.len(), 50);
     println!(
-        "  Metadata              {}...",
+        "  Metadata              {}…",
         lnurl_pay_details
             .request_data
             .metadata_str
@@ -646,11 +654,7 @@ fn print_lnurl_pay_details(lnurl_pay_details: LnUrlPayDetails) {
         lnurl_pay_details.request_data.comment_allowed
     );
     println!(
-        "  Domain                {}",
-        lnurl_pay_details.request_data.domain
-    );
-    println!(
-        "  LN Address            {:?}",
+        "  Lightning Address     {:?}",
         lnurl_pay_details.request_data.ln_address
     );
 }
