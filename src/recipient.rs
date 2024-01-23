@@ -35,8 +35,8 @@ pub enum RecipientNode {
 }
 
 pub(crate) struct RecipientDecoder {
-    voltage: Provider,
     custodians: Vec<Provider>,
+    wrapping_lsp: Vec<Provider>,
     lsps: Vec<Provider>,
 }
 
@@ -47,6 +47,7 @@ impl RecipientDecoder {
             "Voltage Flow 2.0",
             vec!["03aefa43fbb4009b21a4129d05953974b7dbabbbfb511921410080860fca8ee1f0"],
         );
+
         let custodians = vec![
             Provider::new(
                 ServiceKind::Exchange,
@@ -161,6 +162,19 @@ impl RecipientDecoder {
             // Chivo (River Financial?)
             // Other custodial wallets from https://lightningaddress.com/#providers
         ];
+
+        let wrapping_lsp = vec![
+            voltage.clone(),
+            Provider::new(
+                ServiceKind::Exchange,
+                "Boltz",
+                vec![
+                    "026165850492521f4ac8abd9bd8088123446d126f648ca35e60f88177dc149ceb2",
+                    "02d96eadea3d780104449aca5c93461ce67c1564e2e1d73225fa67dd3b997a6018",
+                ],
+            ),
+        ];
+
         let lsps = vec![
             Provider::new(
                 ServiceKind::ConsumerWallet,
@@ -202,11 +216,11 @@ impl RecipientDecoder {
                 "Blixt",
                 vec!["0230a5bca558e6741460c13dd34e636da28e52afd91cf93db87ed1b0392a7466eb"],
             ),
-            voltage.clone(),
+            voltage,
         ];
         Self {
-            voltage,
             custodians,
+            wrapping_lsp,
             lsps,
         }
     }
@@ -221,10 +235,12 @@ impl RecipientDecoder {
                     };
                 }
             }
-            if self.voltage.node_ids.contains(id) {
-                return RecipientNode::NonCustodialWrapped {
-                    lsp: self.voltage.clone(),
-                };
+            for wrapping_lsp in &self.wrapping_lsp {
+                if wrapping_lsp.node_ids.contains(id) {
+                    return RecipientNode::NonCustodialWrapped {
+                        lsp: wrapping_lsp.clone(),
+                    };
+                }
             }
         // TODO: Return node alias.
         // TODO: Compute confidence as amount of sats in days locked in announced channels.

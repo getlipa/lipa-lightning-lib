@@ -624,12 +624,9 @@ fn format_recipient_node(node: &RecipientNode) -> String {
             lsp.name.bold(),
             id.bold()
         ),
-        RecipientNode::NonCustodialWrapped { lsp } => format!(
-            "Non-custodial {:?} {} using {}",
-            lsp.service,
-            lsp.name.bold(),
-            "wrapped invoices".bold(),
-        ),
+        RecipientNode::NonCustodialWrapped { lsp } => {
+            format!("Non-custodial {:?} {}", lsp.service, lsp.name.bold())
+        }
         RecipientNode::Unknown => "Unknown wallet".to_string(),
     }
 }
