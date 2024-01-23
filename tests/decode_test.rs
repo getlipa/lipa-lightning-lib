@@ -46,7 +46,10 @@ fn test_decoding() {
     let valid_invoice = "lnbc1pjs6m8ppp5krf0wqz805p6v2f2ducge75lxg5v9dk34t3vdamz4j0h9ycstp6sdqu2askcmr9wssx7e3q2dshgmmndp5scqzzsxqyz5vqsp5hymglgtm35e7hy6w7c4wswmcs77xg0hu8ns83wmkfskq9p34w8ds9qyyssq389370f0wm48ecajj9nz5vnx2nuru2cwmkdz93qywy45uvf5f7sjp9wjuv3gyvtr8emm6w56s7x94fpxqkgfpgeqq38xz85k9clnkqcq3rw49n".to_string();
     let data = node.decode_data(valid_invoice.clone()).unwrap();
     assert!(matches!(data, DecodedData::Bolt11Invoice { .. }));
-    if let DecodedData::Bolt11Invoice { invoice_details } = data {
+    if let DecodedData::Bolt11Invoice {
+        invoice_details, ..
+    } = data
+    {
         let expected_invoice_details = InvoiceDetails {
             invoice: valid_invoice,
             amount: None,

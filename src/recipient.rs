@@ -1,6 +1,6 @@
 use breez_sdk_core::LNInvoice;
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum ServiceKind {
     BusinessWallet,
     ConsumerWallet,
@@ -9,7 +9,7 @@ pub enum ServiceKind {
     Unknown,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct Provider {
     pub service: ServiceKind,
     pub name: String,
@@ -26,7 +26,7 @@ impl Provider {
     }
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub enum RecipientNode {
     Custodial { custodian: Provider },
     NonCustodial { id: String, lsp: Provider },
@@ -261,7 +261,7 @@ mod tests {
 
     fn decode(invoice: &str) -> String {
         let decoder = RecipientDecoder::new();
-        let invoice = parse_invoice(&invoice).expect("Invalid invoice");
+        let invoice = parse_invoice(invoice).expect("Invalid invoice");
         match decoder.decode(&invoice) {
             RecipientNode::Custodial { custodian } => custodian.name,
             RecipientNode::NonCustodial { id, lsp } => format!("{id}@{}", lsp.name),

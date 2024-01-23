@@ -1,4 +1,4 @@
-use crate::{Amount, InvoiceDetails, OfferKind, PayErrorCode, SwapInfo, TzTime};
+use crate::{Amount, InvoiceDetails, OfferKind, PayErrorCode, RecipientNode, SwapInfo, TzTime};
 use std::time::SystemTime;
 
 use breez_sdk_core::PaymentStatus;
@@ -74,6 +74,7 @@ pub struct Payment {
 #[derive(PartialEq, Debug)]
 pub enum Recipient {
     LightningAddress { address: String },
+    RecipientNode { node: RecipientNode },
     Unknown,
 }
 

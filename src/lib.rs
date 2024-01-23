@@ -206,6 +206,7 @@ pub(crate) struct UserPreferences {
 pub enum DecodedData {
     Bolt11Invoice {
         invoice_details: InvoiceDetails,
+        recipient: Recipient,
     },
     LnUrlPay {
         lnurl_pay_details: LnUrlPayDetails,
@@ -615,11 +616,14 @@ impl LightningNode {
                     }
                 );
 
+                let node = self.recipient_decoder.decode(&invoice);
+                let recipient = Recipient::RecipientNode { node };
                 Ok(DecodedData::Bolt11Invoice {
                     invoice_details: InvoiceDetails::from_ln_invoice(
                         invoice,
                         &self.get_exchange_rate(),
                     ),
+                    recipient,
                 })
             }
             Ok(InputType::LnUrlPay { data }) => Ok(DecodedData::LnUrlPay {
@@ -1122,7 +1126,7 @@ impl LightningNode {
                 ),
             };
 
-        let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
+        let invoice_details = InvoiceDetails::from_ln_invoice(invoice.clone(), &exchange_rate);
 
         let description = invoice_details.description.clone();
 
@@ -1138,12 +1142,12 @@ impl LightningNode {
             paid_sats: s.paid_sats,
         });
 
-        let recipient = match &payment_details.ln_address {
-            None => match breez_payment.payment_type {
-                breez_sdk_core::PaymentType::Sent => Some(Recipient::Unknown),
-                _ => None,
-            },
-            Some(a) => Some(Recipient::LightningAddress { address: a.clone() }),
+        let recipient = match (&payment_details.ln_address, &breez_payment.payment_type) {
+            (Some(a), _) => Some(Recipient::LightningAddress { address: a.clone() }),
+            (None, breez_sdk_core::PaymentType::Sent) => Some(Recipient::RecipientNode {
+                node: self.recipient_decoder.decode(&invoice),
+            }),
+            _ => None,
         };
 
         Ok(Activity::PaymentActivity {
@@ -1269,6 +1273,8 @@ impl LightningNode {
             amount -= lsp_fees.sats;
         }
         let amount = amount.as_sats().to_amount_down(&exchange_rate);
+
+        // TODO: Set recipient.
 
         Ok(Payment {
             payment_type: PaymentType::Receiving,
@@ -2139,11 +2145,6 @@ impl LightningNode {
                 "Failed to start reverse swap",
             )?;
         Ok(())
-    }
-
-    pub fn decode_recipient(&self, invoice: String) -> Result<RecipientNode> {
-        let invoice = parse_invoice(&invoice).map_to_invalid_input("Invalid invoice")?;
-        Ok(self.recipient_decoder.decode(&invoice))
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {

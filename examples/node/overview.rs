@@ -71,22 +71,22 @@ pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
     let line = format!("{:^28}", "Pending Activities".bold());
     println!("{}", line.reversed());
     for activity in activities.pending_activities {
-        print_activity(node, activity)?;
+        print_activity(activity)?;
     }
     println!();
 
     let line = format!("{:^28}", "Completed Activities".bold());
     println!("{}", line.reversed());
     for activity in activities.completed_activities {
-        print_activity(node, activity)?;
+        print_activity(activity)?;
     }
 
     Ok(())
 }
 
-fn print_activity(node: &LightningNode, activity: Activity) -> Result<()> {
+fn print_activity(activity: Activity) -> Result<()> {
     match activity {
-        Activity::PaymentActivity { payment } => print_payment(node, payment),
+        Activity::PaymentActivity { payment } => print_payment(payment),
         Activity::ChannelCloseActivity { channel_close } => print_channel_close(channel_close),
     }
 }
@@ -130,7 +130,7 @@ fn format_line(link: &str, icon: &str, title: &str, amount: &str) -> String {
     format!("{head}{title} {amount}")
 }
 
-fn print_payment(node: &LightningNode, payment: Payment) -> Result<()> {
+fn print_payment(payment: Payment) -> Result<()> {
     let (link_1, link_2, lsp_fees) = match payment.lsp_fees {
         Some(lsp_fees) if lsp_fees.sats > 0 && payment.payment_state == PaymentState::Succeeded => {
             let icon = "💧";
@@ -158,12 +158,11 @@ fn print_payment(node: &LightningNode, payment: Payment) -> Result<()> {
 
     let (icon, title) = match (payment.recipient, &payment.payment_type) {
         (Some(Recipient::LightningAddress { address }), _) => (" @".bold(), address),
-        (_, PaymentType::Sending) => {
-            let recipient = node.decode_recipient(payment.invoice_details.invoice)?;
-            let recipient = format_recipient(&recipient);
+        (Some(Recipient::RecipientNode { node }), _) => {
+            let recipient = format_recipient(&node);
             ("🧾".normal(), recipient)
         }
-        (_, PaymentType::Receiving) => ("🧾".normal(), "Invoice".to_string()),
+        _ => ("🧾".normal(), "Invoice".to_string()),
     };
 
     let amount = payment.requested_amount.sats.separate_with_commas();
@@ -172,7 +171,7 @@ fn print_payment(node: &LightningNode, payment: Payment) -> Result<()> {
         PaymentType::Sending => format!("−{amount}").normal(),
     };
 
-    let line = format_line(&" ", &icon, &title, &amount);
+    let line = format_line(" ", &icon, &title, &amount);
     let line = match payment.payment_state {
         PaymentState::Succeeded => line.normal(),
         PaymentState::Created | PaymentState::Retried => line.italic().dimmed(),

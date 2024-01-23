@@ -223,7 +223,7 @@ dictionary InvoiceDetails {
 
 [Enum]
 interface DecodedData {
-    Bolt11Invoice(InvoiceDetails invoice_details);
+    Bolt11Invoice(InvoiceDetails invoice_details, Recipient recipient);
     LnUrlPay(LnUrlPayDetails lnurl_pay_details);
     LnUrlWithdraw(LnUrlWithdrawDetails lnurl_withdraw_details);
     OnchainAddress(BitcoinAddressData onchain_address_details);
@@ -536,12 +536,34 @@ dictionary SwapToLightningFees {
     OpeningFeeParams? lsp_fee_params;
 };
 
+enum ServiceKind {
+    "BusinessWallet",
+    "ConsumerWallet",
+    "Exchange",
+    "Lsp",
+    "Unknown",
+};
+
+dictionary Provider {
+    ServiceKind service;
+    string name;
+    sequence<string> node_ids;
+};
+
 [Enum]
-interface Recipient {
-    LightningAddress(string address);
+interface RecipientNode {
+    Custodial(Provider custodian);
+    NonCustodial(string id, Provider lsp);
+    NonCustodialWrapped(Provider lsp);
     Unknown();
 };
 
+[Enum]
+interface Recipient {
+    LightningAddress(string address);
+    RecipientNode(RecipientNode node);
+    Unknown();
+};
 
 //
 // ----------------------------- TOP LEVEL FUNCTIONS + RELATED DEFINITIONS -----------------------------
