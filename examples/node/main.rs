@@ -20,6 +20,10 @@ static LOG_FILE: &str = "logs.txt";
 fn main() {
     let environment = env::args().nth(1).unwrap_or("local".to_string());
     let base_dir = format!("{BASE_DIR}_{environment}");
+
+    #[cfg(feature = "mocked-breez-sdk")]
+    let base_dir = format!("{base_dir}_mocked");
+
     let environment = map_environment_code(&environment);
 
     // Create dir for node data persistence.
