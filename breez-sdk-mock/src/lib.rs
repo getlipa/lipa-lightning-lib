@@ -54,10 +54,10 @@ pub use breez_sdk_core::{
     SendPaymentRequest, SignMessageRequest, SweepRequest,
 };
 use breez_sdk_core::{
-    Config, FiatAPI, LspAPI, LspInformation, MaxReverseSwapAmountResponse, NodeState,
-    OpenChannelFeeResponse, PrepareRefundResponse, PrepareSweepResponse, RecommendedFees,
-    RefundResponse, ReverseSwapPairInfo, SendOnchainResponse, SendPaymentResponse,
-    ServiceHealthCheckResponse, SignMessageResponse, SupportAPI, SwapInfo, SweepResponse,
+    Config, LspInformation, MaxReverseSwapAmountResponse, NodeState, OpenChannelFeeResponse,
+    PrepareRefundResponse, PrepareSweepResponse, RecommendedFees, RefundResponse,
+    ReverseSwapPairInfo, SendOnchainResponse, SendPaymentResponse, ServiceHealthCheckResponse,
+    SignMessageResponse, SwapInfo, SweepResponse,
 };
 use chrono::Utc;
 use lazy_static::lazy_static;
