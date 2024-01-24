@@ -23,6 +23,8 @@ fn main() {
 
     #[cfg(feature = "mocked-breez-sdk")]
     let base_dir = format!("{base_dir}_mocked");
+    #[cfg(feature = "mocked-breez-sdk")]
+    fs::remove_dir_all(&base_dir).unwrap_or_default();
 
     let environment = map_environment_code(&environment);
 

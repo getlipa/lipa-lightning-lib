@@ -13,6 +13,10 @@ mod amount;
 mod analytics;
 mod async_runtime;
 mod auth;
+#[cfg(feature = "mocked-breez-sdk")]
+#[allow(warnings)]
+mod backup;
+#[cfg(not(feature = "mocked-breez-sdk"))]
 mod backup;
 mod callbacks;
 mod config;
@@ -32,10 +36,18 @@ mod logger;
 mod migrations;
 mod offer;
 mod random;
+#[cfg(feature = "mocked-breez-sdk")]
+#[allow(warnings)]
+mod recovery;
+#[cfg(not(feature = "mocked-breez-sdk"))]
 mod recovery;
 mod sanitize_input;
 mod secret;
 mod swap;
+#[cfg(feature = "mocked-breez-sdk")]
+#[allow(warnings)]
+mod symmetric_encryption;
+#[cfg(not(feature = "mocked-breez-sdk"))]
 mod symmetric_encryption;
 mod task_manager;
 mod util;
@@ -295,7 +307,16 @@ impl LightningNode {
 
         let environment = Environment::load(config.environment);
 
+        #[cfg(not(feature = "mocked-breez-sdk"))]
         let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)?;
+
+        #[cfg(feature = "mocked-breez-sdk")]
+        let mut strong_typed_seed: [u8; 64] = [0; 64];
+        #[cfg(feature = "mocked-breez-sdk")]
+        use rand::RngCore;
+        #[cfg(feature = "mocked-breez-sdk")]
+        rand::thread_rng().fill_bytes(&mut strong_typed_seed);
+
         let auth = Arc::new(build_auth(
             &strong_typed_seed,
             environment.backend_url.clone(),
