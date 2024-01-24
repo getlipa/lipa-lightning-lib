@@ -21,7 +21,8 @@ squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.18.1" }
 parrot = { git = "https://github.com/getlipa/wild", tag = "v1.18.1" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
 
-breez-sdk-core = { path = "breez-sdk-wrapper" }
+breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.12", optional = true }
+breez-sdk-mock = { path = "breez-sdk-wrapper", optional = true }
 
 aes-gcm = "0.10.3"
 bip39 = "2.0.0"
@@ -46,7 +47,8 @@ uniffi = "0.25.3"
 uuid = { version = "1.6.1", features = ["v5"] }
 
 [features]
-mocked-breez-sdk = ["breez-sdk-core/mocked-sdk"]
+default = ["dep:breez-sdk-core"]
+breez-sdk-mock = ["dep:breez-sdk-mock"]
 
 # Bundle sqlite for all targets except iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]

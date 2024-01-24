@@ -563,21 +563,6 @@ dependencies = [
 [[package]]
 name = "breez-sdk-core"
 version = "0.2.12"
-dependencies = [
- "anyhow",
- "bitcoin 0.30.2",
- "breez-sdk-core 0.2.12 (git+https://github.com/breez/breez-sdk?tag=0.2.12)",
- "chrono",
- "lazy_static",
- "lightning 0.0.120",
- "lightning-invoice 0.28.0",
- "rand",
- "secp256k1 0.27.0",
-]
-
-[[package]]
-name = "breez-sdk-core"
-version = "0.2.12"
 source = "git+https://github.com/breez/breez-sdk?tag=0.2.12#8a13493fc16b9e173b852d7b6ab8e37f7a7e6bc9"
 dependencies = [
  "aes",
@@ -622,6 +607,21 @@ dependencies = [
  "tonic",
  "tonic-build",
  "zbase32",
+]
+
+[[package]]
+name = "breez-sdk-mock"
+version = "0.2.12"
+dependencies = [
+ "anyhow",
+ "bitcoin 0.30.2",
+ "breez-sdk-core",
+ "chrono",
+ "lazy_static",
+ "lightning 0.0.120",
+ "lightning-invoice 0.28.0",
+ "rand",
+ "secp256k1 0.27.0",
 ]
 
 [[package]]
@@ -2161,7 +2161,8 @@ dependencies = [
  "anyhow",
  "bip39",
  "bitcoin 0.30.2",
- "breez-sdk-core 0.2.12",
+ "breez-sdk-core",
+ "breez-sdk-mock",
  "camino",
  "chameleon",
  "chrono",
