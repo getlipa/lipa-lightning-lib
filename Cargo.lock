@@ -371,7 +371,7 @@ dependencies = [
  "async-trait",
  "bdk-macros",
  "bip39",
- "bitcoin 0.30.1",
+ "bitcoin 0.30.2",
  "electrum-client",
  "getrandom",
  "js-sys",
@@ -452,9 +452,9 @@ dependencies = [
 
 [[package]]
 name = "bitcoin"
-version = "0.30.1"
+version = "0.30.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e99ff7289b20a7385f66a0feda78af2fc119d28fb56aea8886a9cd0a4abdd75"
+checksum = "1945a5048598e4189e239d3f809b19bdad4845c4b2ba400d304d2dcf26d2c462"
 dependencies = [
  "base64 0.13.1",
  "bech32",
@@ -567,9 +567,14 @@ name = "breez-sdk-core"
 version = "0.2.12"
 dependencies = [
  "anyhow",
+ "bitcoin 0.30.2",
  "breez-sdk-core 0.2.12 (git+https://github.com/breez/breez-sdk?tag=0.2.12)",
  "chrono",
  "lazy_static",
+ "lightning 0.0.120",
+ "lightning-invoice 0.28.0",
+ "rand",
+ "secp256k1 0.27.0",
 ]
 
 [[package]]
@@ -782,7 +787,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e745ebc04340d421c7bc8305942a60d3dd8531d94df24f1b8c3906942735f0d"
 dependencies = [
  "anyhow",
- "bitcoin 0.30.1",
+ "bitcoin 0.30.2",
  "hex",
  "log",
  "prost",
@@ -1105,7 +1110,7 @@ version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6bc133f1c8d829d254f013f946653cbeb2b08674b960146361d1e9b67733ad19"
 dependencies = [
- "bitcoin 0.30.1",
+ "bitcoin 0.30.2",
  "bitcoin-private",
  "byteorder",
  "libc",
@@ -1494,7 +1499,7 @@ dependencies = [
  "async-trait",
  "base64 0.21.4",
  "bech32",
- "bitcoin 0.30.1",
+ "bitcoin 0.30.2",
  "bytes",
  "chacha20poly1305",
  "cln-grpc",
@@ -1701,6 +1706,12 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hex-conservative"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30ed443af458ccb6d81c1e7e661545f94d3176752fb1df2f543b902a1e0f51e2"
 
 [[package]]
 name = "hex_lit"
@@ -2089,6 +2100,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightning"
+version = "0.0.120"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73a759c353ef7c9e3375362bcf9844fcb5ace0e8c034c4a4252d8b1e571fa3ca"
+dependencies = [
+ "bitcoin 0.30.2",
+ "hex-conservative",
+]
+
+[[package]]
 name = "lightning-invoice"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2117,6 +2138,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightning-invoice"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48634cf0441331ea1fefb09736aa9a02c11be18281db9e067dd7567805bf3d33"
+dependencies = [
+ "bech32",
+ "bitcoin 0.30.2",
+ "lightning 0.0.120",
+ "num-traits",
+ "secp256k1 0.27.0",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2129,7 +2163,7 @@ dependencies = [
  "aes-gcm",
  "anyhow",
  "bip39",
- "bitcoin 0.30.1",
+ "bitcoin 0.30.2",
  "breez-sdk-core 0.2.12",
  "camino",
  "chameleon",
@@ -2234,7 +2268,7 @@ version = "10.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1eb102b66b2127a872dbcc73095b7b47aeb9d92f7b03c2b2298253ffc82c7594"
 dependencies = [
- "bitcoin 0.30.1",
+ "bitcoin 0.30.2",
  "bitcoin-private",
  "serde",
 ]
