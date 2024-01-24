@@ -93,9 +93,9 @@ use breez_sdk_core::{
     GreenlightCredentials, GreenlightNodeConfig, InputType, ListPaymentsRequest, LnPaymentDetails,
     LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest, LnUrlWithdrawRequestData, Network,
     NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails, PaymentStatus,
-    PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest, ReceiveOnchainRequest,
-    RefundRequest, ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest,
-    SendOnchainRequest, SendPaymentRequest, SweepRequest,
+    PaymentTypeFilter, PrepareRedeemOnchainFundsRequest, PrepareRefundRequest,
+    ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest, ReportIssueRequest,
+    ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest, SendPaymentRequest,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -811,6 +811,7 @@ impl LightningNode {
     pub fn list_lightning_addresses(&self) -> Result<Vec<String>> {
         let list_payments_request = ListPaymentsRequest {
             filters: Some(vec![PaymentTypeFilter::Sent]),
+            metadata_filters: None,
             from_timestamp: None,
             to_timestamp: None,
             include_failures: Some(true),
@@ -886,6 +887,7 @@ impl LightningNode {
                 PaymentTypeFilter::Received,
                 PaymentTypeFilter::ClosedChannel,
             ]),
+            metadata_filters: None,
             from_timestamp: None,
             to_timestamp: None,
             include_failures: Some(true),
@@ -1426,6 +1428,7 @@ impl LightningNode {
 
         let list_payments_request = ListPaymentsRequest {
             filters: Some(vec![PaymentTypeFilter::Received]),
+            metadata_filters: None,
             from_timestamp: None,
             to_timestamp: None,
             include_failures: Some(false),
@@ -1630,10 +1633,13 @@ impl LightningNode {
         let res = self
             .rt
             .handle()
-            .block_on(self.sdk.prepare_sweep(PrepareSweepRequest {
-                to_address: address.clone(),
-                sat_per_vbyte: onchain_fee_rate as u64,
-            }))
+            .block_on(
+                self.sdk
+                    .prepare_redeem_onchain_funds(PrepareRedeemOnchainFundsRequest {
+                        to_address: address.clone(),
+                        sat_per_vbyte: onchain_fee_rate,
+                    }),
+            )
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to prepare sweep transaction",
@@ -1655,8 +1661,8 @@ impl LightningNode {
         Ok(SweepInfo {
             address,
             onchain_fee_rate,
-            onchain_fee_sat: res.sweep_tx_fee_sat.as_sats().to_amount_up(&rate),
-            amount: (onchain_balance_sat - res.sweep_tx_fee_sat)
+            onchain_fee_sat: res.tx_fee_sat.as_sats().to_amount_up(&rate),
+            amount: (onchain_balance_sat - res.tx_fee_sat)
                 .as_sats()
                 .to_amount_up(&rate),
         })
@@ -1672,7 +1678,7 @@ impl LightningNode {
         let txid = self
             .rt
             .handle()
-            .block_on(self.sdk.sweep(SweepRequest {
+            .block_on(self.sdk.redeem_onchain_funds(RedeemOnchainFundsRequest {
                 to_address: sweep_info.address,
                 sat_per_vbyte: sweep_info.onchain_fee_rate,
             }))
@@ -1930,10 +1936,12 @@ impl LightningNode {
             });
         }
 
-        let sweep_result = self.rt.handle().block_on(self.sdk.sweep(SweepRequest {
-            to_address: swap_address_info.address,
-            sat_per_vbyte,
-        }))?;
+        let sweep_result = self.rt.handle().block_on(self.sdk.redeem_onchain_funds(
+            RedeemOnchainFundsRequest {
+                to_address: swap_address_info.address,
+                sat_per_vbyte,
+            },
+        ))?;
 
         Ok(hex::encode(sweep_result.txid))
     }
