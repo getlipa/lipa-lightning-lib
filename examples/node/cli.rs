@@ -49,8 +49,8 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
         let mut words = line.split_whitespace();
         if let Some(word) = words.next() {
             match word {
-                "help" => help(),
-                "nodeinfo" => {
+                "h" | "help" => help(),
+                "n" | "nodeinfo" => {
                     node_info(node);
                 }
                 "walletpubkeyid" => {
@@ -91,12 +91,12 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
-                "invoice" => {
+                "i" | "invoice" => {
                     if let Err(message) = create_invoice(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
-                "decodedata" => {
+                "d" | "decodedata" => {
                     if let Err(message) = decode_data(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
                     }
@@ -111,7 +111,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
-                "payinvoice" => {
+                "p" | "payinvoice" => {
                     if let Err(message) = pay_invoice(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
                     }
@@ -171,12 +171,12 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
-                "listactivities" => {
+                "l" | "listactivities" => {
                     if let Err(message) = list_activities(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
-                "overview" => {
+                "o" | "overview" => {
                     if let Err(message) = overview(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
                     }
@@ -265,6 +265,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         .build();
 
     let mut hints = HashSet::new();
+    hints.insert(CommandHint::new("n", "n"));
     hints.insert(CommandHint::new("nodeinfo", "nodeinfo"));
     hints.insert(CommandHint::new("walletpubkeyid", "walletpubkeyid"));
     hints.insert(CommandHint::new("lspfee", "lspfee"));
@@ -283,10 +284,12 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "changetimezone ",
     ));
 
+    hints.insert(CommandHint::new("i <amount in SAT> [description]", "i "));
     hints.insert(CommandHint::new(
         "invoice <amount in SAT> [description]",
         "invoice ",
     ));
+    hints.insert(CommandHint::new("d <data>", "d "));
     hints.insert(CommandHint::new("decodedata <data>", "decodedata "));
     hints.insert(CommandHint::new(
         "getmaxroutingfeemode <payment amount in SAT>",
@@ -296,6 +299,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "getinvoiceaffordability <amount in SAT>",
         "getinvoiceaffordability ",
     ));
+    hints.insert(CommandHint::new("p <invoice>", "p "));
     hints.insert(CommandHint::new("payinvoice <invoice>", "payinvoice "));
     hints.insert(CommandHint::new(
         "payopeninvoice <invoice> <amount in SAT>",
@@ -330,9 +334,14 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
 
     hints.insert(CommandHint::new(
+        "o [number of activities = 10] [fun mode = false]",
+        "o ",
+    ));
+    hints.insert(CommandHint::new(
         "overview [number of activities = 10] [fun mode = false]",
         "overview ",
     ));
+    hints.insert(CommandHint::new("l [number of activities = 2]", "l "));
     hints.insert(CommandHint::new(
         "listactivities [number of activities = 2]",
         "listactivities ",
@@ -362,6 +371,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("background", "background"));
     hints.insert(CommandHint::new("stop", "stop"));
     hints.insert(CommandHint::new("help", "help"));
+    hints.insert(CommandHint::new("h", "h"));
     let hinter = CommandHinter { hints };
 
     let mut rl = Editor::<CommandHinter, DefaultHistory>::with_config(config).unwrap();
@@ -371,7 +381,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
 }
 
 fn help() {
-    println!("  nodeinfo");
+    println!("  n | nodeinfo");
     println!("  walletpubkeyid");
     println!("  lspfee");
     println!("  calculatelspfee <amount in SAT>");
@@ -381,11 +391,11 @@ fn help() {
     println!("  changecurrency <currency code>");
     println!("  changetimezone [timezone offset in mins] [timezone id]");
     println!();
-    println!("  invoice <amount in SAT> [description]");
-    println!("  decodedata <data>");
+    println!("  i | invoice <amount in SAT> [description]");
+    println!("  d | decodedata <data>");
     println!("  getmaxroutingfeemode <payment amount in SAT>");
     println!("  getinvoiceaffordability <amount in SAT>");
-    println!("  payinvoice <invoice>");
+    println!("  p | payinvoice <invoice>");
     println!("  payopeninvoice <invoice> <amount in SAT>");
     println!("  paylnurlp <lnurlp> <amount in SAT>");
     println!("  withdrawlnurlw <lnurlw> <amount in SAT>");
@@ -400,7 +410,8 @@ fn help() {
     println!("  listoffers");
     println!("  calculatelightningpayoutfee <offer id>");
     println!();
-    println!("  listactivities");
+    println!("  o | overview [number of activities = 10] [fun mode = false]");
+    println!("  l | listactivities [number of activities = 2]");
     println!("  listlightningaddresses");
     println!("  paymentuuid <payment hash>");
     println!();
