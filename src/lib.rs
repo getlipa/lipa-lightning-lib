@@ -32,6 +32,7 @@ mod logger;
 mod migrations;
 mod offer;
 mod random;
+mod recipient;
 mod recovery;
 mod sanitize_input;
 mod secret;
@@ -111,6 +112,8 @@ pub use parrot::PaymentSource;
 use perro::{
     ensure, invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
+use recipient::RecipientDecoder;
+pub use recipient::{Provider, RecipientNode};
 use squirrel::RemoteBackupClient;
 use std::cmp::Reverse;
 use std::collections::HashSet;
@@ -260,6 +263,7 @@ pub struct LightningNode {
     task_manager: Arc<Mutex<TaskManager>>,
     analytics_interceptor: Arc<AnalyticsInterceptor>,
     environment: Environment,
+    recipient_decoder: RecipientDecoder,
 }
 
 /// Contains the fee information for the options to resolve on-chain funds from channel closes.
@@ -445,6 +449,7 @@ impl LightningNode {
             task_manager,
             analytics_interceptor,
             environment,
+            recipient_decoder: RecipientDecoder::new(),
         })
     }
 
@@ -2135,6 +2140,11 @@ impl LightningNode {
                 "Failed to start reverse swap",
             )?;
         Ok(())
+    }
+
+    pub fn decode_recipient(&self, invoice: String) -> Result<RecipientNode> {
+        let invoice = parse_invoice(&invoice).map_to_invalid_input("Invalid invoice")?;
+        Ok(self.recipient_decoder.decode(&invoice))
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {

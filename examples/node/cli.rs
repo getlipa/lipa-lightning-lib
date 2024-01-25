@@ -21,7 +21,7 @@ use uniffi_lipalightninglib::{
     Activity, Amount, ChannelClose, ChannelCloseState, DecodedData, ExchangeRate, FiatValue,
     InvoiceCreationMetadata, InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails,
     LnUrlWithdrawDetails, MaxRoutingFeeMode, OfferKind, Payment, PaymentMetadata, PaymentState,
-    TzConfig,
+    RecipientNode, TzConfig,
 };
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
@@ -98,6 +98,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 }
                 "d" | "decodedata" => {
                     if let Err(message) = decode_data(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
+                "decoderecipient" => {
+                    if let Err(message) = decode_recipient(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
@@ -292,6 +297,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("d <data>", "d "));
     hints.insert(CommandHint::new("decodedata <data>", "decodedata "));
     hints.insert(CommandHint::new(
+        "decoderecipient <invoice>",
+        "decoderecipient ",
+    ));
+    hints.insert(CommandHint::new(
         "getmaxroutingfeemode <payment amount in SAT>",
         "getmaxroutingfeemode ",
     ));
@@ -391,8 +400,8 @@ fn help() {
     println!("  changecurrency <currency code>");
     println!("  changetimezone [timezone offset in mins] [timezone id]");
     println!();
-    println!("  i | invoice <amount in SAT> [description]");
-    println!("  d | decodedata <data>");
+    println!("  invoice <amount in SAT> [description]");
+    println!("  decodedata <data>");
     println!("  getmaxroutingfeemode <payment amount in SAT>");
     println!("  getinvoiceaffordability <amount in SAT>");
     println!("  p | payinvoice <invoice>");
@@ -605,6 +614,30 @@ fn decode_data(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
         } => print_bitcoin_address_data(onchain_address_details),
     }
 
+    Ok(())
+}
+
+fn decode_recipient(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let invoice = words.next().ok_or(anyhow!("Invoice is required"))?;
+    match node.decode_recipient(invoice.to_string())? {
+        RecipientNode::Custodial { custodian } => {
+            println!(
+                "User of a custodial wallet {}",
+                custodian.name.bold().bright_red()
+            )
+        }
+        RecipientNode::NonCustodial { id, lsp } => println!(
+            "User of a non-custodial wallet {} with id {}",
+            lsp.name.bold().blue(),
+            id.bold()
+        ),
+        RecipientNode::NonCustodialWrapped { lsp } => println!(
+            "User of a non-custodial wallet {} using {}",
+            lsp.name.bold().blue(),
+            "wrapped invoices".bold(),
+        ),
+        RecipientNode::Unknown => println!("User of unknown wallet"),
+    }
     Ok(())
 }
 
