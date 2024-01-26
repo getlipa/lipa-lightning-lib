@@ -42,7 +42,7 @@ const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_lsp_fee: Some(Duration::from_secs(10 * 60)),
     redeem_swaps: Some(Duration::from_secs(10 * 60)),
     backup: Some(Duration::from_secs(30)),
-    health_status_check: Some(Duration::from_secs(30)),
+    health_status_check: Some(Duration::from_secs(70)),
 };
 
 const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
