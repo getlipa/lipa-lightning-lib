@@ -1131,7 +1131,7 @@ impl LightningNode {
                 timezone_id: user_preferences.timezone_config.timezone_id.clone(),
                 timezone_utc_offset_secs: user_preferences.timezone_config.timezone_utc_offset_secs,
             },
-            paid_sats: s.paid_sats,
+            paid_msats: s.paid_sats, // The field being named paid_sats is a bug -> https://github.com/breez/breez-sdk/issues/746
         });
 
         let recipient = match &payment_details.ln_address {
