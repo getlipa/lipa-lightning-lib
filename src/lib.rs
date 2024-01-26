@@ -1998,7 +1998,10 @@ impl LightningNode {
         info!("Wallet pubkey id: {:?}", self.get_wallet_pubkey_id());
         // Print connected peers, balances, inbound/outbound capacities, on-chain funds.
         info!("Node state:\n{node_state:?}");
-        info!("List of available lsps:\n{available_lsps:?}");
+        info!(
+            "List of available lsps:\n{}",
+            replace_byte_arrays_by_hex_string(&format!("{available_lsps:?}"))
+        );
         info!("Connected lsp id: {connected_lsp}");
         info!(
             "List of peer channels:\n{}",
