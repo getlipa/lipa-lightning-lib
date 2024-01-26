@@ -472,7 +472,7 @@ dictionary FailedSwapInfo {
 dictionary SwapInfo {
     string bitcoin_address;
     TzTime created_at;
-    u64 paid_sats;
+    u64 paid_msats;
 };
 
 enum PaymentSource {
