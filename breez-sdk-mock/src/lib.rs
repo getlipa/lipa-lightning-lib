@@ -46,18 +46,19 @@ pub use breez_sdk_core::{
     EnvironmentType, EventListener, GreenlightCredentials, GreenlightNodeConfig, HealthCheckStatus,
     InputType, InvoicePaidDetails, LNInvoice, ListPaymentsRequest, LnPaymentDetails,
     LnUrlPayRequest, LnUrlPayRequestData, LnUrlPayResult, LnUrlWithdrawRequest,
-    LnUrlWithdrawRequestData, LnUrlWithdrawResult, Network, NodeConfig, OpenChannelFeeRequest,
-    OpeningFeeParams, OpeningFeeParamsMenu, Payment, PaymentDetails, PaymentFailedData,
-    PaymentStatus, PaymentType, PaymentTypeFilter, PrepareRefundRequest, PrepareSweepRequest,
-    ReceiveOnchainRequest, ReceivePaymentRequest, ReceivePaymentResponse, RefundRequest,
+    LnUrlWithdrawRequestData, LnUrlWithdrawResult, MetadataItem, Network, NodeConfig,
+    OpenChannelFeeRequest, OpeningFeeParams, OpeningFeeParamsMenu, Payment, PaymentDetails,
+    PaymentFailedData, PaymentStatus, PaymentType, PaymentTypeFilter,
+    PrepareRedeemOnchainFundsRequest, PrepareRefundRequest, ReceiveOnchainRequest,
+    ReceivePaymentRequest, ReceivePaymentResponse, RedeemOnchainFundsRequest, RefundRequest,
     ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest,
-    SendPaymentRequest, SignMessageRequest, SweepRequest,
+    SendPaymentRequest, SignMessageRequest,
 };
 use breez_sdk_core::{
     Config, LspInformation, MaxReverseSwapAmountResponse, NodeState, OpenChannelFeeResponse,
-    PrepareRefundResponse, PrepareSweepResponse, RecommendedFees, RefundResponse,
-    ReverseSwapPairInfo, SendOnchainResponse, SendPaymentResponse, ServiceHealthCheckResponse,
-    SignMessageResponse, SwapInfo, SweepResponse,
+    PrepareRedeemOnchainFundsResponse, PrepareRefundResponse, RecommendedFees,
+    RedeemOnchainFundsResponse, RefundResponse, ReverseSwapPairInfo, SendOnchainResponse,
+    SendPaymentResponse, ServiceHealthCheckResponse, SignMessageResponse, SwapInfo,
 };
 use chrono::Utc;
 use lazy_static::lazy_static;
@@ -155,6 +156,7 @@ impl BreezServices {
                     amount_msat,
                     fee_msat: 1234,
                     status: PaymentStatus::Complete,
+                    error: None,
                     description: None,
                     details: PaymentDetails::Ln {
                         data: LnPaymentDetails {
@@ -169,8 +171,10 @@ impl BreezServices {
                             lnurl_metadata: None,
                             lnurl_withdraw_endpoint: None,
                             swap_info: None,
+                            pending_expiration_block: None,
                         },
                     },
+                    metadata: None,
                 };
 
                 PAYMENTS.lock().unwrap().push(payment.clone());
@@ -280,6 +284,7 @@ impl BreezServices {
                 amount_msat: req.amount_msat,
                 fee_msat: lsp_fee.unwrap_or(0),
                 status: PaymentStatus::Complete,
+                error: None,
                 description: description.clone(),
                 details: PaymentDetails::Ln {
                     data: LnPaymentDetails {
@@ -294,8 +299,10 @@ impl BreezServices {
                         lnurl_metadata: None,
                         lnurl_withdraw_endpoint: None,
                         swap_info: None,
+                        pending_expiration_block: None,
                     },
                 },
+                metadata: None,
             });
         }
 
@@ -410,15 +417,22 @@ impl BreezServices {
             .cloned())
     }
 
-    pub async fn sweep(&self, _req: SweepRequest) -> SdkResult<SweepResponse> {
+    /* pub async fn sweep(&self, _req: SweepRequest) -> SdkResult<SweepResponse> {
         todo!("sweep");
+    }*/
+
+    pub async fn prepare_redeem_onchain_funds(
+        &self,
+        _req: PrepareRedeemOnchainFundsRequest,
+    ) -> SdkResult<PrepareRedeemOnchainFundsResponse> {
+        todo!("prepare redeem onchain funds");
     }
 
-    pub async fn prepare_sweep(
+    pub async fn redeem_onchain_funds(
         &self,
-        _req: PrepareSweepRequest,
-    ) -> SdkResult<PrepareSweepResponse> {
-        todo!("prepare_sweep");
+        _req: RedeemOnchainFundsRequest,
+    ) -> SdkResult<RedeemOnchainFundsResponse> {
+        todo!("redeem onchain funds");
     }
 
     /// List available LSPs that can be selected by the user
