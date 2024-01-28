@@ -13,10 +13,6 @@ mod amount;
 mod analytics;
 mod async_runtime;
 mod auth;
-#[cfg(feature = "mocked-breez-sdk")]
-#[allow(warnings)]
-mod backup;
-#[cfg(not(feature = "mocked-breez-sdk"))]
 mod backup;
 mod callbacks;
 mod config;
@@ -36,18 +32,10 @@ mod logger;
 mod migrations;
 mod offer;
 mod random;
-#[cfg(feature = "mocked-breez-sdk")]
-#[allow(warnings)]
-mod recovery;
-#[cfg(not(feature = "mocked-breez-sdk"))]
 mod recovery;
 mod sanitize_input;
 mod secret;
 mod swap;
-#[cfg(feature = "mocked-breez-sdk")]
-#[allow(warnings)]
-mod symmetric_encryption;
-#[cfg(not(feature = "mocked-breez-sdk"))]
 mod symmetric_encryption;
 mod task_manager;
 mod util;
@@ -307,14 +295,14 @@ impl LightningNode {
 
         let environment = Environment::load(config.environment);
 
-        #[cfg(not(feature = "mocked-breez-sdk"))]
+        #[cfg(not(feature = "breez-sdk-mock"))]
         let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)?;
 
-        #[cfg(feature = "mocked-breez-sdk")]
+        #[cfg(feature = "breez-sdk-mock")]
         let mut strong_typed_seed: [u8; 64] = [0; 64];
-        #[cfg(feature = "mocked-breez-sdk")]
+        #[cfg(feature = "breez-sdk-mock")]
         use rand::RngCore;
-        #[cfg(feature = "mocked-breez-sdk")]
+        #[cfg(feature = "breez-sdk-mock")]
         rand::thread_rng().fill_bytes(&mut strong_typed_seed);
 
         let auth = Arc::new(build_auth(
@@ -445,17 +433,21 @@ impl LightningNode {
         )?));
         task_manager.lock_unwrap().foreground();
 
-        let data_store_clone = Arc::clone(&data_store);
-        let auth_clone = Arc::clone(&auth);
-        fund_migration::migrate_funds(
-            rt.handle(),
-            &strong_typed_seed,
-            data_store_clone,
-            &sdk,
-            auth_clone,
-            &environment.backend_url,
-        )
-        .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
+        #[cfg(not(feature = "breez-sdk-mock"))]
+        {
+            let data_store_clone = Arc::clone(&data_store);
+            let auth_clone = Arc::clone(&auth);
+
+            fund_migration::migrate_funds(
+                rt.handle(),
+                &strong_typed_seed,
+                data_store_clone,
+                &sdk,
+                auth_clone,
+                &environment.backend_url,
+            )
+            .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
+        }
 
         Ok(LightningNode {
             user_preferences,

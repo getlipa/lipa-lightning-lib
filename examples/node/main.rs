@@ -21,10 +21,10 @@ fn main() {
     let environment = env::args().nth(1).unwrap_or("local".to_string());
     let base_dir = format!("{BASE_DIR}_{environment}");
 
-    #[cfg(feature = "mocked-breez-sdk")]
+    #[cfg(feature = "breez-sdk-mock")]
     let base_dir = format!("{base_dir}_mocked");
-    #[cfg(feature = "mocked-breez-sdk")]
-    fs::remove_dir_all(&base_dir).unwrap_or_default();
+    #[cfg(feature = "breez-sdk-mock")]
+    fs::remove_dir_all(&base_dir).unwrap();
 
     let environment = map_environment_code(&environment);
 

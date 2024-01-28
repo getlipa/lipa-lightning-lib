@@ -35,28 +35,22 @@ pub fn recover_lightning_node(
         )
     }
 
-    #[cfg(feature = "mocked-breez-sdk")]
-    return Ok(());
+    let environment = Environment::load(environment);
 
-    #[cfg(not(feature = "mocked-breez-sdk"))]
-    {
-        let environment = Environment::load(environment);
+    let strong_typed_seed = sanitize_input::strong_type_seed(&seed)?;
+    let auth = Arc::new(build_async_auth(
+        &strong_typed_seed,
+        environment.backend_url.clone(),
+    )?);
 
-        let strong_typed_seed = sanitize_input::strong_type_seed(&seed)?;
-        let auth = Arc::new(build_async_auth(
-            &strong_typed_seed,
-            environment.backend_url.clone(),
-        )?);
+    let backup_client = RemoteBackupClient::new(environment.backend_url, auth);
+    let backup_manager = BackupManager::new(
+        backup_client,
+        db_path,
+        derive_persistence_encryption_key(&strong_typed_seed)?,
+    );
 
-        let backup_client = RemoteBackupClient::new(environment.backend_url, auth);
-        let backup_manager = BackupManager::new(
-            backup_client,
-            db_path,
-            derive_persistence_encryption_key(&strong_typed_seed)?,
-        );
-
-        AsyncRuntime::new()?
-            .handle()
-            .block_on(backup_manager.recover())
-    }
+    AsyncRuntime::new()?
+        .handle()
+        .block_on(backup_manager.recover())
 }

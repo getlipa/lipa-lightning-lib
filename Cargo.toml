@@ -16,12 +16,13 @@ name = "uniffi_lipalightninglib"
 [dependencies]
 parser = { path = "parser" }
 
-chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
-crow = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
-honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
-graphql = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
-squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
-parrot = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
+chameleon = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel" }
+crow = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel" }
+honey-badger = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel" }
+graphql = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel" }
+squirrel = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel", optional = true }
+squirrel-mock = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel", optional = true }
+parrot = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.15", optional = true }
@@ -50,8 +51,8 @@ uniffi = "0.26.1"
 uuid = { version = "1.7.0", features = ["v5"] }
 
 [features]
-default = ["dep:breez-sdk-core"]
-breez-sdk-mock = ["dep:breez-sdk-mock"]
+default = ["dep:breez-sdk-core", "dep:squirrel"]
+breez-sdk-mock = ["dep:breez-sdk-mock", "dep:squirrel-mock"]
 
 # Bundle sqlite for all targets except iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]
