@@ -46,7 +46,7 @@ pub use crate::activity::{
 };
 pub use crate::amount::{Amount, FiatValue};
 use crate::amount::{AsSats, Msats, Sats, ToAmount};
-use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
+use crate::analytics::{derive_analytics_keys, AnalyticsConfig, AnalyticsInterceptor};
 pub use crate::analytics::{InvoiceCreationMetadata, PaymentMetadata};
 use crate::async_runtime::AsyncRuntime;
 use crate::auth::{build_async_auth, build_auth};
@@ -337,10 +337,15 @@ impl LightningNode {
             Arc::clone(&async_auth),
         );
 
+        let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
+        let data_store = Arc::new(Mutex::new(DataStore::new(&db_path)?));
+
+        let analytics_config = data_store.lock_unwrap().retrive_analytics_config()?;
         let analytics_interceptor = Arc::new(AnalyticsInterceptor::new(
             analytics_client,
             Arc::clone(&user_preferences),
             rt.handle(),
+            analytics_config,
         ));
 
         let events_callback = Arc::new(events_callback);
@@ -393,10 +398,6 @@ impl LightningNode {
         ));
 
         let offer_manager = OfferManager::new(environment.backend_url.clone(), Arc::clone(&auth));
-
-        let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
-
-        let data_store = Arc::new(Mutex::new(DataStore::new(&db_path)?));
 
         let fiat_topup_client = PocketClient::new(
             environment.pocket_url.clone(),
@@ -2138,6 +2139,21 @@ impl LightningNode {
                 "Failed to start reverse swap",
             )?;
         Ok(())
+    }
+
+    /// Set the analytics configuration.
+    ///
+    /// This can be used to completely prevent any analytics data from being reported.
+    pub fn set_analytics_config(&self, config: AnalyticsConfig) -> Result<()> {
+        *self.analytics_interceptor.config.lock_unwrap() = config.clone();
+        self.data_store
+            .lock_unwrap()
+            .append_analytics_config(config)
+    }
+
+    /// Get the currently configured analytics configuration.
+    pub fn get_analytics_config(&self) -> Result<AnalyticsConfig> {
+        self.data_store.lock_unwrap().retrive_analytics_config()
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {
