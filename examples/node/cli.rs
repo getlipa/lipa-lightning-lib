@@ -21,7 +21,7 @@ use uniffi_lipalightninglib::{
     Activity, Amount, ChannelClose, ChannelCloseState, DecodedData, ExchangeRate, FiatValue,
     InvoiceCreationMetadata, InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails,
     LnUrlWithdrawDetails, MaxRoutingFeeMode, OfferKind, Payment, PaymentMetadata, PaymentState,
-    TzConfig,
+    Recipient, RecipientNode, TzConfig,
 };
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
@@ -391,8 +391,8 @@ fn help() {
     println!("  changecurrency <currency code>");
     println!("  changetimezone [timezone offset in mins] [timezone id]");
     println!();
-    println!("  i | invoice <amount in SAT> [description]");
-    println!("  d | decodedata <data>");
+    println!("  invoice <amount in SAT> [description]");
+    println!("  decodedata <data>");
     println!("  getmaxroutingfeemode <payment amount in SAT>");
     println!("  getinvoiceaffordability <amount in SAT>");
     println!("  p | payinvoice <invoice>");
@@ -595,7 +595,10 @@ fn decode_data(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
     let data = words.next().ok_or(anyhow!("Data is required"))?;
 
     match node.decode_data(data.to_string())? {
-        DecodedData::Bolt11Invoice { invoice_details } => print_invoice_details(invoice_details),
+        DecodedData::Bolt11Invoice {
+            invoice_details,
+            recipient,
+        } => print_invoice_details(invoice_details, recipient),
         DecodedData::LnUrlPay { lnurl_pay_details } => print_lnurl_pay_details(lnurl_pay_details),
         DecodedData::LnUrlWithdraw {
             lnurl_withdraw_details,
@@ -608,12 +611,41 @@ fn decode_data(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
     Ok(())
 }
 
-fn print_invoice_details(invoice_details: InvoiceDetails) {
+fn format_recipient_node(node: &RecipientNode) -> String {
+    match node {
+        RecipientNode::Custodial { custodian } => format!(
+            "Custodial {:?} {}",
+            custodian.service,
+            custodian.name.bold()
+        ),
+        RecipientNode::NonCustodial { id, lsp } => format!(
+            "Non-custodial {:?} {} with id {}",
+            lsp.service,
+            lsp.name.bold(),
+            id.bold()
+        ),
+        RecipientNode::NonCustodialWrapped { lsp } => {
+            format!("Non-custodial {:?} {}", lsp.service, lsp.name.bold())
+        }
+        RecipientNode::Unknown => "Unknown wallet".to_string(),
+    }
+}
+
+fn format_recipient(recipient: &Recipient) -> String {
+    match recipient {
+        Recipient::LightningAddress { address } => address.bold().to_string(),
+        Recipient::RecipientNode { node } => format_recipient_node(node),
+        Recipient::Unknown => "Unknown".to_string(),
+    }
+}
+
+fn print_invoice_details(invoice_details: InvoiceDetails, recipient: Recipient) {
     println!("Invoice details:");
     println!(
         "  Amount              {:?}",
         invoice_details.amount.map(amount_to_string)
     );
+    println!("  Recipient           {}", format_recipient(&recipient));
     println!("  Description         {}", invoice_details.description);
     println!("  Payment hash        {}", invoice_details.payment_hash);
     println!("  Payee public key    {}", invoice_details.payee_pub_key);
@@ -763,7 +795,10 @@ fn pay_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
     }
 
     let result = node.decode_data(invoice.to_string())?;
-    if let DecodedData::Bolt11Invoice { invoice_details } = result {
+    if let DecodedData::Bolt11Invoice {
+        invoice_details, ..
+    } = result
+    {
         node.pay_invoice(
             invoice_details,
             PaymentMetadata {
@@ -788,7 +823,10 @@ fn pay_open_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>)
         .context("Amount should be a positive integer number")?;
 
     let result = node.decode_data(invoice.to_string())?;
-    if let DecodedData::Bolt11Invoice { invoice_details } = result {
+    if let DecodedData::Bolt11Invoice {
+        invoice_details, ..
+    } = result
+    {
         node.pay_open_invoice(
             invoice_details,
             amount,

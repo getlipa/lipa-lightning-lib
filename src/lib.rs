@@ -32,6 +32,7 @@ mod logger;
 mod migrations;
 mod offer;
 mod random;
+mod recipient;
 mod recovery;
 mod sanitize_input;
 mod secret;
@@ -40,9 +41,9 @@ mod symmetric_encryption;
 mod task_manager;
 mod util;
 
-pub use crate::activity::ListActivitiesResponse;
 pub use crate::activity::{
-    Activity, ChannelClose, ChannelCloseState, Payment, PaymentState, PaymentType,
+    Activity, ChannelClose, ChannelCloseState, ListActivitiesResponse, Payment, PaymentState,
+    PaymentType, Recipient,
 };
 pub use crate::amount::{Amount, FiatValue};
 use crate::amount::{AsSats, Msats, Sats, ToAmount};
@@ -76,15 +77,16 @@ pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 pub use crate::lnurl::{LnUrlPayDetails, LnUrlWithdrawDetails};
 use crate::locker::Locker;
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
+use crate::recipient::RecipientDecoder;
+pub use crate::recipient::{Provider, RecipientNode, ServiceKind};
 pub use crate::recovery::recover_lightning_node;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
+use crate::swap::SwapToLightningFees;
 pub use crate::swap::{FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo};
 use crate::task_manager::TaskManager;
 use crate::util::LogIgnoreError;
 use crate::util::{replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time};
 
-pub use crate::activity::Recipient;
-use crate::swap::SwapToLightningFees;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
@@ -204,6 +206,7 @@ pub(crate) struct UserPreferences {
 pub enum DecodedData {
     Bolt11Invoice {
         invoice_details: InvoiceDetails,
+        recipient: Recipient,
     },
     LnUrlPay {
         lnurl_pay_details: LnUrlPayDetails,
@@ -260,6 +263,7 @@ pub struct LightningNode {
     task_manager: Arc<Mutex<TaskManager>>,
     analytics_interceptor: Arc<AnalyticsInterceptor>,
     environment: Environment,
+    recipient_decoder: RecipientDecoder,
 }
 
 /// Contains the fee information for the options to resolve on-chain funds from channel closes.
@@ -445,6 +449,7 @@ impl LightningNode {
             task_manager,
             analytics_interceptor,
             environment,
+            recipient_decoder: RecipientDecoder::new(),
         })
     }
 
@@ -611,11 +616,14 @@ impl LightningNode {
                     }
                 );
 
+                let node = self.recipient_decoder.decode(&invoice);
+                let recipient = Recipient::RecipientNode { node };
                 Ok(DecodedData::Bolt11Invoice {
                     invoice_details: InvoiceDetails::from_ln_invoice(
                         invoice,
                         &self.get_exchange_rate(),
                     ),
+                    recipient,
                 })
             }
             Ok(InputType::LnUrlPay { data }) => Ok(DecodedData::LnUrlPay {
@@ -1118,7 +1126,7 @@ impl LightningNode {
                 ),
             };
 
-        let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
+        let invoice_details = InvoiceDetails::from_ln_invoice(invoice.clone(), &exchange_rate);
 
         let description = invoice_details.description.clone();
 
@@ -1134,12 +1142,12 @@ impl LightningNode {
             paid_msats: s.paid_sats, // The field being named paid_sats is a bug -> https://github.com/breez/breez-sdk/issues/746
         });
 
-        let recipient = match &payment_details.ln_address {
-            None => match breez_payment.payment_type {
-                breez_sdk_core::PaymentType::Sent => Some(Recipient::Unknown),
-                _ => None,
-            },
-            Some(a) => Some(Recipient::LightningAddress { address: a.clone() }),
+        let recipient = match (&payment_details.ln_address, &breez_payment.payment_type) {
+            (Some(a), _) => Some(Recipient::LightningAddress { address: a.clone() }),
+            (None, breez_sdk_core::PaymentType::Sent) => Some(Recipient::RecipientNode {
+                node: self.recipient_decoder.decode(&invoice),
+            }),
+            _ => None,
         };
 
         Ok(Activity::PaymentActivity {
@@ -1265,6 +1273,8 @@ impl LightningNode {
             amount -= lsp_fees.sats;
         }
         let amount = amount.as_sats().to_amount_down(&exchange_rate);
+
+        // TODO: Set recipient.
 
         Ok(Payment {
             payment_type: PaymentType::Receiving,
