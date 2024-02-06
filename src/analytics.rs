@@ -9,15 +9,24 @@ use breez_sdk_core::{
     InvoicePaidDetails, Payment, PaymentDetails, PaymentFailedData, ReceivePaymentResponse,
 };
 use log::{error, info, warn, Level};
+use num_enum::TryFromPrimitive;
 use parrot::{AnalyticsClient, AnalyticsEvent, PayFailureReason, PaymentSource};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use uuid::Uuid;
 
+#[derive(Debug, PartialEq, TryFromPrimitive, Clone)]
+#[repr(u8)]
+pub enum AnalyticsConfig {
+    Enabled,
+    Disabled,
+}
+
 pub(crate) struct AnalyticsInterceptor {
     pub analytics_client: Arc<AnalyticsClient>,
     pub user_preferences: Arc<Mutex<UserPreferences>>,
     pub rt_handle: Handle,
+    pub config: Mutex<AnalyticsConfig>,
 }
 
 /// Includes metadata about a payment the client received in any way.
@@ -38,11 +47,13 @@ impl AnalyticsInterceptor {
         analytics_client: AnalyticsClient,
         user_preferences: Arc<Mutex<UserPreferences>>,
         rt_handle: Handle,
+        analytics_config: AnalyticsConfig,
     ) -> Self {
         Self {
             analytics_client: Arc::new(analytics_client),
             user_preferences,
             rt_handle,
+            config: Mutex::new(analytics_config),
         }
     }
 
@@ -53,6 +64,10 @@ impl AnalyticsInterceptor {
         paid_amount: Option<u64>,
         exchange_rate: Option<ExchangeRate>,
     ) {
+        if *self.config.lock_unwrap() == AnalyticsConfig::Disabled {
+            return;
+        }
+
         let invoice_amount = invoice_details.amount.map(|a| a.sats.as_sats().msats);
         let paid_amount_msat = match paid_amount.or(invoice_amount) {
             Some(a) => a,
@@ -86,6 +101,10 @@ impl AnalyticsInterceptor {
     }
 
     pub fn pay_succeeded(&self, payment: Payment) {
+        if *self.config.lock_unwrap() == AnalyticsConfig::Disabled {
+            return;
+        }
+
         if let PaymentDetails::Ln { data } = payment.details {
             let analytics_client = Arc::clone(&self.analytics_client);
 
@@ -105,6 +124,10 @@ impl AnalyticsInterceptor {
     }
 
     pub fn pay_failed(&self, failed_data: PaymentFailedData) {
+        if *self.config.lock_unwrap() == AnalyticsConfig::Disabled {
+            return;
+        }
+
         if failed_data.invoice.is_none() {
             info!("Payment failed without invoice, not reporting");
             return;
@@ -130,6 +153,10 @@ impl AnalyticsInterceptor {
         exchange_rate: Option<ExchangeRate>,
         metadata: InvoiceCreationMetadata,
     ) {
+        if *self.config.lock_unwrap() == AnalyticsConfig::Disabled {
+            return;
+        }
+
         let analytics_client = Arc::clone(&self.analytics_client);
         let user_currency = self.user_preferences.lock_unwrap().fiat_currency.clone();
 
@@ -149,6 +176,10 @@ impl AnalyticsInterceptor {
     }
 
     pub fn request_succeeded(&self, paid_details: InvoicePaidDetails) {
+        if *self.config.lock_unwrap() == AnalyticsConfig::Disabled {
+            return;
+        }
+
         let analytics_client = Arc::clone(&self.analytics_client);
 
         let payment = if let Some(payment) = paid_details.payment {

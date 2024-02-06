@@ -135,6 +135,12 @@ interface LightningNode {
 
     [Throws=LnError]
     void clear_wallet(ClearWalletInfo clear_wallet_info, BitcoinAddressData destination_onchain_address_data);
+
+    [Throws=LnError]
+    void set_analytics_config(AnalyticsConfig config);
+
+    [Throws=LnError]
+    AnalyticsConfig get_analytics_config();
 };
 
 dictionary Config {
@@ -540,6 +546,11 @@ dictionary SwapToLightningFees {
 interface Recipient {
     LightningAddress(string address);
     Unknown();
+};
+
+enum AnalyticsConfig {
+    "Enabled",
+    "Disabled",
 };
 
 

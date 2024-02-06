@@ -4,6 +4,7 @@ use crate::fund_migration::MigrationStatus;
 use crate::migrations::migrate;
 use crate::{ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
 
+use crate::analytics::AnalyticsConfig;
 use chrono::{DateTime, Utc};
 use crow::{PermanentFailureCode, TemporaryFailureCode};
 use perro::MapToError;
@@ -270,7 +271,6 @@ impl DataStore {
             .collect()
     }
 
-    #[allow(dead_code)]
     pub fn append_funds_migration_status(&mut self, status: MigrationStatus) -> Result<()> {
         self.backup_status = BackupStatus::WaitingForBackup;
         self.conn
@@ -282,7 +282,6 @@ impl DataStore {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn retrive_funds_migration_status(&self) -> Result<MigrationStatus> {
         let status_from_row = |row: &Row| {
             let status: u8 = row.get(0)?;
@@ -346,6 +345,37 @@ impl DataStore {
         backup
             .run_to_completion(5, Duration::from_millis(250), None)
             .map_to_permanent_failure("Failed to backup db")
+    }
+
+    pub fn append_analytics_config(&mut self, status: AnalyticsConfig) -> Result<()> {
+        self.backup_status = BackupStatus::WaitingForBackup;
+        self.conn
+            .execute(
+                "INSERT INTO analytics_config (status) VALUES (?1)",
+                (status as u8,),
+            )
+            .map_to_permanent_failure("Failed to add analytics config to db")?;
+        Ok(())
+    }
+
+    pub fn retrive_analytics_config(&self) -> Result<AnalyticsConfig> {
+        let status_from_row = |row: &Row| {
+            let status: u8 = row.get(0)?;
+            AnalyticsConfig::try_from(status).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    1,
+                    rusqlite::types::Type::Integer,
+                    Box::new(e),
+                )
+            })
+        };
+        self.conn
+            .query_row(
+                "SELECT status, updated_at FROM analytics_config ORDER BY id DESC LIMIT 1",
+                (),
+                status_from_row,
+            )
+            .map_to_permanent_failure("Failed to query analytics config")
     }
 }
 
@@ -542,6 +572,7 @@ mod tests {
     use crate::fund_migration::MigrationStatus;
     use crate::{ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
 
+    use crate::analytics::AnalyticsConfig;
     use crate::fiat_topup::FiatTopupInfo;
     use crow::TopupError::TemporaryFailure;
     use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -1090,6 +1121,34 @@ mod tests {
         assert_eq!(
             data_store.retrieve_latest_fiat_topup_info().unwrap(),
             Some(fiat_topup_info)
+        );
+    }
+
+    #[test]
+    fn test_persisting_analytics_config() {
+        let db_name = String::from("analytics_config.db3");
+        reset_db(&db_name);
+        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+
+        assert_eq!(
+            data_store.retrive_analytics_config().unwrap(),
+            AnalyticsConfig::Enabled
+        );
+
+        data_store
+            .append_analytics_config(AnalyticsConfig::Disabled)
+            .unwrap();
+        assert_eq!(
+            data_store.retrive_analytics_config().unwrap(),
+            AnalyticsConfig::Disabled
+        );
+
+        data_store
+            .append_analytics_config(AnalyticsConfig::Enabled)
+            .unwrap();
+        assert_eq!(
+            data_store.retrive_analytics_config().unwrap(),
+            AnalyticsConfig::Enabled
         );
     }
 

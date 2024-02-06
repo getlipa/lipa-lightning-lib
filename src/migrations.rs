@@ -100,6 +100,16 @@ const MIGRATION_09_ADD_INVOICE_EXPIRY: &str = "
     ALTER TABLE created_invoices ADD COLUMN invoice_expiry_timestamp INTEGER NOT NULL DEFAULT 0;
 ";
 
+const MIGRATION_10_ANALYTICS_CONFIG: &str = "
+    CREATE TABLE analytics_config (
+        id INTEGER NOT NULL PRIMARY KEY,
+        status INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    INSERT INTO analytics_config (status)
+    VALUES (0);
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -117,6 +127,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_07_RESET_FUND_MIGRATION_STATUS),
         M::up(MIGRATION_08_OFFER_TOPUP_VALUE),
         M::up(MIGRATION_09_ADD_INVOICE_EXPIRY),
+        M::up(MIGRATION_10_ANALYTICS_CONFIG),
     ])
 }
 
