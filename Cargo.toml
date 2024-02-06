@@ -52,7 +52,7 @@ uuid = { version = "1.7.0", features = ["v5"] }
 
 [features]
 default = ["dep:breez-sdk-core", "dep:squirrel"]
-breez-sdk-mock = ["dep:breez-sdk-mock", "dep:squirrel-mock"]
+mock-deps = ["dep:breez-sdk-mock", "dep:squirrel-mock"]
 
 # Bundle sqlite for all targets except iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]

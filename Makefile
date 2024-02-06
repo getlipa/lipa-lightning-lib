@@ -5,7 +5,7 @@ check:
 .PHONY: checkall
 checkall:
 	cargo check --workspace --all-targets
-	cargo check --workspace --all-targets --no-default-features --features breez-sdk-mock
+	cargo check --workspace --all-targets --no-default-features --features mock-deps
 
 .PHONY: build
 build:
@@ -14,7 +14,7 @@ build:
 .PHONY: buildall
 buildall:
 	cargo build --workspace --all-targets
-	cargo build --workspace --all-targets --no-default-features --features breez-sdk-mock
+	cargo build --workspace --all-targets --no-default-features --features mock-deps
 
 .PHONY: clean
 clean:
@@ -79,4 +79,4 @@ run-node:
 .PHONY: run-node-mocked
 run-node-mocked: ARGS =
 run-node-mocked:
-	cargo run --example node --no-default-features --features breez-sdk-mock -- $(ARGS)
+	cargo run --example node --no-default-features --features mock-deps -- $(ARGS)
