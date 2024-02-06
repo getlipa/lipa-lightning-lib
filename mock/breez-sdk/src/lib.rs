@@ -517,7 +517,11 @@ impl BreezServices {
     }
 
     pub async fn execute_dev_command(&self, command: String) -> SdkResult<String> {
-        todo!("command {} not implemented in mock yet", command);
+        match command.as_str() {
+            "listpeerchannels" => Ok("This is a mock response for listpeerchannels".to_string()),
+            "listpayments" => Ok(format!("{:?}", PAYMENTS.lock().unwrap().clone())),
+            _ => panic!("Command {command} not implemented in mock yet"),
+        }
     }
 
     pub async fn sync(&self) -> SdkResult<()> {
