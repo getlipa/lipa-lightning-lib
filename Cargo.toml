@@ -1,3 +1,6 @@
+[workspace]
+members = ["parser"]
+
 [package]
 name = "lipalightninglib"
 version = "0.1.0"
@@ -8,6 +11,8 @@ crate-type = ["lib", "staticlib", "cdylib"]
 name = "uniffi_lipalightninglib"
 
 [dependencies]
+parser = { path = "parser" }
+
 chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
 crow = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
 honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }

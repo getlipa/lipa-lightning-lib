@@ -82,9 +82,9 @@ pub use crate::swap::{
     FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo, SwapToLightningFees,
 };
 use crate::task_manager::TaskManager;
-use crate::util::{
-    replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
-};
+use crate::util::LogIgnoreError;
+use crate::util::{replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time};
+pub use parser::parse_lightning_address;
 
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
@@ -109,6 +109,7 @@ use log::{debug, error, info, Level};
 use logger::init_logger_once;
 use parrot::AnalyticsClient;
 pub use parrot::PaymentSource;
+use parser::parse_lightning_address;
 use perro::{
     ensure, invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };

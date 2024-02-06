@@ -2137,6 +2137,7 @@ dependencies = [
  "log",
  "num_enum",
  "parrot",
+ "parser",
  "perro",
  "qrcode",
  "rand",
@@ -2550,6 +2551,14 @@ source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562
 dependencies = [
  "graphql",
  "honey-badger",
+]
+
+[[package]]
+name = "parser"
+version = "0.1.0"
+dependencies = [
+ "nom",
+ "unicode-segmentation",
 ]
 
 [[package]]
