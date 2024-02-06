@@ -295,15 +295,16 @@ impl LightningNode {
 
         let environment = Environment::load(config.environment);
 
+        // TODO once we have mocked the backend, we can continue to use the seed from the config and still won't have conflicts with the real backend using the same seed
         #[cfg(not(feature = "breez-sdk-mock"))]
         let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)?;
-
         #[cfg(feature = "breez-sdk-mock")]
-        let mut strong_typed_seed: [u8; 64] = [0; 64];
-        #[cfg(feature = "breez-sdk-mock")]
-        use rand::RngCore;
-        #[cfg(feature = "breez-sdk-mock")]
-        rand::thread_rng().fill_bytes(&mut strong_typed_seed);
+        let strong_typed_seed = {
+            let mut seed: [u8; 64] = [0; 64];
+            use rand::RngCore;
+            rand::thread_rng().fill_bytes(&mut seed);
+            seed
+        };
 
         let auth = Arc::new(build_auth(
             &strong_typed_seed,
