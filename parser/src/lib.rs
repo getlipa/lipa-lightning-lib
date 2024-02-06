@@ -83,6 +83,8 @@ mod tests {
 
     #[test]
     fn test_errors() {
+        assert_eq!(p("ü"), Err(ParseError::UnexpectedCharacter(0)));
+        assert_eq!(p("ы"), Err(ParseError::UnexpectedCharacter(0)));
         assert_eq!(p("@"), Err(ParseError::UnexpectedCharacter(0)));
         assert_eq!(p("a:"), Err(ParseError::UnexpectedCharacter(1)));
         assert_eq!(p("a@ a"), Err(ParseError::UnexpectedCharacter(2)));
@@ -115,6 +117,8 @@ mod tests {
         assert_eq!(p("ab@a.xn--9"), Err(ParseError::Incomplete));
         assert_eq!(p("ab@a.xn--90"), Err(ParseError::Incomplete));
         assert_eq!(p("ab@a.xn--90a"), Err(ParseError::Incomplete));
+        assert_eq!(p("ab@a.xn--90aü"), Err(ParseError::UnexpectedCharacter(12)));
+        assert_eq!(p("ab@a.xn--90aы"), Err(ParseError::UnexpectedCharacter(12)));
         assert_eq!(p("ab@a.xn--90ae"), Ok(()));
         // `Bücher.example` as `xn--bcher-kva.example`.
         assert_eq!(p("ab@xn--"), Err(ParseError::Incomplete));
