@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "breez-sdk-mock",
+    "mock/breez-sdk",
     "parser"
 ]
 
@@ -16,17 +16,17 @@ name = "uniffi_lipalightninglib"
 [dependencies]
 parser = { path = "parser" }
 
-chameleon = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel" }
-crow = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel" }
-honey-badger = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel" }
-graphql = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel" }
-squirrel = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel", optional = true }
-squirrel-mock = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel", optional = true }
-parrot = { git = "https://github.com/getlipa/wild", branch = "feature/mocked-squirrel" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
+crow = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
+honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
+squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.19.0", optional = true }
+squirrel-mock = { path = "mock/wild/squirrel", optional = true }
+parrot = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.15", optional = true }
-breez-sdk-mock = { path = "breez-sdk-mock", optional = true }
+breez-sdk-mock = { path = "mock/breez-sdk", optional = true }
 
 aes-gcm = "0.10.3"
 bip39 = "2.0.0"
