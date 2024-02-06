@@ -1,0 +1,12 @@
+[package]
+name = "squirrel-mock"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "squirrel"
+
+[dependencies]
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
+honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
+squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
