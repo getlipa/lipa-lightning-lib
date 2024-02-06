@@ -275,12 +275,12 @@ impl BreezServices {
         let description = Option::from(req.description);
 
         if let PaymentOutcome::Success = &*PAYMENT_OUTCOME.lock().unwrap() {
-            *LN_BALANCE_MSAT.lock().unwrap() += req.amount_msat;
+            *LN_BALANCE_MSAT.lock().unwrap() += req.amount_msat - lsp_fee.unwrap_or(0);
             PAYMENTS.lock().unwrap().push(Payment {
                 id: Utc::now().timestamp().to_string(), // Placeholder. ID is probably never used
                 payment_type: PaymentType::Received,
                 payment_time: Utc::now().timestamp(),
-                amount_msat: req.amount_msat,
+                amount_msat: req.amount_msat - lsp_fee.unwrap_or(0),
                 fee_msat: lsp_fee.unwrap_or(0),
                 status: PaymentStatus::Complete,
                 error: None,
