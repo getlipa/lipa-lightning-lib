@@ -11,6 +11,7 @@ anyhow = { version = "1.0.79", features = [] }
 bitcoin = { version = "0.30.2", default-features = false }
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.2.15" }
 chrono = { version = "0.4", features = [] }
+hex = "0.4.3"
 rand = { version = "0.8.5", features = [] }
 lightning = "0.0.120"
 lightning-invoice = "0.28.0"

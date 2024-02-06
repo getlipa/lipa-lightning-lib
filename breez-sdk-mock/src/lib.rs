@@ -4,6 +4,7 @@ use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, InvoiceBuilder};
 use rand;
 use rand::Rng;
+use rand::RngCore;
 use secp256k1::Secp256k1;
 use secp256k1::SecretKey;
 use std::cmp::max;
@@ -18,12 +19,8 @@ const NODE_PRIVKEY: &[u8] = &[
 const NODE_PUBKEY: &str = "03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad";
 const MAX_RECEIVABLE_MSAT: u64 = 1_000_000_000;
 
-const SAMPLE_PAYMENT_HASH: &str =
-    "9b70d38539220707415a4169953a26786214418cedf9d31c72c105b15018bc68";
 const SAMPLE_PAYMENT_SECRET: &str =
     "91f65d26832cb762a96c455d253f3cb4c3005ad9089d2df8612ffdf7a6b7f92f";
-
-const SAMPLE_PREIMAGE: &str = "30a7e613acba21610ffd04b677ebaf9fb8efd4df7886dcec4017a4a192cdaa7e";
 
 const LSP_ID: &str = "c0ff3e11-2222-3333-4444-555555555555";
 const LSP_NAME: &str = "notdiem.lsp.mock";
@@ -258,9 +255,11 @@ impl BreezServices {
         }
 
         let private_key = SecretKey::from_slice(&NODE_PRIVKEY[..]).unwrap();
-        let preimage = req.preimage.unwrap_or(SAMPLE_PREIMAGE.as_bytes().to_vec());
+        let mut preimage: [u8; 64] = [0; 64];
+        rand::thread_rng().fill_bytes(&mut preimage);
+        let preimage = req.preimage.unwrap_or(preimage.to_vec());
         let payment_hash = sha256::Hash::hash(&preimage);
-        let preimage = String::from_utf8(preimage).unwrap();
+        let preimage = hex::encode(preimage);
         let payment_secret = PaymentSecret([42u8; 32]);
 
         let invoice = InvoiceBuilder::new(Currency::Bitcoin)
@@ -278,7 +277,7 @@ impl BreezServices {
         if let PaymentOutcome::Success = &*PAYMENT_OUTCOME.lock().unwrap() {
             *LN_BALANCE_MSAT.lock().unwrap() += req.amount_msat;
             PAYMENTS.lock().unwrap().push(Payment {
-                id: Utc::now().timestamp().to_string(), // Placeholder. Id is probably never used
+                id: Utc::now().timestamp().to_string(), // Placeholder. ID is probably never used
                 payment_type: PaymentType::Received,
                 payment_time: Utc::now().timestamp(),
                 amount_msat: req.amount_msat,
@@ -288,7 +287,7 @@ impl BreezServices {
                 description: description.clone(),
                 details: PaymentDetails::Ln {
                     data: LnPaymentDetails {
-                        payment_hash: payment_hash.to_string(),
+                        payment_hash: format!("{:x}", payment_hash),
                         label: "".to_string(),
                         destination_pubkey: NODE_PUBKEY.to_string(),
                         payment_preimage: preimage,
@@ -311,7 +310,7 @@ impl BreezServices {
                 bolt11: invoice.to_string(),
                 network: Network::Bitcoin,
                 payee_pubkey: NODE_PUBKEY.to_string(),
-                payment_hash: SAMPLE_PAYMENT_HASH.to_string(),
+                payment_hash: format!("{:x}", payment_hash),
                 description,
                 description_hash: None,
                 amount_msat: Some(req.amount_msat),
