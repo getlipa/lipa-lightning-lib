@@ -7,14 +7,22 @@ use nom::error::Error;
 use nom::sequence::delimited;
 use nom::Finish;
 
+/// Enum representing possible errors why parsing could fail.
 #[derive(Debug, PartialEq)]
 pub enum ParseError {
+    /// Parsing failed because parsed string was not complete.
+    /// Additional characters are needed to make the string valid.
+    /// It makes parsed string a valid prefix of a valid string.
     Incomplete,
+
+    /// Parsing failed because an unexpected character at the position was met.
+    /// The character *has to be removed*.
     UnexpectedCharacter(usize),
+
+    /// Parsing failed because an excess suffix at the position was met.
+    /// The suffix *has to be removed*.
     ExcessSuffix(usize),
 }
-
-pub type ParseResult = Result<(), ParseError>;
 
 pub fn parse_lightning_address(address: &str) -> Result<(), ParseError> {
     let r = delimited(space0, lightning_address, space0)(address).finish();

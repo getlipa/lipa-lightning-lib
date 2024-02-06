@@ -82,9 +82,9 @@ pub use crate::swap::{
     FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo, SwapToLightningFees,
 };
 use crate::task_manager::TaskManager;
-use crate::util::LogIgnoreError;
-use crate::util::{replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time};
-pub use parser::parse_lightning_address;
+use crate::util::{
+    replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
+};
 
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
@@ -109,7 +109,6 @@ use log::{debug, error, info, Level};
 use logger::init_logger_once;
 use parrot::AnalyticsClient;
 pub use parrot::PaymentSource;
-use parser::parse_lightning_address;
 use perro::{
     ensure, invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
@@ -2174,6 +2173,38 @@ pub fn accept_terms_and_conditions(
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions(TermsAndConditions::Lipa, version)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
+}
+
+/// Enum representing possible errors why parsing could fail.
+#[derive(Debug, thiserror::Error)]
+pub enum ParseError {
+    /// Parsing failed because parsed string was not complete.
+    /// Additional characters are needed to make the string valid.
+    /// It makes parsed string a valid prefix of a valid string.
+    #[error("Incomplete")]
+    Incomplete,
+
+    /// Parsing failed because an unexpected character at position `at` was met.
+    /// The character **has to be removed**.
+    #[error("InvalidCharacter at {at}")]
+    InvalidCharacter { at: u32 },
+}
+
+impl From<parser::ParseError> for ParseError {
+    fn from(error: parser::ParseError) -> Self {
+        match error {
+            parser::ParseError::Incomplete => ParseError::Incomplete,
+            parser::ParseError::UnexpectedCharacter(at) | parser::ParseError::ExcessSuffix(at) => {
+                ParseError::InvalidCharacter { at: at as u32 }
+            }
+        }
+    }
+}
+
+/// Try to parse the provided string as a lightning address, return [`ParseError`]
+/// precisely indicating why parsing failed.
+pub fn parse_lightning_address(address: &str) -> std::result::Result<(), ParseError> {
+    parser::parse_lightning_address(address).map_err(ParseError::from)
 }
 
 /// Allows checking if certain terms and conditions have been accepted by the user.

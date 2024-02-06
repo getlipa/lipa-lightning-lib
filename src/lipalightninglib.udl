@@ -564,6 +564,9 @@ namespace lipalightninglib {
 
     [Throws=LnError]
     void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path, boolean enable_file_logging);
+
+    [Throws=ParseError]
+    void parse_lightning_address([ByRef] string address);
 };
 
 dictionary Secret {
@@ -588,6 +591,12 @@ interface MnemonicError {
     BadEntropyBitCount();
     InvalidChecksum();
     AmbiguousLanguages();
+};
+
+[Error]
+interface ParseError {
+    Incomplete();
+    InvalidCharacter(u32 at);
 };
 
 [Error]
