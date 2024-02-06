@@ -71,12 +71,12 @@ lazy_static! {
     static ref HEALTH_STATUS: Mutex<HealthCheckStatus> = Mutex::new(HealthCheckStatus::Operational);
     static ref LN_BALANCE_MSAT: Mutex<u64> = Mutex::new(10_000_000);
     static ref PAYMENT_DELAY: Mutex<PaymentDelay> = Mutex::new(PaymentDelay::Immediate);
-    static ref PAYMENT_SUCCESS: Mutex<PaymentSuccess> = Mutex::new(PaymentSuccess::Success);
+    static ref PAYMENT_OUTCOME: Mutex<PaymentOutcome> = Mutex::new(PaymentOutcome::Success);
     static ref PAYMENTS: Mutex<Vec<Payment>> = Mutex::new(Vec::new());
 }
 
 #[derive(Debug)]
-enum PaymentSuccess {
+enum PaymentOutcome {
     Success,
     AlreadyPaid,
     GenericError,
@@ -119,8 +119,8 @@ impl BreezServices {
             }
         }
 
-        match &*PAYMENT_SUCCESS.lock().unwrap() {
-            PaymentSuccess::Success => {
+        match &*PAYMENT_OUTCOME.lock().unwrap() {
+            PaymentOutcome::Success => {
                 let parsed_invoice = parse_invoice(req.bolt11.as_str())?;
                 let invoice_amount_msat = parsed_invoice.amount_msat.unwrap_or_default();
                 let provided_amount_msat = req.amount_msat.unwrap_or_default();
@@ -181,29 +181,29 @@ impl BreezServices {
 
                 Ok(SendPaymentResponse { payment })
             }
-            PaymentSuccess::AlreadyPaid => Err(SendPaymentError::AlreadyPaid),
-            PaymentSuccess::GenericError => Err(SendPaymentError::Generic {
+            PaymentOutcome::AlreadyPaid => Err(SendPaymentError::AlreadyPaid),
+            PaymentOutcome::GenericError => Err(SendPaymentError::Generic {
                 err: "Generic error".into(),
             }),
-            PaymentSuccess::InvalidNetwork => Err(SendPaymentError::InvalidNetwork {
+            PaymentOutcome::InvalidNetwork => Err(SendPaymentError::InvalidNetwork {
                 err: "Invalid network".into(),
             }),
-            PaymentSuccess::InvoiceExpired => Err(SendPaymentError::InvoiceExpired {
+            PaymentOutcome::InvoiceExpired => Err(SendPaymentError::InvoiceExpired {
                 err: "Invoice expired".into(),
             }),
-            PaymentSuccess::Failed => Err(SendPaymentError::PaymentFailed {
+            PaymentOutcome::Failed => Err(SendPaymentError::PaymentFailed {
                 err: "Payment Failed".into(),
             }),
-            PaymentSuccess::Timeout => Err(SendPaymentError::PaymentTimeout {
+            PaymentOutcome::Timeout => Err(SendPaymentError::PaymentTimeout {
                 err: "Payment timed out".into(),
             }),
-            PaymentSuccess::RouteNotFound => Err(SendPaymentError::RouteNotFound {
+            PaymentOutcome::RouteNotFound => Err(SendPaymentError::RouteNotFound {
                 err: "Route not found".into(),
             }),
-            PaymentSuccess::RouteTooExpensive => Err(SendPaymentError::RouteTooExpensive {
+            PaymentOutcome::RouteTooExpensive => Err(SendPaymentError::RouteTooExpensive {
                 err: "Route too expensive".into(),
             }),
-            PaymentSuccess::ServiceConnectivity => Err(SendPaymentError::ServiceConnectivity {
+            PaymentOutcome::ServiceConnectivity => Err(SendPaymentError::ServiceConnectivity {
                 err: "Service connectivity error".into(),
             }),
         }
@@ -238,21 +238,21 @@ impl BreezServices {
             "pay.delay.immediate" => *PAYMENT_DELAY.lock().unwrap() = PaymentDelay::Immediate,
             "pay.delay.short" => *PAYMENT_DELAY.lock().unwrap() = PaymentDelay::Short,
             "pay.delay.long" => *PAYMENT_DELAY.lock().unwrap() = PaymentDelay::Long,
-            "pay.success" => *PAYMENT_SUCCESS.lock().unwrap() = PaymentSuccess::Success,
+            "pay.success" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::Success,
             "pay.err.already_paid" => {
-                *PAYMENT_SUCCESS.lock().unwrap() = PaymentSuccess::AlreadyPaid
+                *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::AlreadyPaid
             }
-            "pay.err.generic" => *PAYMENT_SUCCESS.lock().unwrap() = PaymentSuccess::GenericError,
-            "pay.err.network" => *PAYMENT_SUCCESS.lock().unwrap() = PaymentSuccess::InvalidNetwork,
-            "pay.err.expired" => *PAYMENT_SUCCESS.lock().unwrap() = PaymentSuccess::InvoiceExpired,
-            "pay.err.failed" => *PAYMENT_SUCCESS.lock().unwrap() = PaymentSuccess::Failed,
-            "pay.err.timeout" => *PAYMENT_SUCCESS.lock().unwrap() = PaymentSuccess::Timeout,
-            "pay.err.route" => *PAYMENT_SUCCESS.lock().unwrap() = PaymentSuccess::RouteNotFound,
+            "pay.err.generic" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::GenericError,
+            "pay.err.network" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::InvalidNetwork,
+            "pay.err.expired" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::InvoiceExpired,
+            "pay.err.failed" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::Failed,
+            "pay.err.timeout" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::Timeout,
+            "pay.err.route" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::RouteNotFound,
             "pay.err.route_too_expensive" => {
-                *PAYMENT_SUCCESS.lock().unwrap() = PaymentSuccess::RouteTooExpensive
+                *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::RouteTooExpensive
             }
             "pay.err.connectivity" => {
-                *PAYMENT_SUCCESS.lock().unwrap() = PaymentSuccess::ServiceConnectivity
+                *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::ServiceConnectivity
             }
             _ => {}
         }
@@ -275,7 +275,7 @@ impl BreezServices {
 
         let description = Option::from(req.description);
 
-        if let PaymentSuccess::Success = &*PAYMENT_SUCCESS.lock().unwrap() {
+        if let PaymentOutcome::Success = &*PAYMENT_OUTCOME.lock().unwrap() {
             *LN_BALANCE_MSAT.lock().unwrap() += req.amount_msat;
             PAYMENTS.lock().unwrap().push(Payment {
                 id: Utc::now().timestamp().to_string(), // Placeholder. Id is probably never used
