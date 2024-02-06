@@ -255,7 +255,7 @@ impl BreezServices {
         }
 
         let private_key = SecretKey::from_slice(&NODE_PRIVKEY[..]).unwrap();
-        let mut preimage: [u8; 64] = [0; 64];
+        let mut preimage: [u8; 32] = [0; 32];
         rand::thread_rng().fill_bytes(&mut preimage);
         let preimage = req.preimage.unwrap_or(preimage.to_vec());
         let payment_hash = sha256::Hash::hash(&preimage);
