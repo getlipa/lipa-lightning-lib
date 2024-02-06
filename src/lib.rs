@@ -2191,6 +2191,38 @@ pub fn accept_terms_and_conditions(
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
 
+/// Enum representing possible errors why parsing could fail.
+#[derive(Debug, thiserror::Error)]
+pub enum ParseError {
+    /// Parsing failed because parsed string was not complete.
+    /// Additional characters are needed to make the string valid.
+    /// It makes parsed string a valid prefix of a valid string.
+    #[error("Incomplete")]
+    Incomplete,
+
+    /// Parsing failed because an unexpected character at position `at` was met.
+    /// The character **has to be removed**.
+    #[error("InvalidCharacter at {at}")]
+    InvalidCharacter { at: u32 },
+}
+
+impl From<parser::ParseError> for ParseError {
+    fn from(error: parser::ParseError) -> Self {
+        match error {
+            parser::ParseError::Incomplete => ParseError::Incomplete,
+            parser::ParseError::UnexpectedCharacter(at) | parser::ParseError::ExcessSuffix(at) => {
+                ParseError::InvalidCharacter { at: at as u32 }
+            }
+        }
+    }
+}
+
+/// Try to parse the provided string as a lightning address, return [`ParseError`]
+/// precisely indicating why parsing failed.
+pub fn parse_lightning_address(address: &str) -> std::result::Result<(), ParseError> {
+    parser::parse_lightning_address(address).map_err(ParseError::from)
+}
+
 /// Allows checking if certain terms and conditions have been accepted by the user.
 ///
 /// Parameters:
