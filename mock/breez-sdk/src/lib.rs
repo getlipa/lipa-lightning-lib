@@ -2,11 +2,8 @@ use anyhow::Result;
 use bitcoin::hashes::{sha256, Hash};
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, InvoiceBuilder};
-use rand;
-use rand::Rng;
-use rand::RngCore;
-use secp256k1::Secp256k1;
-use secp256k1::SecretKey;
+use rand::{Rng, RngCore};
+use secp256k1::{Secp256k1, SecretKey};
 use std::cmp::max;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -254,7 +251,7 @@ impl BreezServices {
             _ => {}
         }
 
-        let private_key = SecretKey::from_slice(&NODE_PRIVKEY[..]).unwrap();
+        let private_key = SecretKey::from_slice(NODE_PRIVKEY).unwrap();
         let mut preimage: [u8; 32] = [0; 32];
         rand::thread_rng().fill_bytes(&mut preimage);
         let preimage = req.preimage.unwrap_or(preimage.to_vec());
@@ -337,7 +334,7 @@ impl BreezServices {
     }
 
     pub fn node_info(&self) -> SdkResult<NodeState> {
-        let balance = LN_BALANCE_MSAT.lock().unwrap().clone();
+        let balance = *LN_BALANCE_MSAT.lock().unwrap();
 
         Ok(NodeState {
             id: NODE_PUBKEY.to_string(),

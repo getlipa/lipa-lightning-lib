@@ -48,7 +48,7 @@ fmt-check:
 
 .PHONY: clippy
 clippy:
-	cargo clippy -- -D warnings
+	cargo clippy --all --tests --examples -- -D warnings
 
 .PHONY: udeps
 udeps:
