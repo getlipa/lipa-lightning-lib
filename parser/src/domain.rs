@@ -7,11 +7,11 @@ use nom::{IResult, Parser};
 use unicode_segmentation::UnicodeSegmentation;
 
 fn is_label_char(c: char) -> bool {
-    c.is_alphanumeric() || !c.is_ascii()
+    c.is_ascii_alphanumeric() || !c.is_ascii()
 }
 
 fn is_punycode_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '-'
+    c.is_ascii_alphanumeric() || c == '-'
 }
 
 enum Label<'a> {
@@ -55,7 +55,9 @@ fn is_valid_top_level_domain(label: &Label) -> bool {
     match label {
         Label::Unicode(label) => {
             label.graphemes(true).count() >= 2
-                && label.chars().all(|c| c.is_alphabetic() || !c.is_ascii())
+                && label
+                    .chars()
+                    .all(|c| c.is_ascii_alphabetic() || !c.is_ascii())
         }
         Label::UnicodeWithHyphens => false,
         Label::Punycode(label) => label.chars().count() >= 4 && label.chars().all(is_punycode_char),

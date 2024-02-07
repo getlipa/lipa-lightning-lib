@@ -6,7 +6,7 @@ use nom::sequence::separated_pair;
 use nom::IResult;
 
 fn is_username_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '-' || c == '_' || c == '.'
+    c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.'
 }
 
 pub(crate) fn lightning_address(s: &str) -> IResult<&str, ()> {
