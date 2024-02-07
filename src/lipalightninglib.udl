@@ -393,7 +393,7 @@ dictionary FiatTopupInfo {
 interface ActionRequiredItem {
     UncompletedOffer(OfferInfo offer);
     UnresolvedFailedSwap(FailedSwapInfo failed_swap);
-    ChannelCloseFundsAvailable(Amount available_funds);
+    ChannelClosesFundsAvailable(Amount available_funds);
 };
 
 dictionary OfferInfo {

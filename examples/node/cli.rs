@@ -1034,8 +1034,8 @@ fn list_actionable_items(node: &LightningNode) -> Result<()> {
             ActionRequiredItem::UnresolvedFailedSwap { failed_swap } => {
                 print_failed_swap(&failed_swap);
             }
-            ActionRequiredItem::ChannelCloseFundsAvailable { available_funds } => {
-                println!("Funds from channel close are available to be recovered");
+            ActionRequiredItem::ChannelClosesFundsAvailable { available_funds } => {
+                println!("Funds from channel closes are available to be recovered");
                 println!(
                     "      Available funds: {}",
                     amount_to_string(&available_funds)

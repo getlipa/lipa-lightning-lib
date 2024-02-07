@@ -280,7 +280,7 @@ pub struct ChannelCloseResolvingFees {
 pub enum ActionRequiredItem {
     UncompletedOffer { offer: OfferInfo },
     UnresolvedFailedSwap { failed_swap: FailedSwapInfo },
-    ChannelCloseFundsAvailable { available_funds: Amount },
+    ChannelClosesFundsAvailable { available_funds: Amount },
 }
 
 impl From<OfferInfo> for ActionRequiredItem {
@@ -1450,7 +1450,7 @@ impl LightningNode {
 
         let failed_swaps = self.get_unresolved_failed_swaps()?;
 
-        let available_channel_close_funds = self.get_node_info()?.onchain_balance;
+        let available_channel_closes_funds = self.get_node_info()?.onchain_balance;
 
         let mut action_required_items: Vec<ActionRequiredItem> = uncompleted_offers
             .into_iter()
@@ -1458,9 +1458,9 @@ impl LightningNode {
             .chain(failed_swaps.into_iter().map(|s| s.into()))
             .collect();
 
-        if available_channel_close_funds.sats > 0 {
-            action_required_items.push(ActionRequiredItem::ChannelCloseFundsAvailable {
-                available_funds: available_channel_close_funds,
+        if available_channel_closes_funds.sats > 0 {
+            action_required_items.push(ActionRequiredItem::ChannelClosesFundsAvailable {
+                available_funds: available_channel_closes_funds,
             })
         }
 
