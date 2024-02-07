@@ -72,6 +72,9 @@ interface LightningNode {
     void reset_fiat_topup();
 
     [Throws=LnError]
+    sequence<ActionRequiredItem> list_action_required_items();
+
+    [Throws=LnError]
     sequence<OfferInfo> query_uncompleted_offers();
 
     [Throws=LnError]
@@ -384,6 +387,13 @@ dictionary FiatTopupInfo {
     string creditor_town;
     string creditor_country;
     string currency;
+};
+
+[Enum]
+interface ActionRequiredItem {
+    UncompletedOffer(OfferInfo offer);
+    UnresolvedFailedSwap(FailedSwapInfo failed_swap);
+    ChannelClosesFundsAvailable(Amount available_funds);
 };
 
 dictionary OfferInfo {

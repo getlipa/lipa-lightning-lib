@@ -18,10 +18,10 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
 use uniffi_lipalightninglib::{
-    Activity, Amount, ChannelClose, ChannelCloseState, DecodedData, ExchangeRate, FiatValue,
-    InvoiceCreationMetadata, InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails,
-    LnUrlWithdrawDetails, MaxRoutingFeeMode, OfferKind, Payment, PaymentMetadata, PaymentState,
-    TzConfig,
+    ActionRequiredItem, Activity, Amount, ChannelClose, ChannelCloseState, DecodedData,
+    ExchangeRate, FailedSwapInfo, FiatValue, InvoiceCreationMetadata, InvoiceDetails,
+    LightningNode, LiquidityLimit, LnUrlPayDetails, LnUrlWithdrawDetails, MaxRoutingFeeMode,
+    OfferInfo, OfferKind, Payment, PaymentMetadata, PaymentState, TzConfig,
 };
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
@@ -169,6 +169,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 "calculatelightningpayoutfee" => {
                     if let Err(message) = calculate_lightning_payout_fee(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
+                    }
+                }
+                "listactionableitems" => {
+                    if let Err(message) = list_actionable_items(node) {
+                        println!("{}", format!("{message:#}").red())
                     }
                 }
                 "l" | "listactivities" => {
@@ -334,6 +339,11 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
 
     hints.insert(CommandHint::new(
+        "listactionableitems",
+        "listactionableitems",
+    ));
+
+    hints.insert(CommandHint::new(
         "o [number of activities = 10] [fun mode = false]",
         "o ",
     ));
@@ -410,6 +420,8 @@ fn help() {
     println!("  listoffers");
     println!("  calculatelightningpayoutfee <offer id>");
     println!();
+    println!("  listactionableitems");
+    println!();
     println!("  o | overview [number of activities = 10] [fun mode = false]");
     println!("  l | listactivities [number of activities = 2]");
     println!("  listlightningaddresses");
@@ -434,7 +446,7 @@ fn lsp_fee(node: &LightningNode) {
     let lsp_fee = node.query_lsp_fee().unwrap();
     println!(
         " Min fee: {}",
-        amount_to_string(lsp_fee.channel_minimum_fee)
+        amount_to_string(&lsp_fee.channel_minimum_fee)
     );
     println!(
         "Fee rate: {}%",
@@ -449,7 +461,7 @@ fn calculate_lsp_fee(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
         .parse()
         .context("Amount should be a positive integer number")?;
     let response = node.calculate_lsp_fee(amount)?;
-    println!(" LSP fee: {}", amount_to_string(response.lsp_fee));
+    println!(" LSP fee: {}", amount_to_string(&response.lsp_fee));
     Ok(())
 }
 
@@ -458,20 +470,20 @@ fn payment_amount_limits(node: &LightningNode) {
 
     println!(
         " Beta maximum receive: {}",
-        amount_to_string(limits.max_receive)
+        amount_to_string(&limits.max_receive)
     );
 
     match limits.liquidity_limit {
         LiquidityLimit::MinReceive { amount } => {
             println!(
                 " Minimum payment amount: {}. A setup fee will be charged.",
-                amount_to_string(amount)
+                amount_to_string(&amount)
             );
         }
         LiquidityLimit::MaxFreeReceive { amount } => {
             println!(
                 " If you want to receive more than {}, a setup fee will be charged.",
-                amount_to_string(amount)
+                amount_to_string(&amount)
             );
         }
         LiquidityLimit::None => {}
@@ -496,19 +508,19 @@ fn node_info(node: &LightningNode) {
     println!("Connected peer(s): {}", peers_list.join(", "));
     println!(
         "         On-chain balance: {}",
-        amount_to_string(node_info.onchain_balance)
+        amount_to_string(&node_info.onchain_balance)
     );
     println!(
         "            Local balance: {}",
-        amount_to_string(node_info.channels_info.local_balance)
+        amount_to_string(&node_info.channels_info.local_balance)
     );
     println!(
         "         Inbound capacity: {}",
-        amount_to_string(node_info.channels_info.inbound_capacity)
+        amount_to_string(&node_info.channels_info.inbound_capacity)
     );
     println!(
         "        Outbound capacity: {}",
-        amount_to_string(node_info.channels_info.outbound_capacity)
+        amount_to_string(&node_info.channels_info.outbound_capacity)
     );
 }
 
@@ -612,7 +624,7 @@ fn print_invoice_details(invoice_details: InvoiceDetails) {
     println!("Invoice details:");
     println!(
         "  Amount              {:?}",
-        invoice_details.amount.map(amount_to_string)
+        invoice_details.amount.map(|a| amount_to_string(&a))
     );
     println!("  Description         {}", invoice_details.description);
     println!("  Payment hash        {}", invoice_details.payment_hash);
@@ -640,11 +652,11 @@ fn print_lnurl_pay_details(lnurl_pay_details: LnUrlPayDetails) {
     );
     println!(
         "  Min Sendable          {}",
-        amount_to_string(lnurl_pay_details.min_sendable)
+        amount_to_string(&lnurl_pay_details.min_sendable)
     );
     println!(
         "  Max Sendable          {}",
-        amount_to_string(lnurl_pay_details.max_sendable)
+        amount_to_string(&lnurl_pay_details.max_sendable)
     );
     println!("---- Internal LnUrlPayRequestData struct ----");
     println!(
@@ -678,11 +690,11 @@ fn print_lnurl_withdraw_details(lnurl_withdraw_details: LnUrlWithdrawDetails) {
     );
     println!(
         "  Max Withdrawable      {}",
-        amount_to_string(lnurl_withdraw_details.max_withdrawable)
+        amount_to_string(&lnurl_withdraw_details.max_withdrawable)
     );
     println!(
         "  Min Withdrawable      {}",
-        amount_to_string(lnurl_withdraw_details.min_withdrawable)
+        amount_to_string(&lnurl_withdraw_details.min_withdrawable)
     );
     println!(
         "  K1                    {}",
@@ -728,7 +740,7 @@ fn get_max_routing_fee_mode(
         MaxRoutingFeeMode::Absolute { max_fee_amount } => {
             println!(
                 "Max fee strategy: Absolute (<= {})",
-                amount_to_string(max_fee_amount)
+                amount_to_string(&max_fee_amount)
             );
         }
     }
@@ -811,11 +823,11 @@ fn get_swap_address(node: &LightningNode) -> Result<()> {
     println!("  Address             {}", swap_address_info.address);
     println!(
         "  Minimum deposit     {}",
-        amount_to_string(swap_address_info.min_deposit)
+        amount_to_string(&swap_address_info.min_deposit)
     );
     println!(
         "  Maximum deposit     {}",
-        amount_to_string(swap_address_info.max_deposit)
+        amount_to_string(&swap_address_info.max_deposit)
     );
 
     Ok(())
@@ -829,13 +841,18 @@ fn list_failed_swaps(node: &LightningNode) -> Result<()> {
         failed_swaps.len().to_string().bold()
     );
     for swap in failed_swaps {
-        let created_at: DateTime<Local> = swap.created_at.into();
-        println!("Failed swap created at {created_at}:");
-        println!("      Address:        {}", swap.address);
-        println!("      Amount:         {}", amount_to_string(swap.amount));
+        print_failed_swap(&swap);
+        println!();
     }
 
     Ok(())
+}
+
+fn print_failed_swap(swap: &FailedSwapInfo) {
+    let created_at: DateTime<Local> = swap.created_at.into();
+    println!("Failed swap created at {created_at}:");
+    println!("      Address:        {}", swap.address);
+    println!("      Amount:         {}", amount_to_string(&swap.amount));
 }
 
 fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
@@ -941,57 +958,90 @@ fn list_offers(node: &LightningNode) -> Result<()> {
 
     println!("Total of {} offers\n", offers.len().to_string().bold());
     for offer in offers {
-        let kind = match offer.offer_kind {
-            OfferKind::Pocket { .. } => "Pocket",
-        };
+        print_offer(&offer);
+        println!();
+    }
 
-        let created_at: DateTime<Local> = offer.created_at.into();
-        let expires_at: Option<DateTime<Local>> = offer.expires_at.map(|e| e.into());
+    Ok(())
+}
 
-        println!("{kind} offer created at {created_at}:");
-        println!("      Expires at:         {expires_at:?}");
-        println!(
-            "      Amount:             {}",
-            amount_to_string(offer.amount)
-        );
-        println!("      LNURL-w:            {:?}", offer.lnurlw);
-        match offer.offer_kind {
-            OfferKind::Pocket {
-                id,
-                exchange_rate,
-                topup_value_minor_units,
-                exchange_fee_minor_units,
-                exchange_fee_rate_permyriad,
-                error,
-                ..
-            } => {
-                println!("                   ID:    {id}");
-                println!(
-                    "      Value exchanged:    {:.2} {}",
-                    topup_value_minor_units as f64 / 100f64,
-                    exchange_rate.currency_code,
-                );
-                println!(
-                    "      Exchange fee rate:  {}%",
-                    exchange_fee_rate_permyriad as f64 / 100_f64
-                );
-                println!(
-                    "      Exchange fee value: {:.2} {}",
-                    exchange_fee_minor_units as f64 / 100f64,
-                    exchange_rate.currency_code,
-                );
-                let exchanged_at: DateTime<Utc> = exchange_rate.updated_at.into();
-                println!(
-                    "             Exchange at: {}",
-                    exchanged_at.format("%d/%m/%Y %T UTC"),
-                );
+fn print_offer(offer: &OfferInfo) {
+    let kind = match offer.offer_kind {
+        OfferKind::Pocket { .. } => "Pocket",
+    };
 
-                if let Some(e) = error {
-                    println!("             Failure reason: {e:?}");
-                }
+    let created_at: DateTime<Local> = offer.created_at.into();
+    let expires_at: Option<DateTime<Local>> = offer.expires_at.map(|e| e.into());
+
+    println!("{kind} offer created at {created_at}:");
+    println!("      Expires at:         {expires_at:?}");
+    println!(
+        "      Amount:             {}",
+        amount_to_string(&offer.amount)
+    );
+    println!("      LNURL-w:            {:?}", offer.lnurlw);
+    match &offer.offer_kind {
+        OfferKind::Pocket {
+            id,
+            exchange_rate,
+            topup_value_minor_units,
+            exchange_fee_minor_units,
+            exchange_fee_rate_permyriad,
+            error,
+            ..
+        } => {
+            println!("                   ID:    {id}");
+            println!(
+                "      Value exchanged:    {:.2} {}",
+                *topup_value_minor_units as f64 / 100f64,
+                exchange_rate.currency_code,
+            );
+            println!(
+                "      Exchange fee rate:  {}%",
+                *exchange_fee_rate_permyriad as f64 / 100_f64
+            );
+            println!(
+                "      Exchange fee value: {:.2} {}",
+                *exchange_fee_minor_units as f64 / 100f64,
+                exchange_rate.currency_code,
+            );
+            let exchanged_at: DateTime<Utc> = exchange_rate.updated_at.into();
+            println!(
+                "             Exchanged at:     {}",
+                exchanged_at.format("%d/%m/%Y %T UTC"),
+            );
+
+            if let Some(e) = error {
+                println!("             Failure reason: {e:?}");
             }
         }
-        println!("      Status:             {:?}", offer.status);
+    }
+    println!("      Status:             {:?}", offer.status);
+}
+
+fn list_actionable_items(node: &LightningNode) -> Result<()> {
+    let items = node.list_action_required_items()?;
+
+    println!(
+        "Total of {} actionable items\n",
+        items.len().to_string().bold()
+    );
+    for item in items {
+        match item {
+            ActionRequiredItem::UncompletedOffer { offer } => {
+                print_offer(&offer);
+            }
+            ActionRequiredItem::UnresolvedFailedSwap { failed_swap } => {
+                print_failed_swap(&failed_swap);
+            }
+            ActionRequiredItem::ChannelClosesFundsAvailable { available_funds } => {
+                println!("Funds from channel closes are available to be recovered");
+                println!(
+                    "      Available funds: {}",
+                    amount_to_string(&available_funds)
+                );
+            }
+        }
         println!();
     }
 
@@ -1058,19 +1108,19 @@ fn print_payment(payment: Payment) -> Result<()> {
     }
     println!(
         "      Amount:           {}",
-        amount_to_string(payment.amount)
+        amount_to_string(&payment.amount)
     );
     println!(
         "      Requested Amount: {}",
-        amount_to_string(payment.requested_amount)
+        amount_to_string(&payment.requested_amount)
     );
     println!(
         "      Network fees:     {:?}",
-        payment.network_fees.map(amount_to_string)
+        payment.network_fees.map(|f| amount_to_string(&f))
     );
     println!(
         "      LSP fees:         {:?}",
-        payment.lsp_fees.map(amount_to_string)
+        payment.lsp_fees.map(|f| amount_to_string(&f))
     );
     println!("      Hash:             {}", payment.hash);
     println!("      Preimage:         {:?}", payment.preimage);
@@ -1100,7 +1150,7 @@ fn print_channel_close(channel_close: ChannelClose) -> Result<()> {
     };
     println!(
         "      Amount:           {}",
-        amount_to_string(channel_close.amount)
+        amount_to_string(&channel_close.amount)
     );
     println!("      Closing txid:     {}", channel_close.closing_tx_id);
     Ok(())
@@ -1130,19 +1180,19 @@ fn clear_wallet_info(node: &LightningNode) -> Result<()> {
     println!("Clear Wallet Information:");
     println!(
         "      Total Amount to be Cleared: {}",
-        amount_to_string(clear_wallet_info.clear_amount)
+        amount_to_string(&clear_wallet_info.clear_amount)
     );
     println!(
         "      Total Estimated Fees: {}",
-        amount_to_string(clear_wallet_info.total_estimated_fees)
+        amount_to_string(&clear_wallet_info.total_estimated_fees)
     );
     println!(
         "      Total On-chain Fees: {}",
-        amount_to_string(clear_wallet_info.onchain_fee)
+        amount_to_string(&clear_wallet_info.onchain_fee)
     );
     println!(
         "      Swap Fee: {}",
-        amount_to_string(clear_wallet_info.swap_fee)
+        amount_to_string(&clear_wallet_info.swap_fee)
     );
 
     Ok(())
@@ -1190,7 +1240,7 @@ fn offer_to_string(offer: Option<OfferKind>) -> String {
 				exchange_fee_rate_permyriad as f64 / 100f64,
 				exchange_fee_minor_units as f64 / 100f64,
                 lightning_payout_fee
-                    .map(|f| amount_to_string(f.clone()))
+                    .map(|f| amount_to_string(&f))
                     .unwrap_or("N/A".to_string()),
 			)
         }
@@ -1198,7 +1248,7 @@ fn offer_to_string(offer: Option<OfferKind>) -> String {
     }
 }
 
-fn fiat_value_to_string(value: FiatValue) -> String {
+fn fiat_value_to_string(value: &FiatValue) -> String {
     let converted_at: DateTime<Utc> = value.converted_at.into();
     format!(
         "{:.2} {} as of {}",
@@ -1208,8 +1258,8 @@ fn fiat_value_to_string(value: FiatValue) -> String {
     )
 }
 
-fn amount_to_string(amount: Amount) -> String {
-    let fiat = match amount.fiat {
+fn amount_to_string(amount: &Amount) -> String {
+    let fiat = match &amount.fiat {
         Some(fiat) => fiat_value_to_string(fiat),
         None => "exchange rate unknown".to_string(),
     };
@@ -1243,7 +1293,7 @@ fn calculate_lightning_payout_fee(
     let lightning_payout_fee = node.calculate_lightning_payout_fee(offer)?;
     println!(
         "Lightning payout fee: {}",
-        amount_to_string(lightning_payout_fee)
+        amount_to_string(&lightning_payout_fee)
     );
 
     Ok(())
@@ -1254,20 +1304,23 @@ fn get_channel_close_resolving_fees(node: &LightningNode) -> Result<()> {
 
     println!(
         "Sweep on-chain fees: {}",
-        amount_to_string(resolving_fees.sweep_onchain_fee_estimate)
+        amount_to_string(&resolving_fees.sweep_onchain_fee_estimate)
     );
 
     match resolving_fees.swap_fees {
         Some(f) => {
-            println!("Swap-to-lightning fees: {}", amount_to_string(f.total_fees));
+            println!(
+                "Swap-to-lightning fees: {}",
+                amount_to_string(&f.total_fees)
+            );
             println!(
                 "    Swap fee:              {}",
-                amount_to_string(f.swap_fee)
+                amount_to_string(&f.swap_fee)
             );
-            println!("    On-chain fee: {}", amount_to_string(f.onchain_fee));
+            println!("    On-chain fee: {}", amount_to_string(&f.onchain_fee));
             println!(
                 "    Channel opening fee:   {}",
-                amount_to_string(f.channel_opening_fee)
+                amount_to_string(&f.channel_opening_fee)
             );
         }
         None => println!("Swap fees: Unavailable"),

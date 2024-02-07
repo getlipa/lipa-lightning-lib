@@ -276,6 +276,25 @@ pub struct ChannelCloseResolvingFees {
     pub sat_per_vbyte: u32,
 }
 
+#[allow(clippy::large_enum_variant)]
+pub enum ActionRequiredItem {
+    UncompletedOffer { offer: OfferInfo },
+    UnresolvedFailedSwap { failed_swap: FailedSwapInfo },
+    ChannelClosesFundsAvailable { available_funds: Amount },
+}
+
+impl From<OfferInfo> for ActionRequiredItem {
+    fn from(value: OfferInfo) -> Self {
+        ActionRequiredItem::UncompletedOffer { offer: value }
+    }
+}
+
+impl From<FailedSwapInfo> for ActionRequiredItem {
+    fn from(value: FailedSwapInfo) -> Self {
+        ActionRequiredItem::UnresolvedFailedSwap { failed_swap: value }
+    }
+}
+
 impl LightningNode {
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         enable_backtrace();
@@ -1433,6 +1452,35 @@ impl LightningNode {
         self.offer_manager
             .hide_topup(id)
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)
+    }
+
+    /// List action required items.
+    ///
+    /// Returns a list of actionable items. They can be:
+    /// * Uncompleted offers (either available for collection or failed).
+    /// * Unresolved failed swaps.
+    /// * Available funds resulting from channel closes.
+    pub fn list_action_required_items(&self) -> Result<Vec<ActionRequiredItem>> {
+        let uncompleted_offers = self.query_uncompleted_offers()?;
+
+        let failed_swaps = self.get_unresolved_failed_swaps()?;
+
+        let available_channel_closes_funds = self.get_node_info()?.onchain_balance;
+
+        let mut action_required_items: Vec<ActionRequiredItem> = uncompleted_offers
+            .into_iter()
+            .map(|o| o.into())
+            .chain(failed_swaps.into_iter().map(|s| s.into()))
+            .collect();
+
+        if available_channel_closes_funds.sats > 0 {
+            action_required_items.push(ActionRequiredItem::ChannelClosesFundsAvailable {
+                available_funds: available_channel_closes_funds,
+            })
+        }
+
+        // TODO: improve ordering of items in the returned vec
+        Ok(action_required_items)
     }
 
     /// Get a list of unclaimed fund offers
