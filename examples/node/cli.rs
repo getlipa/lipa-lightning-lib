@@ -1007,7 +1007,7 @@ fn print_offer(offer: &OfferInfo) {
             );
             let exchanged_at: DateTime<Utc> = exchange_rate.updated_at.into();
             println!(
-                "             Exchange at: {}",
+                "             Exchanged at:     {}",
                 exchanged_at.format("%d/%m/%Y %T UTC"),
             );
 
