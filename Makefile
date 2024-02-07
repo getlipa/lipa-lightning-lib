@@ -4,7 +4,8 @@ check:
 
 .PHONY: checkall
 checkall:
-	cargo check --workspace --all-targets --all-features
+	cargo check --workspace --all-targets
+	cargo check --workspace --all-targets --no-default-features --features mock-deps
 
 .PHONY: build
 build:
@@ -12,7 +13,8 @@ build:
 
 .PHONY: buildall
 buildall:
-	cargo build --workspace --all-targets --all-features
+	cargo build --workspace --all-targets
+	cargo build --workspace --all-targets --no-default-features --features mock-deps
 
 .PHONY: clean
 clean:
@@ -73,3 +75,8 @@ pr: fmt buildall test clippy check-mod-test check-udl doc
 run-node: ARGS =
 run-node:
 	cargo run --example node -- $(ARGS)
+
+.PHONY: run-node-mocked
+run-node-mocked: ARGS =
+run-node-mocked:
+	cargo run --example node --no-default-features --features mock-deps -- $(ARGS)

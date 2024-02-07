@@ -295,7 +295,18 @@ impl LightningNode {
 
         let environment = Environment::load(config.environment);
 
+        // TODO once we have mocked the backend, we can continue to use the seed from the config and still won't have conflicts with the real backend using the same seed
+        #[cfg(not(feature = "mock-deps"))]
         let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)?;
+
+        #[cfg(feature = "mock-deps")]
+        let strong_typed_seed = {
+            let mut seed: [u8; 64] = [0; 64];
+            use rand::RngCore;
+            rand::thread_rng().fill_bytes(&mut seed);
+            seed
+        };
+
         let auth = Arc::new(build_auth(
             &strong_typed_seed,
             environment.backend_url.clone(),
@@ -424,17 +435,21 @@ impl LightningNode {
         )?));
         task_manager.lock_unwrap().foreground();
 
-        let data_store_clone = Arc::clone(&data_store);
-        let auth_clone = Arc::clone(&auth);
-        fund_migration::migrate_funds(
-            rt.handle(),
-            &strong_typed_seed,
-            data_store_clone,
-            &sdk,
-            auth_clone,
-            &environment.backend_url,
-        )
-        .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
+        #[cfg(not(feature = "mock-deps"))]
+        {
+            let data_store_clone = Arc::clone(&data_store);
+            let auth_clone = Arc::clone(&auth);
+
+            fund_migration::migrate_funds(
+                rt.handle(),
+                &strong_typed_seed,
+                data_store_clone,
+                &sdk,
+                auth_clone,
+                &environment.backend_url,
+            )
+            .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
+        }
 
         Ok(LightningNode {
             user_preferences,

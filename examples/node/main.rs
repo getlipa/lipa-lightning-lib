@@ -20,6 +20,12 @@ static LOG_FILE: &str = "logs.txt";
 fn main() {
     let environment = env::args().nth(1).unwrap_or("local".to_string());
     let base_dir = format!("{BASE_DIR}_{environment}");
+
+    #[cfg(feature = "mock-deps")]
+    let base_dir = format!("{base_dir}_mocked");
+    #[cfg(feature = "mock-deps")]
+    fs::remove_dir_all(&base_dir).unwrap();
+
     let environment = map_environment_code(&environment);
 
     // Create dir for node data persistence.
