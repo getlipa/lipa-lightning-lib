@@ -90,8 +90,24 @@ fn print_activity(activity: Activity) -> Result<()> {
     }
 }
 
-fn print_channel_close(_channel_close: ChannelClose) -> Result<()> {
-    // TODO: implement
+fn print_channel_close(channel_close: ChannelClose) -> Result<()> {
+    let amount = channel_close.amount.sats.separate_with_commas();
+    let amount = format!("−{amount}");
+    let fiat = channel_close.amount.fiat.map_or(String::new(), format_fiat);
+    println!(" 🛑 {:<15} {amount:>7}", "Channel close");
+    if let Some(closed_at) = channel_close.closed_at {
+        let timezone = FixedOffset::east_opt(closed_at.timezone_utc_offset_secs)
+            .ok_or(anyhow!("east_opt failed"))?;
+        let closed_at: DateTime<Utc> = closed_at.time.into();
+        let closed_at = closed_at.with_timezone(&timezone);
+        let time = closed_at.format("%b %-d, %H:%M");
+        let line = format!("    {time:<13} {fiat:>9}").dimmed();
+        println!("{line}");
+    } else {
+        let time = String::new();
+        let line = format!("    {time:<13} {fiat:>9}").dimmed();
+        println!("{line}");
+    }
     Ok(())
 }
 
