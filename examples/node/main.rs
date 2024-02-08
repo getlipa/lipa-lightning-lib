@@ -49,7 +49,7 @@ fn main() {
         local_persistence_path: base_dir.clone(),
         timezone_config: TzConfig {
             timezone_id: String::from("Africa/Tunis"),
-            timezone_utc_offset_secs: 1 * 60 * 60,
+            timezone_utc_offset_secs: 60 * 60,
         },
         enable_file_logging: true,
     };
