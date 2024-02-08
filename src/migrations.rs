@@ -110,6 +110,14 @@ const MIGRATION_10_ANALYTICS_CONFIG: &str = "
     VALUES (0);
 ";
 
+const MIGRATION_11_LAST_REGISTERED_NOTIFICATION_WEBHOOK_BASE_URL: &str = "
+    CREATE TABLE webhook_base_url (
+        id INTEGER NOT NULL PRIMARY KEY,
+        url TEXT NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -128,6 +136,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_08_OFFER_TOPUP_VALUE),
         M::up(MIGRATION_09_ADD_INVOICE_EXPIRY),
         M::up(MIGRATION_10_ANALYTICS_CONFIG),
+        M::up(MIGRATION_11_LAST_REGISTERED_NOTIFICATION_WEBHOOK_BASE_URL),
     ])
 }
 

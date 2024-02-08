@@ -740,7 +740,7 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562387f73574e1f39e076"
+source = "git+https://github.com/getlipa/wild?tag=v1.20.0#d541d14674c434b6e55474983fbc27d7d8bb2ba8"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -933,7 +933,7 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562387f73574e1f39e076"
+source = "git+https://github.com/getlipa/wild?tag=v1.20.0#d541d14674c434b6e55474983fbc27d7d8bb2ba8"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -1340,9 +1340,9 @@ checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a62bc1cf6f830c2ec14a513a9fb124d0a213a629668a4186f329db21fe045652"
+checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
 dependencies = [
  "percent-encoding",
 ]
@@ -1583,7 +1583,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562387f73574e1f39e076"
+source = "git+https://github.com/getlipa/wild?tag=v1.20.0#d541d14674c434b6e55474983fbc27d7d8bb2ba8"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1775,7 +1775,7 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562387f73574e1f39e076"
+source = "git+https://github.com/getlipa/wild?tag=v1.20.0#d541d14674c434b6e55474983fbc27d7d8bb2ba8"
 dependencies = [
  "base64 0.21.4",
  "bdk",
@@ -1931,9 +1931,9 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "idna"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d20d6b07bfbc108882d88ed8e37d39636dcc260e15e30c45e6ba089610b917c"
+checksum = "634d9b1461af396cad843f47fdba5597a4f9e6ddd4bfb6ff5d85028c25cb12f6"
 dependencies = [
  "unicode-bidi",
  "unicode-normalization",
@@ -2620,7 +2620,7 @@ dependencies = [
 [[package]]
 name = "parrot"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562387f73574e1f39e076"
+source = "git+https://github.com/getlipa/wild?tag=v1.20.0#d541d14674c434b6e55474983fbc27d7d8bb2ba8"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -2661,9 +2661,9 @@ dependencies = [
 
 [[package]]
 name = "percent-encoding"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b2a4787296e9989611394c33f193f676704af1686e70b8f8033ab5ba9a35a94"
+checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "percent-encoding-rfc3986"
@@ -3644,7 +3644,7 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 [[package]]
 name = "squirrel"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.19.0#144568a419abbe5ef72562387f73574e1f39e076"
+source = "git+https://github.com/getlipa/wild?tag=v1.20.0#d541d14674c434b6e55474983fbc27d7d8bb2ba8"
 dependencies = [
  "bdk",
  "graphql",
@@ -4385,9 +4385,9 @@ checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
 
 [[package]]
 name = "url"
-version = "2.4.1"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "143b538f18257fac9cad154828a57c6bf5157e1aa604d4816b5995bf6de87ae5"
+checksum = "31e6302e3bb753d46e83516cae55ae196fc0c309407cf11ab35cc51a4c2a4633"
 dependencies = [
  "form_urlencoded",
  "idna",

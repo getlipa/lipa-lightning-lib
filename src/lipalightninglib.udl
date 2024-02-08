@@ -86,7 +86,8 @@ interface LightningNode {
     [Throws=LnError]
     void register_notification_token(string notification_token, string language_iso_639_1, string country_iso_3166_1_alpha_2);
 
-    string? get_wallet_pubkey_id();
+    [Throws=LnError]
+    string get_wallet_pubkey_id();
 
     [Throws=LnError]
     string get_payment_uuid(string payment_hash);

@@ -7,6 +7,6 @@ edition = "2021"
 name = "squirrel"
 
 [dependencies]
-graphql = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
-honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
-squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.19.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.20.0" }
+honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.20.0" }
+squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.20.0" }

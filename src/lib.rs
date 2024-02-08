@@ -470,6 +470,34 @@ impl LightningNode {
             .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
         }
 
+        if let Some(webhook_base_url) = &environment.notification_webhook_base_url {
+            let last_registered_webhook_base_url = data_store
+                .lock_unwrap()
+                .retrive_last_registered_notification_webhook_base_url()?;
+
+            if Some(webhook_base_url.to_string()) != last_registered_webhook_base_url {
+                let id = auth.get_wallet_pubkey_id().map_to_runtime_error(
+                    RuntimeErrorCode::AuthServiceUnavailable,
+                    "Failed to authenticate in order to get wallet pubkey id",
+                )?;
+
+                let webhook_url = webhook_base_url.replacen("{id}", &id, 1);
+
+                rt.handle()
+                    .block_on(sdk.register_webhook(webhook_url.clone()))
+                    .map_to_runtime_error(
+                        RuntimeErrorCode::NodeUnavailable,
+                        "Failed to register notification webhook",
+                    )?;
+                data_store
+                    .lock_unwrap()
+                    .append_new_registered_notification_webhook_base_url(webhook_base_url)?;
+                debug!(
+                "Successfully registered notification webhook with Breez SDK. URL: {webhook_url}"
+                );
+            }
+        }
+
         Ok(LightningNode {
             user_preferences,
             sdk,
@@ -1639,13 +1667,13 @@ impl LightningNode {
 
     /// Get the wallet UUID v5 from the wallet pubkey
     ///
-    /// Returns an optional value. If the auth flow has never succeeded in this Auth instance,
-    /// the wallet UUID v5 is unknown and None is returned. Otherwise, this method will always
-    /// return the wallet UUID v5.
-    ///
-    /// This method does not require network access
-    pub fn get_wallet_pubkey_id(&self) -> Option<String> {
-        self.auth.get_wallet_pubkey_id()
+    /// If the auth flow has never succeeded in this Auth instance, this method will require network
+    /// access.
+    pub fn get_wallet_pubkey_id(&self) -> Result<String> {
+        self.auth.get_wallet_pubkey_id().map_to_runtime_error(
+            RuntimeErrorCode::AuthServiceUnavailable,
+            "Failed to authenticate in order to get the wallet pubkey id",
+        )
     }
 
     /// Get the payment UUID v5 from the payment hash

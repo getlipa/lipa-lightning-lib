@@ -54,7 +54,9 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     node_info(node);
                 }
                 "walletpubkeyid" => {
-                    wallet_pubkey_id(node);
+                    if let Err(message) = wallet_pubkey_id(node) {
+                        println!("{}", format!("{message:#}").red());
+                    }
                 }
                 "lspfee" => {
                     lsp_fee(node);
@@ -524,11 +526,12 @@ fn node_info(node: &LightningNode) {
     );
 }
 
-fn wallet_pubkey_id(node: &LightningNode) {
-    match node.get_wallet_pubkey_id() {
-        Some(wallet_pubkey_id) => println!("{wallet_pubkey_id}"),
-        None => eprintln!("Wallet PubKey Id is currently unavailable."),
-    }
+fn wallet_pubkey_id(node: &LightningNode) -> Result<()> {
+    let wallet_pubkey_id = node.get_wallet_pubkey_id()?;
+
+    println!("{wallet_pubkey_id}");
+
+    Ok(())
 }
 
 fn get_exchange_rate(node: &LightningNode) {
