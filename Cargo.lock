@@ -621,7 +621,7 @@ dependencies = [
  "chrono",
  "hex",
  "lazy_static",
- "lightning 0.0.120",
+ "lightning 0.0.121",
  "lightning-invoice 0.28.0",
  "rand",
  "secp256k1 0.27.0",
@@ -2130,6 +2130,16 @@ name = "lightning"
 version = "0.0.120"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73a759c353ef7c9e3375362bcf9844fcb5ace0e8c034c4a4252d8b1e571fa3ca"
+dependencies = [
+ "bitcoin 0.30.2",
+ "hex-conservative",
+]
+
+[[package]]
+name = "lightning"
+version = "0.0.121"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b0c1f811ae288f86c6767055c55b5f7a721ca1e61bf1897a9ae2ec663e8aba1"
 dependencies = [
  "bitcoin 0.30.2",
  "hex-conservative",
