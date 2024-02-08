@@ -471,24 +471,31 @@ impl LightningNode {
         }
 
         if let Some(webhook_base_url) = &environment.notification_webhook_base_url {
-            // TODO: check if currently known base url is the same to avoid unnecessary network calls
+            let last_registered_webhook_base_url = data_store
+                .lock_unwrap()
+                .retrive_last_registered_notification_webhook_base_url()?;
 
-            let id = auth.get_wallet_pubkey_id().map_to_runtime_error(
-                RuntimeErrorCode::AuthServiceUnavailable,
-                "Failed to authenticate in order to get wallet pubkey id",
-            )?;
-
-            let webhook_url = webhook_base_url.replacen("{id}", &id, 1);
-
-            rt.handle()
-                .block_on(sdk.register_webhook(webhook_url.clone()))
-                .map_to_runtime_error(
-                    RuntimeErrorCode::NodeUnavailable,
-                    "Failed to register notification webhook",
+            if Some(webhook_base_url.to_string()) != last_registered_webhook_base_url {
+                let id = auth.get_wallet_pubkey_id().map_to_runtime_error(
+                    RuntimeErrorCode::AuthServiceUnavailable,
+                    "Failed to authenticate in order to get wallet pubkey id",
                 )?;
-            debug!(
+
+                let webhook_url = webhook_base_url.replacen("{id}", &id, 1);
+
+                rt.handle()
+                    .block_on(sdk.register_webhook(webhook_url.clone()))
+                    .map_to_runtime_error(
+                        RuntimeErrorCode::NodeUnavailable,
+                        "Failed to register notification webhook",
+                    )?;
+                data_store
+                    .lock_unwrap()
+                    .append_new_registered_notification_webhook_base_url(webhook_base_url)?;
+                debug!(
                 "Successfully registered notification webhook with Breez SDK. URL: {webhook_url}"
-            );
+                );
+            }
         }
 
         Ok(LightningNode {
