@@ -8,7 +8,7 @@ use std::io;
 use std::io::Write;
 
 fn parse_and_print(line: &str) {
-    match parse_lightning_address(&line) {
+    match parse_lightning_address(line) {
         Ok(()) => print!("{}", line.green()),
         Err(ParseError::Incomplete) => print!("{}", line.white()),
         Err(ParseError::ExcessSuffix(at)) => {

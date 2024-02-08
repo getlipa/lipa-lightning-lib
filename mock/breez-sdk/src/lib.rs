@@ -563,4 +563,8 @@ impl BreezServices {
             EnvironmentType::Staging => Config::staging(api_key, node_config),
         }
     }
+
+    pub async fn register_webhook(&self, _webhook_url: String) -> SdkResult<()> {
+        Ok(())
+    }
 }
