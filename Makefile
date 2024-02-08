@@ -80,3 +80,7 @@ run-node:
 run-node-mocked: ARGS =
 run-node-mocked:
 	cargo run --example node --no-default-features --features mock-deps -- $(ARGS)
+
+.PHONY: run-parser-demo
+run-parser-demo:
+	cargo run --package parser --example demo
