@@ -105,6 +105,7 @@ use email_address::EmailAddress;
 use honey_badger::Auth;
 pub use honey_badger::{TermsAndConditions, TermsAndConditionsStatus};
 use iban::Iban;
+use lnurl::parse_metadata;
 use log::{debug, error, info, Level};
 use logger::init_logger_once;
 use parrot::AnalyticsClient;
@@ -1204,6 +1205,15 @@ impl LightningNode {
                 _ => None,
             },
             Some(a) => Some(Recipient::LightningAddress { address: a.clone() }),
+        };
+
+        let description = match payment_details
+            .lnurl_metadata
+            .as_deref()
+            .map(parse_metadata)
+        {
+            Some(Ok((short_description, _long_description))) => short_description,
+            _ => description,
         };
 
         Ok(Activity::PaymentActivity {
