@@ -30,6 +30,7 @@ mod lnurl;
 mod locker;
 mod logger;
 mod migrations;
+mod notifications_callback;
 mod offer;
 mod random;
 mod recovery;
@@ -86,6 +87,7 @@ use crate::util::{
     replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
 };
 
+pub use crate::notifications_callback::NotificationsCallback;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
@@ -261,6 +263,7 @@ pub struct LightningNode {
     task_manager: Arc<Mutex<TaskManager>>,
     analytics_interceptor: Arc<AnalyticsInterceptor>,
     environment: Environment,
+    notifications_callback: Arc<Box<dyn NotificationsCallback>>,
 }
 
 /// Contains the fee information for the options to resolve on-chain funds from channel closes.
@@ -296,7 +299,11 @@ impl From<FailedSwapInfo> for ActionRequiredItem {
 }
 
 impl LightningNode {
-    pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
+    pub fn new(
+        config: Config,
+        events_callback: Box<dyn EventsCallback>,
+        notifications_callback: Box<dyn NotificationsCallback>,
+    ) -> Result<Self> {
         enable_backtrace();
         fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
             "Failed to create directory: {}",
@@ -509,6 +516,7 @@ impl LightningNode {
             task_manager,
             analytics_interceptor,
             environment,
+            notifications_callback: Arc::new(notifications_callback),
         })
     }
 
@@ -804,27 +812,36 @@ impl LightningNode {
             self.get_exchange_rate(),
         );
 
-        let result = self
-            .rt
-            .handle()
-            .block_on(self.sdk.send_payment(SendPaymentRequest {
-                bolt11: invoice_details.invoice,
-                amount_msat,
-            }));
+        let sdk = Arc::clone(&self.sdk);
+        let callback = Arc::clone(&self.notifications_callback);
+        self.rt.handle().spawn(async move {
+            callback.operation_started("payment".to_string());
 
-        if matches!(
-            result,
-            Err(SendPaymentError::Generic { .. }
-                | SendPaymentError::PaymentFailed { .. }
-                | SendPaymentError::PaymentTimeout { .. }
-                | SendPaymentError::RouteNotFound { .. }
-                | SendPaymentError::RouteTooExpensive { .. }
-                | SendPaymentError::ServiceConnectivity { .. })
-        ) {
-            self.report_send_payment_issue(invoice_details.payment_hash);
-        }
+            let result = sdk
+                .send_payment(SendPaymentRequest {
+                    bolt11: invoice_details.invoice,
+                    amount_msat,
+                })
+                .await;
 
-        result.map_err(map_send_payment_error)?;
+            if matches!(
+                result,
+                Err(SendPaymentError::Generic { .. }
+                    | SendPaymentError::PaymentFailed { .. }
+                    | SendPaymentError::PaymentTimeout { .. }
+                    | SendPaymentError::RouteNotFound { .. }
+                    | SendPaymentError::RouteTooExpensive { .. }
+                    | SendPaymentError::ServiceConnectivity { .. })
+            ) {
+                report_send_payment_issue(&sdk, invoice_details.payment_hash).await;
+            }
+
+            match result {
+                Ok(_) => callback.operation_successful("payment".to_string()),
+                Err(e) => callback.operation_failed(e.to_string()),
+            }
+        });
+
         Ok(())
     }
 
@@ -857,7 +874,9 @@ impl LightningNode {
                 data.reason
             ),
             breez_sdk_core::LnUrlPayResult::PayError { data } => {
-                self.report_send_payment_issue(data.payment_hash);
+                self.rt
+                    .handle()
+                    .block_on(report_send_payment_issue(&self.sdk, data.payment_hash));
                 runtime_error!(
                     LnUrlPayErrorCode::PaymentFailed,
                     "Paying invoice for LNURL pay failed: {}",
@@ -2247,19 +2266,18 @@ impl LightningNode {
     pub fn get_analytics_config(&self) -> Result<AnalyticsConfig> {
         self.data_store.lock_unwrap().retrive_analytics_config()
     }
+}
 
-    fn report_send_payment_issue(&self, payment_hash: String) {
-        debug!("Reporting failure of payment: {payment_hash}");
-        let data = ReportPaymentFailureDetails {
-            payment_hash,
-            comment: None,
-        };
-        let request = ReportIssueRequest::PaymentFailure { data };
-        self.rt
-            .handle()
-            .block_on(self.sdk.report_issue(request))
-            .log_ignore_error(Level::Warn, "Failed to report issue");
-    }
+async fn report_send_payment_issue(sdk: &Arc<BreezServices>, payment_hash: String) {
+    debug!("Reporting failure of payment: {payment_hash}");
+    let data = ReportPaymentFailureDetails {
+        payment_hash,
+        comment: None,
+    };
+    let request = ReportIssueRequest::PaymentFailure { data };
+    sdk.report_issue(request)
+        .await
+        .log_ignore_error(Level::Warn, "Failed to report issue");
 }
 
 /// Accept lipa's terms and conditions. Should be called before instantiating a [`LightningNode`]
