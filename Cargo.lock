@@ -2218,6 +2218,7 @@ dependencies = [
  "rusqlite_migration",
  "rustyline",
  "serde",
+ "serde_json",
  "serial_test",
  "simplelog",
  "squirrel",

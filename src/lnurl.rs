@@ -22,24 +22,8 @@ impl LnUrlPayDetails {
         request_data: LnUrlPayRequestData,
         exchange_rate: &Option<ExchangeRate>,
     ) -> std::result::Result<Self, DecodeDataError> {
-        let mut short_description = String::new();
-        let mut long_description = None;
-        let metadata = request_data
-            .metadata_vec()
-            .map_err(|e| DecodeDataError::LnUrlError { msg: e.to_string() })?;
-        for MetadataItem { key, value } in metadata {
-            match key.as_str() {
-                "text/plain" => short_description = value.clone(),
-                "text/long-desc" => long_description = Some(value.clone()),
-                _ => (),
-            }
-        }
-        ensure!(
-            !short_description.is_empty(),
-            DecodeDataError::LnUrlError {
-                msg: "Missing short description".to_string()
-            }
-        );
+        let (short_description, long_description) = parse_metadata(&request_data.metadata_str)
+            .map_err(|msg| DecodeDataError::LnUrlError { msg })?;
         Ok(Self {
             domain: request_data.domain.clone(),
             short_description,
@@ -82,4 +66,25 @@ impl LnUrlWithdrawDetails {
             request_data,
         }
     }
+}
+
+pub(crate) fn parse_metadata(
+    metadata: &str,
+) -> std::result::Result<(String, Option<String>), String> {
+    let metadata = serde_json::from_str::<Vec<MetadataItem>>(metadata)
+        .map_err(|e| format!("Invalid metadata JSON: {e}"))?;
+    let mut short_description = String::new();
+    let mut long_description = None;
+    for MetadataItem { key, value } in metadata {
+        match key.as_str() {
+            "text/plain" => short_description = value,
+            "text/long-desc" => long_description = Some(value),
+            _ => (),
+        }
+    }
+    ensure!(
+        !short_description.is_empty(),
+        "Metadata missing short description".to_string()
+    );
+    Ok((short_description, long_description))
 }
