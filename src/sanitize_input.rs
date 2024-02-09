@@ -2,7 +2,7 @@ use crate::{ensure, Result};
 
 use perro::invalid_input;
 
-pub(crate) fn strong_type_seed(seed: &Vec<u8>) -> Result<[u8; 64]> {
+pub(crate) fn strong_type_seed(seed: &[u8]) -> Result<[u8; 64]> {
     ensure!(
         seed.len() == 64,
         invalid_input("Seed must be 64 bytes long")

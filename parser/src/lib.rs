@@ -27,9 +27,9 @@ pub enum ParseError {
 pub fn parse_lightning_address(address: &str) -> Result<(), ParseError> {
     let r = delimited(space0, lightning_address, space0)(address).finish();
     match r {
-        Ok((rem, ())) if rem.is_empty() => Ok(()),
+        Ok(("", ())) => Ok(()),
         Ok((rem, ())) => Err(ParseError::ExcessSuffix(address.len() - rem.len())),
-        Err(Error { input, .. }) if input.is_empty() => Err(ParseError::Incomplete),
+        Err(Error { input: "", .. }) => Err(ParseError::Incomplete),
         Err(Error { input, .. }) => {
             Err(ParseError::UnexpectedCharacter(address.len() - input.len()))
         }
