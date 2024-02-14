@@ -243,6 +243,10 @@ jobs:
     name: deploy-android
     needs: lipo-ios
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mock-deps: [ false, true ]
+      max-parallel: 1
     steps:
       - uses: actions/checkout@v2
         with:
