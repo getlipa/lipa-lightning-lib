@@ -193,11 +193,6 @@ jobs:
           cp target/universal/release/libuniffi_lipalightninglib_simulator.a lipa-lightning-lib-swift/lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/lipalightninglibFFI
           cd lipa-lightning-lib-swift
           zip -9 -r lipalightninglibFFI.xcframework.zip lipalightninglibFFI.xcframework
-      - name: Upload xcframework zip
-        uses: actions/upload-artifact@v4
-        with:
-          path: lipa-lightning-lib-swift/lipalightninglibFFI.xcframework.zip
-          name: lipalightninglibFFI.xcframework
       - name: Push to target repo
         env:
           GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
