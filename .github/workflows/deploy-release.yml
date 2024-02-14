@@ -211,6 +211,7 @@ jobs:
           git add Package.swift
           git add Sources/LipaLightningLib/LipaLightningLib.swift
           git commit -m "This commit was created automatically by the lipa bot"
+          git pull --rebase
           git tag -a ${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || ''}} HEAD -m "This tag was created automatically by the lipa bot."
           git push
           git push --tag
@@ -314,6 +315,7 @@ jobs:
           git add LipaLightningLib/src/main/java/com/getlipa/lipalightninglib/lipalightninglib.kt
           git add jitpack.yml
           git commit -m "This commit was created automatically by the lipa bot"
+          git pull --rebase
           git tag -a ${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || ''}} HEAD -m "This tag was created automatically by the lipa bot."
           git push
           git push --tag
