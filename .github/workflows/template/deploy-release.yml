@@ -1,35 +1,21 @@
 name: Deploy a new release
 
+config:
+  mock-deps:
+    required: true
+  ios-repo:
+    required: true
+  android-repo:
+    required: true
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
-on:
-  push:
-    tags:
-      - 'v*.*.*'
 
 env:
   GITHUB_REF: ${{ github.ref }}
 
 jobs:
-  determine-full-or-mock:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Determine full version or mocked version
-        run: |
-          if [[ "${{ github.ref }}" =~ ^v*.*.*.-mock$ ]]; then
-            echo "MOCK_SUFFIX=-mock" >> $GITHUB_ENV
-            echo "CARGO_FEATURES='--no-default-features --features mock-deps'" >> $GITHUB_ENV
-          else
-            echo "Invalid tag format"
-            exit 1
-          fi
-        shell: bash
   cross-compile-ios:
     name: cross-compile-ios
     runs-on: macos-latest
@@ -61,7 +47,9 @@ jobs:
         with:
           use-cross: false
           command: build
-          args: ${{ env.CARGO_FEATURES}} --release --target ${{ matrix.target }}
+          args: >
+            ${{ if eq(config.mock-deps, true) }} --no-default-features --features mock-deps ${{ endif }}
+            --release --target ${{ matrix.target }}
       - name: Upload library binaries
         uses: actions/upload-artifact@v4
         with:
@@ -107,7 +95,9 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: ${{ env.CARGO_FEATURES}} --release --target ${{ matrix.target }}
+          args: >
+            ${{ if eq(config.mock-deps, true) }} --no-default-features --features mock-deps ${{ endif }}
+            --release --target ${{ matrix.target }}
       - name: Upload library binaries
         uses: actions/upload-artifact@v4
         with:
@@ -195,23 +185,23 @@ jobs:
           name: bindings-files-ios
       - name: Create xcframework
         run: |
-          git clone git@github.com:getlipa/lipa-lightning-lib-swift${{ env.MOCK_SUFFIX }}.git
-          cp bindings/swift/lipalightninglibFFI.h lipa-lightning-lib-swift${{ env.MOCK_SUFFIX }}/lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/Headers/lipalightninglibFFI.h
-          cp bindings/swift/lipalightninglibFFI.h lipa-lightning-lib-swift${{ env.MOCK_SUFFIX }}/lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/Headers/lipalightninglibFFI.h
-          cp target/aarch64-apple-ios/release/libuniffi_lipalightninglib.a lipa-lightning-lib-swift${{ env.MOCK_SUFFIX }}/lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/lipalightninglibFFI
-          cp target/universal/release/libuniffi_lipalightninglib_simulator.a lipa-lightning-lib-swift${{ env.MOCK_SUFFIX }}/lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/lipalightninglibFFI
-          cd lipa-lightning-lib-swift${{ env.MOCK_SUFFIX }}
+          git clone git@github.com:getlipa/${{ config.ios-repo }}.git
+          cp bindings/swift/lipalightninglibFFI.h ${{ config.ios-repo }}/lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/Headers/lipalightninglibFFI.h
+          cp bindings/swift/lipalightninglibFFI.h ${{ config.ios-repo }}/lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/Headers/lipalightninglibFFI.h
+          cp target/aarch64-apple-ios/release/libuniffi_lipalightninglib.a ${{ config.ios-repo }}/lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/lipalightninglibFFI
+          cp target/universal/release/libuniffi_lipalightninglib_simulator.a ${{ config.ios-repo }}/lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/lipalightninglibFFI
+          cd ${{ config.ios-repo }}
           zip -9 -r lipalightninglibFFI.xcframework.zip lipalightninglibFFI.xcframework
       - name: Upload xcframework zip
         uses: actions/upload-artifact@v4
         with:
-          path: lipa-lightning-lib-swift${{ env.MOCK_SUFFIX }}/lipalightninglibFFI.xcframework.zip
+          path: ${{ config.ios-repo }}/lipalightninglibFFI.xcframework.zip
           name: lipalightninglibFFI.xcframework
       - name: Push to target repo
         env:
           GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
         run: |
-          cd lipa-lightning-lib-swift${{ env.MOCK_SUFFIX }}
+          cd ${{ config.ios-repo }}
           git config --global user.email "lipa-lightning-engineering@getlipa.com"
           git config --global user.name "lipa Bot"
           
@@ -233,7 +223,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
         if: ${{ env.BRANCH == 'main' }}
         run: |
-          cd lipa-lightning-lib-swift${{ env.MOCK_SUFFIX }}
+          cd ${{ config.ios-repo }}
           gh release create ${{ env.RELEASE_VERSION }} \
             lipalightninglibFFI.xcframework.zip \
             --title "${{ env.RELEASE_VERSION }}" \
@@ -243,7 +233,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
         if: ${{ env.BRANCH != 'main' }}
         run: |
-          cd lipa-lightning-lib-swift${{ env.MOCK_SUFFIX }}
+          cd ${{ config.ios-repo }}
           gh release create ${{ env.RELEASE_VERSION }} \
             lipalightninglibFFI.xcframework.zip \
             --title "${{ env.RELEASE_VERSION }}" \
@@ -298,8 +288,8 @@ jobs:
           name: bindings-file-android
       - name: Push to target repo
         run: |
-          git clone git@github.com:getlipa/lipa-lightning-lib-android${{ env.MOCK_SUFFIX }}.git
-          cd lipa-lightning-lib-android${{ env.MOCK_SUFFIX }}
+          git clone git@github.com:getlipa/${{ config.android-repo }}.git
+          cd ${{ config.android-repo }}
           git config --global user.email "lipa-lightning-engineering@getlipa.com"
           git config --global user.name "lipa Bot"
           
@@ -336,7 +326,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
         if: ${{ env.BRANCH == 'main' }}
         run: |
-          cd lipa-lightning-lib-android${{ env.MOCK_SUFFIX }}
+          cd ${{ config.android-repo }}
           gh release create ${{ env.RELEASE_VERSION }} \
             jniLibs.zip \
             --title "${{ env.RELEASE_VERSION }}" \
@@ -346,7 +336,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
         if: ${{ env.BRANCH != 'main' }}
         run: |
-          cd lipa-lightning-lib-android${{ env.MOCK_SUFFIX }}
+          cd ${{ config.android-repo }}
           gh release create ${{ env.RELEASE_VERSION }} \
             jniLibs.zip \
             --title "${{ env.RELEASE_VERSION }}" \
@@ -354,7 +344,7 @@ jobs:
             --prerelease
       - name: Trigger JitPack build
         run: |
-          curl -s -m 30 https://jitpack.io/com/github/getlipa/lipa-lightning-lib-android${{ env.MOCK_SUFFIX }}/${{ env.RELEASE_VERSION }} || true
+          curl -s -m 30 https://jitpack.io/com/github/getlipa/${{ config.android-repo }}/${{ env.RELEASE_VERSION }} || true
 
   determine-branch:
     name: determine-branch
