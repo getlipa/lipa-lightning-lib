@@ -19,6 +19,7 @@ jobs:
     strategy:
       matrix:
         target: [ x86_64-apple-ios, aarch64-apple-ios, aarch64-apple-ios-sim ]
+        mock-deps: [ false, true ]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -44,18 +45,18 @@ jobs:
         with:
           use-cross: false
           command: build
-          args: --release --target ${{ matrix.target }}
+          args: ${{ matrix.mock-deps && '--no-default-features --features mock-deps' || '' }} --release --target ${{ matrix.target }}
       - name: Upload library binaries
         uses: actions/upload-artifact@v4
         with:
           path: target/${{ matrix.target }}/release/libuniffi_lipalightninglib.a
-          name: build-${{ matrix.target }}
+          name: build-${{ matrix.target }}${{ matrix.mock-deps && '-mock' || ''}}
       - name: Upload bindings files
         uses: actions/upload-artifact@v4
         if: ${{ matrix.target == 'x86_64-apple-ios' }}
         with:
           path: bindings/swift/lipalightninglib*
-          name: bindings-files-ios
+          name: bindings-files-ios${{ matrix.mock-deps && '-mock' || ''}}
 
   cross-compile-android:
     name: cross-compile-android
@@ -63,6 +64,7 @@ jobs:
     strategy:
       matrix:
         target: [ aarch64-linux-android, armv7-linux-androideabi, i686-linux-android ]
+        mock-deps: [ false, true ]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -90,39 +92,42 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --target ${{ matrix.target }}
+          args: ${{ matrix.mock-deps && '--no-default-features --features mock-deps' || '' }} --release --target ${{ matrix.target }}
       - name: Upload library binaries
         uses: actions/upload-artifact@v4
         with:
           path: target/${{ matrix.target }}/release/libuniffi_lipalightninglib.so
-          name: build-${{ matrix.target }}
+          name: build-${{ matrix.target }}${{ matrix.mock-deps && '-mock' || ''}}
       - name: Upload bindings file
         uses: actions/upload-artifact@v4
         if: ${{ matrix.target == 'aarch64-linux-android' }}
         with:
           path: bindings/kotlin/uniffi/lipalightninglib/lipalightninglib.kt
-          name: bindings-file-android
+          name: bindings-file-android${{ matrix.mock-deps && '-mock' || ''}}
 
   lipo-ios:
     name: lipo-ios
     needs: [ cross-compile-ios, cross-compile-android ]
     runs-on: macos-latest
+    strategy:
+      matrix:
+        mock-deps: [ false, true ]
     steps:
       - name: Download x86 bin
         uses: actions/download-artifact@v4
         with:
           path: target/x86_64-apple-ios/release
-          name: build-x86_64-apple-ios
+          name: build-x86_64-apple-ios${{ matrix.mock-deps && '-mock' || ''}}
       - name: Download aarch64 bin
         uses: actions/download-artifact@v4
         with:
           path: target/aarch64-apple-ios/release
-          name: build-aarch64-apple-ios
+          name: build-aarch64-apple-ios${{ matrix.mock-deps && '-mock' || ''}}
       - name: Download aarch64sim bin
         uses: actions/download-artifact@v4
         with:
           path: target/aarch64-apple-ios-sim/release
-          name: build-aarch64-apple-ios-sim
+          name: build-aarch64-apple-ios-sim${{ matrix.mock-deps && '-mock' || ''}}
       - name: Package simulator binaries
         run: |
           mkdir -p target/universal/release
@@ -133,12 +138,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           path: target/universal/release/libuniffi_lipalightninglib_simulator.a
-          name: build-ios-simulator-universal
+          name: build-ios-simulator-universal${{ matrix.mock-deps && '-mock' || ''}}
 
   deploy-ios:
     name: deploy-ios
     needs: lipo-ios
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mock-deps: [ false, true ]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -165,17 +173,17 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: target/aarch64-apple-ios/release
-          name: build-aarch64-apple-ios
+          name: build-aarch64-apple-ios${{ matrix.mock-deps && '-mock' || ''}}
       - name: Download simulator universal bin
         uses: actions/download-artifact@v4
         with:
           path: target/universal/release
-          name: build-ios-simulator-universal
+          name: build-ios-simulator-universal${{ matrix.mock-deps && '-mock' || ''}}
       - name: Download bindings files
         uses: actions/download-artifact@v4
         with:
           path: bindings/swift/
-          name: bindings-files-ios
+          name: bindings-files-ios${{ matrix.mock-deps && '-mock' || ''}}
       - name: Create xcframework
         run: |
           git clone git@github.com:getlipa/lipa-lightning-lib-swift.git
@@ -208,7 +216,7 @@ jobs:
           git add Package.swift
           git add Sources/LipaLightningLib/LipaLightningLib.swift
           git commit -m "This commit was created automatically by the lipa bot"
-          git tag -a ${{ env.RELEASE_VERSION }} HEAD -m "This tag was created automatically by the lipa bot."
+          git tag -a ${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || ''}} HEAD -m "This tag was created automatically by the lipa bot."
           git push
           git push --tag
       - name: Create release
@@ -263,22 +271,22 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: target/aarch64-linux-android/release
-          name: build-aarch64-linux-android
+          name: build-aarch64-linux-android${{ matrix.mock-deps && '-mock' || ''}}
       - name: Download armv7 bin
         uses: actions/download-artifact@v4
         with:
           path: target/armv7-linux-androideabi/release
-          name: build-armv7-linux-androideabi
+          name: build-armv7-linux-androideabi${{ matrix.mock-deps && '-mock' || ''}}
       - name: Download i686 bin
         uses: actions/download-artifact@v4
         with:
           path: target/i686-linux-android/release
-          name: build-i686-linux-android
+          name: build-i686-linux-android${{ matrix.mock-deps && '-mock' || ''}}
       - name: Download bindings file
         uses: actions/download-artifact@v4
         with:
           path: bindings/kotlin/uniffi/lipalightninglib
-          name: bindings-file-android
+          name: bindings-file-android${{ matrix.mock-deps && '-mock' || ''}}
       - name: Push to target repo
         run: |
           git clone git@github.com:getlipa/lipa-lightning-lib-android.git
@@ -311,7 +319,7 @@ jobs:
           git add LipaLightningLib/src/main/java/com/getlipa/lipalightninglib/lipalightninglib.kt
           git add jitpack.yml
           git commit -m "This commit was created automatically by the lipa bot"
-          git tag -a ${{ env.RELEASE_VERSION }} HEAD -m "This tag was created automatically by the lipa bot."
+          git tag -a ${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || ''}} HEAD -m "This tag was created automatically by the lipa bot."
           git push
           git push --tag
       - name: Create release
