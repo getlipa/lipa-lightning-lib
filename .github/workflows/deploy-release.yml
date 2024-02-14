@@ -147,6 +147,7 @@ jobs:
     strategy:
       matrix:
         mock-deps: [ false, true ]
+      max-parallel: 1
     steps:
       - uses: actions/checkout@v2
         with:
@@ -211,7 +212,6 @@ jobs:
           git add Package.swift
           git add Sources/LipaLightningLib/LipaLightningLib.swift
           git commit -m "This commit was created automatically by the lipa bot"
-          git status
           git restore .
           git pull --rebase
           git tag -a ${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || ''}} HEAD -m "This tag was created automatically by the lipa bot."
