@@ -348,7 +348,7 @@ jobs:
             --prerelease
       - name: Trigger JitPack build
         run: |
-          curl -s -m 30 https://jitpack.io/com/github/getlipa/lipa-lightning-lib-android/${{ env.RELEASE_VERSION }} || true
+          curl -s -m 30 https://jitpack.io/com/github/getlipa/lipa-lightning-lib-android/${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }} || true
 
   determine-branch:
     name: determine-branch
