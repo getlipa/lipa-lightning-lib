@@ -206,7 +206,7 @@ jobs:
           
           cp Package.swift.template Package.swift
           shasum -a 256 lipalightninglibFFI.xcframework.zip | sed 's/ .*//' > checksum
-          sed -i "s/to_replace_release_version/${{ env.RELEASE_VERSION }}/g" Package.swift
+          sed -i "s/to_replace_release_version/${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }}/g" Package.swift
           sed -i "s/to_replace_zip_checksum/$(cat checksum)/g" Package.swift
           
           git add Package.swift
@@ -315,7 +315,7 @@ jobs:
           shasum -a 256 jniLibs.zip | sed 's/ .*//' > checksum
 
           cp jitpack.yml.template jitpack.yml
-          sed -i "s/to_replace_release_version/${{ env.RELEASE_VERSION }}/g" jitpack.yml
+          sed -i "s/to_replace_release_version/${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }}/g" jitpack.yml
           sed -i "s/to_replace_zip_checksum/$(cat checksum)/g" jitpack.yml
 
           git add LipaLightningLib/src/main/java/com/getlipa/lipalightninglib/lipalightninglib.kt
