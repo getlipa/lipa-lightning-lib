@@ -13,6 +13,7 @@ use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
 /// A notification to be displayed to the user.
+#[derive(Debug)]
 pub enum Notification {
     /// The notification that a previously issued bolt11 invoice was paid.
     /// The `amount_sat` of the payment is provided.
@@ -23,6 +24,7 @@ pub enum Notification {
 }
 
 /// An action to be taken by the consumer of this library upon calling [`handle_notification`].
+#[derive(Debug)]
 pub enum RecommendedAction {
     None,
     ShowNotification { notification: Notification },
