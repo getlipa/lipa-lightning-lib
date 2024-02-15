@@ -589,12 +589,26 @@ namespace lipalightninglib {
 
     [Throws=ParseError]
     void parse_lightning_address([ByRef] string address);
+
+    [Throws=LnError]
+    RecommendedAction handle_notification(Config config, string notification_payload, duration timeout);
 };
 
 dictionary Secret {
     sequence<string> mnemonic;
     string passphrase;
     bytes seed;
+};
+
+[Enum]
+interface RecommendedAction {
+    None();
+    ShowNotification(Notification notification);
+};
+
+[Enum]
+interface Notification {
+    Bolt11PaymentReceived(u64 amount_sat, string hash);
 };
 
 //

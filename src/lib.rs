@@ -30,6 +30,7 @@ mod lnurl;
 mod locker;
 mod logger;
 mod migrations;
+mod notification_handling;
 mod offer;
 mod random;
 mod recovery;
@@ -85,6 +86,7 @@ use crate::task_manager::TaskManager;
 use crate::util::{
     replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
 };
+pub use notification_handling::{handle_notification, Notification, RecommendedAction};
 
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
