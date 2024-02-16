@@ -566,7 +566,7 @@ impl LightningNode {
     /// provided to [`LightningNode::create_invoice`]
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
         let req = OpenChannelFeeRequest {
-            amount_msat: amount_sat.as_sats().msats,
+            amount_msat: Some(amount_sat.as_sats().msats),
             expiry: None,
         };
         let res = self
@@ -580,9 +580,10 @@ impl LightningNode {
         Ok(CalculateLspFeeResponse {
             lsp_fee: res
                 .fee_msat
+                .ok_or_permanent_failure("Breez SDK open_channel_fee returned None lsp fee when provided with Some(amount_msat)")?
                 .as_msats()
                 .to_amount_up(&self.get_exchange_rate()),
-            lsp_fee_params: res.used_fee_params,
+            lsp_fee_params: Some(res.fee_params),
         })
     }
 
@@ -1196,7 +1197,7 @@ impl LightningNode {
                 timezone_id: user_preferences.timezone_config.timezone_id.clone(),
                 timezone_utc_offset_secs: user_preferences.timezone_config.timezone_utc_offset_secs,
             },
-            paid_msats: s.paid_sats, // The field being named paid_sats is a bug -> https://github.com/breez/breez-sdk/issues/746
+            paid_msats: s.paid_msat,
         });
 
         let recipient = match &payment_details.ln_address {
@@ -1650,6 +1651,9 @@ impl LightningNode {
             Err(LnUrlWithdrawError::ServiceConnectivity { err }) => runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
                 "Failed to withdraw offer due to: {err}"
+            ),
+            Err(LnUrlWithdrawError::InvoiceNoRoutingHints { err }) => permanent_failure!(
+                "A locally created invoice doesn't have any routing hints: {err}"
             ),
         };
 

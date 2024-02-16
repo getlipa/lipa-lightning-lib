@@ -23,12 +23,16 @@ const LSP_ID: &str = "c0ff3e11-2222-3333-4444-555555555555";
 const LSP_NAME: &str = "notdiem.lsp.mock";
 const LSP_PUBKEY: &str = "0314c2aac9c7e9064773616e89daeb71be1d26966fd0e2dfbb8bfbc62d885bb5ab";
 const LSP_HOST: &str = "97.35.97.53:9735";
-const LSP_CHANNEL_CAPACITY: i64 = 1234567;
-const LSP_TARGET_CONF: i32 = 6;
 const LSP_BASE_FEE_MSAT: i64 = 1000;
 const LSP_FEE_RATE: f64 = 0.00001;
 const LSP_TIMELOCK_DELTA: u32 = 42;
 const LSP_MIN_HTLC_MSAT: i64 = 600;
+const OPENING_FEE_PARAMS_MIN_MSAT: u64 = 5_000_000;
+const OPENING_FEE_PARAMS_PROPORTIONAL: u32 = 50;
+const OPENING_FEE_PARAMS_VALID_UNTIL: &str = "2030-02-16T11:46:49Z";
+const OPENING_FEE_PARAMS_MAX_IDLE_TIME: u32 = 10000;
+const OPENING_FEE_PARAMS_MAX_CLIENT_TO_SELF_DELAY: u32 = 256;
+const OPENING_FEE_PARAMS_PROMISE: &str = "promite";
 
 use breez_sdk_core::error::{
     LnUrlPayError, LnUrlWithdrawError, ReceiveOnchainError, ReceivePaymentError, SdkResult,
@@ -160,11 +164,14 @@ impl BreezServices {
                             payment_preimage: "".to_string(),
                             keysend: false,
                             bolt11: req.bolt11,
+                            open_channel_bolt11: None,
                             lnurl_success_action: None,
+                            lnurl_pay_domain: None,
                             ln_address: None,
                             lnurl_metadata: None,
                             lnurl_withdraw_endpoint: None,
                             swap_info: None,
+                            reverse_swap_info: None,
                             pending_expiration_block: None,
                         },
                     },
@@ -290,11 +297,14 @@ impl BreezServices {
                         payment_preimage: preimage,
                         keysend: false,
                         bolt11: invoice.to_string(),
+                        open_channel_bolt11: None,
                         lnurl_success_action: None,
+                        lnurl_pay_domain: None,
                         ln_address: None,
                         lnurl_metadata: None,
                         lnurl_withdraw_endpoint: None,
                         swap_info: None,
+                        reverse_swap_info: None,
                         pending_expiration_block: None,
                     },
                 },
@@ -341,6 +351,7 @@ impl BreezServices {
             block_height: 1234567,
             channels_balance_msat: balance,
             onchain_balance_msat: 0,
+            pending_onchain_balance_msat: 0,
             utxos: vec![],
             max_payable_msat: balance,
             max_receivable_msat: MAX_RECEIVABLE_MSAT,
@@ -439,8 +450,6 @@ impl BreezServices {
             widget_url: "".to_string(),
             pubkey: LSP_PUBKEY.to_string(),
             host: LSP_HOST.to_string(),
-            channel_capacity: LSP_CHANNEL_CAPACITY,
-            target_conf: LSP_TARGET_CONF,
             base_fee_msat: LSP_BASE_FEE_MSAT,
             fee_rate: LSP_FEE_RATE,
             time_lock_delta: LSP_TIMELOCK_DELTA,
@@ -463,8 +472,15 @@ impl BreezServices {
         _req: OpenChannelFeeRequest,
     ) -> SdkResult<OpenChannelFeeResponse> {
         Ok(OpenChannelFeeResponse {
-            fee_msat: 0,
-            used_fee_params: None,
+            fee_msat: Some(0),
+            fee_params: OpeningFeeParams {
+                min_msat: OPENING_FEE_PARAMS_MIN_MSAT,
+                proportional: OPENING_FEE_PARAMS_PROPORTIONAL,
+                valid_until: OPENING_FEE_PARAMS_VALID_UNTIL.to_string(),
+                max_idle_time: OPENING_FEE_PARAMS_MAX_IDLE_TIME,
+                max_client_to_self_delay: OPENING_FEE_PARAMS_MAX_CLIENT_TO_SELF_DELAY,
+                promise: OPENING_FEE_PARAMS_PROMISE.to_string(),
+            },
         })
     }
 
@@ -532,8 +548,6 @@ impl BreezServices {
             widget_url: "".to_string(),
             pubkey: LSP_PUBKEY.to_string().to_string(),
             host: LSP_HOST.to_string(),
-            channel_capacity: LSP_CHANNEL_CAPACITY,
-            target_conf: LSP_TARGET_CONF,
             base_fee_msat: LSP_BASE_FEE_MSAT,
             fee_rate: LSP_FEE_RATE,
             time_lock_delta: LSP_TIMELOCK_DELTA,

@@ -291,5 +291,8 @@ pub(crate) fn map_lnurl_withdraw_error(
         LnUrlWithdrawError::ServiceConnectivity { err } => {
             runtime_error(LnUrlWithdrawErrorCode::ServiceConnectivity, err)
         }
+        LnUrlWithdrawError::InvoiceNoRoutingHints { err } => permanent_failure(format!(
+            "A locally created invoice doesn't have any routing hints: {err}"
+        )),
     }
 }
