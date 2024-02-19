@@ -3,12 +3,15 @@ mod hinter;
 mod overview;
 #[path = "../../tests/print_events_handler/mod.rs"]
 mod print_events_handler;
+#[path = "../../tests/print_notifications_handler/mod.rs"]
+mod print_notifications_handler;
 
 use crate::print_events_handler::PrintEventsHandler;
 
 use uniffi_lipalightninglib::{mnemonic_to_secret, recover_lightning_node, LightningNode};
 use uniffi_lipalightninglib::{Config, EnvironmentCode, TzConfig};
 
+use crate::print_notifications_handler::PrintNotificationsHandler;
 use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
@@ -32,6 +35,7 @@ fn main() {
     fs::create_dir_all(&base_dir).unwrap();
 
     let events = Box::new(PrintEventsHandler {});
+    let notifications_handler = Box::new(PrintNotificationsHandler {});
 
     let seed = read_seed_from_env();
 
@@ -54,7 +58,7 @@ fn main() {
         enable_file_logging: true,
     };
 
-    let node = LightningNode::new(config, events).unwrap();
+    let node = LightningNode::new(config, events, notifications_handler).unwrap();
 
     // Launch CLI
     sleep(Duration::from_secs(1));
