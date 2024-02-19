@@ -77,7 +77,7 @@ pub(crate) fn migrate_funds(
 
     let lsp_fee_msat = rt
         .block_on(sdk.open_channel_fee(OpenChannelFeeRequest {
-            amount_msat: balance_msat,
+            amount_msat: Some(balance_msat),
             expiry: None,
         }))
         .map_to_runtime_error(
@@ -85,7 +85,10 @@ pub(crate) fn migrate_funds(
             "Failed to calculate lsp fee for fund migration amount",
         )?
         .fee_msat;
-    let amount_to_request = if lsp_fee_msat > 0 {
+    let amount_to_request = if lsp_fee_msat.ok_or_permanent_failure(
+        "Breez SDK open_channel_fee returned None lsp fee when provided with Some(amount_msat)",
+    )? > 0
+    {
         add_lsp_fees(balance_msat, &lsp_fee_params).as_msats()
     } else {
         balance_msat.as_msats()
