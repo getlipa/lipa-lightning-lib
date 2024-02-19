@@ -58,6 +58,10 @@ pub fn handle_notification(
         Payload::PaymentReceived { payment_hash } => {
             handle_payment_received_notification(rx, payment_hash, timeout)
         }
+        Payload::AddressTxsConfirmed { .. } => {
+            // TODO: implement handling of AddressTxsConfirmed
+            Ok(RecommendedAction::None)
+        }
     }
 }
 
@@ -139,6 +143,7 @@ fn start_sdk(
 #[serde(rename_all = "snake_case")]
 enum Payload {
     PaymentReceived { payment_hash: String },
+    AddressTxsConfirmed { address: String },
 }
 
 struct NotificationHandlerEventListener {
@@ -162,6 +167,9 @@ mod tests {
                                                  }
                                                 }"#;
 
+    const ADDRESS_TXS_CONFIRMED_PAYLOAD_JSON: &str =
+        r#"{"template": "address_txs_confirmed", "data": {"address": "bc1"}}"#;
+
     #[test]
     pub fn test_payload_deserialize() {
         let payment_received_payload: Payload =
@@ -171,6 +179,15 @@ mod tests {
             Payload::PaymentReceived {
                 payment_hash: hash
             } if hash == "hash"
+        ));
+
+        let address_txs_confirmed_payload: Payload =
+            serde_json::from_str(ADDRESS_TXS_CONFIRMED_PAYLOAD_JSON).unwrap();
+        assert!(matches!(
+            address_txs_confirmed_payload,
+            Payload::AddressTxsConfirmed {
+                address
+            } if address == "bc1"
         ));
     }
 }
