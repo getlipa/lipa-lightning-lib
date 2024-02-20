@@ -1200,12 +1200,9 @@ impl LightningNode {
             paid_msats: s.paid_msat,
         });
 
-        let recipient = match &payment_details.ln_address {
-            None => match breez_payment.payment_type {
-                breez_sdk_core::PaymentType::Sent => Some(Recipient::Unknown),
-                _ => None,
-            },
-            Some(a) => Some(Recipient::LightningAddress { address: a.clone() }),
+        let recipient = match breez_payment.payment_type {
+            breez_sdk_core::PaymentType::Sent => Some(Recipient::new(payment_details)),
+            _ => None,
         };
 
         let description = match payment_details

@@ -556,6 +556,7 @@ dictionary SwapToLightningFees {
 [Enum]
 interface Recipient {
     LightningAddress(string address);
+    LnUrlPayDomain(string domain);
     Unknown();
 };
 

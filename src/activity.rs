@@ -1,7 +1,7 @@
 use crate::{Amount, InvoiceDetails, OfferKind, PayErrorCode, SwapInfo, TzTime};
 use std::time::SystemTime;
 
-use breez_sdk_core::PaymentStatus;
+use breez_sdk_core::{LnPaymentDetails, PaymentStatus};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 #[repr(u8)]
@@ -74,7 +74,24 @@ pub struct Payment {
 #[derive(PartialEq, Debug)]
 pub enum Recipient {
     LightningAddress { address: String },
+    LnUrlPayDomain { domain: String },
     Unknown,
+}
+
+impl Recipient {
+    pub(crate) fn new(payment_details: &LnPaymentDetails) -> Recipient {
+        if let Some(address) = &payment_details.ln_address {
+            Recipient::LightningAddress {
+                address: address.to_string(),
+            }
+        } else if let Some(lnurlp_domain) = &payment_details.lnurl_pay_domain {
+            Recipient::LnUrlPayDomain {
+                domain: lnurlp_domain.to_string(),
+            }
+        } else {
+            Recipient::Unknown
+        }
+    }
 }
 
 /// Information about **all** pending and **only** requested completed activities.
