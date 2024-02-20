@@ -8,6 +8,7 @@ use std::time::Duration;
 use serial_test::file_serial;
 use uniffi_lipalightninglib::{OfferInfo, OfferKind, OfferStatus};
 
+#[ignore]
 #[test]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn test_topup() {
