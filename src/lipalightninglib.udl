@@ -609,7 +609,7 @@ interface RecommendedAction {
 
 [Enum]
 interface Notification {
-    Bolt11PaymentReceived(u64 amount_sat, string hash);
+    Bolt11PaymentReceived(u64 amount_sat, string payment_hash);
 };
 
 //

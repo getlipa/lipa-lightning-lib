@@ -93,12 +93,13 @@ use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPayment
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
 use breez_sdk_core::{
     parse, parse_invoice, BitcoinAddressData, BreezServices, ClosedChannelPaymentDetails,
-    GreenlightCredentials, GreenlightNodeConfig, InputType, ListPaymentsRequest, LnPaymentDetails,
-    LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest, LnUrlWithdrawRequestData, Network,
-    NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails, PaymentStatus,
-    PaymentTypeFilter, PrepareRedeemOnchainFundsRequest, PrepareRefundRequest,
-    ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest, ReportIssueRequest,
-    ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest, SendPaymentRequest,
+    EventListener, GreenlightCredentials, GreenlightNodeConfig, InputType, ListPaymentsRequest,
+    LnPaymentDetails, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
+    LnUrlWithdrawRequestData, Network, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
+    PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRedeemOnchainFundsRequest,
+    PrepareRefundRequest, ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
+    ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest,
+    SendPaymentRequest,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -338,31 +339,9 @@ impl LightningNode {
             environment.backend_url.clone(),
         )?);
 
-        let device_cert = env!("BREEZ_SDK_PARTNER_CERTIFICATE").as_bytes().to_vec();
-        let device_key = env!("BREEZ_SDK_PARTNER_KEY").as_bytes().to_vec();
-        let partner_credentials = GreenlightCredentials {
-            device_cert,
-            device_key,
-        };
-
-        let mut breez_config = BreezServices::default_config(
-            environment.environment_type.clone(),
-            env!("BREEZ_SDK_API_KEY").to_string(),
-            NodeConfig::Greenlight {
-                config: GreenlightNodeConfig {
-                    partner_credentials: Some(partner_credentials),
-                    invite_code: None,
-                },
-            },
-        );
-
-        breez_config.working_dir = config.local_persistence_path.clone();
-        breez_config.exemptfee_msat = EXEMPT_FEE.msats;
-        breez_config.maxfee_percent = MAX_FEE_PERMYRIAD as f64 / 100_f64;
-
         let user_preferences = Arc::new(Mutex::new(UserPreferences {
-            fiat_currency: config.fiat_currency,
-            timezone_config: config.timezone_config,
+            fiat_currency: config.fiat_currency.clone(),
+            timezone_config: config.timezone_config.clone(),
         }));
 
         let analytics_client = AnalyticsClient::new(
@@ -388,17 +367,7 @@ impl LightningNode {
             Arc::clone(&analytics_interceptor),
         ));
 
-        let sdk = rt
-            .handle()
-            .block_on(BreezServices::connect(
-                breez_config,
-                config.seed.clone(),
-                event_listener,
-            ))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to initialize a breez sdk instance",
-            )?;
+        let sdk = start_sdk(&rt, &config, &environment, event_listener)?;
 
         rt.handle().block_on(async {
             if sdk
@@ -2273,6 +2242,46 @@ impl LightningNode {
             .block_on(self.sdk.report_issue(request))
             .log_ignore_error(Level::Warn, "Failed to report issue");
     }
+}
+
+pub(crate) fn start_sdk(
+    rt: &AsyncRuntime,
+    config: &Config,
+    environment: &Environment,
+    event_listener: Box<dyn EventListener>,
+) -> Result<Arc<BreezServices>> {
+    let device_cert = env!("BREEZ_SDK_PARTNER_CERTIFICATE").as_bytes().to_vec();
+    let device_key = env!("BREEZ_SDK_PARTNER_KEY").as_bytes().to_vec();
+    let partner_credentials = GreenlightCredentials {
+        device_cert,
+        device_key,
+    };
+
+    let mut breez_config = BreezServices::default_config(
+        environment.environment_type.clone(),
+        env!("BREEZ_SDK_API_KEY").to_string(),
+        NodeConfig::Greenlight {
+            config: GreenlightNodeConfig {
+                partner_credentials: Some(partner_credentials),
+                invite_code: None,
+            },
+        },
+    );
+
+    breez_config.working_dir = config.local_persistence_path.clone();
+    breez_config.exemptfee_msat = EXEMPT_FEE.msats;
+    breez_config.maxfee_percent = MAX_FEE_PERMYRIAD as f64 / 100_f64;
+
+    rt.handle()
+        .block_on(BreezServices::connect(
+            breez_config,
+            config.seed.clone(),
+            event_listener,
+        ))
+        .map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to initialize a breez sdk instance",
+        )
 }
 
 /// Accept lipa's terms and conditions. Should be called before instantiating a [`LightningNode`]
