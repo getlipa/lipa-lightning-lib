@@ -39,7 +39,7 @@ pub(crate) fn migrate_funds(
     backend_url: &String,
 ) -> Result<()> {
     if matches!(
-        data_store.lock_unwrap().retrive_funds_migration_status()?,
+        data_store.lock_unwrap().retrieve_funds_migration_status()?,
         MigrationStatus::Completed | MigrationStatus::NotNeeded
     ) {
         return Ok(());

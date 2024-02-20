@@ -372,7 +372,7 @@ impl LightningNode {
         let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
         let data_store = Arc::new(Mutex::new(DataStore::new(&db_path)?));
 
-        let analytics_config = data_store.lock_unwrap().retrive_analytics_config()?;
+        let analytics_config = data_store.lock_unwrap().retrieve_analytics_config()?;
         let analytics_interceptor = Arc::new(AnalyticsInterceptor::new(
             analytics_client,
             Arc::clone(&user_preferences),
@@ -474,7 +474,7 @@ impl LightningNode {
         if let Some(webhook_base_url) = &environment.notification_webhook_base_url {
             let last_registered_webhook_base_url = data_store
                 .lock_unwrap()
-                .retrive_last_registered_notification_webhook_base_url()?;
+                .retrieve_last_registered_notification_webhook_base_url()?;
 
             if Some(webhook_base_url.to_string()) != last_registered_webhook_base_url {
                 let id = auth.get_wallet_pubkey_id().map_to_runtime_error(
@@ -2256,7 +2256,7 @@ impl LightningNode {
 
     /// Get the currently configured analytics configuration.
     pub fn get_analytics_config(&self) -> Result<AnalyticsConfig> {
-        self.data_store.lock_unwrap().retrive_analytics_config()
+        self.data_store.lock_unwrap().retrieve_analytics_config()
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {

@@ -282,7 +282,7 @@ impl DataStore {
         Ok(())
     }
 
-    pub fn retrive_funds_migration_status(&self) -> Result<MigrationStatus> {
+    pub fn retrieve_funds_migration_status(&self) -> Result<MigrationStatus> {
         let status_from_row = |row: &Row| {
             let status: u8 = row.get(0)?;
             MigrationStatus::try_from(status).map_err(|e| {
@@ -358,7 +358,7 @@ impl DataStore {
         Ok(())
     }
 
-    pub fn retrive_analytics_config(&self) -> Result<AnalyticsConfig> {
+    pub fn retrieve_analytics_config(&self) -> Result<AnalyticsConfig> {
         let status_from_row = |row: &Row| {
             let status: u8 = row.get(0)?;
             AnalyticsConfig::try_from(status).map_err(|e| {
@@ -392,7 +392,7 @@ impl DataStore {
         Ok(())
     }
 
-    pub fn retrive_last_registered_notification_webhook_base_url(&self) -> Result<Option<String>> {
+    pub fn retrieve_last_registered_notification_webhook_base_url(&self) -> Result<Option<String>> {
         let string_from_row = |row: &Row| {
             let string: String = row.get(0)?;
             Ok(string)
@@ -1007,7 +1007,7 @@ mod tests {
         let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
 
         assert_eq!(
-            data_store.retrive_funds_migration_status().unwrap(),
+            data_store.retrieve_funds_migration_status().unwrap(),
             MigrationStatus::Unknown
         );
 
@@ -1015,7 +1015,7 @@ mod tests {
             .append_funds_migration_status(MigrationStatus::Pending)
             .unwrap();
         assert_eq!(
-            data_store.retrive_funds_migration_status().unwrap(),
+            data_store.retrieve_funds_migration_status().unwrap(),
             MigrationStatus::Pending
         );
 
@@ -1023,7 +1023,7 @@ mod tests {
             .append_funds_migration_status(MigrationStatus::Completed)
             .unwrap();
         assert_eq!(
-            data_store.retrive_funds_migration_status().unwrap(),
+            data_store.retrieve_funds_migration_status().unwrap(),
             MigrationStatus::Completed
         );
     }
@@ -1162,7 +1162,7 @@ mod tests {
         let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
 
         assert_eq!(
-            data_store.retrive_analytics_config().unwrap(),
+            data_store.retrieve_analytics_config().unwrap(),
             AnalyticsConfig::Enabled
         );
 
@@ -1170,7 +1170,7 @@ mod tests {
             .append_analytics_config(AnalyticsConfig::Disabled)
             .unwrap();
         assert_eq!(
-            data_store.retrive_analytics_config().unwrap(),
+            data_store.retrieve_analytics_config().unwrap(),
             AnalyticsConfig::Disabled
         );
 
@@ -1178,7 +1178,7 @@ mod tests {
             .append_analytics_config(AnalyticsConfig::Enabled)
             .unwrap();
         assert_eq!(
-            data_store.retrive_analytics_config().unwrap(),
+            data_store.retrieve_analytics_config().unwrap(),
             AnalyticsConfig::Enabled
         );
     }
@@ -1191,7 +1191,7 @@ mod tests {
 
         assert_eq!(
             data_store
-                .retrive_last_registered_notification_webhook_base_url()
+                .retrieve_last_registered_notification_webhook_base_url()
                 .unwrap(),
             None
         );
@@ -1201,7 +1201,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             data_store
-                .retrive_last_registered_notification_webhook_base_url()
+                .retrieve_last_registered_notification_webhook_base_url()
                 .unwrap(),
             Some("base_url".to_string())
         );
@@ -1211,7 +1211,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             data_store
-                .retrive_last_registered_notification_webhook_base_url()
+                .retrieve_last_registered_notification_webhook_base_url()
                 .unwrap(),
             Some("base_url2".to_string())
         );
