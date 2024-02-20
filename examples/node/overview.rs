@@ -139,6 +139,7 @@ fn print_payment(payment: Payment) -> Result<()> {
 
     let (icon, title) = match payment.recipient {
         Some(Recipient::LightningAddress { address }) => (" @".bold(), address),
+        Some(Recipient::LnUrlPayDomain { domain }) => ("🌐".normal(), domain),
         Some(Recipient::Unknown) | None => ("🧾".normal(), "Invoice".to_string()),
     };
 
