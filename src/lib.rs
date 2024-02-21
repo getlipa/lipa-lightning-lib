@@ -367,9 +367,8 @@ impl LightningNode {
             Arc::clone(&analytics_interceptor),
         ));
 
-        let sdk = start_sdk(&rt, &config, &environment, event_listener)?;
-
-        rt.handle().block_on(async {
+        let sdk = rt.handle().block_on(async {
+            let sdk = start_sdk(&config, &environment, event_listener).await?;
             if sdk
                 .lsp_id()
                 .await
@@ -392,7 +391,7 @@ impl LightningNode {
                     "Failed to connect to lsp",
                 )?;
             }
-            Ok::<(), LnError>(())
+            Ok(sdk)
         })?;
 
         let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
@@ -2244,8 +2243,7 @@ impl LightningNode {
     }
 }
 
-pub(crate) fn start_sdk(
-    rt: &AsyncRuntime,
+pub(crate) async fn start_sdk(
     config: &Config,
     environment: &Environment,
     event_listener: Box<dyn EventListener>,
@@ -2271,13 +2269,8 @@ pub(crate) fn start_sdk(
     breez_config.working_dir = config.local_persistence_path.clone();
     breez_config.exemptfee_msat = EXEMPT_FEE.msats;
     breez_config.maxfee_percent = MAX_FEE_PERMYRIAD as f64 / 100_f64;
-
-    rt.handle()
-        .block_on(BreezServices::connect(
-            breez_config,
-            config.seed.clone(),
-            event_listener,
-        ))
+    BreezServices::connect(breez_config, config.seed.clone(), event_listener)
+        .await
         .map_to_runtime_error(
             RuntimeErrorCode::NodeUnavailable,
             "Failed to initialize a breez sdk instance",

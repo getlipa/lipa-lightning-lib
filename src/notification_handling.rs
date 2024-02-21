@@ -64,7 +64,9 @@ pub fn handle_notification(
     let (tx, rx) = mpsc::channel();
     let event_listener = Box::new(NotificationHandlerEventListener { event_sender: tx });
     let environment = Environment::load(config.environment);
-    let sdk = start_sdk(&rt, &config, &environment, event_listener)?;
+    let sdk = rt
+        .handle()
+        .block_on(start_sdk(&config, &environment, event_listener))?;
 
     match payload {
         Payload::PaymentReceived { payment_hash } => {
