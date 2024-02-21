@@ -2207,6 +2207,7 @@ dependencies = [
  "log",
  "num_enum",
  "parrot",
+ "parrot-mock",
  "parser",
  "perro",
  "qrcode",
@@ -2624,6 +2625,15 @@ source = "git+https://github.com/getlipa/wild?tag=v1.20.0#d541d14674c434b6e55474
 dependencies = [
  "graphql",
  "honey-badger",
+]
+
+[[package]]
+name = "parrot-mock"
+version = "0.1.0"
+dependencies = [
+ "graphql",
+ "honey-badger",
+ "parrot",
 ]
 
 [[package]]

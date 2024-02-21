@@ -22,7 +22,8 @@ honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.20.0" }
 graphql = { git = "https://github.com/getlipa/wild", tag = "v1.20.0" }
 squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.20.0", optional = true }
 squirrel-mock = { path = "mock/wild/squirrel", optional = true }
-parrot = { git = "https://github.com/getlipa/wild", tag = "v1.20.0" }
+parrot = { git = "https://github.com/getlipa/wild", tag = "v1.20.0", optional = true }
+parrot-mock =  { path = "mock/wild/parrot", optional = true }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.3.1", optional = true }
@@ -52,8 +53,8 @@ uniffi = "0.26.1"
 uuid = { version = "1.7.0", features = ["v5"] }
 
 [features]
-default = ["dep:breez-sdk-core", "dep:squirrel"]
-mock-deps = ["dep:breez-sdk-mock", "dep:squirrel-mock"]
+default = ["dep:breez-sdk-core", "dep:squirrel", "dep:parrot"]
+mock-deps = ["dep:breez-sdk-mock", "dep:squirrel-mock", "dep:parrot-mock"]
 
 # Bundle sqlite for all targets except iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]
