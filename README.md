@@ -49,6 +49,13 @@ make run-node ARGS=dev
 ```
 `local` (default), `dev`, `stage`, and `prod` environments are available.
 
+To test background receive:
+ - start the regular example node, issue an invoice, and shut it down
+ - run `make run-notification-handler ARGS=<payment hash of issued invoice>`
+ - do either
+   - don't pay the invoice or pay a different invoice → after the timeout of 60 secs, the action `None` should be printed
+   - pay the invoice issued in step 1 → the action `ShowNotification` should be printed
+
 #### Logs
 View logs in `.3l_node_{ENVIRONMENT_CODE}/logs.txt`.
 

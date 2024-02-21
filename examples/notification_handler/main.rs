@@ -6,14 +6,8 @@ use uniffi_lipalightninglib::{
 static BASE_DIR: &str = ".3l_node";
 
 fn main() {
-    let environment = env::args().nth(1).unwrap_or("local".to_string());
-    let hash = match env::args().nth(2) {
-        None => {
-            println!("A payment hash must be provided");
-            return;
-        }
-        Some(h) => h,
-    };
+    let hash = env::args().nth(1).expect("A payment hash must be provided");
+    let environment = env::args().nth(2).unwrap_or("local".to_string());
 
     println!("Starting a handle_notification test run.");
     println!("Environment: {environment}");
