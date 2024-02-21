@@ -1,5 +1,4 @@
 use std::env;
-use std::time::Duration;
 use uniffi_lipalightninglib::{
     handle_notification, mnemonic_to_secret, Config, EnvironmentCode, TzConfig,
 };
@@ -48,8 +47,7 @@ fn main() {
         }}"
     );
 
-    let action =
-        handle_notification(config, notification_payload, Duration::from_secs(60)).unwrap();
+    let action = handle_notification(config, notification_payload).unwrap();
 
     println!("The recommended action is {action:?}");
 }

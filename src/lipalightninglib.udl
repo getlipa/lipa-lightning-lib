@@ -592,7 +592,7 @@ namespace lipalightninglib {
     void parse_lightning_address([ByRef] string address);
 
     [Throws=LnError]
-    RecommendedAction handle_notification(Config config, string notification_payload, duration timeout);
+    RecommendedAction handle_notification(Config config, string notification_payload);
 };
 
 dictionary Secret {

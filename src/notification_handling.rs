@@ -1,13 +1,18 @@
 use crate::async_runtime::AsyncRuntime;
 use crate::environment::Environment;
 use crate::errors::Result;
-use crate::{enable_backtrace, start_sdk, Config};
-use breez_sdk_core::{BreezEvent, EventListener};
+use crate::logger::init_logger_once;
+use crate::{enable_backtrace, start_sdk, Config, RuntimeErrorCode, LOGS_DIR, LOG_LEVEL};
+use breez_sdk_core::{BreezEvent, BreezServices, EventListener, PaymentStatus};
+use log::{debug, error};
 use perro::{permanent_failure, MapToError};
 use serde::Deserialize;
-use std::sync::mpsc;
+use std::path::Path;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
+use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
+
+const TIMEOUT: Duration = Duration::from_secs(60);
 
 /// A notification to be displayed to the user.
 #[derive(Debug)]
@@ -35,40 +40,67 @@ pub enum RecommendedAction {
 /// Notifications are used to wake up the node in order to process some request. Currently supported
 /// requests are:
 /// * Receive a payment from a previously issued bolt11 invoice.
-///
-/// The `timeout` is the maximum time this function will wait for the request to be processed.
-/// The node start-up time isn't included.
 pub fn handle_notification(
     config: Config,
     notification_payload: String,
-    timeout: Duration,
 ) -> Result<RecommendedAction> {
     enable_backtrace();
+    init_logger_once(
+        LOG_LEVEL,
+        &Path::new(&config.local_persistence_path).join(LOGS_DIR),
+    )?;
+    debug!("Started handling a notification.");
 
-    let payload: Payload = serde_json::from_str(&notification_payload)
-        .map_to_invalid_input("Invalid notification payload")?;
+    let payload = match serde_json::from_str::<Payload>(&notification_payload) {
+        Ok(p) => p,
+        Err(e) => {
+            error!("Notification payload not recognized. Error: {e} - JSON Payload: {notification_payload}");
+            return Ok(RecommendedAction::None);
+        }
+    };
 
     let rt = AsyncRuntime::new()?;
 
     let (tx, rx) = mpsc::channel();
     let event_listener = Box::new(NotificationHandlerEventListener { event_sender: tx });
     let environment = Environment::load(config.environment);
-    let _sdk = start_sdk(&rt, &config, &environment, event_listener)?;
+    let sdk = start_sdk(&rt, &config, &environment, event_listener)?;
 
     match payload {
         Payload::PaymentReceived { payment_hash } => {
-            handle_payment_received_notification(rx, payment_hash, timeout)
+            handle_payment_received_notification(rt, sdk, rx, payment_hash)
         }
     }
 }
 
 fn handle_payment_received_notification(
+    rt: AsyncRuntime,
+    sdk: Arc<BreezServices>,
     event_receiver: Receiver<BreezEvent>,
     payment_hash: String,
-    timeout: Duration,
 ) -> Result<RecommendedAction> {
+    // Check if the payment was already received
+    let payment = rt
+        .handle()
+        .block_on(sdk.payment_by_hash(payment_hash.clone()))
+        .map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to get payment by hash",
+        )?;
+    if let Some(payment) = payment {
+        if payment.status == PaymentStatus::Complete {
+            return Ok(RecommendedAction::ShowNotification {
+                notification: Notification::Bolt11PaymentReceived {
+                    amount_sat: payment.amount_msat / 1000,
+                    payment_hash,
+                },
+            });
+        }
+    }
+
+    // Wait for payment to be received
     let start = Instant::now();
-    while Instant::now().duration_since(start) < timeout {
+    while Instant::now().duration_since(start) < TIMEOUT {
         let event = match event_receiver.recv_timeout(Duration::from_secs(1)) {
             Ok(e) => e,
             Err(RecvTimeoutError::Timeout) => continue,
