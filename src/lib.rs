@@ -88,6 +88,7 @@ use crate::util::{
 };
 pub use notification_handling::{handle_notification, Notification, RecommendedAction};
 
+use crate::symmetric_encryption::encrypt;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
@@ -316,7 +317,7 @@ impl LightningNode {
 
         let rt = AsyncRuntime::new()?;
 
-        let environment = Environment::load(config.environment);
+        let environment = Environment::load(config.environment)?;
 
         // TODO once we have mocked the backend, we can continue to use the seed from the config and still won't have conflicts with the real backend using the same seed
         #[cfg(not(feature = "mock-deps"))]
@@ -452,7 +453,11 @@ impl LightningNode {
                     "Failed to authenticate in order to get wallet pubkey id",
                 )?;
 
-                let webhook_url = webhook_base_url.replacen("{id}", &id, 1);
+                let encrypted_id = encrypt(id.as_bytes(), &environment.notification_webhook_secret)
+                    .map_to_permanent_failure("Failed to encrypt wallet pubkey id")?;
+                let encrypted_id = hex::encode(encrypted_id);
+
+                let webhook_url = webhook_base_url.replacen("{id}", &encrypted_id, 1);
 
                 rt.handle()
                     .block_on(sdk.register_webhook(webhook_url.clone()))
@@ -2290,7 +2295,7 @@ pub fn accept_terms_and_conditions(
     version: i64,
 ) -> Result<()> {
     enable_backtrace();
-    let environment = Environment::load(environment);
+    let environment = Environment::load(environment)?;
     let seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.accept_terms_and_conditions(TermsAndConditions::Lipa, version)
@@ -2343,7 +2348,7 @@ pub fn get_terms_and_conditions_status(
     terms_and_conditions: TermsAndConditions,
 ) -> Result<TermsAndConditionsStatus> {
     enable_backtrace();
-    let environment = Environment::load(environment);
+    let environment = Environment::load(environment)?;
     let seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = build_auth(&seed, environment.backend_url)?;
     auth.get_terms_and_conditions_status(terms_and_conditions)
