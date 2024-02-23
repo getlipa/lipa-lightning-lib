@@ -35,7 +35,7 @@ pub fn recover_lightning_node(
         )
     }
 
-    let environment = Environment::load(environment);
+    let environment = Environment::load(environment)?;
 
     let strong_typed_seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = Arc::new(build_async_auth(
