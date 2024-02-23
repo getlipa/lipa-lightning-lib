@@ -242,6 +242,10 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "registerlightningaddress" => match node.register_lightning_address() {
+                    Ok(address) => println!("{address}"),
+                    Err(message) => println!("{}", format!("{message:#}").red()),
+                },
                 "logdebug" => {
                     if let Err(message) = node.log_debug_info() {
                         println!("{}", format!("{message:#}").red());
@@ -368,6 +372,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "listlightningaddresses",
     ));
     hints.insert(CommandHint::new(
+        "registerlightningaddress",
+        "registerlightningaddress",
+    ));
+    hints.insert(CommandHint::new(
         "paymentuuid <payment hash>",
         "paymentuuid ",
     ));
@@ -436,6 +444,7 @@ fn help() {
     println!("  o | overview [number of activities = 10] [fun mode = false]");
     println!("  l | listactivities [number of activities = 2]");
     println!("  listlightningaddresses");
+    println!("  registerlightningaddress");
     println!("  paymentuuid <payment hash>");
     println!("  personalnote <payment hash> [note]");
     println!();

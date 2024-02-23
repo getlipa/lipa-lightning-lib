@@ -36,7 +36,7 @@ pub(crate) fn migrate_funds(
     data_store: Arc<Mutex<DataStore>>,
     sdk: &BreezServices,
     auth: Arc<Auth>,
-    backend_url: &String,
+    backend_url: &str,
 ) -> Result<()> {
     if matches!(
         data_store.lock_unwrap().retrieve_funds_migration_status()?,
@@ -121,7 +121,7 @@ pub(crate) fn migrate_funds(
     }
 }
 
-fn fetch_legacy_balance(client: &Client, backend_url: &String, public_key: String) -> Result<u64> {
+fn fetch_legacy_balance(client: &Client, backend_url: &str, public_key: String) -> Result<u64> {
     let variables = migration_balance::Variables {
         node_pub_key: Some(public_key),
     };
@@ -140,7 +140,7 @@ fn fetch_legacy_balance(client: &Client, backend_url: &String, public_key: Strin
 
 fn payout(
     client: &Client,
-    backend_url: &String,
+    backend_url: &str,
     public_key: String,
     invoice: String,
     signature: String,

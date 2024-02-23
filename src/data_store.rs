@@ -8,7 +8,7 @@ use crate::analytics::AnalyticsConfig;
 use chrono::{DateTime, Utc};
 use crow::{PermanentFailureCode, TemporaryFailureCode};
 use perro::MapToError;
-use rusqlite::{backup, params, Connection, OptionalExtension, Row};
+use rusqlite::{backup, params, Connection, OptionalExtension, Params, Row};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub(crate) const BACKUP_DB_FILENAME_SUFFIX: &str = ".backup";
@@ -393,10 +393,6 @@ impl DataStore {
     }
 
     pub fn retrieve_last_registered_notification_webhook_base_url(&self) -> Result<Option<String>> {
-        let string_from_row = |row: &Row| {
-            let string: String = row.get(0)?;
-            Ok(string)
-        };
         self.conn
             .query_row(
                 "SELECT url, updated_at FROM webhook_base_url ORDER BY id DESC LIMIT 1",
@@ -408,6 +404,48 @@ impl DataStore {
                 "Failed to query last registered notification webhook base url",
             )
     }
+
+    pub fn store_lightning_address(&mut self, lightning_address: &str) -> Result<()> {
+        let changed_rows = self.conn
+            .execute(
+                "INSERT INTO lightning_addresses (address) VALUES (?1) ON CONFLICT(address) DO NOTHING",
+                (lightning_address,),
+            )
+            .map_to_permanent_failure("Failed to add lightning address to db")?;
+        if changed_rows > 0 {
+            self.backup_status = BackupStatus::WaitingForBackup;
+        }
+        Ok(())
+    }
+
+    pub fn retrieve_lightning_addresses(&self) -> Result<Vec<String>> {
+        self.query_map(
+            "SELECT address FROM lightning_addresses ORDER BY registered_at",
+            [],
+            string_from_row,
+        )
+        .map_to_permanent_failure("Failed to query lightning addresses")
+    }
+
+    fn query_map<T, P, F>(
+        &self,
+        statement: &str,
+        params: P,
+        from_row: F,
+    ) -> rusqlite::Result<Vec<T>>
+    where
+        P: Params,
+        F: Fn(&Row) -> rusqlite::Result<T>,
+    {
+        self.conn
+            .prepare(statement)?
+            .query_map(params, from_row)?
+            .collect()
+    }
+}
+
+fn string_from_row(row: &Row) -> rusqlite::Result<String> {
+    row.get(0)
 }
 
 // Store all provided exchange rates.
@@ -1214,6 +1252,42 @@ mod tests {
                 .retrieve_last_registered_notification_webhook_base_url()
                 .unwrap(),
             Some("base_url2".to_string())
+        );
+    }
+
+    #[test]
+    fn test_storing_lightnining_address() {
+        let db_name = String::from("lightning_addresses.db3");
+        reset_db(&db_name);
+        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+        let addresses = data_store.retrieve_lightning_addresses().unwrap();
+        assert!(addresses.is_empty());
+
+        // Store an address.
+        data_store
+            .store_lightning_address("satoshi@lipa.swiss")
+            .unwrap();
+        let addresses = data_store.retrieve_lightning_addresses().unwrap();
+        assert_eq!(addresses, vec!["satoshi@lipa.swiss".to_string()]);
+
+        // Storing the same address.
+        data_store
+            .store_lightning_address("satoshi@lipa.swiss")
+            .unwrap();
+        let addresses = data_store.retrieve_lightning_addresses().unwrap();
+        assert_eq!(addresses, vec!["satoshi@lipa.swiss".to_string()]);
+
+        // Storing another address.
+        data_store
+            .store_lightning_address("finney@lipa.swiss")
+            .unwrap();
+        let addresses = data_store.retrieve_lightning_addresses().unwrap();
+        assert_eq!(
+            addresses,
+            vec![
+                "satoshi@lipa.swiss".to_string(),
+                "finney@lipa.swiss".to_string()
+            ]
         );
     }
 

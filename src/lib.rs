@@ -260,6 +260,7 @@ pub struct LightningNode {
     user_preferences: Arc<Mutex<UserPreferences>>,
     sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
+    async_auth: Arc<honey_badger::asynchronous::Auth>,
     fiat_topup_client: PocketClient,
     offer_manager: OfferManager,
     rt: AsyncRuntime,
@@ -479,6 +480,7 @@ impl LightningNode {
             user_preferences,
             sdk,
             auth,
+            async_auth,
             fiat_topup_client,
             offer_manager,
             rt,
@@ -2284,6 +2286,33 @@ impl LightningNode {
     /// Get the currently configured analytics configuration.
     pub fn get_analytics_config(&self) -> Result<AnalyticsConfig> {
         self.data_store.lock_unwrap().retrieve_analytics_config()
+    }
+
+    /// Register a human-readable lightning address or return the previously
+    /// registered one.
+    pub fn register_lightning_address(&self) -> Result<String> {
+        let addresses = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_lightning_addresses()?;
+        if let Some(address) = addresses.into_iter().next() {
+            return Ok(address);
+        }
+        let address = self
+            .rt
+            .handle()
+            .block_on(pigeon::assign_lightning_address(
+                &self.environment.backend_url,
+                &self.async_auth,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to register a lightning address",
+            )?;
+        self.data_store
+            .lock_unwrap()
+            .store_lightning_address(&address)?;
+        Ok(address)
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {
