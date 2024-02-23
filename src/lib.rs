@@ -88,6 +88,7 @@ use crate::util::{
 };
 pub use notification_handling::{handle_notification, Notification, RecommendedAction};
 
+use crate::activity::BreezPaymentMetadata;
 use crate::symmetric_encryption::encrypt;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
@@ -1035,6 +1036,49 @@ impl LightningNode {
         }
     }
 
+    /// Set a personal note on a specific payment.
+    ///
+    /// Parameters:
+    /// * `payment_hash` - The hash of the payment for which a personal note will be set.
+    /// * `note` - The personal note.
+    pub fn set_payment_personal_note(&self, payment_hash: String, note: String) -> Result<()> {
+        let note = Some(note.trim().to_string()).filter(|s| !s.is_empty());
+
+        let previous_metadata = self
+            .rt
+            .handle()
+            .block_on(self.sdk.payment_by_hash(payment_hash.clone()))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to fetch payment by hash",
+            )?
+            .ok_or_invalid_input("Payment not found")?
+            .metadata;
+
+        let new_metadata = match previous_metadata {
+            None => BreezPaymentMetadata {
+                personal_note: note,
+            },
+            Some(m) => {
+                let mut m: BreezPaymentMetadata = serde_json::from_str(&m)
+                    .map_to_permanent_failure("Payment metadata got corrupted")?;
+                m.personal_note = note;
+                m
+            }
+        };
+        let new_metadata = serde_json::to_string(&new_metadata)
+            .map_to_permanent_failure("Failed to serialize BreezPaymentMetadata")?;
+
+        self.rt
+            .handle()
+            .block_on(self.sdk.set_payment_metadata(payment_hash, new_metadata))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to set payment metadata",
+            )?;
+        Ok(())
+    }
+
     fn activity_from_breez_payment(
         &self,
         breez_payment: breez_sdk_core::Payment,
@@ -1189,6 +1233,12 @@ impl LightningNode {
             _ => description,
         };
 
+        let payment_metadata: Option<BreezPaymentMetadata> = breez_payment
+            .metadata
+            .as_ref()
+            .and_then(|m| serde_json::from_str(m).unwrap_or(None));
+        let personal_note = payment_metadata.and_then(|p| p.personal_note);
+
         Ok(Activity::PaymentActivity {
             payment: Payment {
                 payment_type,
@@ -1210,6 +1260,7 @@ impl LightningNode {
                 offer,
                 swap,
                 recipient,
+                personal_note,
             },
         })
     }
@@ -1329,6 +1380,7 @@ impl LightningNode {
             offer: None,
             swap: None,
             recipient: None,
+            personal_note: None,
         })
     }
 
@@ -2599,6 +2651,7 @@ mod tests {
                 offer: None,
                 swap: None,
                 recipient: None,
+                personal_note: None,
             },
             Payment {
                 payment_type: PaymentType::Receiving,
@@ -2648,6 +2701,7 @@ mod tests {
                 }),
                 swap: None,
                 recipient: None,
+                personal_note: None,
             },
             Payment {
                 payment_type: PaymentType::Receiving,
@@ -2697,6 +2751,7 @@ mod tests {
                 }),
                 swap: None,
                 recipient: None,
+                personal_note: None,
             },
         ];
 

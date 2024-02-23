@@ -2,6 +2,7 @@ use crate::{Amount, InvoiceDetails, OfferKind, PayErrorCode, SwapInfo, TzTime};
 use std::time::SystemTime;
 
 use breez_sdk_core::{LnPaymentDetails, PaymentStatus};
+use serde::{Deserialize, Serialize};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 #[repr(u8)]
@@ -68,6 +69,8 @@ pub struct Payment {
     pub swap: Option<SwapInfo>,
     /// Information about a payment's recipient. Will only be present for outgoing payments.
     pub recipient: Option<Recipient>,
+    /// A personal note previously added to this payment through [`LightningNode::set_payment_personal_note`](crate::LightningNode::set_payment_personal_note)
+    pub personal_note: Option<String>,
 }
 
 /// User-friendly representation of an outgoing payment's recipient.
@@ -148,4 +151,25 @@ pub struct ChannelClose {
 pub enum ChannelCloseState {
     Pending,
     Confirmed,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub(crate) struct BreezPaymentMetadata {
+    pub personal_note: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::activity::BreezPaymentMetadata;
+
+    #[test]
+    fn test_payment_metadata_serde() {
+        let metadata = BreezPaymentMetadata {
+            personal_note: None,
+        };
+
+        let json = "{}";
+
+        assert_eq!(metadata, serde_json::from_str(json).unwrap());
+    }
 }
