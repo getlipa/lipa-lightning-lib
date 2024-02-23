@@ -196,6 +196,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     Ok(uuid) => println!("{uuid}"),
                     Err(message) => eprintln!("{}", format!("{message:#}").red()),
                 },
+                "personalnote" => {
+                    if let Err(message) = set_personal_note(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "swaponchaintolightning" => {
                     if let Err(message) = swap_onchain_to_lightning(node) {
                         println!("{}", format!("{message:#}").red());
@@ -366,6 +371,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "paymentuuid <payment hash>",
         "paymentuuid ",
     ));
+    hints.insert(CommandHint::new(
+        "personalnote <payment hash> [note]",
+        "personalnote ",
+    ));
     hints.insert(CommandHint::new("sweep <address>", "sweep "));
     hints.insert(CommandHint::new("clearwalletinfo", "clearwalletinfo"));
     hints.insert(CommandHint::new("clearwallet <address>", "clearwallet "));
@@ -428,6 +437,7 @@ fn help() {
     println!("  l | listactivities [number of activities = 2]");
     println!("  listlightningaddresses");
     println!("  paymentuuid <payment hash>");
+    println!("  personalnote <payment hash> [note]");
     println!();
     println!("  getchannelcloseresolvingfees");
     println!("  sweep <address>");
@@ -1135,6 +1145,7 @@ fn print_payment(payment: Payment) -> Result<()> {
     println!("      Offer:            {}", offer_to_string(payment.offer));
     println!("      Swap:             {:?}", payment.swap);
     println!("      Recipient:        {:?}", payment.recipient);
+    println!("      Personal note:    {:?}", payment.personal_note);
     Ok(())
 }
 
@@ -1162,6 +1173,15 @@ fn print_channel_close(channel_close: ChannelClose) -> Result<()> {
 fn payment_uuid(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<String> {
     let payment_hash = words.next().ok_or(anyhow!("Payment Hash is required"))?;
     Ok(node.get_payment_uuid(payment_hash.to_string())?)
+}
+
+fn set_personal_note(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let payment_hash = words.next().ok_or(anyhow!("Payment Hash is required"))?;
+    let note = words.collect::<Vec<_>>().join(" ");
+
+    node.set_payment_personal_note(payment_hash.to_string(), note.to_string())?;
+
+    Ok(())
 }
 
 fn sweep(node: &LightningNode, address: String) -> Result<String> {
