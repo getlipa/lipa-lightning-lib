@@ -424,10 +424,6 @@ impl BreezServices {
             .cloned())
     }
 
-    /* pub async fn sweep(&self, _req: SweepRequest) -> SdkResult<SweepResponse> {
-        todo!("sweep");
-    }*/
-
     pub async fn prepare_redeem_onchain_funds(
         &self,
         _req: PrepareRedeemOnchainFundsRequest,
