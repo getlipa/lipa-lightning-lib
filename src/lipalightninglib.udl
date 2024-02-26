@@ -148,6 +148,9 @@ interface LightningNode {
 
     [Throws=LnError]
     AnalyticsConfig get_analytics_config();
+
+    [Throws=LnError]
+    string register_lightning_address();
 };
 
 dictionary Config {

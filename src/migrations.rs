@@ -118,6 +118,13 @@ const MIGRATION_11_LAST_REGISTERED_NOTIFICATION_WEBHOOK_BASE_URL: &str = "
     );
 ";
 
+const MIGRATION_12_LIGHTNING_ADDRESSES: &str = "
+    CREATE TABLE lightning_addresses (
+        address TEXT NOT NULL UNIQUE,
+        registered_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -137,6 +144,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_09_ADD_INVOICE_EXPIRY),
         M::up(MIGRATION_10_ANALYTICS_CONFIG),
         M::up(MIGRATION_11_LAST_REGISTERED_NOTIFICATION_WEBHOOK_BASE_URL),
+        M::up(MIGRATION_12_LIGHTNING_ADDRESSES),
     ])
 }
 
@@ -146,6 +154,6 @@ mod tests {
 
     #[test]
     fn db_migrations_test() {
-        assert!(migrations().validate().is_ok());
+        assert_eq!(migrations().validate(), Ok(()));
     }
 }
