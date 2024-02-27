@@ -80,7 +80,7 @@ rusqlite = { version = "0.29.0", features = [
 [dev-dependencies]
 anyhow = "1"
 colored = "2.1.0"
-ctor = "0.2.6"
+ctor = "0.2.7"
 qrcode = { version ="0.13.0", default-features = false }
 rustyline = { version = "13.0.0", features = ["derive"] }
 serial_test = { version =  "3.0.0", features = ["file_locks"] }
