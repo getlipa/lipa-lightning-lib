@@ -4,7 +4,7 @@ use hex::FromHex;
 use perro::MapToError;
 
 /// A code of the environment for the node to run.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnvironmentCode {
     Local,
     Dev,

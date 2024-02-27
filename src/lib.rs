@@ -317,11 +317,17 @@ impl LightningNode {
         }
         info!("3L version: {}", env!("GITHUB_REF"));
 
+        #[cfg(feature = "mock-deps")]
+        if config.environment == EnvironmentCode::Prod {
+            permanent_failure!(
+                "The mocked version of 3L cannot be run in the PROD environment (backend)"
+            );
+        }
+
         let rt = AsyncRuntime::new()?;
 
         let environment = Environment::load(config.environment)?;
 
-        // TODO once we have mocked the backend, we can continue to use the seed from the config and still won't have conflicts with the real backend using the same seed
         #[cfg(not(feature = "mock-deps"))]
         let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)?;
 
