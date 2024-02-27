@@ -24,7 +24,9 @@ fn main() {
     #[cfg(feature = "mock-deps")]
     let base_dir = format!("{base_dir}_mocked");
     #[cfg(feature = "mock-deps")]
-    fs::remove_dir_all(&base_dir).unwrap();
+    if let Err(err) = fs::remove_dir_all(&base_dir) {
+        log::warn!("Error deleting directory: {}", err);
+    }
 
     let environment = map_environment_code(&environment);
 
