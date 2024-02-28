@@ -125,6 +125,10 @@ const MIGRATION_12_LIGHTNING_ADDRESSES: &str = "
     );
 ";
 
+const MIGRATION_13_PAYMENT_PERSONAL_NOTE: &str = "
+    ALTER TABLE payments ADD COLUMN personal_note TEXT DEFAULT NULL;
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -145,6 +149,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_10_ANALYTICS_CONFIG),
         M::up(MIGRATION_11_LAST_REGISTERED_NOTIFICATION_WEBHOOK_BASE_URL),
         M::up(MIGRATION_12_LIGHTNING_ADDRESSES),
+        M::up(MIGRATION_13_PAYMENT_PERSONAL_NOTE),
     ])
 }
 
