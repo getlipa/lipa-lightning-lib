@@ -88,7 +88,6 @@ use crate::util::{
 };
 pub use notification_handling::{handle_notification, Notification, RecommendedAction};
 
-use crate::activity::BreezPaymentMetadata;
 use crate::symmetric_encryption::encrypt;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
@@ -1052,39 +1051,9 @@ impl LightningNode {
     pub fn set_payment_personal_note(&self, payment_hash: String, note: String) -> Result<()> {
         let note = Some(note.trim().to_string()).filter(|s| !s.is_empty());
 
-        let previous_metadata = self
-            .rt
-            .handle()
-            .block_on(self.sdk.payment_by_hash(payment_hash.clone()))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to fetch payment by hash",
-            )?
-            .ok_or_invalid_input("Payment not found")?
-            .metadata;
-
-        let new_metadata = match previous_metadata {
-            None => BreezPaymentMetadata {
-                personal_note: note,
-            },
-            Some(m) => {
-                let mut m: BreezPaymentMetadata = serde_json::from_str(&m)
-                    .map_to_permanent_failure("Payment metadata got corrupted")?;
-                m.personal_note = note;
-                m
-            }
-        };
-        let new_metadata = serde_json::to_string(&new_metadata)
-            .map_to_permanent_failure("Failed to serialize BreezPaymentMetadata")?;
-
-        self.rt
-            .handle()
-            .block_on(self.sdk.set_payment_metadata(payment_hash, new_metadata))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to set payment metadata",
-            )?;
-        Ok(())
+        self.data_store
+            .lock_unwrap()
+            .update_personal_note(&payment_hash, note.as_deref())
     }
 
     fn activity_from_breez_payment(
@@ -1132,7 +1101,7 @@ impl LightningNode {
                 )
             }
         };
-        let (exchange_rate, time, offer) = match local_payment_data {
+        let (exchange_rate, time, offer, personal_note) = match local_payment_data {
             None => {
                 let exchange_rate = self.get_exchange_rate();
                 let user_preferences = self.user_preferences.lock_unwrap();
@@ -1144,7 +1113,8 @@ impl LightningNode {
                         .timezone_utc_offset_secs,
                 };
                 let offer = None;
-                (exchange_rate, time, offer)
+                let personal_note = None;
+                (exchange_rate, time, offer, personal_note)
             } // TODO: change interface to accommodate for local payment data being non-existent
             Some(d) => {
                 let exchange_rate = Some(d.exchange_rate);
@@ -1167,8 +1137,9 @@ impl LightningNode {
                     }),
                     None => d.offer,
                 };
+                let personal_note = d.personal_note;
 
-                (exchange_rate, time, offer)
+                (exchange_rate, time, offer, personal_note)
             }
         };
 
@@ -1240,12 +1211,6 @@ impl LightningNode {
             Some(Ok((short_description, _long_description))) => short_description,
             _ => description,
         };
-
-        let payment_metadata: Option<BreezPaymentMetadata> = breez_payment
-            .metadata
-            .as_ref()
-            .and_then(|m| serde_json::from_str(m).unwrap_or(None));
-        let personal_note = payment_metadata.and_then(|p| p.personal_note);
 
         Ok(Activity::PaymentActivity {
             payment: Payment {
@@ -1372,6 +1337,8 @@ impl LightningNode {
         }
         let amount = amount.as_sats().to_amount_down(&exchange_rate);
 
+        let personal_note = local_payment_data.personal_note;
+
         Ok(Payment {
             payment_type: PaymentType::Receiving,
             payment_state,
@@ -1388,7 +1355,7 @@ impl LightningNode {
             offer: None,
             swap: None,
             recipient: None,
-            personal_note: None,
+            personal_note,
         })
     }
 

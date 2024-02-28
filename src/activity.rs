@@ -2,7 +2,6 @@ use crate::{Amount, InvoiceDetails, OfferKind, PayErrorCode, SwapInfo, TzTime};
 use std::time::SystemTime;
 
 use breez_sdk_core::{LnPaymentDetails, PaymentStatus};
-use serde::{Deserialize, Serialize};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 #[repr(u8)]
@@ -151,25 +150,4 @@ pub struct ChannelClose {
 pub enum ChannelCloseState {
     Pending,
     Confirmed,
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
-pub(crate) struct BreezPaymentMetadata {
-    pub personal_note: Option<String>,
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::activity::BreezPaymentMetadata;
-
-    #[test]
-    fn test_payment_metadata_serde() {
-        let metadata = BreezPaymentMetadata {
-            personal_note: None,
-        };
-
-        let json = "{}";
-
-        assert_eq!(metadata, serde_json::from_str(json).unwrap());
-    }
 }
