@@ -39,7 +39,7 @@ email_address = "0.2.4"
 file-rotate = "0.7.5"
 hex = "0.4.3"
 iban_validate = "4.0.1"
-log = "0.4.20"
+log = "0.4.21"
 num_enum = "0.7.2"
 rand = "0.8.5"
 regex = { version = "1.10.3" }
