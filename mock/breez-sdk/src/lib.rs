@@ -577,8 +577,4 @@ impl BreezServices {
     pub async fn register_webhook(&self, _webhook_url: String) -> SdkResult<()> {
         Ok(())
     }
-
-    pub async fn set_payment_metadata(&self, _hash: String, _metadata: String) -> SdkResult<()> {
-        todo!("set_payment_metadata");
-    }
 }
