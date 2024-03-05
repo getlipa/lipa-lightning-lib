@@ -71,6 +71,13 @@ doc:
 .PHONY: pr
 pr: fmt buildall test clippy check-mod-test check-udl doc
 
+.PHONY: bump-wild
+bump-wild:
+	@newest_tag=$$(curl -s "https://api.github.com/repos/getlipa/wild/tags" | jq -r '.[0].name'); \
+	cargo_toml_files=$$(echo './Cargo.toml' ; find ./mock/wild/ -type f -name 'Cargo.toml'); \
+	echo "$$cargo_toml_files" | xargs sed -i "s/\(git = \"https:\/\/github.com\/getlipa\/wild\",\).*\(tag = \"[^\"]*\"\)/\1 tag = \"$$newest_tag\"/g"; \
+    echo "Bumped wild to $$newest_tag"; \
+
 .PHONY: run-node
 run-node: ARGS =
 run-node:
