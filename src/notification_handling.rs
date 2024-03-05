@@ -1,15 +1,23 @@
+use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
 use crate::async_runtime::AsyncRuntime;
+use crate::auth::build_async_auth;
+use crate::data_store::DataStore;
 use crate::environment::Environment;
 use crate::errors::Result;
+use crate::event::report_event_for_analytics;
 use crate::logger::init_logger_once;
-use crate::{enable_backtrace, start_sdk, Config, RuntimeErrorCode, LOGS_DIR, LOG_LEVEL};
+use crate::{
+    enable_backtrace, sanitize_input, start_sdk, Config, RuntimeErrorCode, UserPreferences,
+    DB_FILENAME, LOGS_DIR, LOG_LEVEL,
+};
 use breez_sdk_core::{BreezEvent, BreezServices, EventListener, PaymentStatus};
 use log::{debug, error};
+use parrot::AnalyticsClient;
 use perro::{permanent_failure, MapToError};
 use serde::Deserialize;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const TIMEOUT: Duration = Duration::from_secs(60);
@@ -62,7 +70,11 @@ pub fn handle_notification(
     let rt = AsyncRuntime::new()?;
 
     let (tx, rx) = mpsc::channel();
-    let event_listener = Box::new(NotificationHandlerEventListener { event_sender: tx });
+    let analytics_interceptor = build_analytics_interceptor(&config, &rt)?;
+    let event_listener = Box::new(NotificationHandlerEventListener::new(
+        tx,
+        analytics_interceptor,
+    ));
     let environment = Environment::load(config.environment)?;
     let sdk = rt
         .handle()
@@ -73,6 +85,36 @@ pub fn handle_notification(
             handle_payment_received_notification(rt, sdk, rx, payment_hash)
         }
     }
+}
+
+fn build_analytics_interceptor(config: &Config, rt: &AsyncRuntime) -> Result<AnalyticsInterceptor> {
+    let user_preferences = Arc::new(Mutex::new(UserPreferences {
+        fiat_currency: config.fiat_currency.clone(),
+        timezone_config: config.timezone_config.clone(),
+    }));
+
+    let environment = Environment::load(config.environment)?;
+    let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)?;
+    let async_auth = Arc::new(build_async_auth(
+        &strong_typed_seed,
+        environment.backend_url.clone(),
+    )?);
+
+    let analytics_client = AnalyticsClient::new(
+        environment.backend_url.clone(),
+        derive_analytics_keys(&strong_typed_seed)?,
+        Arc::clone(&async_auth),
+    );
+
+    let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
+    let data_store = DataStore::new(&db_path)?;
+    let analytics_config = data_store.retrieve_analytics_config()?;
+    Ok(AnalyticsInterceptor::new(
+        analytics_client,
+        Arc::clone(&user_preferences),
+        rt.handle(),
+        analytics_config,
+    ))
 }
 
 fn handle_payment_received_notification(
@@ -135,10 +177,21 @@ enum Payload {
 
 struct NotificationHandlerEventListener {
     event_sender: Sender<BreezEvent>,
+    analytics_interceptor: AnalyticsInterceptor,
+}
+
+impl NotificationHandlerEventListener {
+    fn new(event_sender: Sender<BreezEvent>, analytics_interceptor: AnalyticsInterceptor) -> Self {
+        NotificationHandlerEventListener {
+            event_sender,
+            analytics_interceptor,
+        }
+    }
 }
 
 impl EventListener for NotificationHandlerEventListener {
     fn on_event(&self, e: BreezEvent) {
+        report_event_for_analytics(&e, &self.analytics_interceptor);
         let _ = self.event_sender.send(e);
     }
 }

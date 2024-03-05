@@ -22,11 +22,10 @@ impl LipaEventListener {
 
 impl EventListener for LipaEventListener {
     fn on_event(&self, e: BreezEvent) {
+        report_event_for_analytics(&e, &self.analytics_interceptor);
         match e {
             BreezEvent::NewBlock { .. } => {}
             BreezEvent::InvoicePaid { details } => {
-                self.analytics_interceptor
-                    .request_succeeded(details.clone());
                 self.events_callback.payment_received(details.payment_hash)
             }
             BreezEvent::Synced => {
@@ -34,14 +33,12 @@ impl EventListener for LipaEventListener {
             }
             BreezEvent::PaymentSucceed { details } => {
                 if let PaymentDetails::Ln { data } = details.details.clone() {
-                    self.analytics_interceptor.pay_succeeded(details);
                     self.events_callback
                         .payment_sent(data.payment_hash, data.payment_preimage)
                 }
             }
             BreezEvent::PaymentFailed { details } => {
                 if let Some(invoice) = details.invoice.clone() {
-                    self.analytics_interceptor.pay_failed(details);
                     self.events_callback.payment_failed(invoice.payment_hash)
                 }
             }
@@ -49,5 +46,31 @@ impl EventListener for LipaEventListener {
             BreezEvent::BackupSucceeded => {}
             BreezEvent::BackupFailed { .. } => {}
         }
+    }
+}
+
+pub(crate) fn report_event_for_analytics(
+    e: &BreezEvent,
+    analytics_interceptor: &AnalyticsInterceptor,
+) {
+    match e {
+        BreezEvent::NewBlock { .. } => {}
+        BreezEvent::InvoicePaid { details } => {
+            analytics_interceptor.request_succeeded(details.clone());
+        }
+        BreezEvent::Synced => {}
+        BreezEvent::PaymentSucceed { details } => {
+            if let PaymentDetails::Ln { .. } = details.details.clone() {
+                analytics_interceptor.pay_succeeded(details.clone());
+            }
+        }
+        BreezEvent::PaymentFailed { details } => {
+            if details.invoice.is_some() {
+                analytics_interceptor.pay_failed(details.clone());
+            }
+        }
+        BreezEvent::BackupStarted => {}
+        BreezEvent::BackupSucceeded => {}
+        BreezEvent::BackupFailed { .. } => {}
     }
 }
