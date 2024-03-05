@@ -21,9 +21,10 @@ crow = { git = "https://github.com/getlipa/wild", tag = "v1.21.1" }
 graphql = { git = "https://github.com/getlipa/wild", tag = "v1.21.1" }
 honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.21.1" }
 parrot = { git = "https://github.com/getlipa/wild", tag = "v1.21.1", optional = true }
-parrot-mock =  { path = "mock/wild/parrot", optional = true }
+parrot-mock = { path = "mock/wild/parrot", optional = true }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
-pigeon = { git = "https://github.com/getlipa/wild", tag = "v1.21.1" }
+pigeon = { git = "https://github.com/getlipa/wild", tag = "v1.21.1", optional = true }
+pigeon-mock = { path = "mock/wild/pigeon", optional = true }
 squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.21.1", optional = true }
 squirrel-mock = { path = "mock/wild/squirrel", optional = true }
 
@@ -43,9 +44,9 @@ log = "0.4.21"
 num_enum = "0.7.2"
 rand = "0.8.5"
 regex = { version = "1.10.3" }
-reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "rustls-tls"]}
+reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "rustls-tls"] }
 rusqlite_migration = "1"
-serde = { version = "1.0", features = ["derive"]}
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 simplelog = { version = "0.12.2" }
 thiserror = "1.0.57"
@@ -54,8 +55,8 @@ uniffi = "0.26.1"
 uuid = { version = "1.7.0", features = ["v5"] }
 
 [features]
-default = ["dep:breez-sdk-core", "dep:squirrel", "dep:parrot"]
-mock-deps = ["dep:breez-sdk-mock", "dep:squirrel-mock", "dep:parrot-mock"]
+default = ["dep:breez-sdk-core", "dep:squirrel", "dep:parrot", "dep:pigeon"]
+mock-deps = ["dep:breez-sdk-mock", "dep:squirrel-mock", "dep:parrot-mock", "dep:pigeon-mock"]
 
 # Bundle sqlite for all targets except iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]
@@ -81,9 +82,9 @@ rusqlite = { version = "0.29.0", features = [
 anyhow = "1"
 colored = "2.1.0"
 ctor = "0.2.7"
-qrcode = { version ="0.13.0", default-features = false }
+qrcode = { version = "0.13.0", default-features = false }
 rustyline = { version = "13.0.0", features = ["derive"] }
-serial_test = { version =  "3.0.0", features = ["file_locks"] }
+serial_test = { version = "3.0.0", features = ["file_locks"] }
 strip-ansi-escapes = "0.2.0"
 thousands = "0.2.0"
 

@@ -2209,6 +2209,7 @@ dependencies = [
  "parser",
  "perro",
  "pigeon",
+ "pigeon-mock",
  "qrcode",
  "rand",
  "regex",
@@ -2702,6 +2703,14 @@ dependencies = [
 name = "pigeon"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.21.1#8ad6dab46964edf0b128aa86a72384cb74bf7733"
+dependencies = [
+ "graphql",
+ "honey-badger",
+]
+
+[[package]]
+name = "pigeon-mock"
+version = "0.1.0"
 dependencies = [
  "graphql",
  "honey-badger",
