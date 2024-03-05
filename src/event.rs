@@ -29,7 +29,9 @@ impl EventListener for LipaEventListener {
                     .request_succeeded(details.clone());
                 self.events_callback.payment_received(details.payment_hash)
             }
-            BreezEvent::Synced => {}
+            BreezEvent::Synced => {
+                self.events_callback.synced();
+            }
             BreezEvent::PaymentSucceed { details } => {
                 if let PaymentDetails::Ln { data } = details.details.clone() {
                     self.analytics_interceptor.pay_succeeded(details);
