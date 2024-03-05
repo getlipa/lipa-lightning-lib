@@ -180,6 +180,7 @@ callback interface EventsCallback {
     void payment_failed(string payment_hash);
     void channel_closed(string channel_id, string reason);
     void breez_health_status_changed_to(BreezHealthCheckStatus status);
+    void synced();
 };
 
 dictionary NodeInfo {

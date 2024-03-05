@@ -39,4 +39,8 @@ pub trait EventsCallback: Send + Sync {
     /// Parameters:
     /// * `status` - the new status
     fn breez_health_status_changed_to(&self, status: BreezHealthCheckStatus);
+
+    /// This callback will be called every time a sync cycle is performed.
+    /// It can be used as a trigger to update the balance and activities list.
+    fn synced(&self);
 }
