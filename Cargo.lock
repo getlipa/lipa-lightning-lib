@@ -354,6 +354,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ba43ea6f343b788c8764558649e08df62f86c6ef251fdaeb1ffd010a9ae50a2"
 
 [[package]]
+name = "base64"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9475866fec1451be56a3c2400fd081ff546538961565ccb5b7142cbd22bc7a51"
+
+[[package]]
 name = "basic-toml"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -739,7 +745,7 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.1#8ad6dab46964edf0b128aa86a72384cb74bf7733"
+source = "git+https://github.com/getlipa/wild?tag=v1.21.2#714bfc7461ecac758d492debc167c4f4a59abfea"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -932,7 +938,7 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.1#8ad6dab46964edf0b128aa86a72384cb74bf7733"
+source = "git+https://github.com/getlipa/wild?tag=v1.21.2#714bfc7461ecac758d492debc167c4f4a59abfea"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -1580,7 +1586,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.1#8ad6dab46964edf0b128aa86a72384cb74bf7733"
+source = "git+https://github.com/getlipa/wild?tag=v1.21.2#714bfc7461ecac758d492debc167c4f4a59abfea"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1772,9 +1778,9 @@ dependencies = [
 [[package]]
 name = "honey-badger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.1#8ad6dab46964edf0b128aa86a72384cb74bf7733"
+source = "git+https://github.com/getlipa/wild?tag=v1.21.2#714bfc7461ecac758d492debc167c4f4a59abfea"
 dependencies = [
- "base64 0.21.4",
+ "base64 0.22.0",
  "bdk",
  "graphql",
  "hex",
@@ -2621,7 +2627,7 @@ dependencies = [
 [[package]]
 name = "parrot"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.1#8ad6dab46964edf0b128aa86a72384cb74bf7733"
+source = "git+https://github.com/getlipa/wild?tag=v1.21.2#714bfc7461ecac758d492debc167c4f4a59abfea"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -2702,7 +2708,7 @@ dependencies = [
 [[package]]
 name = "pigeon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.1#8ad6dab46964edf0b128aa86a72384cb74bf7733"
+source = "git+https://github.com/getlipa/wild?tag=v1.21.2#714bfc7461ecac758d492debc167c4f4a59abfea"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -3642,7 +3648,7 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 [[package]]
 name = "squirrel"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.1#8ad6dab46964edf0b128aa86a72384cb74bf7733"
+source = "git+https://github.com/getlipa/wild?tag=v1.21.2#714bfc7461ecac758d492debc167c4f4a59abfea"
 dependencies = [
  "bdk",
  "graphql",
