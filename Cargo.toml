@@ -34,7 +34,7 @@ breez-sdk-mock = { path = "mock/breez-sdk", optional = true }
 aes-gcm = "0.10.3"
 bip39 = "2.0.0"
 bitcoin = "0.30.1"
-chrono = { version = "0.4.34", default-features = false, features = ["serde"] }
+chrono = { version = "0.4.35", default-features = false, features = ["serde"] }
 cipher = "0.4.4"
 email_address = "0.2.4"
 file-rotate = "0.7.5"
