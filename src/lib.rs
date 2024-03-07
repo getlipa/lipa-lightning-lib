@@ -327,17 +327,7 @@ impl LightningNode {
 
         let environment = Environment::load(config.environment)?;
 
-        #[cfg(not(feature = "mock-deps"))]
         let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)?;
-
-        #[cfg(feature = "mock-deps")]
-        let strong_typed_seed = {
-            let mut seed: [u8; 64] = [0; 64];
-            use rand::RngCore;
-            rand::thread_rng().fill_bytes(&mut seed);
-            seed
-        };
-
         let auth = Arc::new(build_auth(
             &strong_typed_seed,
             environment.backend_url.clone(),
