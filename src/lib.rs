@@ -1656,6 +1656,13 @@ impl LightningNode {
             ),
         };
 
+        // MOCK: We need to simulate the backend receiving an update from Pocket that the offer has been settled.
+        #[allow(irrefutable_let_patterns)]
+        #[cfg(feature = "mock-deps")]
+        if let OfferKind::Pocket { id, .. } = offer.offer_kind.clone() {
+            self.offer_manager.hide_topup(id).unwrap();
+        }
+
         self.store_payment_info(&hash, Some(offer.offer_kind));
 
         Ok(hash)
