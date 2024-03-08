@@ -514,37 +514,35 @@ fn exchange_rate_from_row(row: &Row) -> rusqlite::Result<ExchangeRate> {
 }
 
 fn offer_kind_from_row(row: &Row) -> rusqlite::Result<Option<OfferKind>> {
-    let pocket_id: Option<String> = row.get(5)?;
-    match pocket_id {
-        Some(pocket_id) => {
-            let fiat_currency: String = row.get(6)?;
-            let rate: u32 = row.get(7)?;
-            let exchanged_at: chrono::DateTime<chrono::Utc> = row.get(8)?;
-            let exchanged_at = SystemTime::from(exchanged_at);
-            let topup_value_minor_units: u64 = row.get(9)?;
-            let exchange_fee_minor_units: u64 = row.get(10)?;
-            let exchange_fee_rate_permyriad: u16 = row.get(11)?;
-            let topup_value_sats: Option<u64> = row.get(13)?;
+    if let Some(pocket_id) = row.get(5)? {
+        let fiat_currency: String = row.get(6)?;
+        let rate: u32 = row.get(7)?;
+        let exchanged_at: chrono::DateTime<chrono::Utc> = row.get(8)?;
+        let exchanged_at = SystemTime::from(exchanged_at);
+        let topup_value_minor_units: u64 = row.get(9)?;
+        let exchange_fee_minor_units: u64 = row.get(10)?;
+        let exchange_fee_rate_permyriad: u16 = row.get(11)?;
+        let topup_value_sats: Option<u64> = row.get(13)?;
 
-            let exchange_rate = ExchangeRate {
-                currency_code: fiat_currency,
-                rate,
-                updated_at: exchanged_at,
-            };
+        let exchange_rate = ExchangeRate {
+            currency_code: fiat_currency,
+            rate,
+            updated_at: exchanged_at,
+        };
 
-            Ok(Some(OfferKind::Pocket {
-                id: pocket_id,
-                exchange_rate: exchange_rate.clone(),
-                topup_value_minor_units,
-                topup_value_sats,
-                exchange_fee_minor_units,
-                exchange_fee_rate_permyriad,
-                lightning_payout_fee: None,
-                error: to_offer_error(row.get(12)?),
-            }))
-        }
-        None => Ok(None),
+        return Ok(Some(OfferKind::Pocket {
+            id: pocket_id,
+            exchange_rate: exchange_rate.clone(),
+            topup_value_minor_units,
+            topup_value_sats,
+            exchange_fee_minor_units,
+            exchange_fee_rate_permyriad,
+            lightning_payout_fee: None,
+            error: to_offer_error(row.get(12)?),
+        }));
     }
+
+    Ok(None)
 }
 
 fn local_payment_data_from_row(row: &Row) -> rusqlite::Result<LocalPaymentData> {
