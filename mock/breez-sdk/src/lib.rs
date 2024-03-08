@@ -210,8 +210,56 @@ impl BreezServices {
         }
     }
 
-    pub async fn lnurl_pay(&self, _req: LnUrlPayRequest) -> Result<LnUrlPayResult, LnUrlPayError> {
-        todo!("lnurl_pay");
+    pub async fn lnurl_pay(&self, req: LnUrlPayRequest) -> Result<LnUrlPayResult, LnUrlPayError> {
+        let fee_msat = 8_000;
+        let now = Utc::now().timestamp();
+        let preimage = sha256::Hash::hash(&now.to_be_bytes());
+        let payment_hash = format!("{:x}", sha256::Hash::hash(preimage.as_byte_array()));
+        let payment_preimage = format!("{:x}", preimage);
+        let bolt11 = "lnbc1486290n1pj74h6psp5tmna0gruf44rx0h7xgl2xsmn5xhjnaxktct40pkfg4m9kssytn0spp5qhpx9s8rvmw6jtzkelslve9zfuhpp2w7hn9s6q7xvdnds5jemr2qdpa2pskjepqw3hjq3r0deshgefqw3hjqjzjgcs8vv3qyq5y7unyv4ezqj2y8gszjxqy9ghlcqpjrzjqvutcqr0g2ltxthh82s8l24gy74xe862kelrywc6ktsx2gejgk26szcqygqqy6qqqyqqqqlgqqqq86qqyg9qxpqysgqzjnfufxw375gpqf9cvzd5jxyqqtm56fuw960wyel2ld3he403r7x6uyw59g5sfsj5rclycd09a8p8r2pnyrcanlg27e2a67nh5g248sp7p7s8z".to_string();
+        *LN_BALANCE_MSAT.lock().unwrap() -= req.amount_msat + fee_msat;
+
+        let payment = Payment {
+            id: now.to_string(), // Placeholder. ID is probably never used
+            payment_type: PaymentType::Sent,
+            payment_time: now,
+            amount_msat: req.amount_msat,
+            fee_msat,
+            status: PaymentStatus::Complete,
+            error: None,
+            description: None,
+            details: PaymentDetails::Ln {
+                data: LnPaymentDetails {
+                    payment_hash: payment_hash.clone(),
+                    label: "".to_string(),
+                    destination_pubkey:
+                        "020333076e35e398a0c14c8a0211563bbcdce5087cb300342cba09414e9b5f3605"
+                            .to_string(),
+                    payment_preimage,
+                    keysend: false,
+                    bolt11,
+                    open_channel_bolt11: None,
+                    lnurl_success_action: None,
+                    lnurl_pay_domain: Some(req.data.domain.clone()),
+                    ln_address: req.data.ln_address.clone(),
+                    lnurl_metadata: Some(req.data.metadata_str.clone()),
+                    lnurl_withdraw_endpoint: None,
+                    swap_info: None,
+                    reverse_swap_info: None,
+                    pending_expiration_block: None,
+                },
+            },
+            metadata: None,
+        };
+
+        PAYMENTS.lock().unwrap().push(payment.clone());
+
+        Ok(LnUrlPayResult::EndpointSuccess {
+            data: breez_sdk_core::LnUrlPaySuccessData {
+                payment_hash,
+                success_action: None,
+            },
+        })
     }
 
     pub async fn lnurl_withdraw(
@@ -648,9 +696,23 @@ pub async fn parse(input: &str) -> Result<InputType> {
         return Ok(Bolt11 { invoice });
     }
 
-    // If the input is not a Bolt11, we just assume it is a LNURL-withdraw request.
-    // This is being used for topups, LNURL-pay is less used.
     // Without requesting the server, it is not possible to know whether an LNURL string is a pay or withdraw request
+    // So instead we interpret the string 'lnurlp' as if it was an LNUrL-pay string
+    if input == "lnurlp" {
+        println!("Returning LnUrlPay");
+        return Ok(InputType::LnUrlPay {
+            data: LnUrlPayRequestData {
+                callback: "https://lnurl.dummy.com/lnurl-pay/callback/e9a0f330f34ac16d297094f568060d267bac6319a7f0d06eaf89d7fc1512f39a".to_string(),
+                min_sendable: 0,
+                max_sendable: 1_000_000_000,
+                metadata_str: "[[\"text/plain\",\"dummy\"],[\"text/long-desc\",\"dummy description\"]]".to_string(),
+                comment_allowed: 100,
+                domain: "lnurl.dummy.com".to_string(),
+                ln_address: None,
+            },
+        });
+    }
+
     Ok(InputType::LnUrlWithdraw {
         data: LnUrlWithdrawRequestData {
             callback: "https://lnurl.dummy.com/lnurl-withdraw/callback/e9a0f330f34ac16d297094f568060d267bac6319a7f0d06eaf89d7fc1512f39a".to_string(),
