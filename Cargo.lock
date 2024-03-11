@@ -953,6 +953,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "crow-mock"
+version = "0.1.0"
+dependencies = [
+ "crow",
+ "graphql",
+ "honey-badger",
+ "isocountry",
+ "isolanguage-1",
+ "lazy_static",
+]
+
+[[package]]
 name = "crunchy"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2207,6 +2219,7 @@ dependencies = [
  "cipher",
  "colored",
  "crow",
+ "crow-mock",
  "ctor",
  "email_address",
  "file-rotate",
