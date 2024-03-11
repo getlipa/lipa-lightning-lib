@@ -141,12 +141,12 @@ mod tests {
     use tokio::time::sleep;
 
     #[test]
-    pub fn test_new_runtime_construction() {
+    fn test_new_runtime_construction() {
         AsyncRuntime::new().unwrap();
     }
 
     #[test]
-    pub fn test_spawn() {
+    fn test_spawn() {
         let rt = AsyncRuntime::new().unwrap();
         let handle = rt.handle();
         let data = Arc::new(AtomicUsize::new(0));
@@ -165,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_block_on() {
+    fn test_block_on() {
         let rt = AsyncRuntime::new().unwrap();
         let handle = rt.handle();
         let data = Arc::new(AtomicUsize::new(0));
@@ -181,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_spawn_repeating_task() {
+    fn test_spawn_repeating_task() {
         let rt = AsyncRuntime::new().unwrap();
         let handle = rt.handle();
         let data = Arc::new(AtomicUsize::new(0));

@@ -208,7 +208,7 @@ mod tests {
                                                 }"#;
 
     #[test]
-    pub fn test_payload_deserialize() {
+    fn test_payload_deserialize() {
         let payment_received_payload: Payload =
             serde_json::from_str(PAYMENT_RECEIVED_PAYLOAD_JSON).unwrap();
         assert!(matches!(

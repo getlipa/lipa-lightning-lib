@@ -2522,14 +2522,14 @@ mod tests {
     const PAYMENT_UUID: &str = "c6e597bd-0a98-5b46-8e74-f6098f5d16a3";
 
     #[test]
-    pub fn test_payment_uuid() {
+    fn test_payment_uuid() {
         let payment_uuid = get_payment_uuid(PAYMENT_HASH.to_string());
 
         assert_eq!(payment_uuid, Ok(PAYMENT_UUID.to_string()));
     }
 
     #[test]
-    pub fn test_payment_uuid_invalid_input() {
+    fn test_payment_uuid_invalid_input() {
         let invalid_hash_encoding = get_payment_uuid("INVALID_HEX_STRING".to_string());
 
         assert!(matches!(
