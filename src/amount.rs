@@ -115,7 +115,7 @@ mod tests {
     use super::*;
 
     #[test]
-    pub fn rounding_up() {
+    fn rounding_up() {
         assert_eq!(round(0, Rounding::Up), 0);
 
         for i in 1..1000 {
@@ -126,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    pub fn rounding_down() {
+    fn rounding_down() {
         for i in 0..1000 {
             assert_eq!(round(i, Rounding::Down), 0);
         }
@@ -135,7 +135,7 @@ mod tests {
     }
 
     #[test]
-    pub fn rounding_to_amount_up() {
+    fn rounding_to_amount_up() {
         let now = SystemTime::now();
         let amount = 12349123u64.as_msats().to_amount_up(&None);
         assert_eq!(amount.sats, 12350);
@@ -156,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    pub fn rounding_to_amount_down() {
+    fn rounding_to_amount_down() {
         let now = SystemTime::now();
         let amount = 12349123u64.as_msats().to_amount_down(&None);
         assert_eq!(amount.sats, 12349);
