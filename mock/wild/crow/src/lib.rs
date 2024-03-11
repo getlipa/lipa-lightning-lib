@@ -53,7 +53,7 @@ impl OfferManager {
                 updated_at: SystemTime::now(),
             },
             expires_at: Some(SystemTime::now() + Duration::from_secs(24 * 60 * 60)),
-            lnurlw: None,
+            lnurlw: Some("LNURL1DP68GURN8GHJ7MRWW4EXCTNXD9SHG6NPVCHXXMMD9AKXUATJDSKHW6T5DPJ8YCTH8AEK2UMND9HKU0TRXQMXXEFJXP3XXVR9VE3NVVTP8PJN2VEEXGCRYWFKVSCRGETY8QMNSVPCVENRWCNZXQ6NVVTPXQMNGER9X43KZCT9V9JRQCF5VEJNQ4W0YKJ".to_string()),
             error: None,
         });
 
