@@ -224,7 +224,7 @@ impl BreezServices {
         let preimage = sha256::Hash::hash(&now.to_be_bytes());
         let payment_hash = format!("{:x}", sha256::Hash::hash(preimage.as_byte_array()));
         let payment_preimage = format!("{:x}", preimage);
-        let bolt11 = "lnbc1486290n1pj74h6psp5tmna0gruf44rx0h7xgl2xsmn5xhjnaxktct40pkfg4m9kssytn0spp5qhpx9s8rvmw6jtzkelslve9zfuhpp2w7hn9s6q7xvdnds5jemr2qdpa2pskjepqw3hjq3r0deshgefqw3hjqjzjgcs8vv3qyq5y7unyv4ezqj2y8gszjxqy9ghlcqpjrzjqvutcqr0g2ltxthh82s8l24gy74xe862kelrywc6ktsx2gejgk26szcqygqqy6qqqyqqqqlgqqqq86qqyg9qxpqysgqzjnfufxw375gpqf9cvzd5jxyqqtm56fuw960wyel2ld3he403r7x6uyw59g5sfsj5rclycd09a8p8r2pnyrcanlg27e2a67nh5g248sp7p7s8z".to_string();
+        let bolt11 = "lnbc1pjlq2t3pp5e3ef7wmszlwxhfpx9cfnxx34gglg779fwnwx9mfm69pfapmymt0qdqqcqzzsxqyz5vqsp5x7k3pjq5y8vk473l6767fenletzwjeaqqukpg9tspfq584g8qp4q9qyyssq678xw6gf2ywl5seummdy8pc6xd0jpvzdexd4v4d3zjse9u6jf7239va4e4r4hhauqrymxu7dp790lv98dl0qhrt4yqxwll2ufkp304gqn6798s".to_string();
         let payee_pubkey =
             "03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad".to_string();
 
