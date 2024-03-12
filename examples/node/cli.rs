@@ -993,11 +993,12 @@ fn list_offers(node: &LightningNode) -> Result<()> {
 }
 
 fn collect_last_offer(node: &LightningNode) -> Result<()> {
-    let mut offers = node.query_uncompleted_offers()?;
-    offers.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-    let offer = offers.last().unwrap();
-
-    let payment_hash = node.request_offer_collection(offer.clone())?;
+    let offer = node
+        .query_uncompleted_offers()?
+        .into_iter()
+        .max_by_key(|o| o.created_at)
+        .ok_or(anyhow!("No uncompleted offers available"))?;
+    let payment_hash = node.request_offer_collection(offer)?;
     println!("Collected offer payment hash: {payment_hash}");
 
     Ok(())
