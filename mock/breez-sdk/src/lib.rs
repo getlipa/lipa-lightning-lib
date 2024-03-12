@@ -225,8 +225,7 @@ impl BreezServices {
         let payment_hash = format!("{:x}", sha256::Hash::hash(preimage.as_byte_array()));
         let payment_preimage = format!("{:x}", preimage);
         let bolt11 = "lnbc1pjlq2t3pp5e3ef7wmszlwxhfpx9cfnxx34gglg779fwnwx9mfm69pfapmymt0qdqqcqzzsxqyz5vqsp5x7k3pjq5y8vk473l6767fenletzwjeaqqukpg9tspfq584g8qp4q9qyyssq678xw6gf2ywl5seummdy8pc6xd0jpvzdexd4v4d3zjse9u6jf7239va4e4r4hhauqrymxu7dp790lv98dl0qhrt4yqxwll2ufkp304gqn6798s".to_string();
-        let payee_pubkey =
-            "03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad".to_string();
+        let payee_pubkey = NODE_PUBKEY.to_string();
 
         let payment = Payment {
             id: now.to_string(), // Placeholder. ID is probably never used
