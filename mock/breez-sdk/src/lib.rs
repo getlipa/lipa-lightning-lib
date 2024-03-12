@@ -272,7 +272,7 @@ impl BreezServices {
                     payment_hash,
                     description: None,
                     description_hash: None,
-                    amount_msat: Some(30_000_000),
+                    amount_msat: Some(req.amount_msat),
                     timestamp: 0,
                     expiry: 0,
                     routing_hints: vec![],
