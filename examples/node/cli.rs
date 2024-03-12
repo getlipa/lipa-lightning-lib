@@ -168,6 +168,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "collectlastoffer" => {
+                    if let Err(message) = collect_last_offer(node) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "calculatelightningpayoutfee" => {
                     if let Err(message) = calculate_lightning_payout_fee(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
@@ -983,6 +988,18 @@ fn list_offers(node: &LightningNode) -> Result<()> {
         print_offer(&offer);
         println!();
     }
+
+    Ok(())
+}
+
+fn collect_last_offer(node: &LightningNode) -> Result<()> {
+    let offer = node
+        .query_uncompleted_offers()?
+        .into_iter()
+        .max_by_key(|o| o.created_at)
+        .ok_or(anyhow!("No uncompleted offers available"))?;
+    let payment_hash = node.request_offer_collection(offer)?;
+    println!("Collected offer payment hash: {payment_hash}");
 
     Ok(())
 }

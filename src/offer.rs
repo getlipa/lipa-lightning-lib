@@ -5,7 +5,7 @@ use crate::PocketOfferError;
 use crow::{TopupInfo, TopupStatus};
 use std::time::SystemTime;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Eq)]
 pub enum OfferStatus {
     READY,
     /// Claiming the offer failed, but it can be retried.
@@ -44,7 +44,7 @@ pub enum OfferKind {
 
 /// Information on a funds offer that can be claimed
 /// using [`crate::LightningNode::request_offer_collection`].
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, Eq)]
 pub struct OfferInfo {
     pub offer_kind: OfferKind,
     /// Amount available for withdrawal
