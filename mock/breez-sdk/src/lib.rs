@@ -38,19 +38,19 @@ use breez_sdk_core::error::{
     LnUrlPayError, LnUrlWithdrawError, ReceiveOnchainError, ReceivePaymentError, SdkResult,
     SendOnchainError, SendPaymentError,
 };
+use breez_sdk_core::InputType::Bolt11;
 use breez_sdk_core::PaymentDetails::Ln;
 pub use breez_sdk_core::{
-    parse, parse_invoice, BitcoinAddressData, BreezEvent, ClosedChannelPaymentDetails,
-    EnvironmentType, EventListener, GreenlightCredentials, GreenlightNodeConfig, HealthCheckStatus,
-    InputType, InvoicePaidDetails, LNInvoice, ListPaymentsRequest, LnPaymentDetails,
-    LnUrlPayRequest, LnUrlPayRequestData, LnUrlPayResult, LnUrlWithdrawRequest,
-    LnUrlWithdrawRequestData, LnUrlWithdrawResult, MetadataItem, Network, NodeConfig,
-    OpenChannelFeeRequest, OpeningFeeParams, OpeningFeeParamsMenu, Payment, PaymentDetails,
-    PaymentFailedData, PaymentStatus, PaymentType, PaymentTypeFilter,
-    PrepareRedeemOnchainFundsRequest, PrepareRefundRequest, ReceiveOnchainRequest,
-    ReceivePaymentRequest, ReceivePaymentResponse, RedeemOnchainFundsRequest, RefundRequest,
-    ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest,
-    SendPaymentRequest, SignMessageRequest,
+    parse_invoice, BitcoinAddressData, BreezEvent, ClosedChannelPaymentDetails, EnvironmentType,
+    EventListener, GreenlightCredentials, GreenlightNodeConfig, HealthCheckStatus, InputType,
+    InvoicePaidDetails, LNInvoice, ListPaymentsRequest, LnPaymentDetails, LnUrlPayRequest,
+    LnUrlPayRequestData, LnUrlPayResult, LnUrlWithdrawRequest, LnUrlWithdrawRequestData,
+    LnUrlWithdrawResult, MetadataItem, Network, NodeConfig, OpenChannelFeeRequest,
+    OpeningFeeParams, OpeningFeeParamsMenu, Payment, PaymentDetails, PaymentFailedData,
+    PaymentStatus, PaymentType, PaymentTypeFilter, PrepareRedeemOnchainFundsRequest,
+    PrepareRefundRequest, ReceiveOnchainRequest, ReceivePaymentRequest, ReceivePaymentResponse,
+    RedeemOnchainFundsRequest, RefundRequest, ReportIssueRequest, ReportPaymentFailureDetails,
+    ReverseSwapFeesRequest, SendOnchainRequest, SendPaymentRequest, SignMessageRequest,
 };
 use breez_sdk_core::{
     Config, LspInformation, MaxReverseSwapAmountResponse, NodeState, OpenChannelFeeResponse,
@@ -216,9 +216,71 @@ impl BreezServices {
 
     pub async fn lnurl_withdraw(
         &self,
-        _req: LnUrlWithdrawRequest,
+        req: LnUrlWithdrawRequest,
     ) -> Result<LnUrlWithdrawResult, LnUrlWithdrawError> {
-        todo!("lnurl_withdraw");
+        *LN_BALANCE_MSAT.lock().unwrap() += req.amount_msat;
+
+        let now = Utc::now().timestamp();
+        let preimage = sha256::Hash::hash(&now.to_be_bytes());
+        let payment_hash = format!("{:x}", sha256::Hash::hash(preimage.as_byte_array()));
+        let payment_preimage = format!("{:x}", preimage);
+        let bolt11 = "lnbc1486290n1pj74h6psp5tmna0gruf44rx0h7xgl2xsmn5xhjnaxktct40pkfg4m9kssytn0spp5qhpx9s8rvmw6jtzkelslve9zfuhpp2w7hn9s6q7xvdnds5jemr2qdpa2pskjepqw3hjq3r0deshgefqw3hjqjzjgcs8vv3qyq5y7unyv4ezqj2y8gszjxqy9ghlcqpjrzjqvutcqr0g2ltxthh82s8l24gy74xe862kelrywc6ktsx2gejgk26szcqygqqy6qqqyqqqqlgqqqq86qqyg9qxpqysgqzjnfufxw375gpqf9cvzd5jxyqqtm56fuw960wyel2ld3he403r7x6uyw59g5sfsj5rclycd09a8p8r2pnyrcanlg27e2a67nh5g248sp7p7s8z".to_string();
+        let payee_pubkey =
+            "03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad".to_string();
+
+        let payment = Payment {
+            id: now.to_string(), // Placeholder. ID is probably never used
+            payment_type: PaymentType::Received,
+            payment_time: now,
+            amount_msat: req.amount_msat,
+            fee_msat: 0,
+            status: PaymentStatus::Complete,
+            error: None,
+            description: None,
+            details: PaymentDetails::Ln {
+                data: LnPaymentDetails {
+                    payment_hash: payment_hash.clone(),
+                    label: "".to_string(),
+                    destination_pubkey: payee_pubkey.clone(),
+                    payment_preimage,
+                    keysend: false,
+                    bolt11: bolt11.clone(),
+                    open_channel_bolt11: None,
+                    lnurl_success_action: None,
+                    lnurl_pay_domain: None,
+                    ln_address: None,
+                    lnurl_metadata: None,
+                    lnurl_withdraw_endpoint: Some(
+                        "https://lnurl.dummy.com/lnurl-withdraw".to_string(),
+                    ),
+                    swap_info: None,
+                    reverse_swap_info: None,
+                    pending_expiration_block: None,
+                },
+            },
+            metadata: None,
+        };
+
+        PAYMENTS.lock().unwrap().push(payment.clone());
+
+        Ok(LnUrlWithdrawResult::Ok {
+            data: breez_sdk_core::LnUrlWithdrawSuccessData {
+                invoice: LNInvoice {
+                    bolt11,
+                    network: Network::Bitcoin,
+                    payee_pubkey,
+                    payment_hash,
+                    description: None,
+                    description_hash: None,
+                    amount_msat: Some(30_000_000),
+                    timestamp: 0,
+                    expiry: 0,
+                    routing_hints: vec![],
+                    payment_secret: vec![],
+                    min_final_cltv_expiry_delta: 0,
+                },
+            },
+        })
     }
 
     pub async fn receive_payment(
@@ -577,4 +639,26 @@ impl BreezServices {
     pub async fn register_webhook(&self, _webhook_url: String) -> SdkResult<()> {
         Ok(())
     }
+}
+
+pub async fn parse(input: &str) -> Result<InputType> {
+    // So far Lipa only supports InputTypes Bolt11, LnUrlPay, and LnUrlWithdraw
+    let input = input.trim();
+
+    if let Ok(invoice) = parse_invoice(input) {
+        return Ok(Bolt11 { invoice });
+    }
+
+    // If the input is not a Bolt11, we just assume it is a LNURL-withdraw request.
+    // This is being used for topups, LNURL-pay is less used.
+    // Without requesting the server, it is not possible to know whether an LNURL string is a pay or withdraw request
+    Ok(InputType::LnUrlWithdraw {
+        data: LnUrlWithdrawRequestData {
+            callback: "https://lnurl.dummy.com/lnurl-withdraw/callback/e9a0f330f34ac16d297094f568060d267bac6319a7f0d06eaf89d7fc1512f39a".to_string(),
+            k1: "".to_string(),
+            default_description: "dummy default description".to_string(),
+            min_withdrawable: 0,
+            max_withdrawable: 30_000_000,
+        },
+    })
 }
