@@ -699,7 +699,6 @@ pub async fn parse(input: &str) -> Result<InputType> {
     // Without requesting the server, it is not possible to know whether an LNURL string is a pay or withdraw request
     // So instead we interpret the string 'lnurlp' as if it was an LNUrL-pay string
     if input == "lnurlp" {
-        println!("Returning LnUrlPay");
         return Ok(InputType::LnUrlPay {
             data: LnUrlPayRequestData {
                 callback: "https://lnurl.dummy.com/lnurl-pay/callback/e9a0f330f34ac16d297094f568060d267bac6319a7f0d06eaf89d7fc1512f39a".to_string(),
