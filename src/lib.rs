@@ -325,6 +325,13 @@ impl LightningNode {
         }
         info!("3L version: {}", env!("GITHUB_REF"));
 
+        #[cfg(feature = "mock-deps")]
+        if config.environment == EnvironmentCode::Prod {
+            permanent_failure!(
+                "The mocked version of 3L cannot be run in the PROD environment (backend)"
+            );
+        }
+
         let rt = AsyncRuntime::new()?;
 
         let environment = Environment::load(config.environment)?;
@@ -425,18 +432,21 @@ impl LightningNode {
         )?));
         task_manager.lock_unwrap().foreground();
 
-        let data_store_clone = Arc::clone(&data_store);
-        let auth_clone = Arc::clone(&auth);
+        #[cfg(not(feature = "mock-deps"))]
+        {
+            let data_store_clone = Arc::clone(&data_store);
+            let auth_clone = Arc::clone(&auth);
 
-        fund_migration::migrate_funds(
-            rt.handle(),
-            &strong_typed_seed,
-            data_store_clone,
-            &sdk,
-            auth_clone,
-            &environment.backend_url,
-        )
-        .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
+            fund_migration::migrate_funds(
+                rt.handle(),
+                &strong_typed_seed,
+                data_store_clone,
+                &sdk,
+                auth_clone,
+                &environment.backend_url,
+            )
+            .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
+        }
 
         let id = auth.get_wallet_pubkey_id().map_to_runtime_error(
             RuntimeErrorCode::AuthServiceUnavailable,
@@ -1687,6 +1697,13 @@ impl LightningNode {
                 )
             }
         };
+
+        // MOCK: We need to simulate the backend receiving an update from Pocket that the offer has been settled.
+        #[allow(irrefutable_let_patterns)]
+        #[cfg(feature = "mock-deps")]
+        if let OfferKind::Pocket { id, .. } = offer.offer_kind.clone() {
+            self.offer_manager.hide_topup(id).unwrap();
+        }
 
         self.store_payment_info(&hash, Some(offer.offer_kind));
 
