@@ -187,6 +187,7 @@ impl PocketClient {
             )
     }
 
+    #[cfg(not(feature = "mock-deps"))]
     fn create_order(
         &self,
         challenge_response: ChallengeResponse,
@@ -247,6 +248,46 @@ impl PocketClient {
                 RuntimeErrorCode::OfferServiceUnavailable,
                 "Failed to parse CreateOrderResponse",
             )
+    }
+
+    #[cfg(feature = "mock-deps")]
+    // todo: Instead of mocking this method only, we should move the entire PocketClient to a separate crate and mock the entire crate.
+    fn create_order(
+        &self,
+        _challenge_response: ChallengeResponse,
+        _user_iban: &str,
+        _user_currency: String,
+    ) -> Result<CreateOrderResponse> {
+        let now: DateTime<Utc> = Utc::now();
+        Ok(CreateOrderResponse {
+            id: format!("mock-order-id-{now}"),
+            active: true,
+            created_on: None,
+            affiliate_id: None,
+            fee_rate: 0.0,
+            payment_method: PaymentMethodResponse {
+                currency: "".to_string(),
+                debitor_iban: "".to_string(),
+                creditor_reference: "".to_string(),
+                creditor_iban: "".to_string(),
+                creditor_bank_name: "".to_string(),
+                creditor_bank_street: "".to_string(),
+                creditor_bank_postal_code: "".to_string(),
+                creditor_bank_town: "".to_string(),
+                creditor_bank_country: "".to_string(),
+                creditor_bank_bic: "".to_string(),
+                creditor_name: "".to_string(),
+                creditor_street: "".to_string(),
+                creditor_postal_code: "".to_string(),
+                creditor_town: "".to_string(),
+                creditor_country: "".to_string(),
+            },
+            payout_method: PayoutMethod {
+                node_pubkey: "".to_string(),
+                message: "".to_string(),
+                signature: "".to_string(),
+            },
+        })
     }
 
     fn sign_message(&self, message: String) -> Result<String> {
