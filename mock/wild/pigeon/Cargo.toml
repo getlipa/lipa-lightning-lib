@@ -1,0 +1,11 @@
+[package]
+name = "pigeon-mock"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "pigeon"
+
+[dependencies]
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.21.2" }
+honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.21.2" }

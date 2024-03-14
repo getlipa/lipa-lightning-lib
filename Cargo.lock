@@ -570,6 +570,52 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-core"
+version = "0.3.4"
+source = "git+https://github.com/breez/breez-sdk?tag=0.3.4#970bd0449b771cadc286d66ed8bec4a386c78f9f"
+dependencies = [
+ "aes",
+ "anyhow",
+ "base64 0.13.1",
+ "bip21",
+ "cbc",
+ "chrono",
+ "const_format",
+ "ecies",
+ "env_logger 0.10.0",
+ "flutter_rust_bridge",
+ "futures",
+ "gl-client",
+ "hex",
+ "lazy_static",
+ "log",
+ "miniz_oxide",
+ "once_cell",
+ "openssl",
+ "prost",
+ "querystring",
+ "rand",
+ "regex",
+ "reqwest",
+ "ripemd",
+ "rusqlite",
+ "rusqlite_migration",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "strum",
+ "strum_macros",
+ "tempfile",
+ "thiserror",
+ "tiny-bip39",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "zbase32",
+]
+
+[[package]]
+name = "breez-sdk-core"
 version = "0.3.6"
 source = "git+https://github.com/breez/breez-sdk?tag=0.3.6#5e1e640f9428f8e36ec5c8c506cffdf3de94000f"
 dependencies = [
@@ -612,6 +658,22 @@ dependencies = [
  "tonic",
  "tonic-build",
  "zbase32",
+]
+
+[[package]]
+name = "breez-sdk-mock"
+version = "0.3.1"
+dependencies = [
+ "anyhow",
+ "bitcoin 0.30.2",
+ "breez-sdk-core 0.3.4",
+ "chrono",
+ "hex",
+ "lazy_static",
+ "lightning 0.0.120",
+ "lightning-invoice 0.28.0",
+ "rand",
+ "secp256k1 0.27.0",
 ]
 
 [[package]]
@@ -938,6 +1000,18 @@ dependencies = [
  "honey-badger",
  "isocountry",
  "isolanguage-1",
+]
+
+[[package]]
+name = "crow-mock"
+version = "0.1.0"
+dependencies = [
+ "crow",
+ "graphql",
+ "honey-badger",
+ "isocountry",
+ "isolanguage-1",
+ "lazy_static",
 ]
 
 [[package]]
@@ -1731,6 +1805,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "hex-conservative"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30ed443af458ccb6d81c1e7e661545f94d3176752fb1df2f543b902a1e0f51e2"
+
+[[package]]
 name = "hex_lit"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2108,6 +2188,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightning"
+version = "0.0.120"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73a759c353ef7c9e3375362bcf9844fcb5ace0e8c034c4a4252d8b1e571fa3ca"
+dependencies = [
+ "bitcoin 0.30.2",
+ "hex-conservative",
+]
+
+[[package]]
 name = "lightning-invoice"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2116,9 +2206,22 @@ dependencies = [
  "bech32",
  "bitcoin 0.29.2",
  "bitcoin_hashes 0.11.0",
- "lightning",
+ "lightning 0.0.116",
  "num-traits",
  "secp256k1 0.24.3",
+]
+
+[[package]]
+name = "lightning-invoice"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48634cf0441331ea1fefb09736aa9a02c11be18281db9e067dd7567805bf3d33"
+dependencies = [
+ "bech32",
+ "bitcoin 0.30.2",
+ "lightning 0.0.120",
+ "num-traits",
+ "secp256k1 0.27.0",
 ]
 
 [[package]]
@@ -2135,13 +2238,15 @@ dependencies = [
  "anyhow",
  "bip39",
  "bitcoin 0.30.2",
- "breez-sdk-core",
+ "breez-sdk-core 0.3.6",
+ "breez-sdk-mock",
  "camino",
  "chameleon",
  "chrono",
  "cipher",
  "colored",
  "crow",
+ "crow-mock",
  "ctor",
  "email_address",
  "file-rotate",
@@ -2152,9 +2257,11 @@ dependencies = [
  "log",
  "num_enum",
  "parrot",
+ "parrot-mock",
  "parser",
  "perro",
  "pigeon",
+ "pigeon-mock",
  "qrcode",
  "rand",
  "regex",
@@ -2167,6 +2274,7 @@ dependencies = [
  "serial_test",
  "simplelog",
  "squirrel",
+ "squirrel-mock",
  "strip-ansi-escapes",
  "thiserror",
  "thousands",
@@ -2573,6 +2681,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "parrot-mock"
+version = "0.1.0"
+dependencies = [
+ "graphql",
+ "honey-badger",
+ "parrot",
+]
+
+[[package]]
 name = "parser"
 version = "0.1.0"
 dependencies = [
@@ -2639,6 +2756,14 @@ dependencies = [
 name = "pigeon"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.21.2#714bfc7461ecac758d492debc167c4f4a59abfea"
+dependencies = [
+ "graphql",
+ "honey-badger",
+]
+
+[[package]]
+name = "pigeon-mock"
+version = "0.1.0"
 dependencies = [
  "graphql",
  "honey-badger",
@@ -3581,6 +3706,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "squirrel-mock"
+version = "0.1.0"
+dependencies = [
+ "graphql",
+ "honey-badger",
+ "squirrel",
+]
+
+[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4337,8 +4471,8 @@ dependencies = [
  "hashbrown 0.8.2",
  "hex",
  "itertools",
- "lightning",
- "lightning-invoice",
+ "lightning 0.0.116",
+ "lightning-invoice 0.24.0",
  "log",
  "scopeguard",
  "serde",
