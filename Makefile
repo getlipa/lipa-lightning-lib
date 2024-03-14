@@ -5,6 +5,7 @@ check:
 .PHONY: checkall
 checkall:
 	cargo check --workspace --all-targets
+	cargo check --workspace --all-targets --no-default-features --features mock-deps
 
 .PHONY: build
 build:
@@ -13,6 +14,7 @@ build:
 .PHONY: buildall
 buildall:
 	cargo build --workspace --all-targets
+	cargo build --workspace --all-targets --no-default-features --features mock-deps
 
 .PHONY: clean
 clean:
@@ -72,7 +74,7 @@ pr: fmt buildall test clippy check-mod-test check-udl doc
 .PHONY: bump-wild
 bump-wild:
 	@newest_tag=$$(curl -s "https://api.github.com/repos/getlipa/wild/tags" | jq -r '.[0].name'); \
-	cargo_toml_files=$$(echo './Cargo.toml'); \
+	cargo_toml_files=$$(echo './Cargo.toml' ; find ./mock/wild/ -type f -name 'Cargo.toml'); \
 	echo "$$cargo_toml_files" | xargs sed -i "s/\(git = \"https:\/\/github.com\/getlipa\/wild\",\).*\(tag = \"[^\"]*\"\)/\1 tag = \"$$newest_tag\"/g"; \
     echo "Bumped wild to $$newest_tag"; \
 
@@ -80,6 +82,11 @@ bump-wild:
 run-node: ARGS =
 run-node:
 	cargo run --example node -- $(ARGS)
+
+.PHONY: run-node-mocked
+run-node-mocked: ARGS =
+run-node-mocked:
+	cargo run --example node --no-default-features --features mock-deps -- $(ARGS)
 
 .PHONY: run-parser-demo
 run-parser-demo:
