@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "mock/breez-sdk",
     "parser"
 ]
 
@@ -16,15 +17,20 @@ name = "uniffi_lipalightninglib"
 parser = { path = "parser" }
 
 chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.21.2" }
-crow = { git = "https://github.com/getlipa/wild", tag = "v1.21.2" }
+crow = { git = "https://github.com/getlipa/wild", tag = "v1.21.2", optional = true }
+crow-mock = { path = "mock/wild/crow", optional = true }
 graphql = { git = "https://github.com/getlipa/wild", tag = "v1.21.2" }
 honey-badger = { git = "https://github.com/getlipa/wild", tag = "v1.21.2" }
-parrot = { git = "https://github.com/getlipa/wild", tag = "v1.21.2" }
+parrot = { git = "https://github.com/getlipa/wild", tag = "v1.21.2", optional = true }
+parrot-mock = { path = "mock/wild/parrot", optional = true }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
-pigeon = { git = "https://github.com/getlipa/wild", tag = "v1.21.2" }
-squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.21.2" }
+pigeon = { git = "https://github.com/getlipa/wild", tag = "v1.21.2", optional = true }
+pigeon-mock = { path = "mock/wild/pigeon", optional = true }
+squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.21.2", optional = true }
+squirrel-mock = { path = "mock/wild/squirrel", optional = true }
 
-breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.3.8" }
+breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.3.8", optional = true }
+breez-sdk-mock = { path = "mock/breez-sdk", optional = true }
 
 aes-gcm = "0.10.3"
 bip39 = "2.0.0"
@@ -48,6 +54,10 @@ thiserror = "1.0.58"
 tokio = { version = "1.36.0", features = ["rt-multi-thread", "time", "sync"] }
 uniffi = "0.26.1"
 uuid = { version = "1.8.0", features = ["v5"] }
+
+[features]
+default = ["dep:breez-sdk-core", "dep:squirrel", "dep:parrot", "dep:pigeon", "dep:crow"]
+mock-deps = ["dep:breez-sdk-mock", "dep:squirrel-mock", "dep:parrot-mock", "dep:pigeon-mock", "dep:crow-mock"]
 
 # Bundle sqlite for all targets except iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]
