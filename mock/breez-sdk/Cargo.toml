@@ -1,0 +1,19 @@
+[package]
+name = "breez-sdk-mock"
+version = "0.3.1"
+edition = "2021"
+
+[lib]
+name = "breez_sdk_core"
+
+[dependencies]
+anyhow = { version = "1.0.81", features = [] }
+bitcoin = { version = "0.30.2", default-features = false }
+breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.3.4" }
+chrono = { version = "0.4", features = [] }
+hex = "0.4.3"
+rand = { version = "0.8.5", features = [] }
+lightning = "0.0.120"
+lightning-invoice = "0.28.0"
+lazy_static = { version = "1.4.0", features = [] }
+secp256k1 = "0.27.0"
