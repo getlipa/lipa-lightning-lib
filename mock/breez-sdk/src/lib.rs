@@ -34,6 +34,16 @@ const OPENING_FEE_PARAMS_MAX_IDLE_TIME: u32 = 10000;
 const OPENING_FEE_PARAMS_MAX_CLIENT_TO_SELF_DELAY: u32 = 256;
 const OPENING_FEE_PARAMS_PROMISE: &str = "promite";
 
+const SWAP_MIN_AMOUNT_SAT: u64 = 1_000;
+const SWAP_MAX_AMOUNT_SAT: u64 = 1_000_000;
+const SWAP_FEE_SAT: u64 = 1_500;
+const SWAP_TX_WEIGHT: u64 = 800;
+const SAT_PER_VBYTE: u64 = 12;
+const SWAP_FEE_PERCENTAGE: f64 = 0.5;
+const SWAP_ADDRESS_DUMMY: &str = "1BitcoinEaterAddressDontSendf59kuE";
+const SWAP_RECEIVED_STATS_ON_CHAIN: u64 = 100_000;
+const TX_ID_DUMMY: &str = "f4184fc596403b9d638783cf57adfe4c75c605f6356fbc91338530e9831e9e16";
+
 use breez_sdk_core::error::{
     LnUrlPayError, LnUrlWithdrawError, ReceiveOnchainError, ReceivePaymentError, SdkResult,
     SendOnchainError, SendPaymentError,
@@ -55,10 +65,12 @@ pub use breez_sdk_core::{
 use breez_sdk_core::{
     Config, LspInformation, MaxReverseSwapAmountResponse, NodeState, OpenChannelFeeResponse,
     PrepareRedeemOnchainFundsResponse, PrepareRefundResponse, RecommendedFees,
-    RedeemOnchainFundsResponse, RefundResponse, ReverseSwapPairInfo, SendOnchainResponse,
-    SendPaymentResponse, ServiceHealthCheckResponse, SignMessageResponse, SwapInfo,
+    RedeemOnchainFundsResponse, RefundResponse, ReverseSwapInfo, ReverseSwapPairInfo,
+    ReverseSwapStatus, SendOnchainResponse, SendPaymentResponse, ServiceHealthCheckResponse,
+    SignMessageResponse, SwapInfo, SwapStatus,
 };
 use chrono::Utc;
+use hex::FromHex;
 use lazy_static::lazy_static;
 
 pub mod error {
@@ -71,6 +83,7 @@ lazy_static! {
     static ref PAYMENT_DELAY: Mutex<PaymentDelay> = Mutex::new(PaymentDelay::Immediate);
     static ref PAYMENT_OUTCOME: Mutex<PaymentOutcome> = Mutex::new(PaymentOutcome::Success);
     static ref PAYMENTS: Mutex<Vec<Payment>> = Mutex::new(Vec::new());
+    static ref SWAPS: Mutex<Vec<SwapInfo>> = Mutex::new(Vec::new());
 }
 
 #[derive(Debug)]
@@ -535,16 +548,21 @@ impl BreezServices {
 
     pub async fn prepare_redeem_onchain_funds(
         &self,
-        _req: PrepareRedeemOnchainFundsRequest,
+        req: PrepareRedeemOnchainFundsRequest,
     ) -> SdkResult<PrepareRedeemOnchainFundsResponse> {
-        todo!("prepare redeem onchain funds");
+        Ok(PrepareRedeemOnchainFundsResponse {
+            tx_weight: SWAP_TX_WEIGHT,
+            tx_fee_sat: SWAP_TX_WEIGHT / 4 * (req.sat_per_vbyte as u64),
+        })
     }
 
     pub async fn redeem_onchain_funds(
         &self,
         _req: RedeemOnchainFundsRequest,
     ) -> SdkResult<RedeemOnchainFundsResponse> {
-        todo!("redeem onchain funds");
+        Ok(RedeemOnchainFundsResponse {
+            txid: Vec::from_hex(TX_ID_DUMMY).unwrap(),
+        })
     }
 
     /// List available LSPs that can be selected by the user
@@ -593,45 +611,159 @@ impl BreezServices {
         &self,
         _req: ReceiveOnchainRequest,
     ) -> Result<SwapInfo, ReceiveOnchainError> {
-        todo!("receive_onchain");
+        let now = Utc::now().timestamp();
+
+        let swap = SwapInfo {
+            bitcoin_address: SWAP_ADDRESS_DUMMY.to_string(),
+            created_at: now,
+            lock_height: 10,
+            payment_hash: vec![],
+            preimage: vec![],
+            private_key: vec![],
+            public_key: vec![],
+            swapper_public_key: vec![],
+            script: vec![],
+            bolt11: None,
+            paid_msat: 0,
+            confirmed_sats: 0,
+            unconfirmed_sats: 0,
+            status: SwapStatus::Initial,
+            refund_tx_ids: vec![],
+            unconfirmed_tx_ids: vec![],
+            confirmed_tx_ids: vec![],
+            min_allowed_deposit: 1_000,
+            max_allowed_deposit: 1_000_000,
+            last_redeem_error: None,
+            channel_opening_fees: None,
+        };
+
+        SWAPS.lock().unwrap().push(swap.clone());
+
+        Ok(swap)
     }
 
     pub async fn in_progress_swap(&self) -> SdkResult<Option<SwapInfo>> {
-        Ok(None)
-        // Todo how to get in progress swap
+        self.sync().await?;
+
+        Ok(SWAPS
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|swap| {
+                (swap.confirmed_sats > 0 || swap.unconfirmed_sats > 0)
+                    && swap.paid_msat == 0
+                    && swap.status != SwapStatus::Expired
+            })
+            .cloned())
     }
 
     pub async fn fetch_reverse_swap_fees(
         &self,
-        _req: ReverseSwapFeesRequest,
+        req: ReverseSwapFeesRequest,
     ) -> SdkResult<ReverseSwapPairInfo> {
-        todo!("fetch_reverse_swap_fees");
+        let total_estimated_fees = req
+            .send_amount_sat
+            .map(|amount| (amount as f64) / 100.0 * SWAP_FEE_PERCENTAGE)
+            .map(|fees| fees as u64);
+        Ok(ReverseSwapPairInfo {
+            min: SWAP_MIN_AMOUNT_SAT,
+            max: SWAP_MAX_AMOUNT_SAT,
+            fees_hash: "this-should-be-a-hash.dummy".to_string(),
+            fees_percentage: SWAP_FEE_PERCENTAGE,
+            fees_lockup: 500,
+            fees_claim: 500,
+            total_estimated_fees,
+        })
     }
 
     pub async fn max_reverse_swap_amount(&self) -> SdkResult<MaxReverseSwapAmountResponse> {
-        todo!("max_reverse_swap_amount");
+        let total_sat = *LN_BALANCE_MSAT.lock().unwrap() / 1000 - SWAP_FEE_SAT;
+
+        Ok(MaxReverseSwapAmountResponse { total_sat })
     }
 
     pub async fn send_onchain(
         &self,
-        _req: SendOnchainRequest,
+        req: SendOnchainRequest,
     ) -> Result<SendOnchainResponse, SendOnchainError> {
-        todo!("send_onchain");
+        let now = Utc::now().timestamp();
+
+        let amount_msat = req.amount_sat * 1_000;
+        let fee_msat = *LN_BALANCE_MSAT.lock().unwrap() - amount_msat;
+        *LN_BALANCE_MSAT.lock().unwrap() -= amount_msat + fee_msat;
+
+        let reverse_swap_info = ReverseSwapInfo {
+            id: now.to_string(),
+            claim_pubkey: req.onchain_recipient_address,
+            lockup_txid: Some("LOCKUP-TXID-DUMMY".to_string()),
+            claim_txid: Some("CLAIM-TXID-DUMMY".to_string()),
+            onchain_amount_sat: req.amount_sat,
+            status: ReverseSwapStatus::Initial,
+        };
+
+        PAYMENTS.lock().unwrap().push(Payment {
+            id: format!("random_id_{}", now),
+            payment_type: PaymentType::Sent,
+            payment_time: now,
+            amount_msat,
+            fee_msat,
+            status: PaymentStatus::Complete,
+            error: None,
+            description: None,
+            details: PaymentDetails::Ln {
+                data: LnPaymentDetails {
+                    payment_hash: "".to_string(),
+                    label: "".to_string(),
+                    destination_pubkey: "".to_string(),
+                    payment_preimage: "".to_string(),
+                    keysend: false,
+                    bolt11: "lnbc1486290n1pj74h6psp5tmna0gruf44rx0h7xgl2xsmn5xhjnaxktct40pkfg4m9kssytn0spp5qhpx9s8rvmw6jtzkelslve9zfuhpp2w7hn9s6q7xvdnds5jemr2qdpa2pskjepqw3hjq3r0deshgefqw3hjqjzjgcs8vv3qyq5y7unyv4ezqj2y8gszjxqy9ghlcqpjrzjqvutcqr0g2ltxthh82s8l24gy74xe862kelrywc6ktsx2gejgk26szcqygqqy6qqqyqqqqlgqqqq86qqyg9qxpqysgqzjnfufxw375gpqf9cvzd5jxyqqtm56fuw960wyel2ld3he403r7x6uyw59g5sfsj5rclycd09a8p8r2pnyrcanlg27e2a67nh5g248sp7p7s8z".to_string(),
+                    open_channel_bolt11: None,
+                    lnurl_success_action: None,
+                    lnurl_pay_domain: None,
+                    ln_address: None,
+                    lnurl_metadata: None,
+                    lnurl_withdraw_endpoint: None,
+                    swap_info: None,
+                    reverse_swap_info: Some(reverse_swap_info.clone()),
+                    pending_expiration_block: None,
+                },
+            },
+            metadata: None,
+        });
+
+        Ok(SendOnchainResponse {
+            reverse_swap_info: reverse_swap_info,
+        })
     }
 
     pub async fn list_refundables(&self) -> SdkResult<Vec<SwapInfo>> {
-        todo!("list_refundables");
-    }
+        self.sync().await?;
 
+        let swaps = SWAPS.lock().unwrap().clone();
+        Ok(swaps
+            .into_iter()
+            .filter(|swap| {
+                (swap.confirmed_sats > 0 || swap.unconfirmed_sats > 0)
+                    && swap.paid_msat == 0
+                    && swap.status == SwapStatus::Expired
+            })
+            .collect())
+    }
     pub async fn prepare_refund(
         &self,
         _req: PrepareRefundRequest,
     ) -> SdkResult<PrepareRefundResponse> {
-        todo!("prepare_refund");
+        Ok(PrepareRefundResponse {
+            refund_tx_weight: (SWAP_TX_WEIGHT / 4 * SAT_PER_VBYTE) as u32,
+            refund_tx_fee_sat: SWAP_TX_WEIGHT,
+        })
     }
 
     pub async fn refund(&self, _req: RefundRequest) -> SdkResult<RefundResponse> {
-        todo!("refund");
+        Ok(RefundResponse {
+            refund_tx_id: TX_ID_DUMMY.to_string(),
+        })
     }
 
     pub async fn execute_dev_command(&self, command: String) -> SdkResult<String> {
@@ -643,6 +775,8 @@ impl BreezServices {
     }
 
     pub async fn sync(&self) -> SdkResult<()> {
+        Self::simulate_swaps();
+
         Ok(())
     }
 
@@ -686,14 +820,56 @@ impl BreezServices {
     pub async fn register_webhook(&self, _webhook_url: String) -> SdkResult<()> {
         Ok(())
     }
+
+    fn simulate_swaps() {
+        let now = Utc::now();
+        let in_one_hour = now + chrono::Duration::try_hours(1).unwrap();
+        let valid_until = in_one_hour.to_rfc3339();
+        let now = now.timestamp();
+
+        let mut swaps = SWAPS.lock().unwrap();
+        swaps.iter_mut().for_each(|swap| {
+            if now - swap.created_at > 30 && swap.created_at <= 60 {
+                swap.unconfirmed_sats = SWAP_RECEIVED_STATS_ON_CHAIN;
+            } else if now - swap.created_at > 60 {
+                swap.unconfirmed_sats = 0;
+                swap.confirmed_sats = SWAP_RECEIVED_STATS_ON_CHAIN;
+            }
+
+            // swap is redeemable for 60 seconds until it is expired and must be refunded
+            if now - swap.created_at < 120 {
+                swap.channel_opening_fees = Some(OpeningFeeParams {
+                    min_msat: 3_000_000,
+                    proportional: 10_000,
+                    valid_until: valid_until.clone(),
+                    max_idle_time: 0,
+                    max_client_to_self_delay: 0,
+                    promise: "promise".to_string(),
+                });
+            } else {
+                swap.status = SwapStatus::Expired;
+            }
+        });
+    }
 }
 
 pub async fn parse(input: &str) -> Result<InputType> {
-    // So far Lipa only supports InputTypes Bolt11, LnUrlPay, and LnUrlWithdraw
     let input = input.trim();
 
     if let Ok(invoice) = parse_invoice(input) {
         return Ok(Bolt11 { invoice });
+    }
+
+    if input.starts_with("bc1q") || input.starts_with("bc1p") {
+        return Ok(InputType::BitcoinAddress {
+            address: BitcoinAddressData {
+                address: input.to_string(),
+                network: Network::Bitcoin,
+                amount_sat: None,
+                label: None,
+                message: None,
+            },
+        });
     }
 
     // Without requesting the server, it is not possible to know whether an LNURL string is a pay or withdraw request
