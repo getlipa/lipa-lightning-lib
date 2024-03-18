@@ -35,19 +35,14 @@ impl From<PaymentStatus> for PaymentState {
     }
 }
 
-/// Information about an incoming or outgoing payment.
+/// Information about a payment.
 #[derive(PartialEq, Debug)]
 pub struct Payment {
-    pub payment_type: PaymentType,
     pub payment_state: PaymentState,
-    /// For now, will always be empty.
-    pub fail_reason: Option<PayErrorCode>,
     /// Hex representation of payment hash.
     pub hash: String,
-    /// Actual amount payed or received, will equal the `requested_amount` until payment succeeded.
+    /// Actual amount payed or received, the value might change with payment status.
     pub amount: Amount,
-    /// Nominal amount specified in the invoice.
-    pub requested_amount: Amount,
     pub invoice_details: InvoiceDetails,
     pub created_at: TzTime,
     /// The description embedded in the invoice. Given the length limit of this data,
@@ -55,21 +50,44 @@ pub struct Payment {
     pub description: String,
     /// Hex representation of the preimage. Will only be present on successful payments.
     pub preimage: Option<String>,
-    /// Routing fees paid in a [`PaymentType::Sending`] payment. Will only be present if the payment
-    /// was successful.
-    pub network_fees: Option<Amount>,
-    /// LSP fees paid in a [`PaymentType::Receiving`] payment. Will never be present for
-    /// [`PaymentType::Sending`] payments but might be 0 for [`PaymentType::Receiving`] payments.
-    /// The amount is only paid if successful.
-    pub lsp_fees: Option<Amount>,
-    /// An offer a [`PaymentType::Receiving`] payment came from if any.
-    pub offer: Option<OfferKind>,
-    /// The swap information of a [`PaymentType::Receiving`] payment if triggered by a swap.
-    pub swap: Option<SwapInfo>,
-    /// Information about a payment's recipient. Will only be present for outgoing payments.
-    pub recipient: Option<Recipient>,
     /// A personal note previously added to this payment through [`LightningNode::set_payment_personal_note`](crate::LightningNode::set_payment_personal_note)
     pub personal_note: Option<String>,
+    pub details: PaymentDetails,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum PaymentDetails {
+    Incoming(IncomingPayment),
+    Outgoing(OutgoingPayment),
+}
+
+/// Information specific to an incoming payment.
+#[derive(PartialEq, Debug)]
+pub struct IncomingPayment {
+    /// Nominal amount specified in the invoice.
+    pub requested_amount: Amount,
+    /// LSP fees paid in a payment. The amount is only paid if successful.
+    pub lsp_fees: Amount,
+
+	// Here we need recipient, if it is a lightning address or a phone number.
+	// Or we can move `OutgoingPayment::recipient` to `Payment`.
+
+	// Merge into one thing?
+    /// The swap information of a payment if triggered by a swap.
+    pub swap: Option<SwapInfo>,
+	// We will have Referrals here also.
+    /// An offer a payment came from if any.
+    pub offer: Option<OfferKind>,
+}
+
+/// Information specific to an outgoing payment.
+#[derive(PartialEq, Debug)]
+pub struct OutgoingPayment {
+    /// Routing fees paid in a payment. Will only be present if the payment was successful.
+    pub network_fees: Amount,
+	// Here we can encode debit card topups.
+    /// Information about a payment's recipient.
+    pub recipient: Recipient,
 }
 
 /// User-friendly representation of an outgoing payment's recipient.
