@@ -202,7 +202,7 @@ jobs:
           git config --global user.email "lipa-lightning-engineering@getlipa.com"
           git config --global user.name "lipa Bot"
           
-          cp ../bindings/swift/lipalightninglib.swift Sources/LipaLightningLib/LipaLightningLib.swift
+          cp ../bindings/swift/lipalightninglib.swift Sources/LipaLightningLib/LipaLightningLib${{ matrix.mock-deps && 'Mock' || '' }}.swift
           
           cp Package.swift.template Package.swift
           shasum -a 256 lipalightninglibFFI.xcframework.zip | sed 's/ .*//' > checksum
@@ -210,7 +210,7 @@ jobs:
           sed -i "s/to_replace_zip_checksum/$(cat checksum)/g" Package.swift
           
           git add Package.swift
-          git add Sources/LipaLightningLib/LipaLightningLib.swift
+          git add Sources/LipaLightningLib/LipaLightningLib${{ matrix.mock-deps && 'Mock' || '' }}.swift
           git commit -m "This commit was created automatically by the lipa bot"
           git restore .
           git pull --rebase
