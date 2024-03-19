@@ -47,7 +47,7 @@ simplelog = { version = "0.12.2" }
 thiserror = "1.0.58"
 tokio = { version = "1.36.0", features = ["rt-multi-thread", "time", "sync"] }
 uniffi = "0.26.1"
-uuid = { version = "1.7.0", features = ["v5"] }
+uuid = { version = "1.8.0", features = ["v5"] }
 
 # Bundle sqlite for all targets except iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]
