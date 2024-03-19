@@ -35,19 +35,14 @@ impl From<PaymentStatus> for PaymentState {
     }
 }
 
-/// Information about an incoming or outgoing payment.
+/// Information about an payment.
 #[derive(PartialEq, Debug)]
-pub struct Payment {
-    pub payment_type: PaymentType,
+pub struct PaymentInfo {
     pub payment_state: PaymentState,
-    /// For now, will always be empty.
-    pub fail_reason: Option<PayErrorCode>,
     /// Hex representation of payment hash.
     pub hash: String,
-    /// Actual amount payed or received, will equal the `requested_amount` until payment succeeded.
+    /// Actual amount payed or received.
     pub amount: Amount,
-    /// Nominal amount specified in the invoice.
-    pub requested_amount: Amount,
     pub invoice_details: InvoiceDetails,
     pub created_at: TzTime,
     /// The description embedded in the invoice. Given the length limit of this data,
@@ -55,21 +50,28 @@ pub struct Payment {
     pub description: String,
     /// Hex representation of the preimage. Will only be present on successful payments.
     pub preimage: Option<String>,
-    /// Routing fees paid in a [`PaymentType::Sending`] payment. Will only be present if the payment
-    /// was successful.
-    pub network_fees: Option<Amount>,
-    /// LSP fees paid in a [`PaymentType::Receiving`] payment. Will never be present for
-    /// [`PaymentType::Sending`] payments but might be 0 for [`PaymentType::Receiving`] payments.
-    /// The amount is only paid if successful.
-    pub lsp_fees: Option<Amount>,
-    /// An offer a [`PaymentType::Receiving`] payment came from if any.
-    pub offer: Option<OfferKind>,
-    /// The swap information of a [`PaymentType::Receiving`] payment if triggered by a swap.
-    pub swap: Option<SwapInfo>,
-    /// Information about a payment's recipient. Will only be present for outgoing payments.
-    pub recipient: Option<Recipient>,
     /// A personal note previously added to this payment through [`LightningNode::set_payment_personal_note`](crate::LightningNode::set_payment_personal_note)
     pub personal_note: Option<String>,
+}
+
+/// Information about an incoming payment.
+#[derive(PartialEq, Debug)]
+pub struct IncomingPaymentInfo {
+    pub payment_info: PaymentInfo,
+    /// Nominal amount specified in the invoice.
+    pub requested_amount: Amount,
+    /// LSP fees paid. The amount is only paid if successful.
+    pub lsp_fees: Amount,
+}
+
+/// Information about an outgoing payment.
+#[derive(PartialEq, Debug)]
+pub struct OutgoingPaymentInfo {
+    pub payment_info: PaymentInfo,
+    /// Routing fees paid. Will only be present if the payment was successful.
+    pub network_fees: Amount,
+    /// Information about a payment's recipient.
+    pub recipient: Recipient,
 }
 
 /// User-friendly representation of an outgoing payment's recipient.
@@ -105,8 +107,34 @@ pub struct ListActivitiesResponse {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum Activity {
-    PaymentActivity { payment: Payment },
-    ChannelCloseActivity { channel_close: ChannelClose },
+    IncomingPayment {
+        incoming_payment_info: IncomingPaymentInfo,
+    },
+    OutgoingPayment {
+        outgoing_payment_info: OutgoingPaymentInfo,
+    },
+    // Topup, referrals.
+    OfferClaim {
+        incoming_payment_info: IncomingPaymentInfo,
+        offer_kind: OfferKind,
+    },
+    // Lightning to an on-chain address.
+    ReverseSwap {
+        outgoing_payment_info: OutgoingPaymentInfo,
+        // reverse_swap_info: ReverseSwapInfo,
+    },
+    // On-chain to lightning.
+    Swap {
+        incoming_payment_info: IncomingPaymentInfo,
+        swap_info: SwapInfo,
+    },
+    ChannelClose {
+        channel_close: ChannelClose,
+    },
+    // On-chain to an external on-chain address.
+    // Sweep {
+    //     sweep_info: SweepInfo,
+    // },
 }
 
 impl Activity {
