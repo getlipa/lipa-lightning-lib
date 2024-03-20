@@ -129,7 +129,7 @@ pub enum Activity {
         swap_info: SwapInfo,
     },
     ChannelClose {
-        channel_close: ChannelClose,
+        channel_close_info: ChannelCloseInfo,
     },
     // On-chain to an external on-chain address.
     // Sweep {
@@ -165,7 +165,7 @@ impl Activity {
 
 /// Information about a closed channel.
 #[derive(Debug, PartialEq)]
-pub struct ChannelClose {
+pub struct ChannelCloseInfo {
     /// Our balance on the channel that got closed.
     pub amount: Amount,
     pub state: ChannelCloseState,
