@@ -1,3 +1,4 @@
+use log::Level;
 use std::env;
 use uniffi_lipalightninglib::{
     handle_notification, mnemonic_to_secret, Config, EnvironmentCode, TzConfig,
@@ -29,7 +30,7 @@ fn main() {
             timezone_id: String::from("Africa/Tunis"),
             timezone_utc_offset_secs: 60 * 60,
         },
-        enable_file_logging: true,
+        file_logging_level: Some(Level::Debug),
     };
 
     let notification_payload = format!(

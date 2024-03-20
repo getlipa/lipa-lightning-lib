@@ -6,7 +6,6 @@ use crate::key_derivation::derive_persistence_encryption_key;
 use crate::logger::init_logger_once;
 use crate::{
     build_async_auth, permanent_failure, sanitize_input, EnvironmentCode, DB_FILENAME, LOGS_DIR,
-    LOG_LEVEL,
 };
 use squirrel::RemoteBackupClient;
 use std::path::Path;
@@ -19,13 +18,10 @@ pub fn recover_lightning_node(
     environment: EnvironmentCode,
     seed: Vec<u8>,
     local_persistence_path: String,
-    enable_file_logging: bool,
+    file_logging_level: Option<log::Level>,
 ) -> Result<()> {
-    if enable_file_logging {
-        init_logger_once(
-            LOG_LEVEL,
-            &Path::new(&local_persistence_path).join(LOGS_DIR),
-        )?;
+    if let Some(level) = file_logging_level {
+        init_logger_once(level, &Path::new(&local_persistence_path).join(LOGS_DIR))?;
     }
 
     let db_path = format!("{local_persistence_path}/{DB_FILENAME}");

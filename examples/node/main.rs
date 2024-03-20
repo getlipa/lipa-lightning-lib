@@ -9,6 +9,7 @@ use crate::print_events_handler::PrintEventsHandler;
 use uniffi_lipalightninglib::{mnemonic_to_secret, recover_lightning_node, LightningNode};
 use uniffi_lipalightninglib::{Config, EnvironmentCode, TzConfig};
 
+use log::Level;
 use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
@@ -34,7 +35,13 @@ fn main() {
         .read_dir()
         .is_ok_and(|mut d| d.next().is_none())
     {
-        recover_lightning_node(environment, seed.clone(), base_dir.clone(), true).unwrap();
+        recover_lightning_node(
+            environment,
+            seed.clone(),
+            base_dir.clone(),
+            Some(Level::Debug),
+        )
+        .unwrap();
     }
 
     let config = Config {
@@ -46,7 +53,7 @@ fn main() {
             timezone_id: String::from("Africa/Tunis"),
             timezone_utc_offset_secs: 60 * 60,
         },
-        enable_file_logging: true,
+        file_logging_level: Some(Level::Debug),
     };
 
     let node = LightningNode::new(config, events).unwrap();

@@ -128,7 +128,6 @@ use std::time::SystemTime;
 use std::{env, fs};
 use uuid::Uuid;
 
-const LOG_LEVEL: Level = Level::Debug;
 const LOGS_DIR: &str = "logs";
 
 pub(crate) const DB_FILENAME: &str = "db2.db3";
@@ -308,9 +307,9 @@ impl LightningNode {
             "Failed to create directory: {}",
             &config.local_persistence_path,
         ))?;
-        if config.enable_file_logging {
+        if let Some(level) = config.file_logging_level {
             init_logger_once(
-                LOG_LEVEL,
+                level,
                 &Path::new(&config.local_persistence_path).join(LOGS_DIR),
             )?;
         }

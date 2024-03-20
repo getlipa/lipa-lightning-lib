@@ -8,7 +8,7 @@ use crate::event::report_event_for_analytics;
 use crate::logger::init_logger_once;
 use crate::{
     enable_backtrace, sanitize_input, start_sdk, Config, RuntimeErrorCode, UserPreferences,
-    DB_FILENAME, LOGS_DIR, LOG_LEVEL,
+    DB_FILENAME, LOGS_DIR,
 };
 use breez_sdk_core::{BreezEvent, BreezServices, EventListener, PaymentStatus};
 use log::{debug, error};
@@ -53,10 +53,12 @@ pub fn handle_notification(
     notification_payload: String,
 ) -> Result<RecommendedAction> {
     enable_backtrace();
-    init_logger_once(
-        LOG_LEVEL,
-        &Path::new(&config.local_persistence_path).join(LOGS_DIR),
-    )?;
+    if let Some(level) = config.file_logging_level {
+        init_logger_once(
+            level,
+            &Path::new(&config.local_persistence_path).join(LOGS_DIR),
+        )?;
+    }
     debug!("Started handling a notification.");
 
     let payload = match serde_json::from_str::<Payload>(&notification_payload) {
