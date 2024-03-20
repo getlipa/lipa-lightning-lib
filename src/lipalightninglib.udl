@@ -602,7 +602,7 @@ namespace lipalightninglib {
     TermsAndConditionsStatus get_terms_and_conditions_status(EnvironmentCode environment, bytes seed, TermsAndConditions terms_and_conditions);
 
     [Throws=LnError]
-    void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path, Level? file_logging_levelma);
+    void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path, Level? file_logging_level);
 
     [Throws=ParseError]
     void parse_lightning_address([ByRef] string address);
