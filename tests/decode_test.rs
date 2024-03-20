@@ -3,6 +3,7 @@ mod setup;
 
 use crate::setup::start_alice;
 
+use breez_sdk_core::Network;
 use serial_test::file_serial;
 use std::time::{Duration, SystemTime};
 use uniffi_lipalightninglib::{DecodeDataError, DecodedData, InvoiceDetails, UnsupportedDataType};
@@ -17,13 +18,15 @@ fn test_decoding() {
     assert!(matches!(result, Err(DecodeDataError::Unrecognized { .. })));
 
     let bitcoin_address = "1DTHjgRiPnCYhgy7PcKxEEWAyFi4VoJpqi".to_string();
-    let result = node.decode_data(bitcoin_address);
-    assert!(matches!(
-        result,
-        Err(DecodeDataError::Unsupported {
-            typ: UnsupportedDataType::BitcoinAddress
-        })
-    ));
+    let data = node.decode_data(bitcoin_address.clone()).unwrap();
+    assert!(matches!(data, DecodedData::OnchainAddress { .. }));
+    if let DecodedData::OnchainAddress {
+        onchain_address_details,
+    } = data
+    {
+        assert_eq!(onchain_address_details.address, bitcoin_address);
+        assert_eq!(onchain_address_details.network, Network::Bitcoin);
+    }
 
     let node_id = "03864ef025fde8fb587d989186ce6a4a186895ee44a926bfc370e2c366597a3f8f".to_string();
     let result = node.decode_data(node_id);
