@@ -6,6 +6,7 @@ use crate::print_events_handler::PrintEventsHandler;
 use uniffi_lipalightninglib::LightningNode;
 use uniffi_lipalightninglib::{generate_secret, Config, TzConfig};
 
+use log::Level;
 use serial_test::file_serial;
 use std::fs;
 use std::string::ToString;
@@ -33,7 +34,7 @@ fn test_register_node() {
             timezone_id: String::from("int_test_timezone_id"),
             timezone_utc_offset_secs: 1234,
         },
-        enable_file_logging: false,
+        file_logging_level: Some(Level::Debug),
     };
 
     let events_handler = PrintEventsHandler {};

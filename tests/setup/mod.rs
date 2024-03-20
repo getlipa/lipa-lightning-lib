@@ -4,6 +4,7 @@ use crate::wait_for;
 use uniffi_lipalightninglib::{mnemonic_to_secret, Config, TzConfig};
 use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
 
+use log::Level;
 use std::fs;
 use std::string::ToString;
 
@@ -77,7 +78,7 @@ fn start_node(node_name: &str) -> Result<LightningNode> {
             timezone_id: String::from("int_test_timezone_id"),
             timezone_utc_offset_secs: 1234,
         },
-        enable_file_logging: false,
+        file_logging_level: Some(Level::Debug),
     };
 
     let events_handler = PrintEventsHandler {};

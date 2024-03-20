@@ -18,8 +18,9 @@ pub struct Config {
     pub local_persistence_path: String,
     /// A timezone configuration object.
     pub timezone_config: TzConfig,
-    /// If set to true, logs will be created in the provided `local_persistence_path`.
-    pub enable_file_logging: bool,
+    /// If a value is provided, logs using the provided level will be created in the provided
+    /// `local_persistence_path`.
+    pub file_logging_level: Option<log::Level>,
 }
 
 /// An object that holds timezone configuration values necessary for 3L to do timestamp annotation. These values get tied

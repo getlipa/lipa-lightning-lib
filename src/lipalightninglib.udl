@@ -159,7 +159,7 @@ dictionary Config {
     string fiat_currency;
     string local_persistence_path;
     TzConfig timezone_config;
-    boolean enable_file_logging;
+    Level? file_logging_level;
 };
 
 enum EnvironmentCode {
@@ -172,6 +172,14 @@ enum EnvironmentCode {
 dictionary TzConfig {
     string timezone_id;
     i32 timezone_utc_offset_secs;
+};
+
+enum Level {
+    "Error",
+    "Warn",
+    "Info",
+    "Debug",
+    "Trace",
 };
 
 callback interface EventsCallback {
@@ -594,7 +602,7 @@ namespace lipalightninglib {
     TermsAndConditionsStatus get_terms_and_conditions_status(EnvironmentCode environment, bytes seed, TermsAndConditions terms_and_conditions);
 
     [Throws=LnError]
-    void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path, boolean enable_file_logging);
+    void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path, Level? file_logging_level);
 
     [Throws=ParseError]
     void parse_lightning_address([ByRef] string address);
