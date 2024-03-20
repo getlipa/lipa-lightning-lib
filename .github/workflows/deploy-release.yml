@@ -206,7 +206,7 @@ jobs:
           
           cp Package.swift.template Package.swift
           shasum -a 256 lipalightninglibFFI.xcframework.zip | sed 's/ .*//' > checksum
-          sed -i "s/to_replace_release_version/${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }}/g" Package.swift
+          sed -i "s/to_replace_release_version/${{ env.RELEASE_VERSION }}/g" Package.swift
           sed -i "s/to_replace_zip_checksum/$(cat checksum)/g" Package.swift
           
           git add Package.swift
@@ -223,9 +223,9 @@ jobs:
         if: ${{ env.BRANCH == 'main' }}
         run: |
           cd lipa-lightning-lib-swift
-          gh release create ${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }} \
+          gh release create ${{ env.RELEASE_VERSION }} \
             lipalightninglibFFI.xcframework.zip \
-            --title "${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }}" \
+            --title "${{ env.RELEASE_VERSION }} \
             --notes "This release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib"
       - name: Create pre-release
         env:
@@ -233,9 +233,9 @@ jobs:
         if: ${{ env.BRANCH != 'main' }}
         run: |
           cd lipa-lightning-lib-swift
-          gh release create ${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }} \
+          gh release create ${{ env.RELEASE_VERSION }} \
             lipalightninglibFFI.xcframework.zip \
-            --title "${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }}" \
+            --title "${{ env.RELEASE_VERSION }} \
             --notes "This pre-release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib" \
             --prerelease
 
@@ -315,7 +315,7 @@ jobs:
           shasum -a 256 jniLibs.zip | sed 's/ .*//' > checksum
 
           cp jitpack.yml.template jitpack.yml
-          sed -i "s/to_replace_release_version/${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }}/g" jitpack.yml
+          sed -i "s/to_replace_release_version/${{ env.RELEASE_VERSION }}/g" jitpack.yml
           sed -i "s/to_replace_zip_checksum/$(cat checksum)/g" jitpack.yml
 
           git add LipaLightningLib/src/main/java/com/getlipa/lipalightninglib/lipalightninglib.kt
@@ -331,9 +331,9 @@ jobs:
         if: ${{ env.BRANCH == 'main' }}
         run: |
           cd lipa-lightning-lib-android
-          gh release create ${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }} \
+          gh release create ${{ env.RELEASE_VERSION }} \
             jniLibs.zip \
-            --title "${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }}" \
+            --title "${{ env.RELEASE_VERSION }}" \
             --notes "This release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib"
       - name: Create pre-release
         env:
@@ -341,14 +341,14 @@ jobs:
         if: ${{ env.BRANCH != 'main' }}
         run: |
           cd lipa-lightning-lib-android
-          gh release create ${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }} \
+          gh release create ${{ env.RELEASE_VERSION }} \
             jniLibs.zip \
-            --title "${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }}" \
+            --title "${{ env.RELEASE_VERSION }}" \
             --notes "This pre-release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib" \
             --prerelease
       - name: Trigger JitPack build
         run: |
-          curl -s -m 30 https://jitpack.io/com/github/getlipa/lipa-lightning-lib-android/${{ env.RELEASE_VERSION }}${{ matrix.mock-deps && '-mock' || '' }} || true
+          curl -s -m 30 https://jitpack.io/com/github/getlipa/lipa-lightning-lib-android/${{ env.RELEASE_VERSION }} || true
 
   determine-branch:
     name: determine-branch
