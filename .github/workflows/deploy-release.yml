@@ -226,7 +226,7 @@ jobs:
           gh release create ${{ env.RELEASE_VERSION }} \
             lipalightninglibFFI.xcframework.zip \
             --title "${{ env.RELEASE_VERSION }}" \
-            --notes "This release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib"
+            --notes "This release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib${{ matrix.mock-deps && '_mock' || '' }}${{ matrix.mock-deps && '_mock' || '' }}"
       - name: Create pre-release
         env:
           GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
@@ -236,7 +236,7 @@ jobs:
           gh release create ${{ env.RELEASE_VERSION }} \
             lipalightninglibFFI.xcframework.zip \
             --title "${{ env.RELEASE_VERSION }}" \
-            --notes "This pre-release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib" \
+            --notes "This pre-release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib${{ matrix.mock-deps && '_mock' || '' }}" \
             --prerelease
 
   deploy-android:
@@ -334,7 +334,7 @@ jobs:
           gh release create ${{ env.RELEASE_VERSION }} \
             jniLibs.zip \
             --title "${{ env.RELEASE_VERSION }}" \
-            --notes "This release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib"
+            --notes "This release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib${{ matrix.mock-deps && '_mock' || '' }}"
       - name: Create pre-release
         env:
           GITHUB_TOKEN: ${{ secrets.LIPA_BOT_ACCESS_TOKEN }}
@@ -344,7 +344,7 @@ jobs:
           gh release create ${{ env.RELEASE_VERSION }} \
             jniLibs.zip \
             --title "${{ env.RELEASE_VERSION }}" \
-            --notes "This pre-release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib" \
+            --notes "This pre-release was created automatically by the lipa bot. For more information, please access the corresponding release in https://github.com/getlipa/lipa-lightning-lib${{ matrix.mock-deps && '_mock' || '' }}" \
             --prerelease
       - name: Trigger JitPack build
         run: |
