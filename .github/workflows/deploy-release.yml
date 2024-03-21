@@ -160,7 +160,7 @@ jobs:
           echo "BRANCH=$branch" >> $GITHUB_ENV
       - uses: webfactory/ssh-agent@v0.5.4
         with:
-          ssh-private-key: ${{ matrix.mock-deps && secrets.LIPA_BOT_IOS_MOCK_DEPLOY_KEY || secrets.LIPA_BOT_IOS_DEPLOY_KEY }}
+          ssh-private-key: ${{ secrets.LIPA_BOT_IOS_DEPLOY_KEY }}
       - name: Import bot's GPG key for signing commits
         id: import-gpg
         uses: crazy-max/ghaction-import-gpg@v4
