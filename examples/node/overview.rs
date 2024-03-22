@@ -4,8 +4,8 @@ use chrono::{DateTime, Utc};
 use colored::Colorize;
 use thousands::Separable;
 use uniffi_lipalightninglib::{
-    Activity, Amount, BreezHealthCheckStatus, ChannelClose, FiatValue, LightningNode, Payment,
-    PaymentState, PaymentType, Recipient,
+    Activity, Amount, BreezHealthCheckStatus, ChannelCloseInfo, FiatValue, IncomingPaymentInfo,
+    LightningNode, OutgoingPaymentInfo, PaymentState, Recipient,
 };
 
 pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
@@ -85,12 +85,28 @@ pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
 
 fn print_activity(activity: Activity) -> Result<()> {
     match activity {
-        Activity::PaymentActivity { payment } => print_payment(payment),
-        Activity::ChannelCloseActivity { channel_close } => print_channel_close(channel_close),
+        Activity::IncomingPayment {
+            incoming_payment_info,
+        } => print_incoming_payment(incoming_payment_info),
+        Activity::OutgoingPayment {
+            outgoing_payment_info,
+        } => print_outgoing_payment(outgoing_payment_info),
+        Activity::OfferClaim {
+            incoming_payment_info,
+            ..
+        } => print_incoming_payment(incoming_payment_info),
+        Activity::ReverseSwap {
+            outgoing_payment_info,
+        } => print_outgoing_payment(outgoing_payment_info),
+        Activity::Swap {
+            incoming_payment_info,
+            ..
+        } => print_incoming_payment(incoming_payment_info),
+        Activity::ChannelClose { channel_close_info } => print_channel_close(channel_close_info),
     }
 }
 
-fn print_channel_close(channel_close: ChannelClose) -> Result<()> {
+fn print_channel_close(channel_close: ChannelCloseInfo) -> Result<()> {
     let amount = channel_close.amount.sats.separate_with_commas();
     let amount = format!("−{amount}");
     let fiat = channel_close.amount.fiat.map_or(String::new(), format_fiat);
@@ -111,17 +127,19 @@ fn print_channel_close(channel_close: ChannelClose) -> Result<()> {
     Ok(())
 }
 
-fn print_payment(payment: Payment) -> Result<()> {
-    let (link_1, link_2, lsp_fees) = match payment.lsp_fees {
-        Some(lsp_fees) if lsp_fees.sats > 0 && payment.payment_state == PaymentState::Succeeded => {
+fn print_incoming_payment(payment: IncomingPaymentInfo) -> Result<()> {
+    let lsp_fees = payment.lsp_fees;
+    let (link_1, link_2) =
+        if lsp_fees.sats > 0 && payment.payment_info.payment_state == PaymentState::Succeeded {
             let icon = "💧";
             let title = "Liquidity fee";
             let amount = lsp_fees.sats.separate_with_commas();
             let amount = format!("−{amount}");
             let link = "┌".dimmed();
-            let created_at: DateTime<Utc> = payment.created_at.time.into();
-            let timezone = FixedOffset::east_opt(payment.created_at.timezone_utc_offset_secs)
-                .ok_or(anyhow!("east_opt failed"))?;
+            let created_at: DateTime<Utc> = payment.payment_info.created_at.time.into();
+            let timezone =
+                FixedOffset::east_opt(payment.payment_info.created_at.timezone_utc_offset_secs)
+                    .ok_or(anyhow!("east_opt failed"))?;
             let created_at = created_at.with_timezone(&timezone);
             let time = created_at.format("%b %-d, %H:%M");
             let fiat = lsp_fees.fiat.map_or(String::new(), format_fiat);
@@ -129,28 +147,19 @@ fn print_payment(payment: Payment) -> Result<()> {
 
             let lsp_fees = format!("{link}{icon} {title:<15} {amount:>7}");
             let lsp_fees = format!("{lsp_fees}\n{line}");
-            ("└".dimmed(), " ".dimmed(), lsp_fees)
-        }
-        _ => (" ".normal(), " ".normal(), String::new()),
-    };
-    if !lsp_fees.is_empty() {
-        println!("{lsp_fees}");
-    }
+            println!("{lsp_fees}");
+            ("└".dimmed(), " ".dimmed())
+        } else {
+            (" ".normal(), " ".normal())
+        };
 
-    let (icon, title) = match payment.recipient {
-        Some(Recipient::LightningAddress { address }) => (" @".bold(), address),
-        Some(Recipient::LnUrlPayDomain { domain }) => ("🌐".normal(), domain),
-        Some(Recipient::Unknown) | None => ("🧾".normal(), "Invoice".to_string()),
-    };
+    let (icon, title) = ("🧾".normal(), "Invoice");
 
     let amount = payment.requested_amount.sats.separate_with_commas();
-    let amount = match payment.payment_type {
-        PaymentType::Receiving => format!("+{amount}").green(),
-        PaymentType::Sending => format!("−{amount}").normal(),
-    };
+    let amount = format!("+{amount}").green();
 
     let line = format!("{icon} {title:<15} {amount:>7}");
-    let line = match payment.payment_state {
+    let line = match payment.payment_info.payment_state {
         PaymentState::Succeeded => line.normal(),
         PaymentState::Created | PaymentState::Retried => line.italic().dimmed(),
         PaymentState::Failed | PaymentState::InvoiceExpired => line.dimmed().strikethrough(),
@@ -158,18 +167,64 @@ fn print_payment(payment: Payment) -> Result<()> {
     println!("{link_1}{line}");
 
     // Time and fiat value.
-    let created_at: DateTime<Utc> = payment.created_at.time.into();
-    let timezone = FixedOffset::east_opt(payment.created_at.timezone_utc_offset_secs)
+    let created_at: DateTime<Utc> = payment.payment_info.created_at.time.into();
+    let timezone = FixedOffset::east_opt(payment.payment_info.created_at.timezone_utc_offset_secs)
         .ok_or(anyhow!("east_opt failed"))?;
     let created_at = created_at.with_timezone(&timezone);
 
     let time = created_at.format("%b %-d, %H:%M");
-    let fiat = payment.amount.fiat.map_or(String::new(), format_fiat);
+    let fiat = payment
+        .payment_info
+        .amount
+        .fiat
+        .map_or(String::new(), format_fiat);
     let line = format!("{link_2}   {time:<13} {fiat:>9}").dimmed();
     println!("{line}");
 
-    if !payment.description.is_empty() {
-        println!("{link_2} ↳ {}", payment.description.italic().dimmed());
+    if !payment.payment_info.description.is_empty() {
+        println!(
+            "{link_2} ↳ {}",
+            payment.payment_info.description.italic().dimmed()
+        );
+    }
+    Ok(())
+}
+
+fn print_outgoing_payment(payment: OutgoingPaymentInfo) -> Result<()> {
+    let (icon, title) = match payment.recipient {
+        Recipient::LightningAddress { address } => (" @".bold(), address),
+        Recipient::LnUrlPayDomain { domain } => ("🌐".normal(), domain),
+        Recipient::Unknown => ("🧾".normal(), "Invoice".to_string()),
+    };
+
+    let amount = payment.payment_info.amount.sats.separate_with_commas();
+    let amount = format!("−{amount}").normal();
+
+    let line = format!("{icon} {title:<15} {amount:>7}");
+    let line = match payment.payment_info.payment_state {
+        PaymentState::Succeeded => line.normal(),
+        PaymentState::Created | PaymentState::Retried => line.italic().dimmed(),
+        PaymentState::Failed | PaymentState::InvoiceExpired => line.dimmed().strikethrough(),
+    };
+    println!(" {line}");
+
+    // Time and fiat value.
+    let created_at: DateTime<Utc> = payment.payment_info.created_at.time.into();
+    let timezone = FixedOffset::east_opt(payment.payment_info.created_at.timezone_utc_offset_secs)
+        .ok_or(anyhow!("east_opt failed"))?;
+    let created_at = created_at.with_timezone(&timezone);
+
+    let time = created_at.format("%b %-d, %H:%M");
+    let fiat = payment
+        .payment_info
+        .amount
+        .fiat
+        .map_or(String::new(), format_fiat);
+    let line = format!("    {time:<13} {fiat:>9}").dimmed();
+    println!("{line}");
+
+    if !payment.payment_info.description.is_empty() {
+        println!("  ↳ {}", payment.payment_info.description.italic().dimmed());
     }
     Ok(())
 }

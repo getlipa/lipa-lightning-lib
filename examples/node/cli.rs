@@ -18,10 +18,11 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
 use uniffi_lipalightninglib::{
-    ActionRequiredItem, Activity, Amount, ChannelClose, ChannelCloseState, DecodedData,
-    ExchangeRate, FailedSwapInfo, FiatValue, InvoiceCreationMetadata, InvoiceDetails,
-    LightningNode, LiquidityLimit, LnUrlPayDetails, LnUrlWithdrawDetails, MaxRoutingFeeMode,
-    OfferInfo, OfferKind, Payment, PaymentMetadata, PaymentState, TzConfig,
+    ActionRequiredItem, Activity, Amount, ChannelCloseInfo, ChannelCloseState, DecodedData,
+    ExchangeRate, FailedSwapInfo, FiatValue, IncomingPaymentInfo, InvoiceCreationMetadata,
+    InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails, LnUrlWithdrawDetails,
+    MaxRoutingFeeMode, OfferInfo, OfferKind, OutgoingPaymentInfo, PaymentInfo, PaymentMetadata,
+    TzConfig,
 };
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
@@ -1123,43 +1124,49 @@ fn list_activities(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
 
 fn print_activity(activity: Activity) -> Result<()> {
     match activity {
-        Activity::PaymentActivity { payment } => print_payment(payment),
-        Activity::ChannelCloseActivity { channel_close } => print_channel_close(channel_close),
+        Activity::IncomingPayment {
+            incoming_payment_info,
+        } => print_incoming_payment(incoming_payment_info),
+        Activity::OutgoingPayment {
+            outgoing_payment_info,
+        } => print_outgoing_payment(outgoing_payment_info),
+        Activity::OfferClaim {
+            incoming_payment_info,
+            offer_kind,
+        } => {
+            print_incoming_payment(incoming_payment_info)?;
+            println!("      Offer:            {}", offer_to_string(offer_kind));
+            Ok(())
+        }
+        Activity::ReverseSwap {
+            outgoing_payment_info,
+        } => print_outgoing_payment(outgoing_payment_info),
+        Activity::Swap {
+            incoming_payment_info,
+            swap_info,
+        } => {
+            print_incoming_payment(incoming_payment_info)?;
+            println!("      Swap:            {:?}", swap_info);
+            Ok(())
+        }
+        Activity::ChannelClose { channel_close_info } => print_channel_close(channel_close_info),
     }
 }
 
-fn print_payment(payment: Payment) -> Result<()> {
-    println!();
-    let payment_type = format!("{:?}", payment.payment_type);
+fn print_payment(payment: PaymentInfo) -> Result<()> {
     let created_at: DateTime<Utc> = payment.created_at.time.into();
     let timezone = FixedOffset::east_opt(payment.created_at.timezone_utc_offset_secs)
         .ok_or(anyhow!("east_opt failed"))?;
     let created_at = created_at.with_timezone(&timezone);
 
     println!(
-        "{} payment created at {created_at} {}",
-        payment_type.bold(),
+        "payment created at {created_at} {}",
         payment.created_at.timezone_id
     );
     println!("      State:            {:?}", payment.payment_state);
-    if payment.payment_state == PaymentState::Failed {
-        println!("      Fail reason:      {:?}", payment.fail_reason);
-    }
     println!(
         "      Amount:           {}",
         amount_to_string(&payment.amount)
-    );
-    println!(
-        "      Requested Amount: {}",
-        amount_to_string(&payment.requested_amount)
-    );
-    println!(
-        "      Network fees:     {:?}",
-        payment.network_fees.map(|f| amount_to_string(&f))
-    );
-    println!(
-        "      LSP fees:         {:?}",
-        payment.lsp_fees.map(|f| amount_to_string(&f))
     );
     println!("      Hash:             {}", payment.hash);
     println!("      Preimage:         {:?}", payment.preimage);
@@ -1168,14 +1175,40 @@ fn print_payment(payment: Payment) -> Result<()> {
         "      Invoice:          {}",
         payment.invoice_details.invoice
     );
-    println!("      Offer:            {}", offer_to_string(payment.offer));
-    println!("      Swap:             {:?}", payment.swap);
-    println!("      Recipient:        {:?}", payment.recipient);
     println!("      Personal note:    {:?}", payment.personal_note);
     Ok(())
 }
 
-fn print_channel_close(channel_close: ChannelClose) -> Result<()> {
+fn print_incoming_payment(payment: IncomingPaymentInfo) -> Result<()> {
+    println!();
+    print!("{} ", "Incoming".bold());
+    print_payment(payment.payment_info)?;
+    println!(
+        "      Requested Amount: {}",
+        amount_to_string(&payment.requested_amount)
+    );
+    println!(
+        "      LSP fees:         {}",
+        amount_to_string(&payment.lsp_fees),
+    );
+    //    println!("      Offer:            {}", offer_to_string(payment.offer));
+    //    println!("      Swap:             {:?}", payment.swap);
+    Ok(())
+}
+
+fn print_outgoing_payment(payment: OutgoingPaymentInfo) -> Result<()> {
+    println!();
+    print!("{} ", "Outgoing".bold());
+    print_payment(payment.payment_info)?;
+    println!(
+        "      Network fees:     {}",
+        amount_to_string(&payment.network_fees)
+    );
+    println!("      Recipient:        {:?}", payment.recipient);
+    Ok(())
+}
+
+fn print_channel_close(channel_close: ChannelCloseInfo) -> Result<()> {
     match channel_close.state {
         ChannelCloseState::Pending => println!("\nUnconfirmed channel close"),
         ChannelCloseState::Confirmed => {
@@ -1265,9 +1298,9 @@ fn clear_wallet(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
     Ok(())
 }
 
-fn offer_to_string(offer: Option<OfferKind>) -> String {
+fn offer_to_string(offer: OfferKind) -> String {
     match offer {
-        Some(OfferKind::Pocket {
+        OfferKind::Pocket {
             id,
             exchange_rate:
                 ExchangeRate {
@@ -1280,7 +1313,7 @@ fn offer_to_string(offer: Option<OfferKind>) -> String {
             exchange_fee_rate_permyriad,
             lightning_payout_fee,
             ..
-        }) => {
+        } => {
             let updated_at: DateTime<Utc> = updated_at.into();
             format!(
 				"Pocket exchange ({id}) of {:.2} {currency_code} at {} at rate {rate} SATS per {currency_code}, fee was {:.2}% or {:.2}, payout fee charged {} {currency_code}",
@@ -1293,7 +1326,6 @@ fn offer_to_string(offer: Option<OfferKind>) -> String {
                     .unwrap_or("N/A".to_string()),
 			)
         }
-        None => "None".to_string(),
     }
 }
 

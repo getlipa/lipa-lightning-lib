@@ -41,9 +41,11 @@ interface LightningNode {
     [Throws=LnError]
     ListActivitiesResponse get_latest_activities(u32 number_of_activities);
 
-    // TODO: Decide. get_incoming_payment()/get_outgoing_payment().
     [Throws=LnError]
-    PaymentInfo get_payment(string hash);
+    IncomingPaymentInfo get_incoming_payment(string hash);
+
+    [Throws=LnError]
+    OutgoingPaymentInfo get_outgoing_payment(string hash);
 
     [Throws=LnError]
     void set_payment_personal_note(string payment_hash, string note);
@@ -357,11 +359,6 @@ dictionary OutgoingPaymentInfo {
     PaymentInfo payment_info;
     Amount network_fees;
     Recipient recipient;
-};
-
-enum PaymentType {
-    "Receiving",
-    "Sending",
 };
 
 enum PaymentState {

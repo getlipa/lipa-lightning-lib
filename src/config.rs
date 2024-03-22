@@ -40,3 +40,13 @@ pub struct TzTime {
     pub timezone_id: String,
     pub timezone_utc_offset_secs: i32,
 }
+
+impl TzTime {
+    pub(crate) fn new(time: SystemTime, tz_config: TzConfig) -> Self {
+        Self {
+            time,
+            timezone_id: tz_config.timezone_id,
+            timezone_utc_offset_secs: tz_config.timezone_utc_offset_secs,
+        }
+    }
+}
