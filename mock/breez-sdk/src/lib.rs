@@ -41,7 +41,7 @@ const SWAP_TX_WEIGHT: u64 = 800;
 const SAT_PER_VBYTE: u64 = 12;
 const SWAP_FEE_PERCENTAGE: f64 = 0.5;
 const SWAP_ADDRESS_DUMMY: &str = "1BitcoinEaterAddressDontSendf59kuE";
-const SWAP_RECEIVED_STATS_ON_CHAIN: u64 = 100_000;
+const SWAP_RECEIVED_SATS_ON_CHAIN: u64 = 100_000;
 const TX_ID_DUMMY: &str = "f4184fc596403b9d638783cf57adfe4c75c605f6356fbc91338530e9831e9e16";
 
 use breez_sdk_core::error::{
@@ -830,10 +830,10 @@ impl BreezServices {
         let mut swaps = SWAPS.lock().unwrap();
         swaps.iter_mut().for_each(|swap| {
             if now - swap.created_at > 30 && swap.created_at <= 60 {
-                swap.unconfirmed_sats = SWAP_RECEIVED_STATS_ON_CHAIN;
+                swap.unconfirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
             } else if now - swap.created_at > 60 {
                 swap.unconfirmed_sats = 0;
-                swap.confirmed_sats = SWAP_RECEIVED_STATS_ON_CHAIN;
+                swap.confirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
             }
 
             // swap is redeemable for 60 seconds until it is expired and must be refunded
