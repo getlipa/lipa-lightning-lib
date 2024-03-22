@@ -18,6 +18,7 @@ const MAX_RECEIVABLE_MSAT: u64 = 1_000_000_000;
 
 const SAMPLE_PAYMENT_SECRET: &str =
     "91f65d26832cb762a96c455d253f3cb4c3005ad9089d2df8612ffdf7a6b7f92f";
+const BOLT11_DUMMY: &str = "lnbc1486290n1pj74h6psp5tmna0gruf44rx0h7xgl2xsmn5xhjnaxktct40pkfg4m9kssytn0spp5qhpx9s8rvmw6jtzkelslve9zfuhpp2w7hn9s6q7xvdnds5jemr2qdpa2pskjepqw3hjq3r0deshgefqw3hjqjzjgcs8vv3qyq5y7unyv4ezqj2y8gszjxqy9ghlcqpjrzjqvutcqr0g2ltxthh82s8l24gy74xe862kelrywc6ktsx2gejgk26szcqygqqy6qqqyqqqqlgqqqq86qqyg9qxpqysgqzjnfufxw375gpqf9cvzd5jxyqqtm56fuw960wyel2ld3he403r7x6uyw59g5sfsj5rclycd09a8p8r2pnyrcanlg27e2a67nh5g248sp7p7s8z";
 
 const LSP_ID: &str = "c0ff3e11-2222-3333-4444-555555555555";
 const LSP_NAME: &str = "notdiem.lsp.mock";
@@ -49,7 +50,6 @@ use breez_sdk_core::error::{
     SendOnchainError, SendPaymentError,
 };
 use breez_sdk_core::InputType::Bolt11;
-use breez_sdk_core::PaymentDetails::Ln;
 pub use breez_sdk_core::{
     parse_invoice, BitcoinAddressData, BreezEvent, ClosedChannelPaymentDetails, EnvironmentType,
     EventListener, GreenlightCredentials, GreenlightNodeConfig, HealthCheckStatus, InputType,
@@ -84,6 +84,7 @@ lazy_static! {
     static ref PAYMENT_OUTCOME: Mutex<PaymentOutcome> = Mutex::new(PaymentOutcome::Success);
     static ref PAYMENTS: Mutex<Vec<Payment>> = Mutex::new(Vec::new());
     static ref SWAPS: Mutex<Vec<SwapInfo>> = Mutex::new(Vec::new());
+    static ref REDEEM_SWAPS: Mutex<bool> = Mutex::new(true);
 }
 
 #[derive(Debug)]
@@ -229,7 +230,7 @@ impl BreezServices {
         let preimage = sha256::Hash::hash(&now.to_be_bytes());
         let payment_hash = format!("{:x}", sha256::Hash::hash(preimage.as_byte_array()));
         let payment_preimage = format!("{:x}", preimage);
-        let bolt11 = "lnbc1486290n1pj74h6psp5tmna0gruf44rx0h7xgl2xsmn5xhjnaxktct40pkfg4m9kssytn0spp5qhpx9s8rvmw6jtzkelslve9zfuhpp2w7hn9s6q7xvdnds5jemr2qdpa2pskjepqw3hjq3r0deshgefqw3hjqjzjgcs8vv3qyq5y7unyv4ezqj2y8gszjxqy9ghlcqpjrzjqvutcqr0g2ltxthh82s8l24gy74xe862kelrywc6ktsx2gejgk26szcqygqqy6qqqyqqqqlgqqqq86qqyg9qxpqysgqzjnfufxw375gpqf9cvzd5jxyqqtm56fuw960wyel2ld3he403r7x6uyw59g5sfsj5rclycd09a8p8r2pnyrcanlg27e2a67nh5g248sp7p7s8z".to_string();
+        let bolt11 = BOLT11_DUMMY.to_string();
         *LN_BALANCE_MSAT.lock().unwrap() -= req.amount_msat + fee_msat;
 
         let payment = Payment {
@@ -377,6 +378,8 @@ impl BreezServices {
             "pay.err.connectivity" => {
                 *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::ServiceConnectivity
             }
+            "swaps.redeem" => *REDEEM_SWAPS.lock().unwrap() = true,
+            "swaps.miss" => *REDEEM_SWAPS.lock().unwrap() = false,
             _ => {}
         }
 
@@ -491,6 +494,8 @@ impl BreezServices {
     }
 
     pub async fn list_payments(&self, req: ListPaymentsRequest) -> SdkResult<Vec<Payment>> {
+        self.sync().await?;
+
         let payment_type_filter = req
             .filters
             .as_ref()
@@ -537,7 +542,7 @@ impl BreezServices {
             .unwrap()
             .iter()
             .find(|p| {
-                if let Ln { data } = &p.details {
+                if let PaymentDetails::Ln { data } = &p.details {
                     data.payment_hash == hash
                 } else {
                     false
@@ -612,6 +617,12 @@ impl BreezServices {
         _req: ReceiveOnchainRequest,
     ) -> Result<SwapInfo, ReceiveOnchainError> {
         let now = Utc::now().timestamp();
+
+        if self.in_progress_swap().await?.is_some() {
+            return Err(ReceiveOnchainError::SwapInProgress {
+                err: SWAP_ADDRESS_DUMMY.to_string(),
+            });
+        }
 
         let swap = SwapInfo {
             bitcoin_address: SWAP_ADDRESS_DUMMY.to_string(),
@@ -717,7 +728,7 @@ impl BreezServices {
                     destination_pubkey: "".to_string(),
                     payment_preimage: "".to_string(),
                     keysend: false,
-                    bolt11: "lnbc1486290n1pj74h6psp5tmna0gruf44rx0h7xgl2xsmn5xhjnaxktct40pkfg4m9kssytn0spp5qhpx9s8rvmw6jtzkelslve9zfuhpp2w7hn9s6q7xvdnds5jemr2qdpa2pskjepqw3hjq3r0deshgefqw3hjqjzjgcs8vv3qyq5y7unyv4ezqj2y8gszjxqy9ghlcqpjrzjqvutcqr0g2ltxthh82s8l24gy74xe862kelrywc6ktsx2gejgk26szcqygqqy6qqqyqqqqlgqqqq86qqyg9qxpqysgqzjnfufxw375gpqf9cvzd5jxyqqtm56fuw960wyel2ld3he403r7x6uyw59g5sfsj5rclycd09a8p8r2pnyrcanlg27e2a67nh5g248sp7p7s8z".to_string(),
+                    bolt11: BOLT11_DUMMY.to_string(),
                     open_channel_bolt11: None,
                     lnurl_success_action: None,
                     lnurl_pay_domain: None,
@@ -732,9 +743,7 @@ impl BreezServices {
             metadata: None,
         });
 
-        Ok(SendOnchainResponse {
-            reverse_swap_info: reverse_swap_info,
-        })
+        Ok(SendOnchainResponse { reverse_swap_info })
     }
 
     pub async fn list_refundables(&self) -> SdkResult<Vec<SwapInfo>> {
@@ -761,6 +770,12 @@ impl BreezServices {
     }
 
     pub async fn refund(&self, _req: RefundRequest) -> SdkResult<RefundResponse> {
+        // Keep it simple for now, remove ALL expired swaps
+        SWAPS
+            .lock()
+            .unwrap()
+            .retain(|swap| swap.status != SwapStatus::Expired);
+
         Ok(RefundResponse {
             refund_tx_id: TX_ID_DUMMY.to_string(),
         })
@@ -821,33 +836,64 @@ impl BreezServices {
         Ok(())
     }
 
+    // After 20 seconds, the swap TX is published > after that you cannot create a new swap
+    // After 40 seconds, the swap TX is confirmed on-chain > it can now be redeemed
+    //                    the payment will be automatically redeemed if REDEEM_SWAPS is true as soon as sync is called (can be triggered by calling listactivities)
+    //                    you can create new swaps again
+    // if REDEEM_SWAPS is off, use refundfailedswap to clear up list
     fn simulate_swaps() {
         let now = Utc::now();
-        let in_one_hour = now + chrono::Duration::try_hours(1).unwrap();
-        let valid_until = in_one_hour.to_rfc3339();
         let now = now.timestamp();
 
         let mut swaps = SWAPS.lock().unwrap();
-        swaps.iter_mut().for_each(|swap| {
-            if now - swap.created_at > 30 && swap.created_at <= 60 {
-                swap.unconfirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
-            } else if now - swap.created_at > 60 {
-                swap.unconfirmed_sats = 0;
-                swap.confirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
-            }
 
-            // swap is redeemable for 60 seconds until it is expired and must be refunded
-            if now - swap.created_at < 120 {
-                swap.channel_opening_fees = Some(OpeningFeeParams {
-                    min_msat: 3_000_000,
-                    proportional: 10_000,
-                    valid_until: valid_until.clone(),
-                    max_idle_time: 0,
-                    max_client_to_self_delay: 0,
-                    promise: "promise".to_string(),
-                });
-            } else {
-                swap.status = SwapStatus::Expired;
+        swaps.iter_mut().for_each(|swap| {
+            if now - swap.created_at > 40 {
+                if *REDEEM_SWAPS.lock().unwrap() {
+                    PAYMENTS.lock().unwrap().push(Payment {
+                        id: "".to_string(),
+                        payment_type: PaymentType::Received,
+                        payment_time: Utc::now().timestamp(),
+                        amount_msat: swap.confirmed_sats * 1_000,
+                        fee_msat: 1234,
+                        status: PaymentStatus::Complete,
+                        error: None,
+                        description: None,
+                        details: PaymentDetails::Ln {
+                            data: LnPaymentDetails {
+                                payment_hash: "".to_string(),
+                                label: "".to_string(),
+                                destination_pubkey: "".to_string(),
+                                payment_preimage: "".to_string(),
+                                keysend: false,
+                                bolt11: swap.bolt11.clone().unwrap_or(BOLT11_DUMMY.to_string()),
+                                open_channel_bolt11: None,
+                                lnurl_success_action: None,
+                                lnurl_pay_domain: None,
+                                ln_address: None,
+                                lnurl_metadata: None,
+                                lnurl_withdraw_endpoint: None,
+                                swap_info: Some(swap.clone()),
+                                reverse_swap_info: None,
+                                pending_expiration_block: None,
+                            },
+                        },
+                        metadata: None,
+                    });
+                } else {
+                    swap.status = SwapStatus::Expired;
+                    swap.unconfirmed_sats = 0;
+                    swap.confirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
+                }
+            }
+        });
+
+        // remove settled swaps
+        swaps.retain(|swap| now - swap.created_at < 40 || swap.status == SwapStatus::Expired);
+
+        swaps.iter_mut().for_each(|swap| {
+            if now - swap.created_at > 20 {
+                swap.unconfirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
             }
         });
     }
