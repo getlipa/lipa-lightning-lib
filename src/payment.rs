@@ -1,12 +1,13 @@
 use std::ops::Add;
 
 use crate::amount::{AsSats, ToAmount};
+use crate::config::WithTimezone;
 use crate::lnurl::parse_metadata;
 use crate::util::unix_timestamp_to_system_time;
 use crate::{Amount, ExchangeRate, InvoiceDetails, Result, TzConfig, TzTime};
 
 use breez_sdk_core::{parse_invoice, LnPaymentDetails, PaymentDetails, PaymentStatus};
-use perro::{invalid_input, permanent_failure, MapToError};
+use perro::{permanent_failure, MapToError};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 #[repr(u8)]
@@ -15,7 +16,7 @@ pub enum PaymentState {
     Created,
     /// The payment succeeded.
     Succeeded,
-    /// The payment failed. If it is a [`OutgoingPaymentInfo`], it can be retried.
+    /// The payment failed. If it is an [`OutgoingPaymentInfo`], it can be retried.
     Failed,
     /// A payment retrial is in progress.
     Retried,
@@ -42,7 +43,7 @@ impl PaymentState {
     }
 }
 
-/// Information about an payment.
+/// Information about a payment.
 #[derive(PartialEq, Debug, Clone)]
 pub struct PaymentInfo {
     pub payment_state: PaymentState,
@@ -71,7 +72,7 @@ impl PaymentInfo {
         let payment_details = match breez_payment.details {
             PaymentDetails::Ln { data } => data,
             PaymentDetails::ClosedChannel { .. } => {
-                invalid_input!("PaymentInfo cannot be created from channel close")
+                permanent_failure!("PaymentInfo cannot be created from channel close")
             }
         };
         let invoice = parse_invoice(&payment_details.bolt11).map_to_permanent_failure(format!(
@@ -95,7 +96,7 @@ impl PaymentInfo {
                 )
             }
         };
-        let time = TzTime::new(time, tz_config.clone());
+        let time = time.with_timezone(tz_config.clone());
 
         let amount = match breez_payment.payment_type {
             breez_sdk_core::PaymentType::Sent => (breez_payment.amount_msat
@@ -107,7 +108,7 @@ impl PaymentInfo {
                 .as_msats()
                 .to_amount_down(exchange_rate),
             breez_sdk_core::PaymentType::ClosedChannel => {
-                invalid_input!("PaymentInfo cannot be created from channel close")
+                permanent_failure!("PaymentInfo cannot be created from channel close")
             }
         };
 
@@ -199,7 +200,7 @@ impl OutgoingPaymentInfo {
         let recipient = match breez_payment.details {
             PaymentDetails::Ln { ref data } => Recipient::new(data),
             PaymentDetails::ClosedChannel { .. } => {
-                invalid_input!("OutgoingPaymentInfo cannot be created from channel close")
+                permanent_failure!("OutgoingPaymentInfo cannot be created from channel close")
             }
         };
         let payment_info =

@@ -1138,9 +1138,6 @@ fn print_activity(activity: Activity) -> Result<()> {
             println!("      Offer:            {}", offer_to_string(offer_kind));
             Ok(())
         }
-        Activity::ReverseSwap {
-            outgoing_payment_info,
-        } => print_outgoing_payment(outgoing_payment_info),
         Activity::Swap {
             incoming_payment_info,
             swap_info,
@@ -1191,8 +1188,6 @@ fn print_incoming_payment(payment: IncomingPaymentInfo) -> Result<()> {
         "      LSP fees:         {}",
         amount_to_string(&payment.lsp_fees),
     );
-    //    println!("      Offer:            {}", offer_to_string(payment.offer));
-    //    println!("      Swap:             {:?}", payment.swap);
     Ok(())
 }
 

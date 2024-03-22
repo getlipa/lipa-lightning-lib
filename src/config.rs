@@ -25,7 +25,7 @@ pub struct Config {
 
 /// An object that holds timezone configuration values necessary for 3L to do timestamp annotation. These values get tied
 /// together with every timestamp persisted in the local payment database.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct TzConfig {
     /// String identifier whose format is completely arbitrary and can be chosen by the user
     pub timezone_id: String,
@@ -41,10 +41,14 @@ pub struct TzTime {
     pub timezone_utc_offset_secs: i32,
 }
 
-impl TzTime {
-    pub(crate) fn new(time: SystemTime, tz_config: TzConfig) -> Self {
-        Self {
-            time,
+pub(crate) trait WithTimezone {
+    fn with_timezone(self, tz_config: TzConfig) -> TzTime;
+}
+
+impl WithTimezone for SystemTime {
+    fn with_timezone(self, tz_config: TzConfig) -> TzTime {
+        TzTime {
+            time: self,
             timezone_id: tz_config.timezone_id,
             timezone_utc_offset_secs: tz_config.timezone_utc_offset_secs,
         }

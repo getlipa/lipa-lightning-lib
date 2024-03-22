@@ -51,6 +51,7 @@ use crate::async_runtime::AsyncRuntime;
 use crate::auth::{build_async_auth, build_auth};
 use crate::backup::BackupManager;
 pub use crate::callbacks::EventsCallback;
+use crate::config::WithTimezone;
 pub use crate::config::{Config, TzConfig, TzTime};
 use crate::data_store::CreatedInvoice;
 use crate::environment::Environment;
@@ -74,6 +75,7 @@ use crate::key_derivation::derive_persistence_encryption_key;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 pub use crate::lnurl::{LnUrlPayDetails, LnUrlWithdrawDetails};
 use crate::locker::Locker;
+pub use crate::notification_handling::{handle_notification, Notification, RecommendedAction};
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
 pub use crate::payment::{
     IncomingPaymentInfo, OutgoingPaymentInfo, PaymentInfo, PaymentState, Recipient,
@@ -83,13 +85,12 @@ pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Se
 pub use crate::swap::{
     FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo, SwapToLightningFees,
 };
+use crate::symmetric_encryption::encrypt;
 use crate::task_manager::TaskManager;
 use crate::util::{
     replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
 };
-pub use notification_handling::{handle_notification, Notification, RecommendedAction};
 
-use crate::symmetric_encryption::encrypt;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
@@ -1007,7 +1008,6 @@ impl LightningNode {
                     incoming_payment_info,
                     ..
                 } => Ok(incoming_payment_info),
-                Activity::ReverseSwap { .. } => invalid_input!("ReverseSwap was found"),
                 Activity::Swap {
                     incoming_payment_info,
                     ..
@@ -1046,9 +1046,6 @@ impl LightningNode {
                     outgoing_payment_info,
                 } => Ok(outgoing_payment_info),
                 Activity::OfferClaim { .. } => invalid_input!("OfferClaim was found"),
-                Activity::ReverseSwap {
-                    outgoing_payment_info,
-                } => Ok(outgoing_payment_info),
                 Activity::Swap { .. } => invalid_input!("Swap was found"),
                 Activity::ChannelClose { .. } => invalid_input!("ChannelClose was found"),
             }
@@ -1127,10 +1124,8 @@ impl LightningNode {
             let swap_info = SwapInfo {
                 bitcoin_address: s.bitcoin_address.clone(),
                 // TODO: Persist SwapInfo in local db on state change, requires https://github.com/breez/breez-sdk/issues/518
-                created_at: TzTime::new(
-                    unix_timestamp_to_system_time(s.created_at as u64),
-                    tz_config.clone(),
-                ),
+                created_at: unix_timestamp_to_system_time(s.created_at as u64)
+                    .with_timezone(tz_config.clone()),
                 paid_msats: s.paid_msat,
             };
             let incoming_payment_info =
@@ -1168,11 +1163,8 @@ impl LightningNode {
 
         let user_preferences = self.user_preferences.lock_unwrap();
 
-        let time = TzTime {
-            time: unix_timestamp_to_system_time(breez_payment.payment_time as u64),
-            timezone_id: user_preferences.timezone_config.timezone_id.clone(),
-            timezone_utc_offset_secs: user_preferences.timezone_config.timezone_utc_offset_secs,
-        };
+        let time = unix_timestamp_to_system_time(breez_payment.payment_time as u64)
+            .with_timezone(user_preferences.timezone_config.clone());
 
         let (closed_at, state) = match breez_payment.status {
             PaymentStatus::Pending => (None, ChannelCloseState::Pending),
@@ -1219,17 +1211,10 @@ impl LightningNode {
             .ok_or_permanent_failure("Locally created invoice doesn't have local payment data")?;
         let exchange_rate = Some(local_payment_data.exchange_rate);
         let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
-        let time = TzTime {
-            time: invoice_details.creation_timestamp, // for receiving payments, we use the invoice timestamp
-            timezone_id: local_payment_data
-                .user_preferences
-                .timezone_config
-                .timezone_id,
-            timezone_utc_offset_secs: local_payment_data
-                .user_preferences
-                .timezone_config
-                .timezone_utc_offset_secs,
-        };
+        // For receiving payments, we use the invoice timestamp.
+        let time = invoice_details
+            .creation_timestamp
+            .with_timezone(local_payment_data.user_preferences.timezone_config);
         let lsp_fees = created_invoice
             .channel_opening_fees
             .unwrap_or_default()
@@ -1445,7 +1430,7 @@ impl LightningNode {
             limit: Some(5),
             offset: None,
         };
-        let latest_activity = self
+        let latest_activities = self
             .rt
             .handle()
             .block_on(self.sdk.list_payments(list_payments_request))
@@ -1457,7 +1442,7 @@ impl LightningNode {
             .collect::<Vec<_>>();
 
         Ok(
-            filter_out_recently_claimed_topups(topup_infos, latest_activity)
+            filter_out_recently_claimed_topups(topup_infos, latest_activities)
                 .into_iter()
                 .map(|topup_info| OfferInfo::from(topup_info, &rate))
                 .collect(),
@@ -2543,11 +2528,7 @@ mod tests {
                 expiry_interval: Default::default(),
                 expiry_timestamp: SystemTime::now(),
             },
-            created_at: TzTime {
-                time: SystemTime::now(),
-                timezone_id: "".to_string(),
-                timezone_utc_offset_secs: 0,
-            },
+            created_at: SystemTime::now().with_timezone(TzConfig::default()),
             description: "".to_string(),
             preimage: None,
             personal_note: None,

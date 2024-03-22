@@ -316,7 +316,6 @@ interface Activity {
     IncomingPayment(IncomingPaymentInfo incoming_payment_info);
     OutgoingPayment(OutgoingPaymentInfo outgoing_payment_info);
     OfferClaim(IncomingPaymentInfo incoming_payment_info, OfferKind offer_kind);
-    ReverseSwap(OutgoingPaymentInfo outgoing_payment_info);
     Swap(IncomingPaymentInfo incoming_payment_info, SwapInfo swap_info);
     ChannelClose(ChannelCloseInfo channel_close_info);
 };

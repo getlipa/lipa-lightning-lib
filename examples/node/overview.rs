@@ -95,9 +95,6 @@ fn print_activity(activity: Activity) -> Result<()> {
             incoming_payment_info,
             ..
         } => print_incoming_payment(incoming_payment_info),
-        Activity::ReverseSwap {
-            outgoing_payment_info,
-        } => print_outgoing_payment(outgoing_payment_info),
         Activity::Swap {
             incoming_payment_info,
             ..
