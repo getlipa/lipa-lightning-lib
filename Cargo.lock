@@ -571,7 +571,7 @@ dependencies = [
 [[package]]
 name = "breez-sdk-core"
 version = "0.3.8"
-source = "git+https://github.com/breez/breez-sdk?tag=0.3.8#f7c45c5ea730523a96a84cecccfce76148b1886a"
+source = "git+https://github.com/danielgranhao/breez-sdk?branch=22-03-2024-disable-rusqlite-bundled-feature#b6f87c3f08853e838d829c798bf2702589cd2f7e"
 dependencies = [
  "aes",
  "anyhow",
