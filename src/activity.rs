@@ -1,100 +1,7 @@
-use crate::{Amount, InvoiceDetails, OfferKind, PayErrorCode, SwapInfo, TzTime};
+use crate::payment::{IncomingPaymentInfo, OutgoingPaymentInfo, PaymentInfo};
+use crate::{Amount, OfferKind, SwapInfo, TzTime};
+
 use std::time::SystemTime;
-
-use breez_sdk_core::{LnPaymentDetails, PaymentStatus};
-
-#[derive(PartialEq, Eq, Debug, Clone)]
-#[repr(u8)]
-pub enum PaymentType {
-    Receiving,
-    Sending,
-}
-
-#[derive(PartialEq, Eq, Debug, Clone)]
-#[repr(u8)]
-pub enum PaymentState {
-    /// The payment was created and is in progress.
-    Created,
-    /// The payment succeeded.
-    Succeeded,
-    /// The payment failed. If it is a [`PaymentType::Sending`] payment, it can be retried.
-    Failed,
-    /// A payment retrial is in progress.
-    Retried,
-    /// The invoice associated with this payment has expired.
-    InvoiceExpired,
-}
-
-impl From<PaymentStatus> for PaymentState {
-    fn from(status: PaymentStatus) -> Self {
-        match status {
-            PaymentStatus::Pending => PaymentState::Created,
-            PaymentStatus::Complete => PaymentState::Succeeded,
-            PaymentStatus::Failed => PaymentState::Failed,
-        }
-    }
-}
-
-/// Information about an incoming or outgoing payment.
-#[derive(PartialEq, Debug)]
-pub struct Payment {
-    pub payment_type: PaymentType,
-    pub payment_state: PaymentState,
-    /// For now, will always be empty.
-    pub fail_reason: Option<PayErrorCode>,
-    /// Hex representation of payment hash.
-    pub hash: String,
-    /// Actual amount payed or received, will equal the `requested_amount` until payment succeeded.
-    pub amount: Amount,
-    /// Nominal amount specified in the invoice.
-    pub requested_amount: Amount,
-    pub invoice_details: InvoiceDetails,
-    pub created_at: TzTime,
-    /// The description embedded in the invoice. Given the length limit of this data,
-    /// it is possible that a hex hash of the description is provided instead, but that is uncommon.
-    pub description: String,
-    /// Hex representation of the preimage. Will only be present on successful payments.
-    pub preimage: Option<String>,
-    /// Routing fees paid in a [`PaymentType::Sending`] payment. Will only be present if the payment
-    /// was successful.
-    pub network_fees: Option<Amount>,
-    /// LSP fees paid in a [`PaymentType::Receiving`] payment. Will never be present for
-    /// [`PaymentType::Sending`] payments but might be 0 for [`PaymentType::Receiving`] payments.
-    /// The amount is only paid if successful.
-    pub lsp_fees: Option<Amount>,
-    /// An offer a [`PaymentType::Receiving`] payment came from if any.
-    pub offer: Option<OfferKind>,
-    /// The swap information of a [`PaymentType::Receiving`] payment if triggered by a swap.
-    pub swap: Option<SwapInfo>,
-    /// Information about a payment's recipient. Will only be present for outgoing payments.
-    pub recipient: Option<Recipient>,
-    /// A personal note previously added to this payment through [`LightningNode::set_payment_personal_note`](crate::LightningNode::set_payment_personal_note)
-    pub personal_note: Option<String>,
-}
-
-/// User-friendly representation of an outgoing payment's recipient.
-#[derive(PartialEq, Debug)]
-pub enum Recipient {
-    LightningAddress { address: String },
-    LnUrlPayDomain { domain: String },
-    Unknown,
-}
-
-impl Recipient {
-    pub(crate) fn new(payment_details: &LnPaymentDetails) -> Recipient {
-        if let Some(address) = &payment_details.ln_address {
-            Recipient::LightningAddress {
-                address: address.to_string(),
-            }
-        } else if let Some(lnurlp_domain) = &payment_details.lnurl_pay_domain {
-            Recipient::LnUrlPayDomain {
-                domain: lnurlp_domain.to_string(),
-            }
-        } else {
-            Recipient::Unknown
-        }
-    }
-}
 
 /// Information about **all** pending and **only** requested completed activities.
 pub struct ListActivitiesResponse {
@@ -105,39 +12,83 @@ pub struct ListActivitiesResponse {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum Activity {
-    PaymentActivity { payment: Payment },
-    ChannelCloseActivity { channel_close: ChannelClose },
+    IncomingPayment {
+        incoming_payment_info: IncomingPaymentInfo,
+    },
+    OutgoingPayment {
+        outgoing_payment_info: OutgoingPaymentInfo,
+    },
+    // Topup, referrals.
+    OfferClaim {
+        incoming_payment_info: IncomingPaymentInfo,
+        offer_kind: OfferKind,
+    },
+    // On-chain to lightning.
+    Swap {
+        incoming_payment_info: IncomingPaymentInfo,
+        swap_info: SwapInfo,
+    },
+    ChannelClose {
+        channel_close_info: ChannelCloseInfo,
+    },
 }
 
 impl Activity {
-    pub(crate) fn get_time(&self) -> SystemTime {
+    pub(crate) fn get_payment_info(&self) -> Option<&PaymentInfo> {
         match self {
-            Activity::PaymentActivity { payment } => payment.created_at.time,
-            Activity::ChannelCloseActivity { channel_close } => channel_close
-                .closed_at
-                .clone()
-                .map(|t| t.time)
-                .unwrap_or(SystemTime::now()),
+            Activity::IncomingPayment {
+                incoming_payment_info,
+            } => Some(&incoming_payment_info.payment_info),
+            Activity::OutgoingPayment {
+                outgoing_payment_info,
+            } => Some(&outgoing_payment_info.payment_info),
+            Activity::OfferClaim {
+                incoming_payment_info,
+                ..
+            } => Some(&incoming_payment_info.payment_info),
+            Activity::Swap {
+                incoming_payment_info,
+                ..
+            } => Some(&incoming_payment_info.payment_info),
+            Activity::ChannelClose { .. } => None,
+        }
+    }
+
+    pub(crate) fn get_time(&self) -> SystemTime {
+        if let Some(payment_info) = self.get_payment_info() {
+            return payment_info.created_at.time;
+        }
+        match self {
+            Activity::ChannelClose {
+                channel_close_info:
+                    ChannelCloseInfo {
+                        amount: _,
+                        state: _,
+                        closed_at: Some(time),
+                        ..
+                    },
+            } => time.time,
+            _ => SystemTime::now(),
         }
     }
 
     pub(crate) fn is_pending(&self) -> bool {
+        if let Some(payment_info) = self.get_payment_info() {
+            return payment_info.payment_state.is_pending();
+        }
         match self {
-            Activity::PaymentActivity { payment } => matches!(
-                payment.payment_state,
-                PaymentState::Created | PaymentState::Retried
-            ),
-            Activity::ChannelCloseActivity { channel_close } => match channel_close.state {
+            Activity::ChannelClose { channel_close_info } => match channel_close_info.state {
                 ChannelCloseState::Pending => true,
                 ChannelCloseState::Confirmed => false,
             },
+            _ => false,
         }
     }
 }
 
 /// Information about a closed channel.
 #[derive(Debug, PartialEq)]
-pub struct ChannelClose {
+pub struct ChannelCloseInfo {
     /// Our balance on the channel that got closed.
     pub amount: Amount,
     pub state: ChannelCloseState,

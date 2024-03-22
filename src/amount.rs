@@ -55,7 +55,7 @@ pub struct FiatValue {
 }
 
 /// A sat amount accompanied by its fiat value in a specific fiat currency
-#[derive(Debug, PartialEq, Clone, Eq)]
+#[derive(Debug, Default, PartialEq, Clone, Eq)]
 pub struct Amount {
     pub sats: u64,
     pub fiat: Option<FiatValue>,

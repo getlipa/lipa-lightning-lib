@@ -42,7 +42,10 @@ interface LightningNode {
     ListActivitiesResponse get_latest_activities(u32 number_of_activities);
 
     [Throws=LnError]
-    Payment get_payment(string hash);
+    IncomingPaymentInfo get_incoming_payment(string hash);
+
+    [Throws=LnError]
+    OutgoingPaymentInfo get_outgoing_payment(string hash);
 
     [Throws=LnError]
     void set_payment_personal_note(string payment_hash, string note);
@@ -310,8 +313,11 @@ interface MaxRoutingFeeMode {
 
 [Enum]
 interface Activity {
-    PaymentActivity(Payment payment);
-    ChannelCloseActivity(ChannelClose channel_close);
+    IncomingPayment(IncomingPaymentInfo incoming_payment_info);
+    OutgoingPayment(OutgoingPaymentInfo outgoing_payment_info);
+    OfferClaim(IncomingPaymentInfo incoming_payment_info, OfferKind offer_kind);
+    Swap(IncomingPaymentInfo incoming_payment_info, SwapInfo swap_info);
+    ChannelClose(ChannelCloseInfo channel_close_info);
 };
 
 dictionary ListActivitiesResponse {
@@ -319,7 +325,7 @@ dictionary ListActivitiesResponse {
     sequence<Activity> completed_activities;
 };
 
-dictionary ChannelClose {
+dictionary ChannelCloseInfo {
     Amount amount;
     ChannelCloseState state;
     TzTime? closed_at;
@@ -331,28 +337,27 @@ enum ChannelCloseState {
     "Confirmed",
 };
 
-dictionary Payment {
-    PaymentType payment_type;
+dictionary PaymentInfo {
     PaymentState payment_state;
-    PayErrorCode? fail_reason;
     string hash;
     Amount amount;
-    Amount requested_amount;
     InvoiceDetails invoice_details;
     TzTime created_at;
     string description;
     string? preimage;
-    Amount? network_fees;
-    Amount? lsp_fees;
-    OfferKind? offer;
-    SwapInfo? swap;
-    Recipient? recipient;
     string? personal_note;
 };
 
-enum PaymentType {
-    "Receiving",
-    "Sending",
+dictionary IncomingPaymentInfo {
+    PaymentInfo payment_info;
+    Amount requested_amount;
+    Amount lsp_fees;
+};
+
+dictionary OutgoingPaymentInfo {
+    PaymentInfo payment_info;
+    Amount network_fees;
+    Recipient recipient;
 };
 
 enum PaymentState {

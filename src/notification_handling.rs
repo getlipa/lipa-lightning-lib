@@ -28,8 +28,10 @@ pub enum Notification {
     /// The notification that a previously issued bolt11 invoice was paid.
     /// The `amount_sat` of the payment is provided.
     ///
-    /// The `payment_hash` can be used to directly open the associated [`Payment`](crate::Payment) using
-    /// [`LightningNode::get_payment`](crate::LightningNode::get_payment).
+    /// The `payment_hash` can be used to directly open the associated [`IncomingPaymentInfo`](crate::IncomingPaymentInfo) or
+    /// [`OutgoingPaymentInfo`](crate::OutgoingPaymentInfo) using
+    /// [`LightningNode::get_incoming_payment`](crate::LightningNode::get_incoming_payment) or
+    /// [`LightningNode::get_outgoing_payment`](crate::LightningNode::get_outgoing_payment).
     Bolt11PaymentReceived {
         amount_sat: u64,
         payment_hash: String,

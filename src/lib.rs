@@ -32,6 +32,7 @@ mod logger;
 mod migrations;
 mod notification_handling;
 mod offer;
+mod payment;
 mod random;
 mod recovery;
 mod sanitize_input;
@@ -41,10 +42,7 @@ mod symmetric_encryption;
 mod task_manager;
 mod util;
 
-pub use crate::activity::{
-    Activity, ChannelClose, ChannelCloseState, ListActivitiesResponse, Payment, PaymentState,
-    PaymentType, Recipient,
-};
+pub use crate::activity::{Activity, ChannelCloseInfo, ChannelCloseState, ListActivitiesResponse};
 pub use crate::amount::{Amount, FiatValue};
 use crate::amount::{AsSats, Msats, Sats, ToAmount};
 use crate::analytics::{derive_analytics_keys, AnalyticsConfig, AnalyticsInterceptor};
@@ -53,6 +51,7 @@ use crate::async_runtime::AsyncRuntime;
 use crate::auth::{build_async_auth, build_auth};
 use crate::backup::BackupManager;
 pub use crate::callbacks::EventsCallback;
+use crate::config::WithTimezone;
 pub use crate::config::{Config, TzConfig, TzTime};
 use crate::data_store::CreatedInvoice;
 use crate::environment::Environment;
@@ -76,31 +75,33 @@ use crate::key_derivation::derive_persistence_encryption_key;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 pub use crate::lnurl::{LnUrlPayDetails, LnUrlWithdrawDetails};
 use crate::locker::Locker;
+pub use crate::notification_handling::{handle_notification, Notification, RecommendedAction};
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
+pub use crate::payment::{
+    IncomingPaymentInfo, OutgoingPaymentInfo, PaymentInfo, PaymentState, Recipient,
+};
 pub use crate::recovery::recover_lightning_node;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
 pub use crate::swap::{
     FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo, SwapToLightningFees,
 };
+use crate::symmetric_encryption::encrypt;
 use crate::task_manager::TaskManager;
 use crate::util::{
     replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
 };
-pub use notification_handling::{handle_notification, Notification, RecommendedAction};
 
-use crate::symmetric_encryption::encrypt;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
 use breez_sdk_core::{
     parse, parse_invoice, BitcoinAddressData, BreezServices, ClosedChannelPaymentDetails,
     EventListener, GreenlightCredentials, GreenlightNodeConfig, InputType, ListPaymentsRequest,
-    LnPaymentDetails, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
-    LnUrlWithdrawRequestData, Network, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
-    PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRedeemOnchainFundsRequest,
-    PrepareRefundRequest, ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
-    ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest,
-    SendPaymentRequest,
+    LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest, LnUrlWithdrawRequestData, Network,
+    NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails, PaymentStatus,
+    PaymentTypeFilter, PrepareRedeemOnchainFundsRequest, PrepareRefundRequest,
+    ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest, ReportIssueRequest,
+    ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest, SendPaymentRequest,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -109,7 +110,6 @@ use email_address::EmailAddress;
 use honey_badger::Auth;
 pub use honey_badger::{TermsAndConditions, TermsAndConditionsStatus};
 use iban::Iban;
-use lnurl::parse_metadata;
 use log::{debug, error, info, Level};
 use logger::init_logger_once;
 use parrot::AnalyticsClient;
@@ -120,7 +120,6 @@ use perro::{
 use squirrel::RemoteBackupClient;
 use std::cmp::Reverse;
 use std::collections::HashSet;
-use std::ops::{Add, Not};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -971,33 +970,26 @@ impl LightningNode {
     ) -> Vec<Activity> {
         let breez_payment_hashes: HashSet<_> = breez_activities
             .iter()
-            .filter_map(|m| match m {
-                Activity::PaymentActivity { payment } => {
-                    Some(payment.invoice_details.payment_hash.as_ref())
-                }
-                Activity::ChannelCloseActivity { .. } => None,
-            })
+            .filter_map(|m| m.get_payment_info().map(|p| p.hash.clone()))
             .collect();
         let mut activities = local_created_invoices
             .into_iter()
             .filter(|i| !breez_payment_hashes.contains(i.hash.as_str()))
             .map(|i| self.payment_from_created_invoice(&i))
             .filter_map(filter_out_and_log_corrupted_payments)
-            .map(|p| Activity::PaymentActivity { payment: p })
+            .map(|p| Activity::IncomingPayment {
+                incoming_payment_info: p,
+            })
             .collect::<Vec<_>>();
         activities.extend(breez_activities);
         activities
     }
 
-    /// Get a payment given its payment hash
+    /// Get an incoming payment by its payment hash.
     ///
     /// Parameters:
     /// * `hash` - hex representation of payment hash
-    pub fn get_payment(&self, hash: String) -> Result<Payment> {
-        let optional_invoice = self
-            .data_store
-            .lock_unwrap()
-            .retrieve_created_invoice_by_hash(&hash)?;
+    pub fn get_incoming_payment(&self, hash: String) -> Result<IncomingPaymentInfo> {
         if let Some(breez_payment) = self
             .rt
             .handle()
@@ -1007,16 +999,56 @@ impl LightningNode {
                 "Failed to get payment by hash",
             )?
         {
-            match self.activity_from_breez_payment(breez_payment)? {
-                Activity::PaymentActivity { payment } => Ok(payment),
-                Activity::ChannelCloseActivity { .. } => {
-                    permanent_failure!(
-                        "Searching a Breez payment by hash returned a channel close payment"
-                    );
-                }
-            }
-        } else if let Some(invoice) = optional_invoice {
+            return match self.activity_from_breez_ln_payment(breez_payment)? {
+                Activity::IncomingPayment {
+                    incoming_payment_info,
+                } => Ok(incoming_payment_info),
+                Activity::OutgoingPayment { .. } => invalid_input!("OutgoingPayment was found"),
+                Activity::OfferClaim {
+                    incoming_payment_info,
+                    ..
+                } => Ok(incoming_payment_info),
+                Activity::Swap {
+                    incoming_payment_info,
+                    ..
+                } => Ok(incoming_payment_info),
+                Activity::ChannelClose { .. } => invalid_input!("ChannelClose was found"),
+            };
+        }
+        let optional_invoice = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_created_invoice_by_hash(&hash)?;
+        if let Some(invoice) = optional_invoice {
             self.payment_from_created_invoice(&invoice)
+        } else {
+            invalid_input!("No payment with provided hash was found");
+        }
+    }
+
+    /// Get an outgoing payment by its payment hash.
+    ///
+    /// Parameters:
+    /// * `hash` - hex representation of payment hash
+    pub fn get_outgoing_payment(&self, hash: String) -> Result<OutgoingPaymentInfo> {
+        if let Some(breez_payment) = self
+            .rt
+            .handle()
+            .block_on(self.sdk.payment_by_hash(hash))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to get payment by hash",
+            )?
+        {
+            match self.activity_from_breez_ln_payment(breez_payment)? {
+                Activity::IncomingPayment { .. } => invalid_input!("IncomingPayment was found"),
+                Activity::OutgoingPayment {
+                    outgoing_payment_info,
+                } => Ok(outgoing_payment_info),
+                Activity::OfferClaim { .. } => invalid_input!("OfferClaim was found"),
+                Activity::Swap { .. } => invalid_input!("Swap was found"),
+                Activity::ChannelClose { .. } => invalid_input!("ChannelClose was found"),
+            }
         } else {
             invalid_input!("No payment with provided hash was found");
         }
@@ -1040,9 +1072,7 @@ impl LightningNode {
         breez_payment: breez_sdk_core::Payment,
     ) -> Result<Activity> {
         match &breez_payment.details {
-            PaymentDetails::Ln { data } => {
-                self.activity_from_breez_ln_payment(&breez_payment, data)
-            }
+            PaymentDetails::Ln { .. } => self.activity_from_breez_ln_payment(breez_payment),
             PaymentDetails::ClosedChannel { data } => {
                 self.activity_from_breez_closed_channel_payment(&breez_payment, data)
             }
@@ -1051,170 +1081,74 @@ impl LightningNode {
 
     fn activity_from_breez_ln_payment(
         &self,
-        breez_payment: &breez_sdk_core::Payment,
-        payment_details: &LnPaymentDetails,
+        breez_payment: breez_sdk_core::Payment,
     ) -> Result<Activity> {
-        let invoice = parse_invoice(&payment_details.bolt11).map_to_permanent_failure(format!(
-            "Invalid invoice provided by the Breez SDK: {}",
-            payment_details.bolt11
-        ))?;
-        let invoice_details = InvoiceDetails::from_ln_invoice(invoice.clone(), &None);
-
+        let payment_details = match breez_payment.details {
+            PaymentDetails::Ln { ref data } => data,
+            PaymentDetails::ClosedChannel { .. } => {
+                invalid_input!("PaymentInfo cannot be created from channel close")
+            }
+        };
         let local_payment_data = self
             .data_store
             .lock_unwrap()
             .retrieve_payment_info(&payment_details.payment_hash)?;
-
-        // Use invoice timestamp for receiving payments and breez_payment.payment_time for sending ones
-        // Reasoning: for receiving payments, Breez returns the time the invoice was paid. Given that
-        // now we show pending invoices, this can result in a receiving payment jumping around in the
-        // list when it gets paid.
-        let time = match breez_payment.payment_type {
-            breez_sdk_core::PaymentType::Sent => {
-                unix_timestamp_to_system_time(breez_payment.payment_time as u64)
-            }
-            breez_sdk_core::PaymentType::Received => invoice_details.creation_timestamp,
-            breez_sdk_core::PaymentType::ClosedChannel => {
-                permanent_failure!(
-                    "Current interface doesn't support PaymentDetails::ClosedChannel"
-                )
-            }
-        };
-        let (exchange_rate, time, offer, personal_note) = match local_payment_data {
-            None => {
-                let exchange_rate = self.get_exchange_rate();
-                let user_preferences = self.user_preferences.lock_unwrap();
-                let time = TzTime {
-                    time,
-                    timezone_id: user_preferences.timezone_config.timezone_id.clone(),
-                    timezone_utc_offset_secs: user_preferences
-                        .timezone_config
-                        .timezone_utc_offset_secs,
-                };
-                let offer = None;
-                let personal_note = None;
-                (exchange_rate, time, offer, personal_note)
-            } // TODO: change interface to accommodate for local payment data being non-existent
-            Some(d) => {
-                let exchange_rate = Some(d.exchange_rate);
-                let time = TzTime {
-                    time,
-                    timezone_id: d.user_preferences.timezone_config.timezone_id,
-                    timezone_utc_offset_secs: d
-                        .user_preferences
-                        .timezone_config
-                        .timezone_utc_offset_secs,
-                };
-
-                let offer = match invoice_details.amount {
-                    Some(amount) => d.offer.map(|offer| {
-                        fill_payout_fee(
-                            offer,
-                            (amount.sats.as_sats().msats + breez_payment.fee_msat).as_msats(),
-                            &exchange_rate,
-                        )
-                    }),
-                    None => d.offer,
-                };
-                let personal_note = d.personal_note;
-
-                (exchange_rate, time, offer, personal_note)
-            }
+        let (exchange_rate, tz_config, personal_note, offer) = match local_payment_data {
+            Some(data) => (
+                Some(data.exchange_rate),
+                data.user_preferences.timezone_config,
+                data.personal_note,
+                data.offer,
+            ),
+            None => (
+                self.get_exchange_rate(),
+                self.user_preferences.lock_unwrap().timezone_config.clone(),
+                None,
+                None,
+            ),
         };
 
-        let (payment_type, amount, requested_amount, network_fees, lsp_fees) =
-            match breez_payment.payment_type {
-                breez_sdk_core::PaymentType::Sent => (
-                    PaymentType::Sending,
-                    (breez_payment.amount_msat + breez_payment.fee_msat)
-                        .as_msats()
-                        .to_amount_up(&exchange_rate),
-                    breez_payment
-                        .amount_msat
-                        .as_msats()
-                        .to_amount_up(&exchange_rate),
-                    Some(
-                        breez_payment
-                            .fee_msat
-                            .as_msats()
-                            .to_amount_up(&exchange_rate),
-                    ),
-                    None,
-                ),
-                breez_sdk_core::PaymentType::Received => (
-                    PaymentType::Receiving,
-                    breez_payment
-                        .amount_msat
-                        .as_msats()
-                        .to_amount_down(&exchange_rate),
-                    Self::get_requested_amount_for_received_payment(breez_payment, &exchange_rate),
-                    None,
-                    Some(
-                        breez_payment
-                            .fee_msat
-                            .as_msats()
-                            .to_amount_up(&exchange_rate),
-                    ),
-                ),
-                breez_sdk_core::PaymentType::ClosedChannel => permanent_failure!(
-                    "Current interface doesn't support PaymentDetails::ClosedChannel"
-                ),
-            };
-
-        let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
-
-        let description = invoice_details.description.clone();
-
-        let user_preferences = self.user_preferences.lock_unwrap();
-        let swap = payment_details.swap_info.clone().map(|s| SwapInfo {
-            bitcoin_address: s.bitcoin_address,
-            created_at: TzTime {
-                // TODO: Persist SwapInfo in local db on state change, requires https://github.com/breez/breez-sdk/issues/518
-                time: unix_timestamp_to_system_time(s.created_at as u64),
-                timezone_id: user_preferences.timezone_config.timezone_id.clone(),
-                timezone_utc_offset_secs: user_preferences.timezone_config.timezone_utc_offset_secs,
-            },
-            paid_msats: s.paid_msat,
-        });
-
-        let recipient = match breez_payment.payment_type {
-            breez_sdk_core::PaymentType::Sent => Some(Recipient::new(payment_details)),
-            _ => None,
-        };
-
-        let description = match payment_details
-            .lnurl_metadata
-            .as_deref()
-            .map(parse_metadata)
-        {
-            Some(Ok((short_description, _long_description))) => short_description,
-            _ => description,
-        };
-
-        Ok(Activity::PaymentActivity {
-            payment: Payment {
-                payment_type,
-                payment_state: breez_payment.status.into(),
-                fail_reason: None, // TODO: Request SDK to store and provide reason for failed payments - issue: https://github.com/breez/breez-sdk/issues/626
-                hash: payment_details.payment_hash.clone(),
-                amount,
-                requested_amount,
-                invoice_details,
-                created_at: time,
-                description,
-                preimage: payment_details
-                    .payment_preimage
-                    .is_empty()
-                    .not()
-                    .then_some(payment_details.payment_preimage.clone()),
-                network_fees,
-                lsp_fees,
+        if let Some(offer) = offer {
+            let incoming_payment_info =
+                IncomingPaymentInfo::new(breez_payment, &exchange_rate, tz_config, personal_note)?;
+            let offer_kind = fill_payout_fee(
                 offer,
-                swap,
-                recipient,
-                personal_note,
-            },
-        })
+                incoming_payment_info.requested_amount.sats.as_msats(),
+                &exchange_rate,
+            );
+            Ok(Activity::OfferClaim {
+                incoming_payment_info,
+                offer_kind,
+            })
+        } else if let Some(ref s) = payment_details.swap_info {
+            let swap_info = SwapInfo {
+                bitcoin_address: s.bitcoin_address.clone(),
+                // TODO: Persist SwapInfo in local db on state change, requires https://github.com/breez/breez-sdk/issues/518
+                created_at: unix_timestamp_to_system_time(s.created_at as u64)
+                    .with_timezone(tz_config.clone()),
+                paid_msats: s.paid_msat,
+            };
+            let incoming_payment_info =
+                IncomingPaymentInfo::new(breez_payment, &exchange_rate, tz_config, personal_note)?;
+            Ok(Activity::Swap {
+                incoming_payment_info,
+                swap_info,
+            })
+        } else if breez_payment.payment_type == breez_sdk_core::PaymentType::Received {
+            let incoming_payment_info =
+                IncomingPaymentInfo::new(breez_payment, &exchange_rate, tz_config, personal_note)?;
+            Ok(Activity::IncomingPayment {
+                incoming_payment_info,
+            })
+        } else if breez_payment.payment_type == breez_sdk_core::PaymentType::Sent {
+            let outgoing_payment_info =
+                OutgoingPaymentInfo::new(breez_payment, &exchange_rate, tz_config, personal_note)?;
+            Ok(Activity::OutgoingPayment {
+                outgoing_payment_info,
+            })
+        } else {
+            permanent_failure!("Unreachable code")
+        }
     }
 
     fn activity_from_breez_closed_channel_payment(
@@ -1229,11 +1163,8 @@ impl LightningNode {
 
         let user_preferences = self.user_preferences.lock_unwrap();
 
-        let time = TzTime {
-            time: unix_timestamp_to_system_time(breez_payment.payment_time as u64),
-            timezone_id: user_preferences.timezone_config.timezone_id.clone(),
-            timezone_utc_offset_secs: user_preferences.timezone_config.timezone_utc_offset_secs,
-        };
+        let time = unix_timestamp_to_system_time(breez_payment.payment_time as u64)
+            .with_timezone(user_preferences.timezone_config.clone());
 
         let (closed_at, state) = match breez_payment.status {
             PaymentStatus::Pending => (None, ChannelCloseState::Pending),
@@ -1246,8 +1177,8 @@ impl LightningNode {
         // According to the docs, it can only be empty for older closed channels.
         let closing_tx_id = details.closing_txid.clone().unwrap_or_default();
 
-        Ok(Activity::ChannelCloseActivity {
-            channel_close: ChannelClose {
+        Ok(Activity::ChannelClose {
+            channel_close_info: ChannelCloseInfo {
                 amount,
                 state,
                 closed_at,
@@ -1256,18 +1187,10 @@ impl LightningNode {
         })
     }
 
-    fn get_requested_amount_for_received_payment(
-        payment: &breez_sdk_core::Payment,
-        exchange_rate: &Option<ExchangeRate>,
-    ) -> Amount {
-        payment
-            .amount_msat
-            .add(payment.fee_msat)
-            .as_msats()
-            .to_amount_down(exchange_rate)
-    }
-
-    fn payment_from_created_invoice(&self, created_invoice: &CreatedInvoice) -> Result<Payment> {
+    fn payment_from_created_invoice(
+        &self,
+        created_invoice: &CreatedInvoice,
+    ) -> Result<IncomingPaymentInfo> {
         let invoice =
             parse_invoice(created_invoice.invoice.as_str()).map_to_permanent_failure(format!(
                 "Invalid invoice obtained from local db: {}",
@@ -1288,20 +1211,15 @@ impl LightningNode {
             .ok_or_permanent_failure("Locally created invoice doesn't have local payment data")?;
         let exchange_rate = Some(local_payment_data.exchange_rate);
         let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
-        let time = TzTime {
-            time: invoice_details.creation_timestamp, // for receiving payments, we use the invoice timestamp
-            timezone_id: local_payment_data
-                .user_preferences
-                .timezone_config
-                .timezone_id,
-            timezone_utc_offset_secs: local_payment_data
-                .user_preferences
-                .timezone_config
-                .timezone_utc_offset_secs,
-        };
+        // For receiving payments, we use the invoice timestamp.
+        let time = invoice_details
+            .creation_timestamp
+            .with_timezone(local_payment_data.user_preferences.timezone_config);
         let lsp_fees = created_invoice
             .channel_opening_fees
-            .map(|f| f.as_msats().to_amount_up(&exchange_rate));
+            .unwrap_or_default()
+            .as_msats()
+            .to_amount_up(&exchange_rate);
         let requested_amount = invoice_details
             .amount
             .clone()
@@ -1310,32 +1228,27 @@ impl LightningNode {
             .as_sats()
             .to_amount_down(&exchange_rate);
 
-        let mut amount = requested_amount.clone().sats;
-        if let Some(ref lsp_fees) = lsp_fees {
-            amount -= lsp_fees.sats;
-        }
+        let amount = requested_amount.clone().sats - lsp_fees.sats;
         let amount = amount.as_sats().to_amount_down(&exchange_rate);
 
         let personal_note = local_payment_data.personal_note;
 
-        Ok(Payment {
-            payment_type: PaymentType::Receiving,
+        let payment_info = PaymentInfo {
             payment_state,
-            fail_reason: None,
             hash: invoice_details.payment_hash.clone(),
             amount,
-            requested_amount,
             invoice_details: invoice_details.clone(),
             created_at: time,
             description: invoice_details.description,
             preimage: None,
-            network_fees: None,
-            lsp_fees,
-            offer: None,
-            swap: None,
-            recipient: None,
             personal_note,
-        })
+        };
+        let incoming_payment_info = IncomingPaymentInfo {
+            payment_info,
+            requested_amount,
+            lsp_fees,
+        };
+        Ok(incoming_payment_info)
     }
 
     /// Call the method when the app goes to foreground, such that the user can interact with it.
@@ -1517,7 +1430,7 @@ impl LightningNode {
             limit: Some(5),
             offset: None,
         };
-        let latest_payments = self
+        let latest_activities = self
             .rt
             .handle()
             .block_on(self.sdk.list_payments(list_payments_request))
@@ -1526,14 +1439,10 @@ impl LightningNode {
             .filter(|p| p.status == PaymentStatus::Complete)
             .map(|p| self.activity_from_breez_payment(p))
             .filter_map(filter_out_and_log_corrupted_activities)
-            .filter_map(|m| match m {
-                Activity::PaymentActivity { payment } => Some(payment),
-                Activity::ChannelCloseActivity { .. } => None,
-            })
             .collect::<Vec<_>>();
 
         Ok(
-            filter_out_recently_claimed_topups(topup_infos, latest_payments)
+            filter_out_recently_claimed_topups(topup_infos, latest_activities)
                 .into_iter()
                 .map(|topup_info| OfferInfo::from(topup_info, &rate))
                 .collect(),
@@ -2417,12 +2326,19 @@ fn get_payment_max_routing_fee_mode(
 
 fn filter_out_recently_claimed_topups(
     topups: Vec<TopupInfo>,
-    latest_payments: Vec<Payment>,
+    latest_activities: Vec<Activity>,
 ) -> Vec<TopupInfo> {
-    let latest_succeeded_payment_offer_ids: HashSet<String> = latest_payments
+    let pocket_id = |a: Activity| match a {
+        Activity::OfferClaim {
+            incoming_payment_info: _,
+            offer_kind: OfferKind::Pocket { id, .. },
+        } => Some(id),
+        _ => None,
+    };
+    let latest_succeeded_payment_offer_ids: HashSet<String> = latest_activities
         .into_iter()
-        .filter(|p| p.payment_state == PaymentState::Succeeded)
-        .filter_map(|p| p.offer.map(|OfferKind::Pocket { id, .. }| id))
+        .filter(|a| a.get_payment_info().map(|p| p.payment_state) == Some(PaymentState::Succeeded))
+        .filter_map(pocket_id)
         .collect();
     topups
         .into_iter()
@@ -2480,7 +2396,9 @@ fn filter_out_and_log_corrupted_activities(r: Result<Activity>) -> Option<Activi
 }
 
 // TODO provide corrupted payment information partially instead of hiding it
-fn filter_out_and_log_corrupted_payments(r: Result<Payment>) -> Option<Payment> {
+fn filter_out_and_log_corrupted_payments(
+    r: Result<IncomingPaymentInfo>,
+) -> Option<IncomingPaymentInfo> {
     if r.is_ok() {
         r.ok()
     } else {
@@ -2596,145 +2514,81 @@ mod tests {
             },
         ];
 
-        let latest_payments = vec![
-            Payment {
-                payment_type: PaymentType::Receiving,
-                payment_state: PaymentState::Succeeded,
-                fail_reason: None,
-                hash: "hash".to_string(),
-                amount: Amount {
-                    sats: 0,
-                    fiat: None,
-                },
-                requested_amount: Amount {
-                    sats: 0,
-                    fiat: None,
-                },
-                invoice_details: InvoiceDetails {
-                    invoice: "bca".to_string(),
-                    amount: None,
-                    description: "".to_string(),
-                    payment_hash: "".to_string(),
-                    payee_pub_key: "".to_string(),
-                    creation_timestamp: SystemTime::now(),
-                    expiry_interval: Default::default(),
-                    expiry_timestamp: SystemTime::now(),
-                },
-                created_at: TzTime {
-                    time: SystemTime::now(),
-                    timezone_id: "".to_string(),
-                    timezone_utc_offset_secs: 0,
-                },
+        let mut payment_info = PaymentInfo {
+            payment_state: PaymentState::Succeeded,
+            hash: "hash".to_string(),
+            amount: Amount::default(),
+            invoice_details: InvoiceDetails {
+                invoice: "bca".to_string(),
+                amount: None,
                 description: "".to_string(),
-                preimage: None,
-                network_fees: None,
-                lsp_fees: None,
-                offer: None,
-                swap: None,
-                recipient: None,
-                personal_note: None,
+                payment_hash: "".to_string(),
+                payee_pub_key: "".to_string(),
+                creation_timestamp: SystemTime::now(),
+                expiry_interval: Default::default(),
+                expiry_timestamp: SystemTime::now(),
             },
-            Payment {
-                payment_type: PaymentType::Receiving,
-                payment_state: PaymentState::Succeeded,
-                fail_reason: None,
-                hash: "hash2".to_string(),
-                amount: Amount {
-                    sats: 0,
-                    fiat: None,
-                },
-                requested_amount: Amount {
-                    sats: 0,
-                    fiat: None,
-                },
-                invoice_details: InvoiceDetails {
-                    invoice: "abc".to_string(),
-                    amount: None,
-                    description: "".to_string(),
-                    payment_hash: "".to_string(),
-                    payee_pub_key: "".to_string(),
-                    creation_timestamp: SystemTime::now(),
-                    expiry_interval: Default::default(),
-                    expiry_timestamp: SystemTime::now(),
-                },
-                created_at: TzTime {
-                    time: SystemTime::now(),
-                    timezone_id: "".to_string(),
-                    timezone_utc_offset_secs: 0,
-                },
-                description: "".to_string(),
-                preimage: None,
-                network_fees: None,
-                lsp_fees: None,
-                offer: Some(OfferKind::Pocket {
-                    id: "123".to_string(),
-                    exchange_rate: ExchangeRate {
-                        currency_code: "".to_string(),
-                        rate: 0,
-                        updated_at: SystemTime::now(),
-                    },
-                    topup_value_minor_units: 0,
-                    topup_value_sats: Some(0),
-                    exchange_fee_minor_units: 0,
-                    exchange_fee_rate_permyriad: 0,
-                    lightning_payout_fee: None,
-                    error: None,
-                }),
-                swap: None,
-                recipient: None,
-                personal_note: None,
+            created_at: SystemTime::now().with_timezone(TzConfig::default()),
+            description: "".to_string(),
+            preimage: None,
+            personal_note: None,
+        };
+
+        let incoming_payment = Activity::IncomingPayment {
+            incoming_payment_info: IncomingPaymentInfo {
+                payment_info: payment_info.clone(),
+                requested_amount: Amount::default(),
+                lsp_fees: Amount::default(),
             },
-            Payment {
-                payment_type: PaymentType::Receiving,
-                payment_state: PaymentState::Failed,
-                fail_reason: None,
-                hash: "hash3".to_string(),
-                amount: Amount {
-                    sats: 0,
-                    fiat: None,
-                },
-                requested_amount: Amount {
-                    sats: 0,
-                    fiat: None,
-                },
-                invoice_details: InvoiceDetails {
-                    invoice: "cba".to_string(),
-                    amount: None,
-                    description: "".to_string(),
-                    payment_hash: "".to_string(),
-                    payee_pub_key: "".to_string(),
-                    creation_timestamp: SystemTime::now(),
-                    expiry_interval: Default::default(),
-                    expiry_timestamp: SystemTime::now(),
-                },
-                created_at: TzTime {
-                    time: SystemTime::now(),
-                    timezone_id: "".to_string(),
-                    timezone_utc_offset_secs: 0,
-                },
-                description: "".to_string(),
-                preimage: None,
-                network_fees: None,
-                lsp_fees: None,
-                offer: Some(OfferKind::Pocket {
-                    id: "234".to_string(),
-                    exchange_rate: ExchangeRate {
-                        currency_code: "".to_string(),
-                        rate: 0,
-                        updated_at: SystemTime::now(),
-                    },
-                    topup_value_minor_units: 0,
-                    topup_value_sats: Some(0),
-                    exchange_fee_minor_units: 0,
-                    exchange_fee_rate_permyriad: 0,
-                    lightning_payout_fee: None,
-                    error: None,
-                }),
-                swap: None,
-                recipient: None,
-                personal_note: None,
+        };
+
+        payment_info.hash = "hash2".to_string();
+        let topup = Activity::OfferClaim {
+            incoming_payment_info: IncomingPaymentInfo {
+                payment_info: payment_info.clone(),
+                requested_amount: Amount::default(),
+                lsp_fees: Amount::default(),
             },
-        ];
+            offer_kind: OfferKind::Pocket {
+                id: "123".to_string(),
+                exchange_rate: ExchangeRate {
+                    currency_code: "".to_string(),
+                    rate: 0,
+                    updated_at: SystemTime::now(),
+                },
+                topup_value_minor_units: 0,
+                topup_value_sats: Some(0),
+                exchange_fee_minor_units: 0,
+                exchange_fee_rate_permyriad: 0,
+                lightning_payout_fee: None,
+                error: None,
+            },
+        };
+
+        payment_info.hash = "hash3".to_string();
+        payment_info.payment_state = PaymentState::Failed;
+        let failed_topup = Activity::OfferClaim {
+            incoming_payment_info: IncomingPaymentInfo {
+                payment_info,
+                requested_amount: Amount::default(),
+                lsp_fees: Amount::default(),
+            },
+            offer_kind: OfferKind::Pocket {
+                id: "234".to_string(),
+                exchange_rate: ExchangeRate {
+                    currency_code: "".to_string(),
+                    rate: 0,
+                    updated_at: SystemTime::now(),
+                },
+                topup_value_minor_units: 0,
+                topup_value_sats: Some(0),
+                exchange_fee_minor_units: 0,
+                exchange_fee_rate_permyriad: 0,
+                lightning_payout_fee: None,
+                error: None,
+            },
+        };
+        let latest_payments = vec![incoming_payment, topup, failed_topup];
 
         let filtered_topups = filter_out_recently_claimed_topups(topups, latest_payments);
 
