@@ -107,15 +107,17 @@ enum PaymentDelay {
     Long,
 }
 
-pub struct BreezServices {}
+pub struct BreezServices {
+    event_listener: Box<dyn EventListener>,
+}
 
 impl BreezServices {
     pub async fn connect(
         _config: Config,
         _seed: Vec<u8>,
-        _event_listener: Box<dyn EventListener>,
+        event_listener: Box<dyn EventListener>,
     ) -> SdkResult<Arc<BreezServices>> {
-        Ok(Arc::new(BreezServices {}))
+        Ok(Arc::new(BreezServices { event_listener }))
     }
     pub async fn send_payment(
         &self,
@@ -194,33 +196,118 @@ impl BreezServices {
 
                 PAYMENTS.lock().unwrap().push(payment.clone());
 
+                self.event_listener.on_event(BreezEvent::PaymentSucceed {
+                    details: payment.clone(),
+                });
+
                 Ok(SendPaymentResponse { payment })
             }
-            PaymentOutcome::AlreadyPaid => Err(SendPaymentError::AlreadyPaid),
-            PaymentOutcome::GenericError => Err(SendPaymentError::Generic {
-                err: "Generic error".into(),
-            }),
-            PaymentOutcome::InvalidNetwork => Err(SendPaymentError::InvalidNetwork {
-                err: "Invalid network".into(),
-            }),
-            PaymentOutcome::InvoiceExpired => Err(SendPaymentError::InvoiceExpired {
-                err: "Invoice expired".into(),
-            }),
-            PaymentOutcome::Failed => Err(SendPaymentError::PaymentFailed {
-                err: "Payment Failed".into(),
-            }),
-            PaymentOutcome::Timeout => Err(SendPaymentError::PaymentTimeout {
-                err: "Payment timed out".into(),
-            }),
-            PaymentOutcome::RouteNotFound => Err(SendPaymentError::RouteNotFound {
-                err: "Route not found".into(),
-            }),
-            PaymentOutcome::RouteTooExpensive => Err(SendPaymentError::RouteTooExpensive {
-                err: "Route too expensive".into(),
-            }),
-            PaymentOutcome::ServiceConnectivity => Err(SendPaymentError::ServiceConnectivity {
-                err: "Service connectivity error".into(),
-            }),
+            PaymentOutcome::AlreadyPaid => {
+                self.event_listener.on_event(BreezEvent::PaymentFailed {
+                    details: PaymentFailedData {
+                        error: "Already paid".to_string(),
+                        node_id: NODE_PUBKEY.to_string(),
+                        invoice: None,
+                    },
+                });
+                Err(SendPaymentError::AlreadyPaid)
+            }
+            PaymentOutcome::GenericError => {
+                self.event_listener.on_event(BreezEvent::PaymentFailed {
+                    details: PaymentFailedData {
+                        error: "Generic error".to_string(),
+                        node_id: NODE_PUBKEY.to_string(),
+                        invoice: None,
+                    },
+                });
+                Err(SendPaymentError::Generic {
+                    err: "Generic error".into(),
+                })
+            }
+            PaymentOutcome::InvalidNetwork => {
+                self.event_listener.on_event(BreezEvent::PaymentFailed {
+                    details: PaymentFailedData {
+                        error: "Invalid network".to_string(),
+                        node_id: NODE_PUBKEY.to_string(),
+                        invoice: None,
+                    },
+                });
+                Err(SendPaymentError::InvalidNetwork {
+                    err: "Invalid network".into(),
+                })
+            }
+            PaymentOutcome::InvoiceExpired => {
+                self.event_listener.on_event(BreezEvent::PaymentFailed {
+                    details: PaymentFailedData {
+                        error: "Invoice expired".to_string(),
+                        node_id: NODE_PUBKEY.to_string(),
+                        invoice: None,
+                    },
+                });
+                Err(SendPaymentError::InvoiceExpired {
+                    err: "Invoice expired".into(),
+                })
+            }
+            PaymentOutcome::Failed => {
+                self.event_listener.on_event(BreezEvent::PaymentFailed {
+                    details: PaymentFailedData {
+                        error: "Payment failed".to_string(),
+                        node_id: NODE_PUBKEY.to_string(),
+                        invoice: None,
+                    },
+                });
+                Err(SendPaymentError::PaymentFailed {
+                    err: "Payment Failed".into(),
+                })
+            }
+            PaymentOutcome::Timeout => {
+                self.event_listener.on_event(BreezEvent::PaymentFailed {
+                    details: PaymentFailedData {
+                        error: "Payment timed out".to_string(),
+                        node_id: NODE_PUBKEY.to_string(),
+                        invoice: None,
+                    },
+                });
+                Err(SendPaymentError::PaymentTimeout {
+                    err: "Payment timed out".into(),
+                })
+            }
+            PaymentOutcome::RouteNotFound => {
+                self.event_listener.on_event(BreezEvent::PaymentFailed {
+                    details: PaymentFailedData {
+                        error: "Route not found".to_string(),
+                        node_id: NODE_PUBKEY.to_string(),
+                        invoice: None,
+                    },
+                });
+                Err(SendPaymentError::RouteNotFound {
+                    err: "Route not found".into(),
+                })
+            }
+            PaymentOutcome::RouteTooExpensive => {
+                self.event_listener.on_event(BreezEvent::PaymentFailed {
+                    details: PaymentFailedData {
+                        error: "Route too expensive".to_string(),
+                        node_id: NODE_PUBKEY.to_string(),
+                        invoice: None,
+                    },
+                });
+                Err(SendPaymentError::RouteTooExpensive {
+                    err: "Route too expensive".into(),
+                })
+            }
+            PaymentOutcome::ServiceConnectivity => {
+                self.event_listener.on_event(BreezEvent::PaymentFailed {
+                    details: PaymentFailedData {
+                        error: "Service connectivity error".to_string(),
+                        node_id: NODE_PUBKEY.to_string(),
+                        invoice: None,
+                    },
+                });
+                Err(SendPaymentError::ServiceConnectivity {
+                    err: "Service connectivity error".into(),
+                })
+            }
         }
     }
 
@@ -267,6 +354,10 @@ impl BreezServices {
         };
 
         PAYMENTS.lock().unwrap().push(payment.clone());
+
+        self.event_listener.on_event(BreezEvent::PaymentSucceed {
+            details: payment.clone(),
+        });
 
         Ok(LnUrlPayResult::EndpointSuccess {
             data: breez_sdk_core::LnUrlPaySuccessData {
@@ -323,6 +414,14 @@ impl BreezServices {
         };
 
         PAYMENTS.lock().unwrap().push(payment.clone());
+
+        self.event_listener.on_event(BreezEvent::InvoicePaid {
+            details: InvoicePaidDetails {
+                payment_hash: payment_hash.clone(),
+                bolt11: bolt11.clone(),
+                payment: Some(payment),
+            },
+        });
 
         Ok(LnUrlWithdrawResult::Ok {
             data: breez_sdk_core::LnUrlWithdrawSuccessData {
@@ -405,7 +504,7 @@ impl BreezServices {
 
         if let PaymentOutcome::Success = &*PAYMENT_OUTCOME.lock().unwrap() {
             *LN_BALANCE_MSAT.lock().unwrap() += req.amount_msat - lsp_fee.unwrap_or(0);
-            PAYMENTS.lock().unwrap().push(Payment {
+            let payment = Payment {
                 id: Utc::now().timestamp().to_string(), // Placeholder. ID is probably never used
                 payment_type: PaymentType::Received,
                 payment_time: Utc::now().timestamp(),
@@ -434,6 +533,15 @@ impl BreezServices {
                     },
                 },
                 metadata: None,
+            };
+
+            PAYMENTS.lock().unwrap().push(payment.clone());
+            self.event_listener.on_event(BreezEvent::InvoicePaid {
+                details: InvoicePaidDetails {
+                    payment_hash: format!("{:x}", payment_hash),
+                    bolt11: invoice.to_string(),
+                    payment: Some(payment),
+                },
             });
         }
 
@@ -712,7 +820,7 @@ impl BreezServices {
             status: ReverseSwapStatus::Initial,
         };
 
-        PAYMENTS.lock().unwrap().push(Payment {
+        let payment = Payment {
             id: format!("random_id_{}", now),
             payment_type: PaymentType::Sent,
             payment_time: now,
@@ -741,7 +849,11 @@ impl BreezServices {
                 },
             },
             metadata: None,
-        });
+        };
+        PAYMENTS.lock().unwrap().push(payment.clone());
+
+        self.event_listener
+            .on_event(BreezEvent::PaymentSucceed { details: payment });
 
         Ok(SendOnchainResponse { reverse_swap_info })
     }
@@ -790,8 +902,9 @@ impl BreezServices {
     }
 
     pub async fn sync(&self) -> SdkResult<()> {
-        Self::simulate_swaps();
+        self.simulate_swaps();
 
+        self.event_listener.on_event(BreezEvent::Synced);
         Ok(())
     }
 
@@ -841,7 +954,7 @@ impl BreezServices {
     //                    the payment will be automatically redeemed if REDEEM_SWAPS is true as soon as sync is called (can be triggered by calling listactivities)
     //                    you can create new swaps again
     // if REDEEM_SWAPS is off, use refundfailedswap to clear up list
-    fn simulate_swaps() {
+    fn simulate_swaps(&self) {
         let now = Utc::now();
         let now = now.timestamp();
 
@@ -850,7 +963,7 @@ impl BreezServices {
         swaps.iter_mut().for_each(|swap| {
             if now - swap.created_at > 40 {
                 if *REDEEM_SWAPS.lock().unwrap() {
-                    PAYMENTS.lock().unwrap().push(Payment {
+                    let payment = Payment {
                         id: "".to_string(),
                         payment_type: PaymentType::Received,
                         payment_time: Utc::now().timestamp(),
@@ -879,6 +992,14 @@ impl BreezServices {
                             },
                         },
                         metadata: None,
+                    };
+                    PAYMENTS.lock().unwrap().push(payment.clone());
+                    self.event_listener.on_event(BreezEvent::InvoicePaid {
+                        details: InvoicePaidDetails {
+                            payment_hash: "".to_string(),
+                            bolt11: swap.bolt11.clone().unwrap_or(BOLT11_DUMMY.to_string()),
+                            payment: Some(payment),
+                        },
                     });
                 } else {
                     swap.status = SwapStatus::Expired;
