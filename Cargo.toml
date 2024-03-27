@@ -81,7 +81,7 @@ thousands = "0.2.0"
 
 [build-dependencies]
 camino = "1.1.6"
-uniffi_bindgen = "0.26.0"
+uniffi_bindgen = "0.27.0"
 
 # Use some of the binary size reduction strategies from https://github.com/johnthagen/min-sized-rust
 [profile.release]
