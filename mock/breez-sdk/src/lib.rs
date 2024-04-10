@@ -796,7 +796,12 @@ impl BreezServices {
     }
 
     pub async fn max_reverse_swap_amount(&self) -> SdkResult<MaxReverseSwapAmountResponse> {
-        let total_sat = *LN_BALANCE_MSAT.lock().unwrap() / 1000 - SWAP_FEE_SAT;
+        let balance_sat = *LN_BALANCE_MSAT.lock().unwrap() / 1000;
+        let total_sat = if balance_sat > SWAP_FEE_SAT {
+            balance_sat - SWAP_FEE_SAT
+        } else {
+            0
+        };
 
         Ok(MaxReverseSwapAmountResponse { total_sat })
     }
@@ -805,6 +810,12 @@ impl BreezServices {
         &self,
         req: SendOnchainRequest,
     ) -> Result<SendOnchainResponse, SendOnchainError> {
+        if req.amount_sat < SWAP_MIN_AMOUNT_SAT {
+            return Err(SendOnchainError::PaymentFailed {
+                err: "Insufficient funds".to_string(),
+            });
+        }
+
         let now = Utc::now().timestamp();
 
         let amount_msat = req.amount_sat * 1_000;
