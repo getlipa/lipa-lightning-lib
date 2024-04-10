@@ -9,11 +9,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-const NODE_PRIVKEY: &[u8] = &[
-    0xe1, 0x26, 0xf6, 0x8f, 0x7e, 0xaf, 0xcc, 0x8b, 0x74, 0xf5, 0x4d, 0x26, 0x9f, 0xe2, 0x06, 0xbe,
-    0x71, 0x50, 0x00, 0xf9, 0x4d, 0xac, 0x06, 0x7d, 0x1c, 0x04, 0xa8, 0xca, 0x3b, 0x2d, 0xb7, 0x34,
-];
-
 const MAX_RECEIVABLE_MSAT: u64 = 1_000_000_000;
 
 const SAMPLE_PAYMENT_SECRET: &str =
@@ -87,7 +82,9 @@ lazy_static! {
     static ref PAYMENTS: Mutex<Vec<Payment>> = Mutex::new(Vec::new());
     static ref SWAPS: Mutex<Vec<SwapInfo>> = Mutex::new(Vec::new());
     static ref REDEEM_SWAPS: Mutex<bool> = Mutex::new(true);
-    static ref NODE_PUBKEY: String = generate_2_hashes().0;
+    static ref NODE_PRIVKEY: SecretKey =
+        SecretKey::from_slice(&generate_32_random_bytes()).unwrap();
+    static ref NODE_PUBKEY: String = NODE_PRIVKEY.public_key(&Secp256k1::new()).to_string();
 }
 
 #[derive(Debug)]
@@ -379,7 +376,6 @@ impl BreezServices {
         let now = Utc::now().timestamp();
         let (payment_preimage, payment_hash) = generate_2_hashes();
         let bolt11 = "lnbc1pjlq2t3pp5e3ef7wmszlwxhfpx9cfnxx34gglg779fwnwx9mfm69pfapmymt0qdqqcqzzsxqyz5vqsp5x7k3pjq5y8vk473l6767fenletzwjeaqqukpg9tspfq584g8qp4q9qyyssq678xw6gf2ywl5seummdy8pc6xd0jpvzdexd4v4d3zjse9u6jf7239va4e4r4hhauqrymxu7dp790lv98dl0qhrt4yqxwll2ufkp304gqn6798s".to_string();
-        let payee_pubkey = NODE_PUBKEY.to_string();
 
         let payment = Payment {
             id: now.to_string(), // Placeholder. ID is probably never used
@@ -394,7 +390,7 @@ impl BreezServices {
                 data: LnPaymentDetails {
                     payment_hash: payment_hash.clone(),
                     label: "".to_string(),
-                    destination_pubkey: payee_pubkey.clone(),
+                    destination_pubkey: NODE_PUBKEY.clone(),
                     payment_preimage,
                     keysend: false,
                     bolt11: bolt11.clone(),
@@ -429,7 +425,7 @@ impl BreezServices {
                 invoice: LNInvoice {
                     bolt11,
                     network: Network::Bitcoin,
-                    payee_pubkey,
+                    payee_pubkey: NODE_PUBKEY.clone(),
                     payment_hash,
                     description: None,
                     description_hash: None,
@@ -483,7 +479,6 @@ impl BreezServices {
             _ => {}
         }
 
-        let private_key = SecretKey::from_slice(NODE_PRIVKEY).unwrap();
         let (preimage, payment_hash) = generate_2_hashes_raw();
         let preimage = format!("{:x}", preimage);
         let payment_secret = PaymentSecret([42u8; 32]);
@@ -495,7 +490,7 @@ impl BreezServices {
             .payment_secret(payment_secret)
             .current_timestamp()
             .min_final_cltv_expiry_delta(144)
-            .build_signed(|hash| Secp256k1::new().sign_ecdsa_recoverable(hash, &private_key))
+            .build_signed(|hash| Secp256k1::new().sign_ecdsa_recoverable(hash, &NODE_PRIVKEY))
             .unwrap();
 
         let description = Option::from(req.description);
