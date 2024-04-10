@@ -13,7 +13,7 @@ const NODE_PRIVKEY: &[u8] = &[
     0xe1, 0x26, 0xf6, 0x8f, 0x7e, 0xaf, 0xcc, 0x8b, 0x74, 0xf5, 0x4d, 0x26, 0x9f, 0xe2, 0x06, 0xbe,
     0x71, 0x50, 0x00, 0xf9, 0x4d, 0xac, 0x06, 0x7d, 0x1c, 0x04, 0xa8, 0xca, 0x3b, 0x2d, 0xb7, 0x34,
 ];
-const NODE_PUBKEY: &str = "03e7156ae33b0a208d0744199163177e909e80176e55d97a2f221ede0f934dd9ad";
+
 const MAX_RECEIVABLE_MSAT: u64 = 1_000_000_000;
 
 const SAMPLE_PAYMENT_SECRET: &str =
@@ -44,6 +44,8 @@ const SWAP_FEE_PERCENTAGE: f64 = 0.5;
 const SWAP_ADDRESS_DUMMY: &str = "1BitcoinEaterAddressDontSendf59kuE";
 const SWAP_RECEIVED_SATS_ON_CHAIN: u64 = 100_000;
 const TX_ID_DUMMY: &str = "f4184fc596403b9d638783cf57adfe4c75c605f6356fbc91338530e9831e9e16";
+
+const LNURL_PAY_FEE_MSAT: u64 = 8_000;
 
 use breez_sdk_core::error::{
     LnUrlPayError, LnUrlWithdrawError, ReceiveOnchainError, ReceivePaymentError, SdkResult,
@@ -85,6 +87,7 @@ lazy_static! {
     static ref PAYMENTS: Mutex<Vec<Payment>> = Mutex::new(Vec::new());
     static ref SWAPS: Mutex<Vec<SwapInfo>> = Mutex::new(Vec::new());
     static ref REDEEM_SWAPS: Mutex<bool> = Mutex::new(true);
+    static ref NODE_PUBKEY: String = generate_2_hashes("node-pubkey").0;
 }
 
 #[derive(Debug)]
@@ -133,6 +136,8 @@ impl BreezServices {
             }
         }
 
+        let (payment_hash, payment_preimage) = generate_2_hashes("sent-payment");
+
         match &*PAYMENT_OUTCOME.lock().unwrap() {
             PaymentOutcome::Success => {
                 let parsed_invoice = parse_invoice(req.bolt11.as_str())?;
@@ -174,10 +179,10 @@ impl BreezServices {
                     description: None,
                     details: PaymentDetails::Ln {
                         data: LnPaymentDetails {
-                            payment_hash: "".to_string(),
+                            payment_hash,
                             label: "".to_string(),
                             destination_pubkey: "".to_string(),
-                            payment_preimage: "".to_string(),
+                            payment_preimage,
                             keysend: false,
                             bolt11: req.bolt11,
                             open_channel_bolt11: None,
@@ -312,20 +317,18 @@ impl BreezServices {
     }
 
     pub async fn lnurl_pay(&self, req: LnUrlPayRequest) -> Result<LnUrlPayResult, LnUrlPayError> {
-        let fee_msat = 8_000;
         let now = Utc::now().timestamp();
-        let preimage = sha256::Hash::hash(&now.to_be_bytes());
-        let payment_hash = format!("{:x}", sha256::Hash::hash(preimage.as_byte_array()));
-        let payment_preimage = format!("{:x}", preimage);
+        let (payment_preimage, payment_hash) = generate_2_hashes("lnurl-pay");
+
         let bolt11 = BOLT11_DUMMY.to_string();
-        *LN_BALANCE_MSAT.lock().unwrap() -= req.amount_msat + fee_msat;
+        *LN_BALANCE_MSAT.lock().unwrap() -= req.amount_msat + LNURL_PAY_FEE_MSAT;
 
         let payment = Payment {
             id: now.to_string(), // Placeholder. ID is probably never used
             payment_type: PaymentType::Sent,
             payment_time: now,
             amount_msat: req.amount_msat,
-            fee_msat,
+            fee_msat: LNURL_PAY_FEE_MSAT,
             status: PaymentStatus::Complete,
             error: None,
             description: None,
@@ -1075,4 +1078,13 @@ pub async fn parse(input: &str) -> Result<InputType> {
             max_withdrawable: 30_000_000,
         },
     })
+}
+
+// The key is just here to make sure that on startup hashes that are created within the same timestamp still differ from each other
+fn generate_2_hashes(key: &str) -> (String, String) {
+    let now = Utc::now().timestamp();
+    let hash1 = sha256::Hash::hash(&[key.as_bytes(), &now.to_be_bytes()].concat());
+    let hash2 = sha256::Hash::hash(hash1.as_byte_array());
+
+    (format!("{hash1:x}"), format!("{hash2:x}"))
 }
