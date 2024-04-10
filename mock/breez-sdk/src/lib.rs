@@ -45,6 +45,8 @@ const SWAP_ADDRESS_DUMMY: &str = "1BitcoinEaterAddressDontSendf59kuE";
 const SWAP_RECEIVED_SATS_ON_CHAIN: u64 = 100_000;
 const TX_ID_DUMMY: &str = "f4184fc596403b9d638783cf57adfe4c75c605f6356fbc91338530e9831e9e16";
 
+const LNURL_PAY_FEE_MSAT: u64 = 8_000;
+
 use breez_sdk_core::error::{
     LnUrlPayError, LnUrlWithdrawError, ReceiveOnchainError, ReceivePaymentError, SdkResult,
     SendOnchainError, SendPaymentError,
@@ -314,19 +316,18 @@ impl BreezServices {
     }
 
     pub async fn lnurl_pay(&self, req: LnUrlPayRequest) -> Result<LnUrlPayResult, LnUrlPayError> {
-        let fee_msat = 8_000;
         let now = Utc::now().timestamp();
         let (payment_preimage, payment_hash) = generate_2_hashes();
 
         let bolt11 = BOLT11_DUMMY.to_string();
-        *LN_BALANCE_MSAT.lock().unwrap() -= req.amount_msat + fee_msat;
+        *LN_BALANCE_MSAT.lock().unwrap() -= req.amount_msat + LNURL_PAY_FEE_MSAT;
 
         let payment = Payment {
             id: now.to_string(), // Placeholder. ID is probably never used
             payment_type: PaymentType::Sent,
             payment_time: now,
             amount_msat: req.amount_msat,
-            fee_msat,
+            fee_msat: LNURL_PAY_FEE_MSAT,
             status: PaymentStatus::Complete,
             error: None,
             description: None,
