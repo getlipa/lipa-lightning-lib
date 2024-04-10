@@ -31,7 +31,7 @@ jobs:
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.72.0
+          toolchain: 1.77.1
           profile: minimal
           override: true
           target: ${{ matrix.target }}
@@ -75,7 +75,7 @@ jobs:
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.72.0
+          toolchain: 1.77.1
           profile: minimal
           override: true
           target: ${{ matrix.target }}
@@ -384,7 +384,7 @@ jobs:
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.72.0
+          toolchain: 1.77.1
           profile: minimal
           override: true
       - name: Install Protoc
