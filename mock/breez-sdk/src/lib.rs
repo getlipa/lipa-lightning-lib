@@ -133,6 +133,8 @@ impl BreezServices {
             }
         }
 
+        let (payment_hash, payment_preimage) = generate_2_hashes();
+
         match &*PAYMENT_OUTCOME.lock().unwrap() {
             PaymentOutcome::Success => {
                 let parsed_invoice = parse_invoice(req.bolt11.as_str())?;
@@ -174,10 +176,10 @@ impl BreezServices {
                     description: None,
                     details: PaymentDetails::Ln {
                         data: LnPaymentDetails {
-                            payment_hash: "".to_string(),
+                            payment_hash,
                             label: "".to_string(),
                             destination_pubkey: "".to_string(),
-                            payment_preimage: "".to_string(),
+                            payment_preimage,
                             keysend: false,
                             bolt11: req.bolt11,
                             open_channel_bolt11: None,
@@ -314,9 +316,8 @@ impl BreezServices {
     pub async fn lnurl_pay(&self, req: LnUrlPayRequest) -> Result<LnUrlPayResult, LnUrlPayError> {
         let fee_msat = 8_000;
         let now = Utc::now().timestamp();
-        let preimage = sha256::Hash::hash(&now.to_be_bytes());
-        let payment_hash = format!("{:x}", sha256::Hash::hash(preimage.as_byte_array()));
-        let payment_preimage = format!("{:x}", preimage);
+        let (payment_preimage, payment_hash) = generate_2_hashes();
+
         let bolt11 = BOLT11_DUMMY.to_string();
         *LN_BALANCE_MSAT.lock().unwrap() -= req.amount_msat + fee_msat;
 
@@ -1075,4 +1076,12 @@ pub async fn parse(input: &str) -> Result<InputType> {
             max_withdrawable: 30_000_000,
         },
     })
+}
+
+fn generate_2_hashes() -> (String, String) {
+    let now = Utc::now().timestamp();
+    let hash1 = sha256::Hash::hash(&now.to_be_bytes());
+    let hash2 = sha256::Hash::hash(hash1.as_byte_array());
+
+    (format!("{hash1:x}"), format!("{hash2:x}"))
 }
