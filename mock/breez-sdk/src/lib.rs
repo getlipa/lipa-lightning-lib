@@ -136,7 +136,7 @@ impl BreezServices {
             }
         }
 
-        let (payment_hash, payment_preimage) = generate_2_hashes("sent-payment");
+        let (payment_hash, payment_preimage) = generate_2_hashes();
 
         match &*PAYMENT_OUTCOME.lock().unwrap() {
             PaymentOutcome::Success => {
@@ -318,7 +318,7 @@ impl BreezServices {
 
     pub async fn lnurl_pay(&self, req: LnUrlPayRequest) -> Result<LnUrlPayResult, LnUrlPayError> {
         let now = Utc::now().timestamp();
-        let (payment_preimage, payment_hash) = generate_2_hashes("lnurl-pay");
+        let (payment_preimage, payment_hash) = generate_2_hashes();
 
         let bolt11 = BOLT11_DUMMY.to_string();
         *LN_BALANCE_MSAT.lock().unwrap() -= req.amount_msat + LNURL_PAY_FEE_MSAT;
@@ -1080,11 +1080,15 @@ pub async fn parse(input: &str) -> Result<InputType> {
     })
 }
 
-// The key is just here to make sure that on startup hashes that are created within the same timestamp still differ from each other
-fn generate_2_hashes(key: &str) -> (String, String) {
-    let now = Utc::now().timestamp();
-    let hash1 = sha256::Hash::hash(&[key.as_bytes(), &now.to_be_bytes()].concat());
+fn generate_2_hashes() -> (String, String) {
+    let hash1 = sha256::Hash::hash(&generate_32_random_bytes());
     let hash2 = sha256::Hash::hash(hash1.as_byte_array());
 
     (format!("{hash1:x}"), format!("{hash2:x}"))
+}
+
+fn generate_32_random_bytes() -> Vec<u8> {
+    let mut bytes = vec![0; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    bytes
 }
