@@ -10,10 +10,12 @@ use crate::{
     enable_backtrace, sanitize_input, start_sdk, Config, RuntimeErrorCode, UserPreferences,
     DB_FILENAME, LOGS_DIR,
 };
-use breez_sdk_core::{BreezEvent, BreezServices, EventListener, PaymentStatus};
+use breez_sdk_core::{
+    BreezEvent, BreezServices, EventListener, InvoicePaidDetails, Payment, PaymentStatus,
+};
 use log::{debug, error};
 use parrot::AnalyticsClient;
-use perro::{permanent_failure, MapToError};
+use perro::{invalid_input, permanent_failure, MapToError};
 use serde::Deserialize;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
@@ -33,6 +35,16 @@ pub enum Notification {
     /// [`LightningNode::get_incoming_payment`](crate::LightningNode::get_incoming_payment) or
     /// [`LightningNode::get_outgoing_payment`](crate::LightningNode::get_outgoing_payment).
     Bolt11PaymentReceived {
+        amount_sat: u64,
+        payment_hash: String,
+    },
+    /// The notification that an onchain receive has completed successfully.
+    /// The `amount_sat` of the payment is provided.
+    ///
+    /// The `payment_hash` can be used to directly open the associated
+    /// [`Activity`](crate::Activity) using
+    /// [`LightningNode::get_activity`](crate::LightningNode::get_activity).
+    OnchainPaymentReceived {
         amount_sat: u64,
         payment_hash: String,
     },
@@ -88,6 +100,9 @@ pub fn handle_notification(
         Payload::PaymentReceived { payment_hash } => {
             handle_payment_received_notification(rt, sdk, rx, payment_hash)
         }
+        Payload::AddressTxsConfirmed { address } => {
+            handle_address_txs_confirmed_notification(rt, sdk, rx, address)
+        }
     }
 }
 
@@ -128,25 +143,106 @@ fn handle_payment_received_notification(
     payment_hash: String,
 ) -> Result<RecommendedAction> {
     // Check if the payment was already received
+    if let Some(payment) = get_confirmed_payment(&rt, &sdk, &payment_hash)? {
+        return Ok(RecommendedAction::ShowNotification {
+            notification: Notification::Bolt11PaymentReceived {
+                amount_sat: payment.amount_msat / 1000,
+                payment_hash,
+            },
+        });
+    }
+
+    // Wait for payment to be received
+    if let Some(details) = wait_for_payment_with_timeout(event_receiver, &payment_hash)? {
+        return Ok(RecommendedAction::ShowNotification {
+            notification: Notification::Bolt11PaymentReceived {
+                amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
+                payment_hash,
+            },
+        });
+    }
+
+    Ok(RecommendedAction::None)
+}
+
+fn handle_address_txs_confirmed_notification(
+    rt: AsyncRuntime,
+    sdk: Arc<BreezServices>,
+    event_receiver: Receiver<BreezEvent>,
+    address: String,
+) -> Result<RecommendedAction> {
+    let in_progress_swap = match rt
+        .handle()
+        .block_on(sdk.in_progress_swap())
+        .map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to get in-progress swap",
+        )? {
+        None => {
+            invalid_input!("Received an address_txs_confirmed event when no swap is in progress");
+        }
+        Some(s) => s,
+    };
+
+    if in_progress_swap.bitcoin_address != address {
+        invalid_input!("Received an address_txs_confirmed event for an address different from the current in-progress swap address");
+    }
+
+    rt.handle()
+        .block_on(sdk.redeem_swap(address.clone()))
+        .map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to start a swap redeem",
+        )?;
+
+    // Check if the payment was already received
+    let payment_hash = hex::encode(in_progress_swap.payment_hash);
+    if let Some(payment) = get_confirmed_payment(&rt, &sdk, &payment_hash)? {
+        return Ok(RecommendedAction::ShowNotification {
+            notification: Notification::OnchainPaymentReceived {
+                amount_sat: payment.amount_msat / 1000,
+                payment_hash,
+            },
+        });
+    }
+
+    // Wait for payment to arrive
+    if let Some(details) = wait_for_payment_with_timeout(event_receiver, &payment_hash)? {
+        return Ok(RecommendedAction::ShowNotification {
+            notification: Notification::OnchainPaymentReceived {
+                amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
+                payment_hash,
+            },
+        });
+    }
+
+    Ok(RecommendedAction::None)
+}
+
+fn get_confirmed_payment(
+    rt: &AsyncRuntime,
+    sdk: &Arc<BreezServices>,
+    payment_hash: &str,
+) -> Result<Option<Payment>> {
     let payment = rt
         .handle()
-        .block_on(sdk.payment_by_hash(payment_hash.clone()))
+        .block_on(sdk.payment_by_hash(payment_hash.to_string()))
         .map_to_runtime_error(
             RuntimeErrorCode::NodeUnavailable,
             "Failed to get payment by hash",
         )?;
     if let Some(payment) = payment {
         if payment.status == PaymentStatus::Complete {
-            return Ok(RecommendedAction::ShowNotification {
-                notification: Notification::Bolt11PaymentReceived {
-                    amount_sat: payment.amount_msat / 1000,
-                    payment_hash,
-                },
-            });
+            return Ok(Some(payment));
         }
     }
+    Ok(None)
+}
 
-    // Wait for payment to be received
+fn wait_for_payment_with_timeout(
+    event_receiver: Receiver<BreezEvent>,
+    payment_hash: &str,
+) -> Result<Option<InvoicePaidDetails>> {
     let start = Instant::now();
     while Instant::now().duration_since(start) < TIMEOUT {
         let event = match event_receiver.recv_timeout(Duration::from_secs(1)) {
@@ -159,17 +255,11 @@ fn handle_payment_received_notification(
 
         if let BreezEvent::InvoicePaid { details } = event {
             if details.payment_hash == payment_hash {
-                return Ok(RecommendedAction::ShowNotification {
-                    notification: Notification::Bolt11PaymentReceived {
-                        amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
-                        payment_hash,
-                    },
-                });
+                return Ok(Some(details));
             }
         }
     }
-
-    Ok(RecommendedAction::None)
+    Ok(None)
 }
 
 #[derive(Deserialize)]
@@ -177,6 +267,7 @@ fn handle_payment_received_notification(
 #[serde(rename_all = "snake_case")]
 enum Payload {
     PaymentReceived { payment_hash: String },
+    AddressTxsConfirmed { address: String },
 }
 
 struct NotificationHandlerEventListener {
@@ -211,6 +302,13 @@ mod tests {
                                                  }
                                                 }"#;
 
+    const ADDRESS_TXS_CONFIRMED_PAYLOAD_JSON: &str = r#"{
+                                                 "template": "address_txs_confirmed",
+                                                 "data": {
+                                                  "address": "address"
+                                                 }
+                                                }"#;
+
     #[test]
     fn test_payload_deserialize() {
         let payment_received_payload: Payload =
@@ -218,8 +316,17 @@ mod tests {
         assert!(matches!(
             payment_received_payload,
             Payload::PaymentReceived {
-                payment_hash: hash
-            } if hash == "hash"
+                payment_hash
+            } if payment_hash == "hash"
+        ));
+
+        let address_txs_confirmed_payload: Payload =
+            serde_json::from_str(ADDRESS_TXS_CONFIRMED_PAYLOAD_JSON).unwrap();
+        assert!(matches!(
+            address_txs_confirmed_payload,
+            Payload::AddressTxsConfirmed {
+                address
+            } if address == "address"
         ));
     }
 }
