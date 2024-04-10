@@ -17,7 +17,6 @@ pub(crate) struct TaskPeriods {
     pub update_exchange_rates: Option<Duration>,
     pub sync_breez: Option<Duration>,
     pub update_lsp_fee: Option<Duration>,
-    pub redeem_swaps: Option<Duration>,
     pub backup: Option<Duration>,
     pub health_status_check: Option<Duration>,
 }
@@ -40,7 +39,6 @@ const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_exchange_rates: Some(Duration::from_secs(10 * 60)),
     sync_breez: Some(Duration::from_secs(10 * 60)),
     update_lsp_fee: Some(Duration::from_secs(10 * 60)),
-    redeem_swaps: Some(Duration::from_secs(10 * 60)),
     backup: Some(Duration::from_secs(30)),
     health_status_check: Some(Duration::from_secs(70)),
 };
@@ -49,7 +47,6 @@ const BACKGROUND_PERIODS: TaskPeriods = TaskPeriods {
     update_exchange_rates: None,
     sync_breez: Some(Duration::from_secs(30 * 60)),
     update_lsp_fee: None,
-    redeem_swaps: None,
     backup: None,
     health_status_check: None,
 };
@@ -120,11 +117,6 @@ impl TaskManager {
         // Update lsp fee.
         if let Some(period) = periods.update_lsp_fee {
             self.task_handles.push(self.start_lsp_fee_update(period));
-        }
-
-        // Redeem swaps.
-        if let Some(period) = periods.redeem_swaps {
-            self.task_handles.push(self.start_redeem_swaps(period));
         }
 
         // Backup local db
@@ -207,25 +199,6 @@ impl TaskManager {
                     }
                     Err(e) => {
                         error!("Failed to update lsp fee: {e}");
-                    }
-                }
-            }
-        })
-    }
-
-    fn start_redeem_swaps(&self, period: Duration) -> RepeatingTaskHandle {
-        let sdk = Arc::clone(&self.sdk);
-        self.runtime_handle.spawn_repeating_task(period, move || {
-            let sdk = Arc::clone(&sdk);
-            async move {
-                debug!("Starting redeem swaps task");
-                match sdk.in_progress_swap().await {
-                    Ok(Some(s)) => {
-                        debug!("A swap is in progress: {s:?}");
-                    }
-                    Ok(None) => {}
-                    Err(e) => {
-                        error!("Failed to call in_progress_swap(): {e}");
                     }
                 }
             }
@@ -322,7 +295,6 @@ fn get_foreground_periods() -> TaskPeriods {
                 update_exchange_rates: Some(period),
                 sync_breez: Some(period),
                 update_lsp_fee: Some(period),
-                redeem_swaps: Some(period),
                 backup: Some(period),
                 health_status_check: Some(period),
             }
