@@ -242,16 +242,18 @@ impl TaskManager {
     }
 
     fn start_health_status_check(&self, period: Duration) -> RepeatingTaskHandle {
-        let sdk = Arc::clone(&self.sdk);
         let status = Arc::clone(&self.breez_health_status);
         let events_callback = Arc::clone(&self.events_callback);
         self.runtime_handle.spawn_repeating_task(period, move || {
-            let sdk = Arc::clone(&sdk);
             let status = Arc::clone(&status);
             let events_callback = Arc::clone(&events_callback);
             async move {
                 debug!("Starting health status check task");
-                let new_status = match sdk.service_health_check().await {
+                let new_status = match BreezServices::service_health_check(
+                    env!("BREEZ_SDK_API_KEY").to_string(),
+                )
+                .await
+                {
                     Ok(status) => {
                         debug!("Breez Health Status: {status:?}");
                         status.status
