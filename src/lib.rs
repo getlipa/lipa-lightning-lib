@@ -651,8 +651,8 @@ impl LightningNode {
                     &self.get_exchange_rate(),
                 )?,
             }),
-            Ok(InputType::BitcoinAddress { .. }) => Err(DecodeDataError::Unsupported {
-                typ: UnsupportedDataType::BitcoinAddress,
+            Ok(InputType::BitcoinAddress { address }) => Ok(DecodedData::OnchainAddress {
+                onchain_address_details: address,
             }),
             Ok(InputType::LnUrlAuth { .. }) => Err(DecodeDataError::Unsupported {
                 typ: UnsupportedDataType::LnUrlAuth,
