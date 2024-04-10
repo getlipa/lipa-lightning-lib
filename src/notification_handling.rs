@@ -245,17 +245,14 @@ fn wait_for_payment_with_timeout(
 ) -> Result<Option<InvoicePaidDetails>> {
     let start = Instant::now();
     while Instant::now().duration_since(start) < TIMEOUT {
-        let event = match event_receiver.recv_timeout(Duration::from_secs(1)) {
-            Ok(e) => e,
+        match event_receiver.recv_timeout(Duration::from_secs(1)) {
+            Ok(BreezEvent::InvoicePaid { details }) if details.payment_hash == payment_hash => {
+                return Ok(Some(details))
+            }
+            Ok(_) => continue,
             Err(RecvTimeoutError::Timeout) => continue,
             Err(RecvTimeoutError::Disconnected) => {
                 permanent_failure!("The SDK stopped running unexpectedly");
-            }
-        };
-
-        if let BreezEvent::InvoicePaid { details } = event {
-            if details.payment_hash == payment_hash {
-                return Ok(Some(details));
             }
         }
     }
