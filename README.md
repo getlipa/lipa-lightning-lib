@@ -71,7 +71,8 @@ make run-node ARGS=dev
 To test background receive:
 
 - start the regular example node, issue an invoice, and shut it down
-- run `make run-notification-handler ARGS=<payment hash of issued invoice>`
+- run `make run-notification-handler`
+- run `payment_received <payment hash of issued invoice> <environment>`
 - do either
     - don't pay the invoice or pay a different invoice → after the timeout of 60 secs, the action `None` should be
       printed

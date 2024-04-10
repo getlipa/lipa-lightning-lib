@@ -86,6 +86,5 @@ run-parser-demo:
 	cargo run --package parser --example demo
 
 .PHONY: run-notification-handler
-run-notification-handler: ARGS =
 run-notification-handler:
-	cargo run --example notification_handler -- $(ARGS)
+	cargo run --example notification_handler

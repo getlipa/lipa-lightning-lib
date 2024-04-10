@@ -1094,6 +1094,26 @@ impl LightningNode {
         }
     }
 
+    /// Get an activity by its payment hash.
+    ///
+    /// Parameters:
+    /// * `hash` - hex representation of payment hash
+    pub fn get_activity(&self, hash: String) -> Result<Activity> {
+        if let Some(breez_payment) = self
+            .rt
+            .handle()
+            .block_on(self.sdk.payment_by_hash(hash))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to get payment by hash",
+            )?
+        {
+            self.activity_from_breez_ln_payment(breez_payment)
+        } else {
+            invalid_input!("No activity with provided hash was found");
+        }
+    }
+
     /// Set a personal note on a specific payment.
     ///
     /// Parameters:
