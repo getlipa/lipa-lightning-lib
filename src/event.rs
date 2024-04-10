@@ -45,6 +45,9 @@ impl EventListener for LipaEventListener {
             BreezEvent::BackupStarted => {}
             BreezEvent::BackupSucceeded => {}
             BreezEvent::BackupFailed { .. } => {}
+            BreezEvent::SwapUpdated { .. } => {
+                // TODO
+            }
         }
     }
 }
@@ -72,5 +75,6 @@ pub(crate) fn report_event_for_analytics(
         BreezEvent::BackupStarted => {}
         BreezEvent::BackupSucceeded => {}
         BreezEvent::BackupFailed { .. } => {}
+        BreezEvent::SwapUpdated { .. } => {}
     }
 }

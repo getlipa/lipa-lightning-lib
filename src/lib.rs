@@ -96,12 +96,13 @@ use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPayment
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
 use breez_sdk_core::{
     parse, parse_invoice, BitcoinAddressData, BreezServices, ClosedChannelPaymentDetails,
-    EventListener, GreenlightCredentials, GreenlightNodeConfig, InputType, ListPaymentsRequest,
-    LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest, LnUrlWithdrawRequestData, Network,
-    NodeConfig, OpenChannelFeeRequest, OpeningFeeParams, PaymentDetails, PaymentStatus,
-    PaymentTypeFilter, PrepareRedeemOnchainFundsRequest, PrepareRefundRequest,
-    ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest, ReportIssueRequest,
-    ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest, SendPaymentRequest,
+    ConnectRequest, EventListener, GreenlightCredentials, GreenlightNodeConfig, InputType,
+    ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
+    LnUrlWithdrawRequestData, Network, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
+    PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRedeemOnchainFundsRequest,
+    PrepareRefundRequest, ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
+    ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest,
+    SendPaymentRequest,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -2020,7 +2021,9 @@ impl LightningNode {
         Ok(self
             .rt
             .handle()
-            .block_on(self.sdk.service_health_check())
+            .block_on(BreezServices::service_health_check(
+                env!("BREEZ_SDK_API_KEY").to_string(),
+            ))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to get health status",
@@ -2048,6 +2051,7 @@ impl LightningNode {
             .handle()
             .block_on(self.sdk.fetch_reverse_swap_fees(ReverseSwapFeesRequest {
                 send_amount_sat: None,
+                claim_tx_feerate: None,
             }))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
@@ -2082,17 +2086,16 @@ impl LightningNode {
             .handle()
             .block_on(self.sdk.fetch_reverse_swap_fees(ReverseSwapFeesRequest {
                 send_amount_sat: Some(amount_sat),
+                claim_tx_feerate: None,
             }))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to fetch reverse swap fees",
             )?;
 
-        let total_fees_sat = reverse_swap_info
-            .total_estimated_fees
-            .ok_or_permanent_failure(
-                "No total reverse swap fee estimation provided when amount was present",
-            )?;
+        let total_fees_sat = reverse_swap_info.total_fees.ok_or_permanent_failure(
+            "No total reverse swap fee estimation provided when amount was present",
+        )?;
         let onchain_fee_sat = reverse_swap_info.fees_claim + reverse_swap_info.fees_lockup;
         let swap_fee_sat =
             ((amount_sat as f64) * reverse_swap_info.fees_percentage / 100_f64) as u64;
@@ -2216,7 +2219,12 @@ pub(crate) async fn start_sdk(
     breez_config.working_dir = config.local_persistence_path.clone();
     breez_config.exemptfee_msat = EXEMPT_FEE.msats;
     breez_config.maxfee_percent = MAX_FEE_PERMYRIAD as f64 / 100_f64;
-    BreezServices::connect(breez_config, config.seed.clone(), event_listener)
+    let connect_request = ConnectRequest {
+        config: breez_config,
+        seed: config.seed.clone(),
+        restore_only: None,
+    };
+    BreezServices::connect(connect_request, event_listener)
         .await
         .map_to_runtime_error(
             RuntimeErrorCode::NodeUnavailable,
