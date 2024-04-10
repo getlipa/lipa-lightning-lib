@@ -87,7 +87,7 @@ lazy_static! {
     static ref PAYMENTS: Mutex<Vec<Payment>> = Mutex::new(Vec::new());
     static ref SWAPS: Mutex<Vec<SwapInfo>> = Mutex::new(Vec::new());
     static ref REDEEM_SWAPS: Mutex<bool> = Mutex::new(true);
-    static ref NODE_PUBKEY: String = generate_2_hashes("node-pubkey").0;
+    static ref NODE_PUBKEY: String = generate_2_hashes().0;
 }
 
 #[derive(Debug)]
@@ -377,9 +377,7 @@ impl BreezServices {
         *LN_BALANCE_MSAT.lock().unwrap() += req.amount_msat;
 
         let now = Utc::now().timestamp();
-        let preimage = sha256::Hash::hash(&now.to_be_bytes());
-        let payment_hash = format!("{:x}", sha256::Hash::hash(preimage.as_byte_array()));
-        let payment_preimage = format!("{:x}", preimage);
+        let (payment_preimage, payment_hash) = generate_2_hashes();
         let bolt11 = "lnbc1pjlq2t3pp5e3ef7wmszlwxhfpx9cfnxx34gglg779fwnwx9mfm69pfapmymt0qdqqcqzzsxqyz5vqsp5x7k3pjq5y8vk473l6767fenletzwjeaqqukpg9tspfq584g8qp4q9qyyssq678xw6gf2ywl5seummdy8pc6xd0jpvzdexd4v4d3zjse9u6jf7239va4e4r4hhauqrymxu7dp790lv98dl0qhrt4yqxwll2ufkp304gqn6798s".to_string();
         let payee_pubkey = NODE_PUBKEY.to_string();
 
@@ -486,11 +484,8 @@ impl BreezServices {
         }
 
         let private_key = SecretKey::from_slice(NODE_PRIVKEY).unwrap();
-        let mut preimage: [u8; 32] = [0; 32];
-        rand::thread_rng().fill_bytes(&mut preimage);
-        let preimage = req.preimage.unwrap_or(preimage.to_vec());
-        let payment_hash = sha256::Hash::hash(&preimage);
-        let preimage = hex::encode(preimage);
+        let (preimage, payment_hash) = generate_2_hashes_raw();
+        let preimage = format!("{:x}", preimage);
         let payment_secret = PaymentSecret([42u8; 32]);
 
         let invoice = InvoiceBuilder::new(Currency::Bitcoin)
@@ -1081,10 +1076,14 @@ pub async fn parse(input: &str) -> Result<InputType> {
 }
 
 fn generate_2_hashes() -> (String, String) {
-    let hash1 = sha256::Hash::hash(&generate_32_random_bytes());
-    let hash2 = sha256::Hash::hash(hash1.as_byte_array());
+    let hashes = generate_2_hashes_raw();
 
-    (format!("{hash1:x}"), format!("{hash2:x}"))
+    (format!("{:x}", hashes.0), format!("{:x}", hashes.1))
+}
+fn generate_2_hashes_raw() -> (sha256::Hash, sha256::Hash) {
+    let hash1 = sha256::Hash::hash(&generate_32_random_bytes());
+
+    (hash1, Hash::hash(hash1.as_byte_array()))
 }
 
 fn generate_32_random_bytes() -> Vec<u8> {
