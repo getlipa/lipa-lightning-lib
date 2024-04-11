@@ -296,3 +296,27 @@ pub(crate) fn map_lnurl_withdraw_error(
         )),
     }
 }
+
+/// A code that specifies the NotificationHandlingError that occurred.
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum NotificationHandlingErrorCode {
+    /// Information about the remote node isn't cached and couldn't be accessed. Could be a network error.
+    NodeUnavailable,
+    /// The specificed in-progress swap couldn't be found.
+    InProgressSwapNotFound,
+}
+
+impl Display for NotificationHandlingErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+pub type NotificationHandlingError = perro::Error<NotificationHandlingErrorCode>;
+pub type NotificationHandlingResult<T> = std::result::Result<T, NotificationHandlingError>;
+
+impl NotificationHandlingErrorCode {
+    pub(crate) fn from_runtime_error(_error: RuntimeErrorCode) -> Self {
+        Self::NodeUnavailable
+    }
+}

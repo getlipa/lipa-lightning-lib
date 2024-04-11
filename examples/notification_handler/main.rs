@@ -3,6 +3,7 @@ mod hinter;
 use crate::hinter::{CommandHint, CommandHinter};
 use anyhow::{anyhow, Result};
 use colored::Colorize;
+use lazy_static::lazy_static;
 use log::Level;
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
@@ -15,6 +16,10 @@ use uniffi_lipalightninglib::{
 };
 
 static BASE_DIR: &str = ".3l_node";
+
+lazy_static! {
+    static ref ENVIRONMENT: String = env::args().nth(1).unwrap_or("local".to_string());
+}
 
 fn main() {
     let prompt = "3L Notification Handler ϟ ".bold().blue().to_string();
@@ -63,7 +68,7 @@ fn setup_editor() -> Editor<CommandHinter, DefaultHistory> {
 
     let mut hints = HashSet::new();
     hints.insert(CommandHint::new(
-        "payment_received <hash> [environment]",
+        "payment_received <hash>",
         "payment_received ",
     ));
     hints.insert(CommandHint::new(
@@ -94,10 +99,10 @@ fn map_environment_code(code: &str) -> EnvironmentCode {
     }
 }
 
-fn get_config(environment: &str) -> Config {
-    let base_dir = format!("{BASE_DIR}_{environment}");
+fn get_config() -> Config {
+    let base_dir = format!("{BASE_DIR}_{}", ENVIRONMENT.as_str());
 
-    let environment = map_environment_code(environment);
+    let environment = map_environment_code(ENVIRONMENT.as_str());
 
     let seed = read_seed_from_env();
 
@@ -115,22 +120,21 @@ fn get_config(environment: &str) -> Config {
 }
 
 fn help() {
-    println!("  n | nodeinfo");
-    println!("  payment_received <hash> [environment]");
-    println!("  address_txs_confirmed <address> [environment]");
+    println!("  h | help");
+    println!("  payment_received <hash>");
+    println!("  address_txs_confirmed <address>");
     println!("  stop");
 }
 
 fn start_payment_received(words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let hash = words.next().ok_or(anyhow!("Payment hash is required"))?;
-    let environment = words.next().unwrap_or("local");
 
     println!("Starting a handle_notification(payment_received) test run.");
-    println!("Environment: {environment}");
+    println!("Environment: {}", ENVIRONMENT.as_str());
     println!("Payment hash we are looking for: {hash}");
     println!();
 
-    let config = get_config(environment);
+    let config = get_config();
 
     let notification_payload = format!(
         "{{
@@ -157,7 +161,7 @@ fn start_address_txs_confirmed(words: &mut dyn Iterator<Item = &str>) -> Result<
     println!("Swap address we are interested in: {address}");
     println!();
 
-    let config = get_config(environment);
+    let config = get_config();
 
     let notification_payload = format!(
         "{{

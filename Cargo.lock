@@ -2144,6 +2144,7 @@ dependencies = [
  "hex",
  "honey-badger",
  "iban_validate",
+ "lazy_static",
  "log",
  "num_enum",
  "parrot",

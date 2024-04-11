@@ -62,8 +62,8 @@ use crate::errors::{
 };
 pub use crate::errors::{
     DecodeDataError, Error as LnError, LnUrlPayError, LnUrlPayErrorCode, LnUrlPayResult,
-    MnemonicError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode, SimpleError,
-    UnsupportedDataType,
+    MnemonicError, NotificationHandlingError, NotificationHandlingErrorCode, PayError,
+    PayErrorCode, PayResult, Result, RuntimeErrorCode, SimpleError, UnsupportedDataType,
 };
 use crate::event::LipaEventListener;
 pub use crate::exchange_rate_provider::ExchangeRate;
@@ -1099,7 +1099,7 @@ impl LightningNode {
     /// Parameters:
     /// * `hash` - hex representation of payment hash
     pub fn get_activity(&self, hash: String) -> Result<Activity> {
-        if let Some(breez_payment) = self
+        let payment = self
             .rt
             .handle()
             .block_on(self.sdk.payment_by_hash(hash))
@@ -1107,11 +1107,9 @@ impl LightningNode {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to get payment by hash",
             )?
-        {
-            self.activity_from_breez_ln_payment(breez_payment)
-        } else {
-            invalid_input!("No activity with provided hash was found");
-        }
+            .ok_or_invalid_input("No activity with provided hash was found")?;
+
+        self.activity_from_breez_ln_payment(payment)
     }
 
     /// Set a personal note on a specific payment.

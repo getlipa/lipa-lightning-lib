@@ -615,7 +615,7 @@ namespace lipalightninglib {
     [Throws=ParseError]
     void parse_lightning_address([ByRef] string address);
 
-    [Throws=LnError]
+    [Throws=NotificationHandlingError]
     RecommendedAction handle_notification(Config config, string notification_payload);
 };
 
@@ -634,7 +634,7 @@ interface RecommendedAction {
 [Enum]
 interface Notification {
     Bolt11PaymentReceived(u64 amount_sat, string payment_hash);
-    OnchainPaymentReceived(u64 amount_sat, string payment_hash);
+    OnchainPaymentSwappedIn(u64 amount_sat, string payment_hash);
 };
 
 //
@@ -737,4 +737,16 @@ interface SwapError {
     Generic(string err);
     ServiceConnectivity(string err);
     SwapInProgress(string err);
+};
+
+[Error]
+interface NotificationHandlingError {
+    InvalidInput(string msg);
+    RuntimeError(NotificationHandlingErrorCode code, string msg);
+    PermanentFailure(string msg);
+};
+
+enum NotificationHandlingErrorCode {
+    "NodeUnavailable",
+    "InProgressSwapNotFound",
 };
