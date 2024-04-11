@@ -9,11 +9,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-const NODE_PRIVKEY: &[u8] = &[
-    0xe1, 0x26, 0xf6, 0x8f, 0x7e, 0xaf, 0xcc, 0x8b, 0x74, 0xf5, 0x4d, 0x26, 0x9f, 0xe2, 0x06, 0xbe,
-    0x71, 0x50, 0x00, 0xf9, 0x4d, 0xac, 0x06, 0x7d, 0x1c, 0x04, 0xa8, 0xca, 0x3b, 0x2d, 0xb7, 0x34,
-];
-
 const MAX_RECEIVABLE_MSAT: u64 = 1_000_000_000;
 
 const SAMPLE_PAYMENT_SECRET: &str =
@@ -87,7 +82,9 @@ lazy_static! {
     static ref PAYMENTS: Mutex<Vec<Payment>> = Mutex::new(Vec::new());
     static ref SWAPS: Mutex<Vec<SwapInfo>> = Mutex::new(Vec::new());
     static ref REDEEM_SWAPS: Mutex<bool> = Mutex::new(true);
-    static ref NODE_PUBKEY: String = generate_2_hashes("node-pubkey").0;
+    static ref NODE_PRIVKEY: SecretKey =
+        SecretKey::from_slice(&generate_32_random_bytes()).unwrap();
+    static ref NODE_PUBKEY: String = NODE_PRIVKEY.public_key(&Secp256k1::new()).to_string();
 }
 
 #[derive(Debug)]
@@ -136,7 +133,7 @@ impl BreezServices {
             }
         }
 
-        let (payment_hash, payment_preimage) = generate_2_hashes("sent-payment");
+        let (payment_hash, payment_preimage) = generate_2_hashes();
 
         match &*PAYMENT_OUTCOME.lock().unwrap() {
             PaymentOutcome::Success => {
@@ -318,7 +315,7 @@ impl BreezServices {
 
     pub async fn lnurl_pay(&self, req: LnUrlPayRequest) -> Result<LnUrlPayResult, LnUrlPayError> {
         let now = Utc::now().timestamp();
-        let (payment_preimage, payment_hash) = generate_2_hashes("lnurl-pay");
+        let (payment_preimage, payment_hash) = generate_2_hashes();
 
         let bolt11 = BOLT11_DUMMY.to_string();
         *LN_BALANCE_MSAT.lock().unwrap() -= req.amount_msat + LNURL_PAY_FEE_MSAT;
@@ -377,11 +374,8 @@ impl BreezServices {
         *LN_BALANCE_MSAT.lock().unwrap() += req.amount_msat;
 
         let now = Utc::now().timestamp();
-        let preimage = sha256::Hash::hash(&now.to_be_bytes());
-        let payment_hash = format!("{:x}", sha256::Hash::hash(preimage.as_byte_array()));
-        let payment_preimage = format!("{:x}", preimage);
+        let (payment_preimage, payment_hash) = generate_2_hashes();
         let bolt11 = "lnbc1pjlq2t3pp5e3ef7wmszlwxhfpx9cfnxx34gglg779fwnwx9mfm69pfapmymt0qdqqcqzzsxqyz5vqsp5x7k3pjq5y8vk473l6767fenletzwjeaqqukpg9tspfq584g8qp4q9qyyssq678xw6gf2ywl5seummdy8pc6xd0jpvzdexd4v4d3zjse9u6jf7239va4e4r4hhauqrymxu7dp790lv98dl0qhrt4yqxwll2ufkp304gqn6798s".to_string();
-        let payee_pubkey = NODE_PUBKEY.to_string();
 
         let payment = Payment {
             id: now.to_string(), // Placeholder. ID is probably never used
@@ -396,7 +390,7 @@ impl BreezServices {
                 data: LnPaymentDetails {
                     payment_hash: payment_hash.clone(),
                     label: "".to_string(),
-                    destination_pubkey: payee_pubkey.clone(),
+                    destination_pubkey: NODE_PUBKEY.clone(),
                     payment_preimage,
                     keysend: false,
                     bolt11: bolt11.clone(),
@@ -431,7 +425,7 @@ impl BreezServices {
                 invoice: LNInvoice {
                     bolt11,
                     network: Network::Bitcoin,
-                    payee_pubkey,
+                    payee_pubkey: NODE_PUBKEY.clone(),
                     payment_hash,
                     description: None,
                     description_hash: None,
@@ -485,12 +479,8 @@ impl BreezServices {
             _ => {}
         }
 
-        let private_key = SecretKey::from_slice(NODE_PRIVKEY).unwrap();
-        let mut preimage: [u8; 32] = [0; 32];
-        rand::thread_rng().fill_bytes(&mut preimage);
-        let preimage = req.preimage.unwrap_or(preimage.to_vec());
-        let payment_hash = sha256::Hash::hash(&preimage);
-        let preimage = hex::encode(preimage);
+        let (preimage, payment_hash) = generate_2_hashes_raw();
+        let preimage = format!("{:x}", preimage);
         let payment_secret = PaymentSecret([42u8; 32]);
 
         let invoice = InvoiceBuilder::new(Currency::Bitcoin)
@@ -500,7 +490,7 @@ impl BreezServices {
             .payment_secret(payment_secret)
             .current_timestamp()
             .min_final_cltv_expiry_delta(144)
-            .build_signed(|hash| Secp256k1::new().sign_ecdsa_recoverable(hash, &private_key))
+            .build_signed(|hash| Secp256k1::new().sign_ecdsa_recoverable(hash, &NODE_PRIVKEY))
             .unwrap();
 
         let description = Option::from(req.description);
@@ -1080,11 +1070,19 @@ pub async fn parse(input: &str) -> Result<InputType> {
     })
 }
 
-// The key is just here to make sure that on startup hashes that are created within the same timestamp still differ from each other
-fn generate_2_hashes(key: &str) -> (String, String) {
-    let now = Utc::now().timestamp();
-    let hash1 = sha256::Hash::hash(&[key.as_bytes(), &now.to_be_bytes()].concat());
-    let hash2 = sha256::Hash::hash(hash1.as_byte_array());
+fn generate_2_hashes() -> (String, String) {
+    let hashes = generate_2_hashes_raw();
 
-    (format!("{hash1:x}"), format!("{hash2:x}"))
+    (format!("{:x}", hashes.0), format!("{:x}", hashes.1))
+}
+fn generate_2_hashes_raw() -> (sha256::Hash, sha256::Hash) {
+    let hash1 = sha256::Hash::hash(&generate_32_random_bytes());
+
+    (hash1, Hash::hash(hash1.as_byte_array()))
+}
+
+fn generate_32_random_bytes() -> Vec<u8> {
+    let mut bytes = vec![0; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    bytes
 }
