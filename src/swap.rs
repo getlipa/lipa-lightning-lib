@@ -43,7 +43,7 @@ pub struct ResolveFailedSwapInfo {
     pub onchain_fee: Amount,
     /// The address to which recovered funds will be sent.
     pub to_address: String,
-    /// The onchain fee rate that will be applied. This fee rate results in the `onchain_fee`.
+    /// The on-chain fee rate that will be applied. This fee rate results in the `onchain_fee`.
     pub onchain_fee_rate: u32,
 }
 

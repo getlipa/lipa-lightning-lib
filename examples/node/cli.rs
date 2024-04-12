@@ -1,7 +1,7 @@
 use crate::hinter::{CommandHint, CommandHinter};
 use crate::overview::overview;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use breez_sdk_core::BitcoinAddressData;
 use chrono::offset::FixedOffset;
 use chrono::{DateTime, Local, Utc};
@@ -232,8 +232,8 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     match sweep(node, address.clone()) {
                         Ok(txid) => {
                             println!();
-                            println!("Transaction Id: {}", txid);
-                            println!("Payout address: {}", address)
+                            println!("Transaction Id: {txid}");
+                            println!("Payout address: {address}")
                         }
                         Err(message) => println!("{}", format!("{message:#}").red()),
                     }
@@ -521,7 +521,7 @@ fn node_info(node: &LightningNode) {
     let node_info = match node.get_node_info() {
         Ok(n) => n,
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("{e}");
             return;
         }
     };
@@ -794,7 +794,7 @@ fn get_invoice_affordability(
         .get_invoice_affordability(amount_sat)
         .context("Couldn't get invoice affordability")?;
 
-    println!("{:?}", invoice_affordability);
+    println!("{invoice_affordability:?}");
 
     Ok(())
 }
@@ -802,9 +802,9 @@ fn get_invoice_affordability(
 fn pay_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let invoice = words.next().ok_or(anyhow!("Invoice is required"))?;
 
-    if words.next().is_some() {
-        bail!("To many arguments. Specifying an amount is only allowed for open invoices. To pay an open invoice use 'payopeninvoice'");
-    }
+    ensure!(words.next().is_none(),
+        "To many arguments. Specifying an amount is only allowed for open invoices. To pay an open invoice use 'payopeninvoice'"
+    );
 
     let result = node.decode_data(invoice.to_string())?;
     if let DecodedData::Bolt11Invoice { invoice_details } = result {
@@ -1156,7 +1156,7 @@ fn print_activity(activity: Activity) -> Result<()> {
             if let Some(incoming_payment_info) = incoming_payment_info {
                 print_incoming_payment(incoming_payment_info)?;
             }
-            println!("      Swap:            {:?}", swap_info);
+            println!("      Swap:            {swap_info:?}");
             Ok(())
         }
         Activity::ChannelClose { channel_close_info } => print_channel_close(channel_close_info),
@@ -1428,7 +1428,7 @@ fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
     let txid =
         node.swap_onchain_to_lightning(resolving_fees.sat_per_vbyte, swap_fees.lsp_fee_params)?;
 
-    println!("Sweeping transaction: {}", txid);
+    println!("Sweeping transaction: {txid}");
 
     Ok(())
 }
