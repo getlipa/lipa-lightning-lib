@@ -73,13 +73,13 @@ fn test_decoding() {
         })
     ));
 
-    let lightning_address = "fiatjaf@zbd.gg".to_string();
+    let lightning_address = "danielgranhao@walletofsatoshi.com".to_string();
     let data = node.decode_data(lightning_address).unwrap();
     assert!(matches!(data, DecodedData::LnUrlPay { .. }));
     if let DecodedData::LnUrlPay { lnurl_pay_details } = data {
         assert_eq!(
             lnurl_pay_details.request_data.ln_address,
-            Some("fiatjaf@zbd.gg".to_string())
+            Some("danielgranhao@walletofsatoshi.com".to_string())
         );
     }
 

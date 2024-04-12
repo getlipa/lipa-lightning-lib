@@ -328,7 +328,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "payopeninvoice ",
     ));
     hints.insert(CommandHint::new(
-        "paylnurlp <lnurlp> <amount in SAT>",
+        "paylnurlp <lnurlp> <amount in SAT> [comment]",
         "paylnurlp ",
     ));
     hints.insert(CommandHint::new(
@@ -432,7 +432,7 @@ fn help() {
     println!("  getinvoiceaffordability <amount in SAT>");
     println!("  p | payinvoice <invoice>");
     println!("  payopeninvoice <invoice> <amount in SAT>");
-    println!("  paylnurlp <lnurlp> <amount in SAT>");
+    println!("  paylnurlp <lnurlp> <amount in SAT> [comment]");
     println!("  withdrawlnurlw <lnurlw> <amount in SAT>");
     println!();
     println!("  getswapaddress");
@@ -686,6 +686,10 @@ fn print_lnurl_pay_details(lnurl_pay_details: LnUrlPayDetails) {
         "  Max Sendable          {}",
         amount_to_string(&lnurl_pay_details.max_sendable)
     );
+    println!(
+        "  Max Comment Length    {}",
+        lnurl_pay_details.max_comment_length
+    );
     println!("---- Internal LnUrlPayRequestData struct ----");
     println!(
         "  Callback              {}",
@@ -917,6 +921,13 @@ fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Re
         .parse()
         .context("Amount should be a positive integer number")?;
 
+    let comment = words.collect::<Vec<_>>().join(" ");
+    let comment = if comment.is_empty() {
+        None
+    } else {
+        Some(comment)
+    };
+
     let lnurlp_details = match node.decode_data(lnurlp.into()) {
         Ok(DecodedData::LnUrlPay { lnurl_pay_details }) => lnurl_pay_details,
         Ok(DecodedData::LnUrlWithdraw { .. }) => {
@@ -931,7 +942,7 @@ fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Re
         Err(_) => bail!("Invalid lnurlp"),
     };
 
-    let hash = node.pay_lnurlp(lnurlp_details.request_data, amount)?;
+    let hash = node.pay_lnurlp(lnurlp_details.request_data, amount, comment)?;
     println!("Started to pay lnurlp - payment hash is {hash}");
 
     Ok(())
