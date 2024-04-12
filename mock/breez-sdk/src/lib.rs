@@ -476,6 +476,7 @@ impl BreezServices {
             }
             "swaps.redeem" => *REDEEM_SWAPS.lock().unwrap() = true,
             "swaps.miss" => *REDEEM_SWAPS.lock().unwrap() = false,
+            "mimic.pay2addr" => self.simulate_payments(PaymentType::Sent, 10, true),
             _ => {}
         }
 
@@ -1021,6 +1022,70 @@ impl BreezServices {
                 swap.unconfirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
             }
         });
+    }
+
+    fn simulate_payments(
+        &self,
+        payment_type: PaymentType,
+        number_of_payments: u32,
+        ln_address: bool,
+    ) {
+        let now = Utc::now().timestamp();
+
+        let max_amount = LN_BALANCE_MSAT
+            .lock()
+            .unwrap()
+            .div_ceil(number_of_payments.into());
+
+        for _ in 0..number_of_payments {
+            let amount_msat = rand::thread_rng().gen_range(1000..max_amount);
+            let (preimage, payment_hash) = generate_2_hashes();
+
+            let ln_address = if ln_address {
+                let mut rng = rand::thread_rng();
+                let prefix: Vec<u8> = (0..10).map(|_| rng.gen_range(b'a'..=b'z')).collect();
+                Some(format!(
+                    "{}@lipa.swiss",
+                    String::from_utf8(prefix.to_vec()).unwrap()
+                ))
+            } else {
+                None
+            };
+
+            let payment = Payment {
+                id: now.to_string(),
+                payment_type: payment_type.clone(),
+                payment_time: now,
+                amount_msat,
+                fee_msat: 1234,
+                status: PaymentStatus::Complete,
+                error: None,
+                description: None,
+                details: PaymentDetails::Ln {
+                    data: LnPaymentDetails {
+                        payment_hash,
+                        label: "".to_string(),
+                        destination_pubkey: "".to_string(),
+                        payment_preimage: preimage,
+                        keysend: false,
+                        bolt11: BOLT11_DUMMY.to_string(),
+                        open_channel_bolt11: None,
+                        lnurl_success_action: None,
+                        lnurl_pay_domain: None,
+                        ln_address,
+                        lnurl_metadata: None,
+                        lnurl_withdraw_endpoint: None,
+                        swap_info: None,
+                        reverse_swap_info: None,
+                        pending_expiration_block: None,
+                    },
+                },
+                metadata: None,
+            };
+
+            *LN_BALANCE_MSAT.lock().unwrap() -= amount_msat;
+            PAYMENTS.lock().unwrap().push(payment.clone());
+        }
     }
 }
 
