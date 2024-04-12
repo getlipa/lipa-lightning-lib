@@ -71,6 +71,10 @@ impl Activity {
                         ..
                     },
             } => time.time,
+            Activity::Swap {
+                incoming_payment_info: None,
+                swap_info,
+            } => swap_info.created_at.time,
             _ => SystemTime::now(),
         }
     }
@@ -84,6 +88,10 @@ impl Activity {
                 ChannelCloseState::Pending => true,
                 ChannelCloseState::Confirmed => false,
             },
+            Activity::Swap {
+                incoming_payment_info: None,
+                ..
+            } => true,
             _ => false,
         }
     }
