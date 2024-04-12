@@ -962,6 +962,33 @@ impl LightningNode {
             }
         });
 
+        if let Some(in_progress_swap) = self
+            .rt
+            .handle()
+            .block_on(self.sdk.in_progress_swap())
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to get in-progress swap",
+            )?
+        {
+            pending_activities.push(Activity::Swap {
+                incoming_payment_info: None,
+                swap_info: SwapInfo {
+                    bitcoin_address: in_progress_swap.bitcoin_address,
+                    created_at: unix_timestamp_to_system_time(in_progress_swap.created_at as u64)
+                        .with_timezone(self.user_preferences.lock_unwrap().clone().timezone_config),
+                    // Multiple txs can be sent to swap address and they aren't guaranteed to
+                    // confirm all at the same time. Our best guess of the amount that will be
+                    // received once the entire swap confirms is given by confirmed sats added to
+                    // any unconfirmed sats waiting to be confirmed.
+                    paid_amount: (in_progress_swap.unconfirmed_sats
+                        + in_progress_swap.confirmed_sats)
+                        .as_sats()
+                        .to_amount_down(&self.get_exchange_rate()),
+                },
+            })
+        }
+
         pending_activities.sort_by_key(|m| Reverse(m.get_time()));
         completed_activities.sort_by_key(|m| Reverse(m.get_time()));
         completed_activities.truncate(number_of_completed_activities as usize);
@@ -1021,9 +1048,13 @@ impl LightningNode {
                     ..
                 } => Ok(incoming_payment_info),
                 Activity::Swap {
-                    incoming_payment_info,
+                    incoming_payment_info: Some(incoming_payment_info),
                     ..
                 } => Ok(incoming_payment_info),
+                Activity::Swap {
+                    incoming_payment_info: None,
+                    ..
+                } => invalid_input!("Pending swap was found"),
                 Activity::ChannelClose { .. } => invalid_input!("ChannelClose was found"),
             };
         }
@@ -1138,12 +1169,12 @@ impl LightningNode {
                 // TODO: Persist SwapInfo in local db on state change, requires https://github.com/breez/breez-sdk/issues/518
                 created_at: unix_timestamp_to_system_time(s.created_at as u64)
                     .with_timezone(tz_config.clone()),
-                paid_msats: s.paid_msat,
+                paid_amount: s.paid_msat.as_msats().to_amount_down(&exchange_rate),
             };
             let incoming_payment_info =
                 IncomingPaymentInfo::new(breez_payment, &exchange_rate, tz_config, personal_note)?;
             Ok(Activity::Swap {
-                incoming_payment_info,
+                incoming_payment_info: Some(incoming_payment_info),
                 swap_info,
             })
         } else if breez_payment.payment_type == breez_sdk_core::PaymentType::Received {

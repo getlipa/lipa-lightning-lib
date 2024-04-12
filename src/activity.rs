@@ -23,9 +23,12 @@ pub enum Activity {
         incoming_payment_info: IncomingPaymentInfo,
         offer_kind: OfferKind,
     },
-    // On-chain to lightning.
+    /// An On-chain to Lightning swap.
+    ///
+    /// The optional field `incoming_payment_info` will always be filled in for successful swaps
+    /// and missing for pending swaps.
     Swap {
-        incoming_payment_info: IncomingPaymentInfo,
+        incoming_payment_info: Option<IncomingPaymentInfo>,
         swap_info: SwapInfo,
     },
     ChannelClose {
@@ -49,7 +52,7 @@ impl Activity {
             Activity::Swap {
                 incoming_payment_info,
                 ..
-            } => Some(&incoming_payment_info.payment_info),
+            } => incoming_payment_info.as_ref().map(|i| &i.payment_info),
             Activity::ChannelClose { .. } => None,
         }
     }
@@ -68,6 +71,10 @@ impl Activity {
                         ..
                     },
             } => time.time,
+            Activity::Swap {
+                incoming_payment_info: None,
+                swap_info,
+            } => swap_info.created_at.time,
             _ => SystemTime::now(),
         }
     }
@@ -81,6 +88,10 @@ impl Activity {
                 ChannelCloseState::Pending => true,
                 ChannelCloseState::Confirmed => false,
             },
+            Activity::Swap {
+                incoming_payment_info: None,
+                ..
+            } => true,
             _ => false,
         }
     }
