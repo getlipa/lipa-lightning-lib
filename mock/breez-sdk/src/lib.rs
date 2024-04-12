@@ -11,6 +11,8 @@ use std::time::Duration;
 
 const MAX_RECEIVABLE_MSAT: u64 = 1_000_000_000;
 
+const PAYEE_PUBKEY_DUMMY: &str =
+    "020333076e35e398a0c14c8a0211563bbcdce5087cb300342cba09414e9b5f3605";
 const SAMPLE_PAYMENT_SECRET: &str =
     "91f65d26832cb762a96c455d253f3cb4c3005ad9089d2df8612ffdf7a6b7f92f";
 const BOLT11_DUMMY: &str = "lnbc1486290n1pj74h6psp5tmna0gruf44rx0h7xgl2xsmn5xhjnaxktct40pkfg4m9kssytn0spp5qhpx9s8rvmw6jtzkelslve9zfuhpp2w7hn9s6q7xvdnds5jemr2qdpa2pskjepqw3hjq3r0deshgefqw3hjqjzjgcs8vv3qyq5y7unyv4ezqj2y8gszjxqy9ghlcqpjrzjqvutcqr0g2ltxthh82s8l24gy74xe862kelrywc6ktsx2gejgk26szcqygqqy6qqqyqqqqlgqqqq86qqyg9qxpqysgqzjnfufxw375gpqf9cvzd5jxyqqtm56fuw960wyel2ld3he403r7x6uyw59g5sfsj5rclycd09a8p8r2pnyrcanlg27e2a67nh5g248sp7p7s8z";
@@ -300,44 +302,26 @@ impl BreezServices {
     }
 
     pub async fn lnurl_pay(&self, req: LnUrlPayRequest) -> Result<LnUrlPayResult, LnUrlPayError> {
-        let now = Utc::now().timestamp();
         let (payment_preimage, payment_hash) = generate_2_hashes();
 
-        let bolt11 = BOLT11_DUMMY.to_string();
         *LN_BALANCE_MSAT.lock().unwrap() -= req.amount_msat + LNURL_PAY_FEE_MSAT;
 
-        let payment = Payment {
-            id: now.to_string(), // Placeholder. ID is probably never used
+        let payment = create_payment(MockPayment {
             payment_type: PaymentType::Sent,
-            payment_time: now,
             amount_msat: req.amount_msat,
             fee_msat: LNURL_PAY_FEE_MSAT,
-            status: PaymentStatus::Complete,
-            error: None,
             description: None,
-            details: PaymentDetails::Ln {
-                data: LnPaymentDetails {
-                    payment_hash: payment_hash.clone(),
-                    label: "".to_string(),
-                    destination_pubkey:
-                        "020333076e35e398a0c14c8a0211563bbcdce5087cb300342cba09414e9b5f3605"
-                            .to_string(),
-                    payment_preimage,
-                    keysend: false,
-                    bolt11,
-                    open_channel_bolt11: None,
-                    lnurl_success_action: None,
-                    lnurl_pay_domain: Some(req.data.domain.clone()),
-                    ln_address: req.data.ln_address.clone(),
-                    lnurl_metadata: Some(req.data.metadata_str.clone()),
-                    lnurl_withdraw_endpoint: None,
-                    swap_info: None,
-                    reverse_swap_info: None,
-                    pending_expiration_block: None,
-                },
-            },
-            metadata: None,
-        };
+            payment_hash: payment_hash.clone(),
+            payment_preimage,
+            destination_pubkey: PAYEE_PUBKEY_DUMMY.to_string(),
+            bolt11: BOLT11_DUMMY.to_string(),
+            lnurl_pay_domain: Some(req.data.domain.clone()),
+            ln_address: req.data.ln_address.clone(),
+            lnurl_metadata: Some(req.data.metadata_str.clone()),
+            lnurl_withdraw_endpoint: None,
+            swap_info: None,
+            reverse_swap_info: None,
+        });
 
         PAYMENTS.lock().unwrap().push(payment.clone());
 
@@ -359,42 +343,25 @@ impl BreezServices {
     ) -> Result<LnUrlWithdrawResult, LnUrlWithdrawError> {
         *LN_BALANCE_MSAT.lock().unwrap() += req.amount_msat;
 
-        let now = Utc::now().timestamp();
         let (payment_preimage, payment_hash) = generate_2_hashes();
         let bolt11 = "lnbc1pjlq2t3pp5e3ef7wmszlwxhfpx9cfnxx34gglg779fwnwx9mfm69pfapmymt0qdqqcqzzsxqyz5vqsp5x7k3pjq5y8vk473l6767fenletzwjeaqqukpg9tspfq584g8qp4q9qyyssq678xw6gf2ywl5seummdy8pc6xd0jpvzdexd4v4d3zjse9u6jf7239va4e4r4hhauqrymxu7dp790lv98dl0qhrt4yqxwll2ufkp304gqn6798s".to_string();
 
-        let payment = Payment {
-            id: now.to_string(), // Placeholder. ID is probably never used
+        let payment = create_payment(MockPayment {
             payment_type: PaymentType::Received,
-            payment_time: now,
             amount_msat: req.amount_msat,
             fee_msat: 0,
-            status: PaymentStatus::Complete,
-            error: None,
             description: None,
-            details: PaymentDetails::Ln {
-                data: LnPaymentDetails {
-                    payment_hash: payment_hash.clone(),
-                    label: "".to_string(),
-                    destination_pubkey: NODE_PUBKEY.clone(),
-                    payment_preimage,
-                    keysend: false,
-                    bolt11: bolt11.clone(),
-                    open_channel_bolt11: None,
-                    lnurl_success_action: None,
-                    lnurl_pay_domain: None,
-                    ln_address: None,
-                    lnurl_metadata: None,
-                    lnurl_withdraw_endpoint: Some(
-                        "https://lnurl.dummy.com/lnurl-withdraw".to_string(),
-                    ),
-                    swap_info: None,
-                    reverse_swap_info: None,
-                    pending_expiration_block: None,
-                },
-            },
-            metadata: None,
-        };
+            payment_hash: payment_hash.clone(),
+            payment_preimage,
+            destination_pubkey: NODE_PUBKEY.clone(),
+            bolt11: bolt11.clone(),
+            lnurl_pay_domain: None,
+            ln_address: None,
+            lnurl_metadata: None,
+            lnurl_withdraw_endpoint: Some("https://lnurl.dummy.com/lnurl-withdraw".to_string()),
+            swap_info: None,
+            reverse_swap_info: None,
+        });
 
         PAYMENTS.lock().unwrap().push(payment.clone());
 
@@ -484,36 +451,23 @@ impl BreezServices {
 
         if let PaymentOutcome::Success = &*PAYMENT_OUTCOME.lock().unwrap() {
             *LN_BALANCE_MSAT.lock().unwrap() += req.amount_msat - lsp_fee.unwrap_or(0);
-            let payment = Payment {
-                id: Utc::now().timestamp().to_string(), // Placeholder. ID is probably never used
+
+            let payment = create_payment(MockPayment {
                 payment_type: PaymentType::Received,
-                payment_time: Utc::now().timestamp(),
                 amount_msat: req.amount_msat - lsp_fee.unwrap_or(0),
                 fee_msat: lsp_fee.unwrap_or(0),
-                status: PaymentStatus::Complete,
-                error: None,
                 description: description.clone(),
-                details: PaymentDetails::Ln {
-                    data: LnPaymentDetails {
-                        payment_hash: format!("{:x}", payment_hash),
-                        label: "".to_string(),
-                        destination_pubkey: NODE_PUBKEY.to_string(),
-                        payment_preimage: preimage,
-                        keysend: false,
-                        bolt11: invoice.to_string(),
-                        open_channel_bolt11: None,
-                        lnurl_success_action: None,
-                        lnurl_pay_domain: None,
-                        ln_address: None,
-                        lnurl_metadata: None,
-                        lnurl_withdraw_endpoint: None,
-                        swap_info: None,
-                        reverse_swap_info: None,
-                        pending_expiration_block: None,
-                    },
-                },
-                metadata: None,
-            };
+                payment_hash: format!("{:x}", payment_hash),
+                payment_preimage: preimage,
+                destination_pubkey: NODE_PUBKEY.to_string(),
+                bolt11: invoice.to_string(),
+                lnurl_pay_domain: None,
+                ln_address: None,
+                lnurl_metadata: None,
+                lnurl_withdraw_endpoint: None,
+                swap_info: None,
+                reverse_swap_info: None,
+            });
 
             PAYMENTS.lock().unwrap().push(payment.clone());
             self.event_listener.on_event(BreezEvent::InvoicePaid {
@@ -811,36 +765,23 @@ impl BreezServices {
             status: ReverseSwapStatus::Initial,
         };
 
-        let payment = Payment {
-            id: format!("random_id_{}", now),
+        let (payment_hash, payment_preimage) = generate_2_hashes();
+        let payment = create_payment(MockPayment {
             payment_type: PaymentType::Sent,
-            payment_time: now,
             amount_msat,
             fee_msat,
-            status: PaymentStatus::Complete,
-            error: None,
             description: None,
-            details: PaymentDetails::Ln {
-                data: LnPaymentDetails {
-                    payment_hash: "".to_string(),
-                    label: "".to_string(),
-                    destination_pubkey: "".to_string(),
-                    payment_preimage: "".to_string(),
-                    keysend: false,
-                    bolt11: BOLT11_DUMMY.to_string(),
-                    open_channel_bolt11: None,
-                    lnurl_success_action: None,
-                    lnurl_pay_domain: None,
-                    ln_address: None,
-                    lnurl_metadata: None,
-                    lnurl_withdraw_endpoint: None,
-                    swap_info: None,
-                    reverse_swap_info: Some(reverse_swap_info.clone()),
-                    pending_expiration_block: None,
-                },
-            },
-            metadata: None,
-        };
+            payment_hash,
+            payment_preimage,
+            destination_pubkey: PAYEE_PUBKEY_DUMMY.to_string(),
+            bolt11: BOLT11_DUMMY.to_string(),
+            lnurl_pay_domain: None,
+            ln_address: None,
+            lnurl_metadata: None,
+            lnurl_withdraw_endpoint: None,
+            swap_info: None,
+            reverse_swap_info: Some(reverse_swap_info.clone()),
+        });
         PAYMENTS.lock().unwrap().push(payment.clone());
 
         self.event_listener
@@ -954,36 +895,23 @@ impl BreezServices {
         swaps.iter_mut().for_each(|swap| {
             if now - swap.created_at > 40 {
                 if *REDEEM_SWAPS.lock().unwrap() {
-                    let payment = Payment {
-                        id: "".to_string(),
+                    let (payment_hash, payment_preimage) = generate_2_hashes();
+                    let payment = create_payment(MockPayment {
                         payment_type: PaymentType::Received,
-                        payment_time: Utc::now().timestamp(),
                         amount_msat: swap.confirmed_sats * 1_000,
                         fee_msat: 1234,
-                        status: PaymentStatus::Complete,
-                        error: None,
                         description: None,
-                        details: PaymentDetails::Ln {
-                            data: LnPaymentDetails {
-                                payment_hash: "".to_string(),
-                                label: "".to_string(),
-                                destination_pubkey: "".to_string(),
-                                payment_preimage: "".to_string(),
-                                keysend: false,
-                                bolt11: swap.bolt11.clone().unwrap_or(BOLT11_DUMMY.to_string()),
-                                open_channel_bolt11: None,
-                                lnurl_success_action: None,
-                                lnurl_pay_domain: None,
-                                ln_address: None,
-                                lnurl_metadata: None,
-                                lnurl_withdraw_endpoint: None,
-                                swap_info: Some(swap.clone()),
-                                reverse_swap_info: None,
-                                pending_expiration_block: None,
-                            },
-                        },
-                        metadata: None,
-                    };
+                        payment_hash,
+                        payment_preimage,
+                        destination_pubkey: PAYEE_PUBKEY_DUMMY.to_string(),
+                        bolt11: swap.bolt11.clone().unwrap_or(BOLT11_DUMMY.to_string()),
+                        lnurl_pay_domain: None,
+                        ln_address: None,
+                        lnurl_metadata: None,
+                        lnurl_withdraw_endpoint: None,
+                        swap_info: Some(swap.clone()),
+                        reverse_swap_info: None,
+                    });
                     PAYMENTS.lock().unwrap().push(payment.clone());
                     self.event_listener.on_event(BreezEvent::InvoicePaid {
                         details: InvoicePaidDetails {
@@ -1016,8 +944,6 @@ impl BreezServices {
         number_of_payments: u32,
         ln_address: bool,
     ) {
-        let now = Utc::now().timestamp();
-
         let max_amount = LN_BALANCE_MSAT
             .lock()
             .unwrap()
@@ -1038,36 +964,22 @@ impl BreezServices {
                 None
             };
 
-            let payment = Payment {
-                id: now.to_string(),
+            let payment = create_payment(MockPayment {
                 payment_type: payment_type.clone(),
-                payment_time: now,
                 amount_msat,
                 fee_msat: 1234,
-                status: PaymentStatus::Complete,
-                error: None,
                 description: None,
-                details: PaymentDetails::Ln {
-                    data: LnPaymentDetails {
-                        payment_hash,
-                        label: "".to_string(),
-                        destination_pubkey: "".to_string(),
-                        payment_preimage: preimage,
-                        keysend: false,
-                        bolt11: BOLT11_DUMMY.to_string(),
-                        open_channel_bolt11: None,
-                        lnurl_success_action: None,
-                        lnurl_pay_domain: None,
-                        ln_address,
-                        lnurl_metadata: None,
-                        lnurl_withdraw_endpoint: None,
-                        swap_info: None,
-                        reverse_swap_info: None,
-                        pending_expiration_block: None,
-                    },
-                },
-                metadata: None,
-            };
+                payment_hash,
+                payment_preimage: preimage,
+                destination_pubkey: PAYEE_PUBKEY_DUMMY.to_string(),
+                bolt11: BOLT11_DUMMY.to_string(),
+                lnurl_pay_domain: None,
+                ln_address,
+                lnurl_metadata: None,
+                lnurl_withdraw_endpoint: None,
+                swap_info: None,
+                reverse_swap_info: None,
+            });
 
             *LN_BALANCE_MSAT.lock().unwrap() -= amount_msat;
             PAYMENTS.lock().unwrap().push(payment.clone());
