@@ -133,7 +133,7 @@ impl BreezServices {
             }
         }
 
-        let (payment_hash, payment_preimage) = generate_2_hashes();
+        let (_, payment_preimage) = generate_2_hashes();
 
         match &*PAYMENT_OUTCOME.lock().unwrap() {
             PaymentOutcome::Success => {
@@ -176,7 +176,7 @@ impl BreezServices {
                     description: None,
                     details: PaymentDetails::Ln {
                         data: LnPaymentDetails {
-                            payment_hash,
+                            payment_hash: parsed_invoice.payment_hash,
                             label: "".to_string(),
                             destination_pubkey: "".to_string(),
                             payment_preimage,
