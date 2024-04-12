@@ -1142,7 +1142,9 @@ fn print_activity(activity: Activity) -> Result<()> {
             incoming_payment_info,
             swap_info,
         } => {
-            print_incoming_payment(incoming_payment_info)?;
+            if let Some(incoming_payment_info) = incoming_payment_info {
+                print_incoming_payment(incoming_payment_info)?;
+            }
             println!("      Swap:            {:?}", swap_info);
             Ok(())
         }

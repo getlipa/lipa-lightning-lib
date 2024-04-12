@@ -9,7 +9,7 @@ use std::time::SystemTime;
 pub struct SwapInfo {
     pub bitcoin_address: String,
     pub created_at: TzTime,
-    pub paid_msats: u64,
+    pub paid_amount: Amount,
 }
 
 /// Information about a generated swap address

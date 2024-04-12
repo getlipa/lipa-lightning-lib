@@ -96,9 +96,16 @@ fn print_activity(activity: Activity) -> Result<()> {
             ..
         } => print_incoming_payment(incoming_payment_info),
         Activity::Swap {
-            incoming_payment_info,
+            incoming_payment_info: Some(info),
             ..
-        } => print_incoming_payment(incoming_payment_info),
+        } => print_incoming_payment(info),
+        Activity::Swap {
+            incoming_payment_info: None,
+            ..
+        } => {
+            // TODO: implement print of pending swap
+            Ok(())
+        }
         Activity::ChannelClose { channel_close_info } => print_channel_close(channel_close_info),
     }
 }
