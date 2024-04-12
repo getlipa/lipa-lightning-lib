@@ -796,20 +796,31 @@ impl LightningNode {
     /// Parameters:
     /// * `lnurl_pay_request_data` - LNURL-pay request data as obtained from [`LightningNode::decode_data`]
     /// * `amount_sat` - amount to be paid
+    /// * `comment` - optional comment to be sent to payee
     ///
     /// Returns the payment hash of the payment.
     pub fn pay_lnurlp(
         &self,
         lnurl_pay_request_data: LnUrlPayRequestData,
         amount_sat: u64,
+        comment: Option<String>,
     ) -> LnUrlPayResult<String> {
+        if let Some(comment) = comment.as_ref() {
+            if comment.len() > lnurl_pay_request_data.comment_allowed as usize {
+                invalid_input!(
+                    "The provided comment is longer than the allowed {} characters",
+                    lnurl_pay_request_data.comment_allowed
+                );
+            }
+        }
+
         let payment_hash = match self
             .rt
             .handle()
             .block_on(self.sdk.lnurl_pay(LnUrlPayRequest {
                 data: lnurl_pay_request_data,
                 amount_msat: amount_sat.as_sats().msats,
-                comment: None,
+                comment,
             }))
             .map_err(map_lnurl_pay_error)?
         {

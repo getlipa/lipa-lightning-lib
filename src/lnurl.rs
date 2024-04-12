@@ -13,6 +13,7 @@ pub struct LnUrlPayDetails {
     pub long_description: Option<String>,
     pub min_sendable: Amount,
     pub max_sendable: Amount,
+    pub max_comment_length: u16,
     /// An internal struct is not supposed to be inspected, but only passed to [`crate::LightningNode::pay_lnurlp`].
     pub request_data: LnUrlPayRequestData,
 }
@@ -36,6 +37,7 @@ impl LnUrlPayDetails {
                 .max_sendable
                 .as_msats()
                 .to_amount_up(exchange_rate),
+            max_comment_length: request_data.comment_allowed,
             request_data,
         })
     }
