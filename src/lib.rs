@@ -796,7 +796,8 @@ impl LightningNode {
     /// Parameters:
     /// * `lnurl_pay_request_data` - LNURL-pay request data as obtained from [`LightningNode::decode_data`]
     /// * `amount_sat` - amount to be paid
-    /// * `comment` - optional comment to be sent to payee
+    /// * `comment` - optional comment to be sent to payee (`max_comment_length` in
+    /// [`LnUrlPayDetails`] must be respected)
     ///
     /// Returns the payment hash of the payment.
     pub fn pay_lnurlp(
