@@ -165,36 +165,22 @@ impl BreezServices {
                     *LN_BALANCE_MSAT.lock().unwrap() -= amount_msat;
                 }
 
-                let payment = Payment {
-                    id: "".to_string(),
+                let payment = create_payment(MockPayment {
                     payment_type: PaymentType::Sent,
-                    payment_time: Utc::now().timestamp(),
                     amount_msat,
                     fee_msat: 1234,
-                    status: PaymentStatus::Complete,
-                    error: None,
                     description: None,
-                    details: PaymentDetails::Ln {
-                        data: LnPaymentDetails {
-                            payment_hash: parsed_invoice.payment_hash,
-                            label: "".to_string(),
-                            destination_pubkey: "".to_string(),
-                            payment_preimage,
-                            keysend: false,
-                            bolt11: req.bolt11,
-                            open_channel_bolt11: None,
-                            lnurl_success_action: None,
-                            lnurl_pay_domain: None,
-                            ln_address: None,
-                            lnurl_metadata: None,
-                            lnurl_withdraw_endpoint: None,
-                            swap_info: None,
-                            reverse_swap_info: None,
-                            pending_expiration_block: None,
-                        },
-                    },
-                    metadata: None,
-                };
+                    payment_hash: parsed_invoice.payment_hash,
+                    payment_preimage,
+                    destination_pubkey: parsed_invoice.payee_pubkey,
+                    bolt11: req.bolt11,
+                    lnurl_pay_domain: None,
+                    ln_address: None,
+                    lnurl_metadata: None,
+                    lnurl_withdraw_endpoint: None,
+                    swap_info: None,
+                    reverse_swap_info: None,
+                });
 
                 PAYMENTS.lock().unwrap().push(payment.clone());
 
@@ -1144,6 +1130,58 @@ fn generate_2_hashes_raw() -> (sha256::Hash, sha256::Hash) {
     let hash1 = sha256::Hash::hash(&generate_32_random_bytes());
 
     (hash1, Hash::hash(hash1.as_byte_array()))
+}
+
+struct MockPayment {
+    payment_type: PaymentType,
+    amount_msat: u64,
+    fee_msat: u64,
+    description: Option<String>,
+    payment_hash: String,
+    payment_preimage: String,
+    destination_pubkey: String,
+    bolt11: String,
+    lnurl_pay_domain: Option<String>,
+    ln_address: Option<String>,
+    lnurl_metadata: Option<String>,
+    lnurl_withdraw_endpoint: Option<String>,
+    swap_info: Option<SwapInfo>,
+    reverse_swap_info: Option<ReverseSwapInfo>,
+}
+
+fn create_payment(p: MockPayment) -> Payment {
+    let now = Utc::now().timestamp();
+
+    Payment {
+        id: now.to_string(), // Placeholder. ID is probably never used
+        payment_type: p.payment_type,
+        payment_time: now,
+        amount_msat: p.amount_msat,
+        fee_msat: p.fee_msat,
+        status: PaymentStatus::Complete,
+        error: None,
+        description: p.description,
+        details: PaymentDetails::Ln {
+            data: LnPaymentDetails {
+                payment_hash: p.payment_hash,
+                label: "".to_string(),
+                destination_pubkey: p.destination_pubkey,
+                payment_preimage: p.payment_preimage,
+                keysend: false,
+                bolt11: p.bolt11,
+                open_channel_bolt11: None,
+                lnurl_success_action: None,
+                lnurl_pay_domain: p.lnurl_pay_domain,
+                ln_address: p.ln_address,
+                lnurl_metadata: p.lnurl_metadata,
+                lnurl_withdraw_endpoint: p.lnurl_withdraw_endpoint,
+                swap_info: p.swap_info,
+                reverse_swap_info: p.reverse_swap_info,
+                pending_expiration_block: None,
+            },
+        },
+        metadata: None,
+    }
 }
 
 fn generate_32_random_bytes() -> Vec<u8> {
