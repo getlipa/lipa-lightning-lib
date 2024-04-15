@@ -27,7 +27,7 @@ impl BackupManager {
         BackupManager {
             remote_backup_client,
             local_db_path: local_db_path.clone(),
-            local_backup_db_path: format!("{}{BACKUP_DB_FILENAME_SUFFIX}", local_db_path),
+            local_backup_db_path: format!("{local_db_path}{BACKUP_DB_FILENAME_SUFFIX}"),
             encryption_key,
         }
     }

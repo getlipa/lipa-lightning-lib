@@ -806,14 +806,13 @@ impl LightningNode {
         amount_sat: u64,
         comment: Option<String>,
     ) -> LnUrlPayResult<String> {
-        if let Some(comment) = comment.as_ref() {
-            if comment.len() > lnurl_pay_request_data.comment_allowed as usize {
-                invalid_input!(
-                    "The provided comment is longer than the allowed {} characters",
-                    lnurl_pay_request_data.comment_allowed
-                );
-            }
-        }
+        let comment_allowed = lnurl_pay_request_data.comment_allowed;
+        ensure!(
+            !matches!(comment, Some(ref comment) if comment.len() > comment_allowed as usize),
+            invalid_input(format!(
+                "The provided comment is longer than the allowed {comment_allowed} characters"
+            ))
+        );
 
         let payment_hash = match self
             .rt
@@ -1058,15 +1057,12 @@ impl LightningNode {
                 Activity::ChannelClose { .. } => invalid_input!("ChannelClose was found"),
             };
         }
-        let optional_invoice = self
+        let invoice = self
             .data_store
             .lock_unwrap()
-            .retrieve_created_invoice_by_hash(&hash)?;
-        if let Some(invoice) = optional_invoice {
-            self.payment_from_created_invoice(&invoice)
-        } else {
-            invalid_input!("No payment with provided hash was found");
-        }
+            .retrieve_created_invoice_by_hash(&hash)?
+            .ok_or_invalid_input("No payment with provided hash was found")?;
+        self.payment_from_created_invoice(&invoice)
     }
 
     /// Get an outgoing payment by its payment hash.
@@ -1074,7 +1070,7 @@ impl LightningNode {
     /// Parameters:
     /// * `hash` - hex representation of payment hash
     pub fn get_outgoing_payment(&self, hash: String) -> Result<OutgoingPaymentInfo> {
-        if let Some(breez_payment) = self
+        let breez_payment = self
             .rt
             .handle()
             .block_on(self.sdk.payment_by_hash(hash))
@@ -1082,18 +1078,16 @@ impl LightningNode {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to get payment by hash",
             )?
-        {
-            match self.activity_from_breez_ln_payment(breez_payment)? {
-                Activity::IncomingPayment { .. } => invalid_input!("IncomingPayment was found"),
-                Activity::OutgoingPayment {
-                    outgoing_payment_info,
-                } => Ok(outgoing_payment_info),
-                Activity::OfferClaim { .. } => invalid_input!("OfferClaim was found"),
-                Activity::Swap { .. } => invalid_input!("Swap was found"),
-                Activity::ChannelClose { .. } => invalid_input!("ChannelClose was found"),
-            }
-        } else {
-            invalid_input!("No payment with provided hash was found");
+            .ok_or_invalid_input("No payment with provided hash was found")?;
+
+        match self.activity_from_breez_ln_payment(breez_payment)? {
+            Activity::IncomingPayment { .. } => invalid_input!("IncomingPayment was found"),
+            Activity::OutgoingPayment {
+                outgoing_payment_info,
+            } => Ok(outgoing_payment_info),
+            Activity::OfferClaim { .. } => invalid_input!("OfferClaim was found"),
+            Activity::Swap { .. } => invalid_input!("Swap was found"),
+            Activity::ChannelClose { .. } => invalid_input!("ChannelClose was found"),
         }
     }
 
@@ -1499,7 +1493,7 @@ impl LightningNode {
     pub fn calculate_lightning_payout_fee(&self, offer: OfferInfo) -> Result<Amount> {
         ensure!(
             offer.status != OfferStatus::REFUNDED && offer.status != OfferStatus::SETTLED,
-            invalid_input(format!("Provided offer is already completed: {:?}", offer))
+            invalid_input(format!("Provided offer is already completed: {offer:?}"))
         );
 
         let max_withdrawable_msats = match self.rt.handle().block_on(parse(
