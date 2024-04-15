@@ -3,17 +3,19 @@ use crate::async_runtime::AsyncRuntime;
 use crate::auth::build_async_auth;
 use crate::data_store::DataStore;
 use crate::environment::Environment;
-use crate::errors::Result;
+use crate::errors::{NotificationHandlingErrorCode, NotificationHandlingResult};
 use crate::event::report_event_for_analytics;
 use crate::logger::init_logger_once;
 use crate::{
     enable_backtrace, sanitize_input, start_sdk, Config, RuntimeErrorCode, UserPreferences,
     DB_FILENAME, LOGS_DIR,
 };
-use breez_sdk_core::{BreezEvent, BreezServices, EventListener, PaymentStatus};
+use breez_sdk_core::{
+    BreezEvent, BreezServices, EventListener, InvoicePaidDetails, Payment, PaymentStatus,
+};
 use log::{debug, error};
 use parrot::AnalyticsClient;
-use perro::{permanent_failure, MapToError};
+use perro::{ensure, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait};
 use serde::Deserialize;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
@@ -36,6 +38,16 @@ pub enum Notification {
         amount_sat: u64,
         payment_hash: String,
     },
+    /// The notification that an onchain receive has completed successfully.
+    /// The `amount_sat` of the payment is provided.
+    ///
+    /// The `payment_hash` can be used to directly open the associated
+    /// [`Activity`](crate::Activity) using
+    /// [`LightningNode::get_activity`](crate::LightningNode::get_activity).
+    OnchainPaymentSwappedIn {
+        amount_sat: u64,
+        payment_hash: String,
+    },
 }
 
 /// An action to be taken by the consumer of this library upon calling [`handle_notification`].
@@ -53,13 +65,14 @@ pub enum RecommendedAction {
 pub fn handle_notification(
     config: Config,
     notification_payload: String,
-) -> Result<RecommendedAction> {
+) -> NotificationHandlingResult<RecommendedAction> {
     enable_backtrace();
     if let Some(level) = config.file_logging_level {
         init_logger_once(
             level,
             &Path::new(&config.local_persistence_path).join(LOGS_DIR),
-        )?;
+        )
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
     }
     debug!("Started handling a notification.");
 
@@ -71,7 +84,8 @@ pub fn handle_notification(
         }
     };
 
-    let rt = AsyncRuntime::new()?;
+    let rt = AsyncRuntime::new()
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
 
     let (tx, rx) = mpsc::channel();
     let analytics_interceptor = build_analytics_interceptor(&config, &rt)?;
@@ -79,40 +93,54 @@ pub fn handle_notification(
         tx,
         analytics_interceptor,
     ));
-    let environment = Environment::load(config.environment)?;
+    let environment = Environment::load(config.environment)
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
     let sdk = rt
         .handle()
-        .block_on(start_sdk(&config, &environment, event_listener))?;
+        .block_on(start_sdk(&config, &environment, event_listener))
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
 
     match payload {
         Payload::PaymentReceived { payment_hash } => {
             handle_payment_received_notification(rt, sdk, rx, payment_hash)
         }
+        Payload::AddressTxsConfirmed { address } => {
+            handle_address_txs_confirmed_notification(rt, sdk, rx, address)
+        }
     }
 }
 
-fn build_analytics_interceptor(config: &Config, rt: &AsyncRuntime) -> Result<AnalyticsInterceptor> {
+fn build_analytics_interceptor(
+    config: &Config,
+    rt: &AsyncRuntime,
+) -> NotificationHandlingResult<AnalyticsInterceptor> {
     let user_preferences = Arc::new(Mutex::new(UserPreferences {
         fiat_currency: config.fiat_currency.clone(),
         timezone_config: config.timezone_config.clone(),
     }));
 
-    let environment = Environment::load(config.environment)?;
-    let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)?;
-    let async_auth = Arc::new(build_async_auth(
-        &strong_typed_seed,
-        environment.backend_url.clone(),
-    )?);
+    let environment = Environment::load(config.environment)
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
+    let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
+    let async_auth = Arc::new(
+        build_async_auth(&strong_typed_seed, environment.backend_url.clone())
+            .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?,
+    );
 
     let analytics_client = AnalyticsClient::new(
         environment.backend_url.clone(),
-        derive_analytics_keys(&strong_typed_seed)?,
+        derive_analytics_keys(&strong_typed_seed)
+            .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?,
         Arc::clone(&async_auth),
     );
 
     let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
-    let data_store = DataStore::new(&db_path)?;
-    let analytics_config = data_store.retrieve_analytics_config()?;
+    let data_store = DataStore::new(&db_path)
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
+    let analytics_config = data_store
+        .retrieve_analytics_config()
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
     Ok(AnalyticsInterceptor::new(
         analytics_client,
         Arc::clone(&user_preferences),
@@ -126,50 +154,128 @@ fn handle_payment_received_notification(
     sdk: Arc<BreezServices>,
     event_receiver: Receiver<BreezEvent>,
     payment_hash: String,
-) -> Result<RecommendedAction> {
+) -> NotificationHandlingResult<RecommendedAction> {
     // Check if the payment was already received
-    let payment = rt
-        .handle()
-        .block_on(sdk.payment_by_hash(payment_hash.clone()))
-        .map_to_runtime_error(
-            RuntimeErrorCode::NodeUnavailable,
-            "Failed to get payment by hash",
-        )?;
-    if let Some(payment) = payment {
-        if payment.status == PaymentStatus::Complete {
-            return Ok(RecommendedAction::ShowNotification {
-                notification: Notification::Bolt11PaymentReceived {
-                    amount_sat: payment.amount_msat / 1000,
-                    payment_hash,
-                },
-            });
-        }
+    if let Some(payment) = get_confirmed_payment(&rt, &sdk, &payment_hash)? {
+        return Ok(RecommendedAction::ShowNotification {
+            notification: Notification::Bolt11PaymentReceived {
+                amount_sat: payment.amount_msat / 1000,
+                payment_hash,
+            },
+        });
     }
 
     // Wait for payment to be received
+    if let Some(details) = wait_for_payment_with_timeout(event_receiver, &payment_hash)? {
+        return Ok(RecommendedAction::ShowNotification {
+            notification: Notification::Bolt11PaymentReceived {
+                amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
+                payment_hash,
+            },
+        });
+    }
+
+    Ok(RecommendedAction::None)
+}
+
+fn handle_address_txs_confirmed_notification(
+    rt: AsyncRuntime,
+    sdk: Arc<BreezServices>,
+    event_receiver: Receiver<BreezEvent>,
+    address: String,
+) -> NotificationHandlingResult<RecommendedAction> {
+    let in_progress_swap = rt
+        .handle()
+        .block_on(sdk.in_progress_swap())
+        .map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to get in-progress swap",
+        )
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?
+        .ok_or_runtime_error(
+            NotificationHandlingErrorCode::InProgressSwapNotFound,
+            "Received an address_txs_confirmed event when no swap is in progress",
+        )?;
+
+    ensure!(
+        in_progress_swap.bitcoin_address == address,
+        runtime_error(
+            NotificationHandlingErrorCode::InProgressSwapNotFound,
+            "Received an address_txs_confirmed event for an address different from the \
+            current in-progress swap address"
+        )
+    );
+
+    rt.handle()
+        .block_on(sdk.redeem_swap(address.clone()))
+        .map_to_runtime_error(
+            NotificationHandlingErrorCode::NodeUnavailable,
+            "Failed to start a swap redeem",
+        )?;
+
+    // Check if the payment was already received
+    let payment_hash = hex::encode(in_progress_swap.payment_hash);
+    if let Some(payment) = get_confirmed_payment(&rt, &sdk, &payment_hash)? {
+        return Ok(RecommendedAction::ShowNotification {
+            notification: Notification::OnchainPaymentSwappedIn {
+                amount_sat: payment.amount_msat / 1000,
+                payment_hash,
+            },
+        });
+    }
+
+    // Wait for payment to arrive
+    if let Some(details) = wait_for_payment_with_timeout(event_receiver, &payment_hash)? {
+        return Ok(RecommendedAction::ShowNotification {
+            notification: Notification::OnchainPaymentSwappedIn {
+                amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
+                payment_hash,
+            },
+        });
+    }
+
+    Ok(RecommendedAction::None)
+}
+
+fn get_confirmed_payment(
+    rt: &AsyncRuntime,
+    sdk: &Arc<BreezServices>,
+    payment_hash: &str,
+) -> NotificationHandlingResult<Option<Payment>> {
+    let payment = rt
+        .handle()
+        .block_on(sdk.payment_by_hash(payment_hash.to_string()))
+        .map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to get payment by hash",
+        )
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
+    if let Some(payment) = payment {
+        if payment.status == PaymentStatus::Complete {
+            return Ok(Some(payment));
+        }
+    }
+    Ok(None)
+}
+
+fn wait_for_payment_with_timeout(
+    event_receiver: Receiver<BreezEvent>,
+    payment_hash: &str,
+) -> NotificationHandlingResult<Option<InvoicePaidDetails>> {
     let start = Instant::now();
     while Instant::now().duration_since(start) < TIMEOUT {
-        let event = match event_receiver.recv_timeout(Duration::from_secs(1)) {
-            Ok(e) => e,
+        match event_receiver.recv_timeout(Duration::from_secs(1)) {
+            Ok(BreezEvent::InvoicePaid { details }) if details.payment_hash == payment_hash => {
+                return Ok(Some(details))
+            }
+            Ok(_) => continue,
             Err(RecvTimeoutError::Timeout) => continue,
             Err(RecvTimeoutError::Disconnected) => {
                 permanent_failure!("The SDK stopped running unexpectedly");
             }
-        };
-
-        if let BreezEvent::InvoicePaid { details } = event {
-            if details.payment_hash == payment_hash {
-                return Ok(RecommendedAction::ShowNotification {
-                    notification: Notification::Bolt11PaymentReceived {
-                        amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
-                        payment_hash,
-                    },
-                });
-            }
         }
     }
-
-    Ok(RecommendedAction::None)
+    Ok(None)
 }
 
 #[derive(Deserialize)]
@@ -177,6 +283,7 @@ fn handle_payment_received_notification(
 #[serde(rename_all = "snake_case")]
 enum Payload {
     PaymentReceived { payment_hash: String },
+    AddressTxsConfirmed { address: String },
 }
 
 struct NotificationHandlerEventListener {
@@ -211,6 +318,13 @@ mod tests {
                                                  }
                                                 }"#;
 
+    const ADDRESS_TXS_CONFIRMED_PAYLOAD_JSON: &str = r#"{
+                                                 "template": "address_txs_confirmed",
+                                                 "data": {
+                                                  "address": "address"
+                                                 }
+                                                }"#;
+
     #[test]
     fn test_payload_deserialize() {
         let payment_received_payload: Payload =
@@ -218,8 +332,17 @@ mod tests {
         assert!(matches!(
             payment_received_payload,
             Payload::PaymentReceived {
-                payment_hash: hash
-            } if hash == "hash"
+                payment_hash
+            } if payment_hash == "hash"
+        ));
+
+        let address_txs_confirmed_payload: Payload =
+            serde_json::from_str(ADDRESS_TXS_CONFIRMED_PAYLOAD_JSON).unwrap();
+        assert!(matches!(
+            address_txs_confirmed_payload,
+            Payload::AddressTxsConfirmed {
+                address
+            } if address == "address"
         ));
     }
 }

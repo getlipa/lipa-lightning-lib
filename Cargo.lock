@@ -570,8 +570,8 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-core"
-version = "0.3.9"
-source = "git+https://github.com/breez/breez-sdk?tag=0.3.9#704e893e8c0670faf285ec834dd336f8ea61a0ae"
+version = "0.4.0"
+source = "git+https://github.com/breez/breez-sdk?tag=0.4.0-rc1#3434278077be8bca6789c3dcb615b88e993d1d0f"
 dependencies = [
  "aes",
  "anyhow",
@@ -2144,6 +2144,7 @@ dependencies = [
  "hex",
  "honey-badger",
  "iban_validate",
+ "lazy_static",
  "log",
  "num_enum",
  "parrot",
