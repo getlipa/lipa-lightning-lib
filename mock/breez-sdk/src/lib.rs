@@ -1022,6 +1022,21 @@ pub async fn parse(input: &str) -> Result<InputType> {
         });
     }
 
+    if input.contains('@') {
+        let domain = input.split('@').last().unwrap();
+        return Ok(InputType::LnUrlPay {
+            data: LnUrlPayRequestData {
+                callback: format!("https://{domain}/lnurl-pay/callback/e9a0f330f34ac16d297094f568060d267bac6319a7f0d06eaf89d7fc1512f39a"),
+                min_sendable: 1,
+                max_sendable: 1_000_000_000,
+                metadata_str: "[[\"text/plain\",\"dummy\"],[\"text/long-desc\",\"dummy description\"]]".to_string(),
+                comment_allowed: 100,
+                domain: domain.to_string(),
+                ln_address: Some(input.to_string()),
+            },
+        });
+    }
+
     Ok(InputType::LnUrlWithdraw {
         data: LnUrlWithdrawRequestData {
             callback: "https://lnurl.dummy.com/lnurl-withdraw/callback/e9a0f330f34ac16d297094f568060d267bac6319a7f0d06eaf89d7fc1512f39a".to_string(),
