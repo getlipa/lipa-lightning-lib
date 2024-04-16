@@ -973,12 +973,14 @@ impl LightningNode {
                 "Failed to get in-progress swap",
             )?
         {
+            let created_at = unix_timestamp_to_system_time(in_progress_swap.created_at as u64)
+                .with_timezone(self.user_preferences.lock_unwrap().clone().timezone_config);
+
             pending_activities.push(Activity::Swap {
                 incoming_payment_info: None,
                 swap_info: SwapInfo {
                     bitcoin_address: in_progress_swap.bitcoin_address,
-                    created_at: unix_timestamp_to_system_time(in_progress_swap.created_at as u64)
-                        .with_timezone(self.user_preferences.lock_unwrap().clone().timezone_config),
+                    created_at,
                     // Multiple txs can be sent to swap address and they aren't guaranteed to
                     // confirm all at the same time. Our best guess of the amount that will be
                     // received once the entire swap confirms is given by confirmed sats added to
