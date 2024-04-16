@@ -536,8 +536,6 @@ impl BreezServices {
     }
 
     pub async fn list_payments(&self, req: ListPaymentsRequest) -> SdkResult<Vec<Payment>> {
-        self.sync().await?;
-
         let payment_type_filter = req
             .filters
             .as_ref()
