@@ -34,6 +34,13 @@ pub trait EventsCallback: Send + Sync {
     /// * `payment_hash` - the hash of the payment can be used to cross-reference this event to the payment that has failed
     fn payment_failed(&self, payment_hash: String);
 
+    /// This callback will be called when an incoming swap has completed.
+    ///
+    /// Parameters:
+    /// * `payment_hash` - can be used to find the [´Activity´](crate::Activity) corresponding to
+    /// this swap.
+    fn swap_received(&self, payment_hash: String);
+
     /// This callback will be called when a change to the Breez services health is noticed
     ///
     /// Parameters:

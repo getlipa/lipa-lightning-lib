@@ -19,6 +19,10 @@ impl EventsCallback for PrintEventsHandler {
         println!("An outgoing payment has failed! Its hash is {payment_hash}");
     }
 
+    fn swap_received(&self, payment_hash: String) {
+        println!("A swap has been received! Its hash is {payment_hash}");
+    }
+
     fn breez_health_status_changed_to(&self, status: BreezHealthCheckStatus) {
         println!("The Breez SDK health status changed to {status:?}");
     }
