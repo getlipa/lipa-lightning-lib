@@ -190,6 +190,7 @@ callback interface EventsCallback {
     void payment_sent(string payment_hash, string payment_preimage);
     void payment_failed(string payment_hash);
     void channel_closed(string channel_id, string reason);
+    void swap_received(string payment_hash);
     void breez_health_status_changed_to(BreezHealthCheckStatus status);
     void synced();
 };
