@@ -45,28 +45,29 @@ const TX_ID_DUMMY: &str = "f4184fc596403b9d638783cf57adfe4c75c605f6356fbc9133853
 const LNURL_PAY_FEE_MSAT: u64 = 8_000;
 
 use breez_sdk_core::error::{
-    LnUrlPayError, LnUrlWithdrawError, ReceiveOnchainError, ReceivePaymentError, SdkResult,
-    SendOnchainError, SendPaymentError,
+    LnUrlPayError, LnUrlWithdrawError, ReceiveOnchainError, ReceivePaymentError, SdkError,
+    SdkResult, SendOnchainError, SendPaymentError,
 };
 use breez_sdk_core::InputType::Bolt11;
 pub use breez_sdk_core::{
-    parse_invoice, BitcoinAddressData, BreezEvent, ClosedChannelPaymentDetails, EnvironmentType,
-    EventListener, GreenlightCredentials, GreenlightNodeConfig, HealthCheckStatus, InputType,
-    InvoicePaidDetails, LNInvoice, ListPaymentsRequest, LnPaymentDetails, LnUrlPayRequest,
-    LnUrlPayRequestData, LnUrlPayResult, LnUrlWithdrawRequest, LnUrlWithdrawRequestData,
-    LnUrlWithdrawResult, MetadataItem, Network, NodeConfig, OpenChannelFeeRequest,
-    OpeningFeeParams, OpeningFeeParamsMenu, Payment, PaymentDetails, PaymentFailedData,
-    PaymentStatus, PaymentType, PaymentTypeFilter, PrepareRedeemOnchainFundsRequest,
-    PrepareRefundRequest, ReceiveOnchainRequest, ReceivePaymentRequest, ReceivePaymentResponse,
-    RedeemOnchainFundsRequest, RefundRequest, ReportIssueRequest, ReportPaymentFailureDetails,
-    ReverseSwapFeesRequest, SendOnchainRequest, SendPaymentRequest, SignMessageRequest,
+    parse_invoice, BitcoinAddressData, BreezEvent, ClosedChannelPaymentDetails, ConnectRequest,
+    EnvironmentType, EventListener, GreenlightCredentials, GreenlightNodeConfig, HealthCheckStatus,
+    InputType, InvoicePaidDetails, LNInvoice, ListPaymentsRequest, LnPaymentDetails,
+    LnUrlPayRequest, LnUrlPayRequestData, LnUrlPayResult, LnUrlWithdrawRequest,
+    LnUrlWithdrawRequestData, LnUrlWithdrawResult, MetadataItem, Network, NodeConfig,
+    OpenChannelFeeRequest, OpeningFeeParams, OpeningFeeParamsMenu, Payment, PaymentDetails,
+    PaymentFailedData, PaymentStatus, PaymentType, PaymentTypeFilter,
+    PrepareRedeemOnchainFundsRequest, PrepareRefundRequest, ReceiveOnchainRequest,
+    ReceivePaymentRequest, ReceivePaymentResponse, RedeemOnchainFundsRequest, RefundRequest,
+    ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest,
+    SendPaymentRequest, SignMessageRequest, SwapStatus, UnspentTransactionOutput,
 };
 use breez_sdk_core::{
     Config, LspInformation, MaxReverseSwapAmountResponse, NodeState, OpenChannelFeeResponse,
     PrepareRedeemOnchainFundsResponse, PrepareRefundResponse, RecommendedFees,
     RedeemOnchainFundsResponse, RefundResponse, ReverseSwapInfo, ReverseSwapPairInfo,
     ReverseSwapStatus, SendOnchainResponse, SendPaymentResponse, ServiceHealthCheckResponse,
-    SignMessageResponse, SwapInfo, SwapStatus,
+    SignMessageResponse, SwapInfo,
 };
 use chrono::Utc;
 use hex::FromHex;
@@ -115,8 +116,7 @@ pub struct BreezServices {
 
 impl BreezServices {
     pub async fn connect(
-        _config: Config,
-        _seed: Vec<u8>,
+        _req: ConnectRequest,
         event_listener: Box<dyn EventListener>,
     ) -> SdkResult<Arc<BreezServices>> {
         Ok(Arc::new(BreezServices { event_listener }))
@@ -198,6 +198,7 @@ impl BreezServices {
                         error: "Already paid".to_string(),
                         node_id: NODE_PUBKEY.to_string(),
                         invoice: None,
+                        label: None,
                     },
                 });
                 Err(SendPaymentError::AlreadyPaid)
@@ -208,6 +209,7 @@ impl BreezServices {
                         error: "Generic error".to_string(),
                         node_id: NODE_PUBKEY.to_string(),
                         invoice: None,
+                        label: None,
                     },
                 });
                 Err(SendPaymentError::Generic {
@@ -220,6 +222,7 @@ impl BreezServices {
                         error: "Invalid network".to_string(),
                         node_id: NODE_PUBKEY.to_string(),
                         invoice: None,
+                        label: None,
                     },
                 });
                 Err(SendPaymentError::InvalidNetwork {
@@ -232,6 +235,7 @@ impl BreezServices {
                         error: "Invoice expired".to_string(),
                         node_id: NODE_PUBKEY.to_string(),
                         invoice: None,
+                        label: None,
                     },
                 });
                 Err(SendPaymentError::InvoiceExpired {
@@ -244,6 +248,7 @@ impl BreezServices {
                         error: "Payment failed".to_string(),
                         node_id: NODE_PUBKEY.to_string(),
                         invoice: None,
+                        label: None,
                     },
                 });
                 Err(SendPaymentError::PaymentFailed {
@@ -256,6 +261,7 @@ impl BreezServices {
                         error: "Payment timed out".to_string(),
                         node_id: NODE_PUBKEY.to_string(),
                         invoice: None,
+                        label: None,
                     },
                 });
                 Err(SendPaymentError::PaymentTimeout {
@@ -268,6 +274,7 @@ impl BreezServices {
                         error: "Route not found".to_string(),
                         node_id: NODE_PUBKEY.to_string(),
                         invoice: None,
+                        label: None,
                     },
                 });
                 Err(SendPaymentError::RouteNotFound {
@@ -280,6 +287,7 @@ impl BreezServices {
                         error: "Route too expensive".to_string(),
                         node_id: NODE_PUBKEY.to_string(),
                         invoice: None,
+                        label: None,
                     },
                 });
                 Err(SendPaymentError::RouteTooExpensive {
@@ -292,6 +300,7 @@ impl BreezServices {
                         error: "Service connectivity error".to_string(),
                         node_id: NODE_PUBKEY.to_string(),
                         invoice: None,
+                        label: None,
                     },
                 });
                 Err(SendPaymentError::ServiceConnectivity {
@@ -331,7 +340,7 @@ impl BreezServices {
 
         Ok(LnUrlPayResult::EndpointSuccess {
             data: breez_sdk_core::LnUrlPaySuccessData {
-                payment_hash,
+                payment,
                 success_action: None,
             },
         })
@@ -499,7 +508,7 @@ impl BreezServices {
         })
     }
 
-    pub async fn service_health_check(&self) -> SdkResult<ServiceHealthCheckResponse> {
+    pub async fn service_health_check(_api_key: String) -> SdkResult<ServiceHealthCheckResponse> {
         Ok(ServiceHealthCheckResponse {
             status: HEALTH_STATUS.lock().unwrap().clone(),
         })
@@ -612,6 +621,48 @@ impl BreezServices {
         })
     }
 
+    pub async fn redeem_swap(&self, swap_address: String) -> SdkResult<()> {
+        let swaps = SWAPS.lock().unwrap();
+        let swap = swaps
+            .iter()
+            .find(|swap| swap.bitcoin_address == swap_address);
+
+        if let Some(swap) = swap {
+            if swap.status == SwapStatus::Redeemable {
+                SWAPS
+                    .lock()
+                    .unwrap()
+                    .retain(|s| s.bitcoin_address != swap_address);
+
+                *LN_BALANCE_MSAT.lock().unwrap() += swap.confirmed_sats;
+
+                let payment = create_payment(MockPayment {
+                    payment_type: PaymentType::Received,
+                    amount_msat: swap.confirmed_sats,
+                    fee_msat: SWAP_FEE_SAT * 1_000,
+                    description: Some("swapped in".to_string()),
+                    payment_hash: hex::encode(&swap.payment_hash),
+                    payment_preimage: hex::encode(&swap.preimage),
+                    destination_pubkey: NODE_PUBKEY.to_string(),
+                    bolt11: swap.clone().bolt11.unwrap_or_default(),
+                    lnurl_pay_domain: None,
+                    ln_address: None,
+                    lnurl_metadata: None,
+                    lnurl_withdraw_endpoint: None,
+                    swap_info: Some(swap.clone()),
+                    reverse_swap_info: None,
+                });
+                PAYMENTS.lock().unwrap().push(payment);
+
+                return Ok(());
+            }
+        }
+
+        Err(SdkError::Generic {
+            err: "Swap not found or not redeemable".into(),
+        })
+    }
+
     /// List available LSPs that can be selected by the user
     pub async fn list_lsps(&self) -> SdkResult<Vec<LspInformation>> {
         Ok(vec![LspInformation {
@@ -678,6 +729,7 @@ impl BreezServices {
             script: vec![],
             bolt11: None,
             paid_msat: 0,
+            total_incoming_txs: 0,
             confirmed_sats: 0,
             unconfirmed_sats: 0,
             status: SwapStatus::Initial,
@@ -686,8 +738,10 @@ impl BreezServices {
             confirmed_tx_ids: vec![],
             min_allowed_deposit: 1_000,
             max_allowed_deposit: 1_000_000,
+            max_swapper_payable: 100_000_000,
             last_redeem_error: None,
             channel_opening_fees: None,
+            confirmed_at: None,
         };
 
         SWAPS.lock().unwrap().push(swap.clone());
@@ -702,11 +756,7 @@ impl BreezServices {
             .lock()
             .unwrap()
             .iter()
-            .find(|swap| {
-                (swap.confirmed_sats > 0 || swap.unconfirmed_sats > 0)
-                    && swap.paid_msat == 0
-                    && swap.status != SwapStatus::Expired
-            })
+            .find(|swap| swap.status != SwapStatus::Initial && swap.status != SwapStatus::Completed)
             .cloned())
     }
 
@@ -714,7 +764,7 @@ impl BreezServices {
         &self,
         req: ReverseSwapFeesRequest,
     ) -> SdkResult<ReverseSwapPairInfo> {
-        let total_estimated_fees = req
+        let total_fees = req
             .send_amount_sat
             .map(|amount| (amount as f64) / 100.0 * SWAP_FEE_PERCENTAGE)
             .map(|fees| fees as u64);
@@ -725,7 +775,7 @@ impl BreezServices {
             fees_percentage: SWAP_FEE_PERCENTAGE,
             fees_lockup: 500,
             fees_claim: 500,
-            total_estimated_fees,
+            total_fees,
         })
     }
 
@@ -796,11 +846,7 @@ impl BreezServices {
         let swaps = SWAPS.lock().unwrap().clone();
         Ok(swaps
             .into_iter()
-            .filter(|swap| {
-                (swap.confirmed_sats > 0 || swap.unconfirmed_sats > 0)
-                    && swap.paid_msat == 0
-                    && swap.status == SwapStatus::Expired
-            })
+            .filter(|swap| swap.status == SwapStatus::Refundable)
             .collect())
     }
     pub async fn prepare_refund(
@@ -814,11 +860,11 @@ impl BreezServices {
     }
 
     pub async fn refund(&self, _req: RefundRequest) -> SdkResult<RefundResponse> {
-        // Keep it simple for now, remove ALL expired swaps
+        // Keep it simple for now, remove ALL refundable swaps
         SWAPS
             .lock()
             .unwrap()
-            .retain(|swap| swap.status != SwapStatus::Expired);
+            .retain(|swap| swap.status != SwapStatus::Refundable);
 
         Ok(RefundResponse {
             refund_tx_id: TX_ID_DUMMY.to_string(),
@@ -889,11 +935,20 @@ impl BreezServices {
     fn simulate_swaps(&self) {
         let now = Utc::now();
         let now = now.timestamp();
+        let secs_until_tx_in_mempool = 20;
+        let secs_until_onchain_conf = 40;
 
         let mut swaps = SWAPS.lock().unwrap();
 
         swaps.iter_mut().for_each(|swap| {
-            if now - swap.created_at > 40 {
+            if now - swap.created_at > secs_until_tx_in_mempool {
+                swap.total_incoming_txs = 1;
+                swap.unconfirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
+                swap.status = SwapStatus::WaitingConfirmation;
+            }
+            if now - swap.created_at > secs_until_onchain_conf {
+                swap.confirmed_at = Some(830_000);
+                swap.status = SwapStatus::Redeemable;
                 if *REDEEM_SWAPS.lock().unwrap() {
                     let (payment_hash, payment_preimage) = generate_2_hashes();
                     let payment = create_payment(MockPayment {
@@ -913,6 +968,7 @@ impl BreezServices {
                         reverse_swap_info: None,
                     });
                     PAYMENTS.lock().unwrap().push(payment.clone());
+                    swap.status = SwapStatus::Completed;
                     self.event_listener.on_event(BreezEvent::InvoicePaid {
                         details: InvoicePaidDetails {
                             payment_hash: "".to_string(),
@@ -921,7 +977,7 @@ impl BreezServices {
                         },
                     });
                 } else {
-                    swap.status = SwapStatus::Expired;
+                    swap.status = SwapStatus::Refundable;
                     swap.unconfirmed_sats = 0;
                     swap.confirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
                 }
@@ -929,12 +985,8 @@ impl BreezServices {
         });
 
         // remove settled swaps
-        swaps.retain(|swap| now - swap.created_at < 40 || swap.status == SwapStatus::Expired);
-
-        swaps.iter_mut().for_each(|swap| {
-            if now - swap.created_at > 20 {
-                swap.unconfirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
-            }
+        swaps.retain(|swap| {
+            now - swap.created_at < secs_until_onchain_conf || swap.status != SwapStatus::Completed
         });
     }
 
@@ -985,6 +1037,10 @@ impl BreezServices {
             PAYMENTS.lock().unwrap().push(payment.clone());
         }
     }
+
+    pub async fn generate_diagnostic_data(&self) -> SdkResult<String> {
+        Ok("Dummy diagnostics".to_string())
+    }
 }
 
 pub async fn parse(input: &str) -> Result<InputType> {
@@ -1017,6 +1073,8 @@ pub async fn parse(input: &str) -> Result<InputType> {
                 metadata_str: "[[\"text/plain\",\"dummy\"],[\"text/long-desc\",\"dummy description\"]]".to_string(),
                 comment_allowed: 100,
                 domain: "lnurl.dummy.com".to_string(),
+                allows_nostr: false,
+                nostr_pubkey: None,
                 ln_address: None,
             },
         });
@@ -1032,6 +1090,8 @@ pub async fn parse(input: &str) -> Result<InputType> {
                 metadata_str: "[[\"text/plain\",\"dummy\"],[\"text/long-desc\",\"dummy description\"]]".to_string(),
                 comment_allowed: 100,
                 domain: domain.to_string(),
+                allows_nostr: false,
+                nostr_pubkey: None,
                 ln_address: Some(input.to_string()),
             },
         });
@@ -1099,6 +1159,7 @@ fn create_payment(p: MockPayment) -> Payment {
                 open_channel_bolt11: None,
                 lnurl_success_action: None,
                 lnurl_pay_domain: p.lnurl_pay_domain,
+                lnurl_pay_comment: None,
                 ln_address: p.ln_address,
                 lnurl_metadata: p.lnurl_metadata,
                 lnurl_withdraw_endpoint: p.lnurl_withdraw_endpoint,
