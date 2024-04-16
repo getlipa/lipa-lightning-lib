@@ -570,52 +570,6 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-core"
-version = "0.3.4"
-source = "git+https://github.com/breez/breez-sdk?tag=0.3.4#970bd0449b771cadc286d66ed8bec4a386c78f9f"
-dependencies = [
- "aes",
- "anyhow",
- "base64 0.13.1",
- "bip21",
- "cbc",
- "chrono",
- "const_format",
- "ecies",
- "env_logger 0.10.2",
- "flutter_rust_bridge",
- "futures",
- "gl-client 0.1.11 (git+https://github.com/Blockstream/greenlight.git?rev=1dbe06999bac216212124779c60006bd3d135ac7)",
- "hex",
- "lazy_static",
- "log",
- "miniz_oxide",
- "once_cell",
- "openssl",
- "prost",
- "querystring",
- "rand",
- "regex",
- "reqwest",
- "ripemd",
- "rusqlite",
- "rusqlite_migration",
- "serde",
- "serde_json",
- "serde_with",
- "strum",
- "strum_macros",
- "tempfile",
- "thiserror",
- "tiny-bip39",
- "tokio",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "zbase32",
-]
-
-[[package]]
-name = "breez-sdk-core"
 version = "0.4.0-rc5"
 source = "git+https://github.com/breez/breez-sdk?tag=0.4.0-rc5#cd65efc3a2c04d0fa6dd36492ebd7b54b6f7356c"
 dependencies = [
@@ -630,7 +584,7 @@ dependencies = [
  "env_logger 0.10.2",
  "flutter_rust_bridge",
  "futures",
- "gl-client 0.1.11 (git+https://github.com/Blockstream/greenlight.git?rev=97e2f418c331653330f9fa928ed10ed1538c27d0)",
+ "gl-client",
  "hex",
  "lazy_static",
  "log",
@@ -666,7 +620,7 @@ version = "0.3.1"
 dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
- "breez-sdk-core 0.3.4",
+ "breez-sdk-core",
  "chrono",
  "hex",
  "lazy_static",
@@ -1574,51 +1528,6 @@ checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 [[package]]
 name = "gl-client"
 version = "0.1.11"
-source = "git+https://github.com/Blockstream/greenlight.git?rev=1dbe06999bac216212124779c60006bd3d135ac7#1dbe06999bac216212124779c60006bd3d135ac7"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64 0.21.7",
- "bech32",
- "bytes",
- "chacha20poly1305",
- "cln-grpc",
- "futures",
- "hex",
- "http",
- "http-body",
- "log",
- "mockall",
- "pin-project",
- "prost",
- "rand",
- "rcgen",
- "reqwest",
- "ring 0.16.20",
- "rustls-pemfile",
- "secp256k1 0.26.0",
- "serde",
- "serde_bolt 0.2.6",
- "serde_json",
- "sha256",
- "tempfile",
- "thiserror",
- "time",
- "tokio",
- "tonic",
- "tonic-build",
- "tower",
- "url",
- "uuid",
- "vls-core",
- "vls-persist",
- "vls-protocol",
- "vls-protocol-signer",
-]
-
-[[package]]
-name = "gl-client"
-version = "0.1.11"
 source = "git+https://github.com/Blockstream/greenlight.git?rev=97e2f418c331653330f9fa928ed10ed1538c27d0#97e2f418c331653330f9fa928ed10ed1538c27d0"
 dependencies = [
  "anyhow",
@@ -2265,7 +2174,7 @@ dependencies = [
  "anyhow",
  "bip39",
  "bitcoin 0.30.2",
- "breez-sdk-core 0.4.0-rc5",
+ "breez-sdk-core",
  "breez-sdk-mock",
  "camino",
  "chameleon",
