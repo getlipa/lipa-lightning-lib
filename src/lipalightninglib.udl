@@ -154,6 +154,9 @@ interface LightningNode {
 
     [Throws=LnError]
     string register_lightning_address();
+
+    [Throws=LnError]
+    string? query_lightning_address();
 };
 
 dictionary Config {
