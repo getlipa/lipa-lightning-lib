@@ -2214,13 +2214,6 @@ impl LightningNode {
     /// Register a human-readable lightning address or return the previously
     /// registered one.
     pub fn register_lightning_address(&self) -> Result<String> {
-        let addresses = self
-            .data_store
-            .lock_unwrap()
-            .retrieve_lightning_addresses()?;
-        if let Some(address) = addresses.into_iter().next() {
-            return Ok(address);
-        }
         let address = self
             .rt
             .handle()
@@ -2236,6 +2229,15 @@ impl LightningNode {
             .lock_unwrap()
             .store_lightning_address(&address)?;
         Ok(address)
+    }
+
+    /// Query the registered lightning address.
+    pub fn query_lightning_address(&self) -> Result<Option<String>> {
+        let addresses = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_lightning_addresses()?;
+        Ok(addresses.into_iter().next())
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {
