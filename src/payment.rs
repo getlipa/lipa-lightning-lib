@@ -184,6 +184,9 @@ pub struct OutgoingPaymentInfo {
     pub network_fees: Amount,
     /// Information about a payment's recipient.
     pub recipient: Recipient,
+    /// Comment sent to the recipient.
+    /// Only set for LNURL-pay and lightning address payments where a comment has been sent.
+    pub comment_for_recipient: Option<String>,
 }
 
 impl OutgoingPaymentInfo {
@@ -197,18 +200,23 @@ impl OutgoingPaymentInfo {
             .fee_msat
             .as_msats()
             .to_amount_up(exchange_rate);
-        let recipient = match breez_payment.details {
-            PaymentDetails::Ln { ref data } => Recipient::new(data),
+        let data = match breez_payment.details {
+            PaymentDetails::Ln { ref data } => data,
             PaymentDetails::ClosedChannel { .. } => {
                 permanent_failure!("OutgoingPaymentInfo cannot be created from channel close")
             }
         };
+        let recipient = Recipient::new(data);
+        // TODO: Read the comment from `data`.
+        // let comment_for_recipient = data.lnurl_pay_comment.clone();
+        let comment_for_recipient = None;
         let payment_info =
             PaymentInfo::new(breez_payment, exchange_rate, tz_config, personal_note)?;
         Ok(Self {
             payment_info,
             network_fees,
             recipient,
+            comment_for_recipient,
         })
     }
 }

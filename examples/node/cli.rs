@@ -1213,6 +1213,10 @@ fn print_outgoing_payment(payment: OutgoingPaymentInfo) -> Result<()> {
         amount_to_string(&payment.network_fees)
     );
     println!("      Recipient:        {:?}", payment.recipient);
+    println!(
+        "      Comment sent:     {:?}",
+        payment.comment_for_recipient
+    );
     Ok(())
 }
 
