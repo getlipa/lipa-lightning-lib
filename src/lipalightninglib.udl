@@ -365,6 +365,7 @@ dictionary OutgoingPaymentInfo {
     PaymentInfo payment_info;
     Amount network_fees;
     Recipient recipient;
+    string? comment_for_recipient;
 };
 
 enum PaymentState {
