@@ -185,6 +185,7 @@ pub struct OutgoingPaymentInfo {
     /// Information about a payment's recipient.
     pub recipient: Recipient,
     /// Comment sent to the recipient.
+    /// Only set for LNURL-pay and lightning address payments where a comment has been sent.
     pub comment_for_recipient: Option<String>,
 }
 

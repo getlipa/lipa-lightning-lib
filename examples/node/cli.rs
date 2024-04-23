@@ -1214,7 +1214,7 @@ fn print_outgoing_payment(payment: OutgoingPaymentInfo) -> Result<()> {
     );
     println!("      Recipient:        {:?}", payment.recipient);
     println!(
-        "   Comment sent:        {:?}",
+        "      Comment sent:     {:?}",
         payment.comment_for_recipient
     );
     Ok(())
