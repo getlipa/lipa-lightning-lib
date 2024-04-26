@@ -51,7 +51,7 @@ jobs:
           toolchain: stable
           components: clippy
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Checkout
@@ -83,7 +83,7 @@ jobs:
           toolchain: nightly-2023-12-28
           override: true
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install unused dependency checker
