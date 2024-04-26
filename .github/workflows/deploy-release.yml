@@ -36,7 +36,7 @@ jobs:
           override: true
           target: ${{ matrix.target }}
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build target
@@ -80,7 +80,7 @@ jobs:
           override: true
           target: ${{ matrix.target }}
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install Cross
@@ -388,7 +388,7 @@ jobs:
           profile: minimal
           override: true
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build Docs
