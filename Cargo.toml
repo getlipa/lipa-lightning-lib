@@ -75,7 +75,7 @@ colored = "2.1.0"
 ctor = "0.2.8"
 qrcode = { version = "0.14.0", default-features = false }
 rustyline = { version = "14.0.0", features = ["derive"] }
-serial_test = { version = "3.1.0", features = ["file_locks"] }
+serial_test = { version = "3.1.1", features = ["file_locks"] }
 strip-ansi-escapes = "0.2.0"
 thousands = "0.2.0"
 lazy_static = "1.4.0"
