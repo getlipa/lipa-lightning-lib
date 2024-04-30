@@ -57,8 +57,8 @@ use crate::data_store::CreatedInvoice;
 use crate::environment::Environment;
 pub use crate::environment::EnvironmentCode;
 use crate::errors::{
-    map_lnurl_pay_error, map_lnurl_withdraw_error, map_send_payment_error, LnUrlWithdrawErrorCode,
-    LnUrlWithdrawResult,
+    map_lnurl_pay_error, map_lnurl_withdraw_error, map_send_payment_error, LnUrlWithdrawError,
+    LnUrlWithdrawErrorCode, LnUrlWithdrawResult,
 };
 pub use crate::errors::{
     DecodeDataError, Error as LnError, LnUrlPayError, LnUrlPayErrorCode, LnUrlPayResult,
@@ -92,7 +92,7 @@ use crate::util::{
 };
 
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
-use breez_sdk_core::error::{LnUrlWithdrawError, ReceiveOnchainError, SendPaymentError};
+use breez_sdk_core::error::{ReceiveOnchainError, SendPaymentError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
 use breez_sdk_core::{
     parse, parse_invoice, BitcoinAddressData, BreezServices, ClosedChannelPaymentDetails,
@@ -1582,26 +1582,30 @@ impl LightningNode {
                 "Failed to withdraw offer due to: {}",
                 data.reason
             ),
-            Err(LnUrlWithdrawError::Generic { err }) => runtime_error!(
+            Err(breez_sdk_core::error::LnUrlWithdrawError::Generic { err }) => runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
                 "Failed to withdraw offer due to: {err}"
             ),
-            Err(LnUrlWithdrawError::InvalidAmount { err }) => {
+            Err(breez_sdk_core::error::LnUrlWithdrawError::InvalidAmount { err }) => {
                 permanent_failure!("Invalid amount in invoice for LNURL withdraw: {err}")
             }
-            Err(LnUrlWithdrawError::InvalidInvoice { err }) => {
+            Err(breez_sdk_core::error::LnUrlWithdrawError::InvalidInvoice { err }) => {
                 permanent_failure!("Invalid invoice for LNURL withdraw: {err}")
             }
-            Err(LnUrlWithdrawError::InvalidUri { err }) => {
+            Err(breez_sdk_core::error::LnUrlWithdrawError::InvalidUri { err }) => {
                 permanent_failure!("Invalid URL in LNURL withdraw: {err}")
             }
-            Err(LnUrlWithdrawError::ServiceConnectivity { err }) => runtime_error!(
-                RuntimeErrorCode::OfferServiceUnavailable,
-                "Failed to withdraw offer due to: {err}"
-            ),
-            Err(LnUrlWithdrawError::InvoiceNoRoutingHints { err }) => permanent_failure!(
-                "A locally created invoice doesn't have any routing hints: {err}"
-            ),
+            Err(breez_sdk_core::error::LnUrlWithdrawError::ServiceConnectivity { err }) => {
+                runtime_error!(
+                    RuntimeErrorCode::OfferServiceUnavailable,
+                    "Failed to withdraw offer due to: {err}"
+                )
+            }
+            Err(breez_sdk_core::error::LnUrlWithdrawError::InvoiceNoRoutingHints { err }) => {
+                permanent_failure!(
+                    "A locally created invoice doesn't have any routing hints: {err}"
+                )
+            }
         };
 
         self.store_payment_info(&hash, Some(offer.offer_kind));
