@@ -53,6 +53,9 @@ interface LightningNode {
     [Throws=LnError]
     sequence<string> list_lightning_addresses();
 
+    [Throws=LnUrlWithdrawError]
+    string withdraw_lnurlw(LnUrlWithdrawRequestData lnurl_withdraw_request_data, u64 amount_sat);
+
     void foreground();
 
     void background();
@@ -735,6 +738,19 @@ enum LnUrlPayErrorCode {
     "UnexpectedError",
     "ServiceConnectivity",
     "InvalidNetwork",
+};
+
+[Error]
+interface LnUrlWithdrawError {
+    InvalidInput(string msg);
+    RuntimeError(LnUrlWithdrawErrorCode code, string msg);
+    PermanentFailure(string msg);
+};
+
+enum LnUrlWithdrawErrorCode {
+    "LnUrlServerError",
+    "ServiceConnectivity",
+    "UnexpectedError",
 };
 
 [Error]
