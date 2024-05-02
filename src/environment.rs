@@ -20,7 +20,7 @@ pub(crate) struct Environment {
     pub backend_url: String,
     pub backend_health_url: String,
     pub pocket_url: String,
-    pub notification_webhook_base_url: Option<String>,
+    pub notification_webhook_base_url: String,
     pub notification_webhook_secret: [u8; 32],
 }
 
@@ -30,7 +30,8 @@ impl Environment {
         let backend_url = format!("{base_url}/v1/graphql");
         let backend_health_url = format!("{base_url}/healthz");
 
-        let notification_webhook_base_url = get_notification_webhook_base_url(environment);
+        let notification_webhook_base_url =
+            get_notification_webhook_base_url(environment).to_string();
         let notification_webhook_secret = get_notification_webhook_secret(environment)?;
 
         Ok(match environment {
@@ -83,18 +84,12 @@ fn get_backend_base_url(environment: EnvironmentCode) -> &'static str {
     }
 }
 
-fn get_notification_webhook_base_url(environment_code: EnvironmentCode) -> Option<String> {
-    let url = match environment_code {
+fn get_notification_webhook_base_url(environment_code: EnvironmentCode) -> &'static str {
+    match environment_code {
         EnvironmentCode::Local => env!("NOTIFICATION_WEBHOOK_URL_LOCAL"),
         EnvironmentCode::Dev => env!("NOTIFICATION_WEBHOOK_URL_DEV"),
         EnvironmentCode::Stage => env!("NOTIFICATION_WEBHOOK_URL_STAGE"),
         EnvironmentCode::Prod => env!("NOTIFICATION_WEBHOOK_URL_PROD"),
-    };
-
-    if url.is_empty() {
-        None
-    } else {
-        Some(url.to_string())
     }
 }
 
