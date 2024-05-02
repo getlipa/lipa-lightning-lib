@@ -2057,6 +2057,15 @@ impl LightningNode {
                 "Couldn't execute `listpayments` command",
             )?;
 
+        let diagnostics = self
+            .rt
+            .handle()
+            .block_on(self.sdk.generate_diagnostic_data())
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Couldn't call generate_diagnostic_data",
+            )?;
+
         info!("3L version: {}", env!("GITHUB_REF"));
         info!("Wallet pubkey id: {:?}", self.get_wallet_pubkey_id());
         // Print connected peers, balances, inbound/outbound capacities, on-chain funds.
@@ -2074,6 +2083,7 @@ impl LightningNode {
             "List of payments:\n{}",
             replace_byte_arrays_by_hex_string(&payments)
         );
+        info!("Diagnostic data:\n{diagnostics}");
         Ok(())
     }
 
