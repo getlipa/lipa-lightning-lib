@@ -1,23 +1,27 @@
 use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
 use crate::async_runtime::AsyncRuntime;
-use crate::auth::build_async_auth;
+use crate::auth::{build_async_auth, build_auth};
 use crate::data_store::DataStore;
 use crate::environment::Environment;
 use crate::errors::{NotificationHandlingErrorCode, NotificationHandlingResult};
 use crate::event::report_event_for_analytics;
+use crate::exchange_rate_provider::{ExchangeRateProvider, ExchangeRateProviderImpl};
 use crate::logger::init_logger_once;
+use crate::util::LogIgnoreError;
 use crate::{
-    enable_backtrace, sanitize_input, start_sdk, Config, RuntimeErrorCode, UserPreferences,
-    DB_FILENAME, LOGS_DIR,
+    enable_backtrace, register_webhook_url, sanitize_input, start_sdk, Config, RuntimeErrorCode,
+    UserPreferences, DB_FILENAME, LOGS_DIR,
 };
 use breez_sdk_core::{
-    BreezEvent, BreezServices, EventListener, InvoicePaidDetails, Payment, PaymentStatus,
+    BreezEvent, BreezServices, EventListener, InvoicePaidDetails, OpenChannelFeeRequest, Payment,
+    PaymentStatus, ReceivePaymentRequest,
 };
-use log::debug;
+use log::{debug, Level};
 use parrot::AnalyticsClient;
 use perro::{
     ensure, invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
+use pigeon::submit_lnurl_pay_invoice;
 use serde::Deserialize;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
@@ -50,6 +54,10 @@ pub enum Notification {
         amount_sat: u64,
         payment_hash: String,
     },
+    /// The notification that an invoice was created and submitted for payment as part of an
+    /// incoming LNURL payment.
+    /// The `amount_sat` of the created invoice is provided.
+    LnurlInvoiceCreated { amount_sat: u64 },
 }
 
 /// Handles a notification.
@@ -104,6 +112,9 @@ pub fn handle_notification(
         Payload::AddressTxsConfirmed { address } => {
             handle_address_txs_confirmed_notification(rt, sdk, rx, address)
         }
+        Payload::LnurlPayRequest { data } => {
+            handle_lnurl_pay_request_notification(rt, sdk, config, data)
+        }
     }
 }
 
@@ -116,12 +127,10 @@ fn build_analytics_interceptor(
         timezone_config: config.timezone_config.clone(),
     }));
 
-    let environment = Environment::load(config.environment)
-        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
-    let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)
-        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
+    let environment = get_environment(config)?;
+    let strong_typed_seed = get_strong_typed_seed(config)?;
     let async_auth = Arc::new(
-        build_async_auth(&strong_typed_seed, environment.backend_url.clone())
+        build_async_auth(&strong_typed_seed, &environment.backend_url)
             .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?,
     );
 
@@ -240,6 +249,124 @@ fn handle_address_txs_confirmed_notification(
     )
 }
 
+fn handle_lnurl_pay_request_notification(
+    rt: AsyncRuntime,
+    sdk: Arc<BreezServices>,
+    config: Config,
+    data: LnurlPayRequestData,
+) -> NotificationHandlingResult<Notification> {
+    // Prevent payments that need a new channel from being received
+    let open_channel_fee_response = rt
+        .handle()
+        .block_on(sdk.open_channel_fee(OpenChannelFeeRequest {
+            amount_msat: Some(data.amount_msat),
+            expiry: None,
+        }))
+        .map_to_runtime_error(
+            NotificationHandlingErrorCode::NodeUnavailable,
+            "Failed to query open channel fees",
+        )?;
+    if let Some(fee_msat) = open_channel_fee_response.fee_msat {
+        if fee_msat > 0 {
+            runtime_error!(
+                NotificationHandlingErrorCode::InsufficientInboundLiquidity,
+                "Rejecting an inbound LNURL-pay payment because of insufficient inbound liquidity"
+            );
+        }
+    }
+
+    let strong_typed_seed = get_strong_typed_seed(&config)?;
+    let environment = get_environment(&config)?;
+    let auth = build_auth(&strong_typed_seed, &environment.backend_url).map_to_runtime_error(
+        NotificationHandlingErrorCode::LipaServiceUnavailable,
+        "Failed to authenticate against backend",
+    )?;
+
+    // Register webhook in case user hasn't started the wallet for a long time
+    //  (Breez expires webhook registrations)
+    register_webhook_url(&rt, &sdk, &auth, &environment)
+        .map_runtime_error_to(NotificationHandlingErrorCode::NodeUnavailable)?;
+
+    // Create invoice
+    let receive_payment_result = rt
+        .handle()
+        .block_on(sdk.receive_payment(ReceivePaymentRequest {
+            amount_msat: data.amount_msat,
+            description: data.payer_comment.unwrap_or_default(),
+            preimage: None,
+            opening_fee_params: None,
+            use_description_hash: None,
+            expiry: None,
+            cltv: None,
+        }))
+        .map_to_runtime_error(
+            NotificationHandlingErrorCode::NodeUnavailable,
+            "Failed to create invoice",
+        )?;
+    if receive_payment_result.opening_fee_msat.is_some() {
+        runtime_error!(
+            NotificationHandlingErrorCode::InsufficientInboundLiquidity,
+            "Rejecting an inbound LNURL-pay payment because of insufficient inbound liquidity"
+        );
+    }
+
+    // Invoice is not persisted in invoices table because we are not interested in unpaid invoices
+    // resulting from incoming LNURL payments
+
+    // Store payment info (exchange rates, user preferences, etc...)
+    let user_preferences = UserPreferences {
+        fiat_currency: config.fiat_currency.clone(),
+        timezone_config: config.timezone_config.clone(),
+    };
+    let exchange_rate_provider =
+        ExchangeRateProviderImpl::new(environment.backend_url.clone(), Arc::new(auth));
+    let exchange_rates = exchange_rate_provider
+        .query_all_exchange_rates()
+        .map_to_runtime_error(
+            NotificationHandlingErrorCode::LipaServiceUnavailable,
+            "Failed to get exchange rates",
+        )?;
+
+    let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
+    let mut data_store = DataStore::new(&db_path)
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
+    data_store
+        .store_payment_info(
+            &receive_payment_result.ln_invoice.payment_hash,
+            user_preferences,
+            exchange_rates,
+            None,
+        )
+        .log_ignore_error(Level::Error, "Failed to persist payment info");
+
+    // Persist recipient information
+    data_store
+        .update_received_on(
+            &receive_payment_result.ln_invoice.payment_hash,
+            &data.recipient,
+        )
+        .log_ignore_error(Level::Error, "Failed to persist recipient info");
+
+    // Submit created invoice to backend
+    let async_auth = build_async_auth(&strong_typed_seed, &environment.backend_url)
+        .map_to_runtime_error(
+            NotificationHandlingErrorCode::LipaServiceUnavailable,
+            "Failed to authenticate against backend",
+        )?;
+    rt.handle()
+        .block_on(submit_lnurl_pay_invoice(
+            &environment.backend_url,
+            &async_auth,
+            data.id,
+            receive_payment_result.ln_invoice.bolt11,
+        ))
+        .map_runtime_error_to(NotificationHandlingErrorCode::LipaServiceUnavailable)?;
+
+    Ok(Notification::LnurlInvoiceCreated {
+        amount_sat: data.amount_msat / 1_000,
+    })
+}
+
 fn get_confirmed_payment(
     rt: &AsyncRuntime,
     sdk: &Arc<BreezServices>,
@@ -295,12 +422,38 @@ fn wait_for_synced_event(event_receiver: &Receiver<BreezEvent>) -> NotificationH
     }
 }
 
+fn get_strong_typed_seed(config: &Config) -> NotificationHandlingResult<[u8; 64]> {
+    sanitize_input::strong_type_seed(&config.seed)
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)
+}
+
+fn get_environment(config: &Config) -> NotificationHandlingResult<Environment> {
+    Environment::load(config.environment)
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "template", content = "data")]
 #[serde(rename_all = "snake_case")]
 enum Payload {
-    PaymentReceived { payment_hash: String },
-    AddressTxsConfirmed { address: String },
+    PaymentReceived {
+        payment_hash: String,
+    },
+    AddressTxsConfirmed {
+        address: String,
+    },
+    LnurlPayRequest {
+        #[serde(flatten)]
+        data: LnurlPayRequestData,
+    },
+}
+
+#[derive(Deserialize)]
+struct LnurlPayRequestData {
+    amount_msat: u64,
+    recipient: String,
+    payer_comment: Option<String>,
+    id: String,
 }
 
 struct NotificationHandlerEventListener {
@@ -342,6 +495,26 @@ mod tests {
                                                  }
                                                 }"#;
 
+    const LNURL_PAY_REQUEST_PAYLOAD_JSON: &str = r#"{
+                                                 "template": "lnurl_pay_request",
+                                                 "data": {
+                                                  "amount_msat": 12345,
+                                                  "recipient": "recipient",
+                                                  "payer_comment": "payer_comment",
+                                                  "id": "id"
+                                                 }
+                                                }"#;
+
+    const LNURL_PAY_REQUEST_WITHOUT_COMMENT_PAYLOAD_JSON: &str = r#"{
+                                                 "template": "lnurl_pay_request",
+                                                 "data": {
+                                                  "amount_msat": 12345,
+                                                  "recipient": "recipient",
+                                                  "payer_comment": null,
+                                                  "id": "id"
+                                                 }
+                                                }"#;
+
     #[test]
     fn test_payload_deserialize() {
         let payment_received_payload: Payload =
@@ -360,6 +533,24 @@ mod tests {
             Payload::AddressTxsConfirmed {
                 address
             } if address == "address"
+        ));
+
+        let lnurl_pay_request_payload: Payload =
+            serde_json::from_str(LNURL_PAY_REQUEST_PAYLOAD_JSON).unwrap();
+        assert!(matches!(
+            lnurl_pay_request_payload,
+            Payload::LnurlPayRequest {
+                data
+            } if data.amount_msat == 12345 && data.recipient == "recipient" && data.payer_comment == Some("payer_comment".to_string()) && data.id == "id"
+        ));
+
+        let lnurl_pay_request_without_comment_payload: Payload =
+            serde_json::from_str(LNURL_PAY_REQUEST_WITHOUT_COMMENT_PAYLOAD_JSON).unwrap();
+        assert!(matches!(
+            lnurl_pay_request_without_comment_payload,
+            Payload::LnurlPayRequest {
+                data
+            } if data.amount_msat == 12345 && data.recipient == "recipient" && data.payer_comment.is_none() && data.id == "id"
         ));
     }
 }

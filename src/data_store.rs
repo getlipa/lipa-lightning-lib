@@ -19,6 +19,7 @@ pub(crate) struct LocalPaymentData {
     pub exchange_rate: ExchangeRate,
     pub offer: Option<OfferKind>,
     pub personal_note: Option<String>,
+    pub received_on: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -132,7 +133,8 @@ impl DataStore {
                 " \
             SELECT timezone_id, timezone_utc_offset_secs, payments.fiat_currency, h.rate, h.updated_at,  \
             o.pocket_id, o.fiat_currency, o.rate, o.exchanged_at, o.topup_value_minor_units, \
-			o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad, o.error, o.topup_value_sats, payments.personal_note \
+            o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad, o.error, o.topup_value_sats, \
+            payments.personal_note, payments.received_on \
             FROM payments \
             LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snaphot_id=h.snapshot_id \
                 AND payments.fiat_currency=h.fiat_currency \
@@ -252,6 +254,21 @@ impl DataStore {
                 params![personal_note, payment_hash],
             )
             .map_to_permanent_failure("Failed to store personal note in local db")?;
+
+        Ok(())
+    }
+
+    pub fn update_received_on(&mut self, payment_hash: &str, received_on: &str) -> Result<()> {
+        self.backup_status = BackupStatus::WaitingForBackup;
+        self.conn
+            .execute(
+                "
+                UPDATE payments \
+                SET received_on = ?1 \
+                WHERE hash=?2",
+                params![received_on, payment_hash],
+            )
+            .map_to_permanent_failure("Failed to store received_on in local db")?;
 
         Ok(())
     }
@@ -526,6 +543,7 @@ fn local_payment_data_from_row(row: &Row) -> rusqlite::Result<LocalPaymentData> 
     let updated_at: chrono::DateTime<chrono::Utc> = row.get(4)?;
     let offer = offer_kind_from_row(row)?;
     let personal_note = row.get(14)?;
+    let received_on = row.get(15)?;
 
     Ok(LocalPaymentData {
         user_preferences: UserPreferences {
@@ -542,6 +560,7 @@ fn local_payment_data_from_row(row: &Row) -> rusqlite::Result<LocalPaymentData> 
         },
         offer,
         personal_note,
+        received_on,
     })
 }
 
@@ -802,6 +821,21 @@ mod tests {
         assert_eq!(
             local_payment_data_without_note_from_store,
             local_payment_data
+        );
+
+        data_store
+            .update_received_on("hash - no error", "Satoshi")
+            .unwrap();
+        let local_payment_data_with_received_on_from_store = data_store
+            .retrieve_payment_info("hash - no error")
+            .unwrap()
+            .unwrap();
+        let mut local_payment_data_with_received_on =
+            local_payment_data_without_note_from_store.clone();
+        local_payment_data_with_received_on.received_on = Some("Satoshi".to_string());
+        assert_eq!(
+            local_payment_data_with_received_on_from_store,
+            local_payment_data_with_received_on
         );
     }
     #[test]

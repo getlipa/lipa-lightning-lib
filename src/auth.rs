@@ -5,10 +5,10 @@ use honeybadger::secrets::{generate_keypair, KeyPair};
 use honeybadger::{Auth, AuthLevel};
 use perro::MapToError;
 
-pub(crate) fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
+pub(crate) fn build_auth(seed: &[u8; 64], graphql_url: &str) -> Result<Auth> {
     let auth_keys = derive_auth_keys(seed)?;
     Auth::new(
-        graphql_url,
+        graphql_url.to_string(),
         AuthLevel::Pseudonymous,
         auth_keys.into(),
         generate_keypair(),
@@ -18,11 +18,11 @@ pub(crate) fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
 
 pub(crate) fn build_async_auth(
     seed: &[u8; 64],
-    graphql_url: String,
+    graphql_url: &str,
 ) -> Result<honeybadger::asynchronous::Auth> {
     let auth_keys = derive_auth_keys(seed)?;
     honeybadger::asynchronous::Auth::new(
-        graphql_url,
+        graphql_url.to_string(),
         AuthLevel::Pseudonymous,
         auth_keys.into(),
         generate_keypair(),

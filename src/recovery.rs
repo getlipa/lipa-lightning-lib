@@ -36,7 +36,7 @@ pub fn recover_lightning_node(
     let strong_typed_seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = Arc::new(build_async_auth(
         &strong_typed_seed,
-        environment.backend_url.clone(),
+        &environment.backend_url,
     )?);
 
     let backup_client = RemoteBackupClient::new(environment.backend_url, auth);

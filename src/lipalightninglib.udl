@@ -362,6 +362,7 @@ dictionary IncomingPaymentInfo {
     PaymentInfo payment_info;
     Amount requested_amount;
     Amount lsp_fees;
+    string? received_on;
 };
 
 dictionary OutgoingPaymentInfo {
@@ -637,6 +638,7 @@ dictionary Secret {
 interface Notification {
     Bolt11PaymentReceived(u64 amount_sat, string payment_hash);
     OnchainPaymentSwappedIn(u64 amount_sat, string payment_hash);
+    LnurlInvoiceCreated(u64 amount_sat);
 };
 
 //
@@ -765,4 +767,6 @@ enum NotificationHandlingErrorCode {
     "NodeUnavailable",
     "InProgressSwapNotFound",
     "ExpectedPaymentNotReceived",
+    "InsufficientInboundLiquidity",
+    "LipaServiceUnavailable",
 };

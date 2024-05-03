@@ -730,7 +730,7 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.3#9bec325a6531cbc1c4075fc6c910eddc471d5d76"
+source = "git+https://github.com/getlipa/wild?branch=feature/implement-registration-of-lnurlp-invoices#6c4fd0942161ace0b2eb01c90315cd1379a90961"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -923,7 +923,7 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.3#9bec325a6531cbc1c4075fc6c910eddc471d5d76"
+source = "git+https://github.com/getlipa/wild?branch=feature/implement-registration-of-lnurlp-invoices#6c4fd0942161ace0b2eb01c90315cd1379a90961"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -1562,7 +1562,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.3#9bec325a6531cbc1c4075fc6c910eddc471d5d76"
+source = "git+https://github.com/getlipa/wild?branch=feature/implement-registration-of-lnurlp-invoices#6c4fd0942161ace0b2eb01c90315cd1379a90961"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1748,7 +1748,7 @@ dependencies = [
 [[package]]
 name = "honeybadger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.3#9bec325a6531cbc1c4075fc6c910eddc471d5d76"
+source = "git+https://github.com/getlipa/wild?branch=feature/implement-registration-of-lnurlp-invoices#6c4fd0942161ace0b2eb01c90315cd1379a90961"
 dependencies = [
  "base64 0.22.0",
  "bdk",
@@ -2546,7 +2546,7 @@ dependencies = [
 [[package]]
 name = "parrot"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.3#9bec325a6531cbc1c4075fc6c910eddc471d5d76"
+source = "git+https://github.com/getlipa/wild?branch=feature/implement-registration-of-lnurlp-invoices#6c4fd0942161ace0b2eb01c90315cd1379a90961"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -2618,7 +2618,7 @@ dependencies = [
 [[package]]
 name = "pigeon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.3#9bec325a6531cbc1c4075fc6c910eddc471d5d76"
+source = "git+https://github.com/getlipa/wild?branch=feature/implement-registration-of-lnurlp-invoices#6c4fd0942161ace0b2eb01c90315cd1379a90961"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -3583,7 +3583,7 @@ checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 [[package]]
 name = "squirrel"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.21.3#9bec325a6531cbc1c4075fc6c910eddc471d5d76"
+source = "git+https://github.com/getlipa/wild?branch=feature/implement-registration-of-lnurlp-invoices#6c4fd0942161ace0b2eb01c90315cd1379a90961"
 dependencies = [
  "bdk",
  "graphql",
