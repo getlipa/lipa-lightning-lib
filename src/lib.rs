@@ -428,42 +428,24 @@ impl LightningNode {
         )
         .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
 
-        let last_registered_webhook_base_url = data_store
-            .lock_unwrap()
-            .retrieve_last_registered_notification_webhook_base_url()?;
-
-        if Some(environment.notification_webhook_base_url.clone())
-            != last_registered_webhook_base_url
-        {
-            let id = auth.get_wallet_pubkey_id().map_to_runtime_error(
-                RuntimeErrorCode::AuthServiceUnavailable,
-                "Failed to authenticate in order to get wallet pubkey id",
+        let id = auth.get_wallet_pubkey_id().map_to_runtime_error(
+            RuntimeErrorCode::AuthServiceUnavailable,
+            "Failed to authenticate in order to get wallet pubkey id",
+        )?;
+        let encrypted_id = encrypt(id.as_bytes(), &environment.notification_webhook_secret)
+            .map_to_permanent_failure("Failed to encrypt wallet pubkey id")?;
+        let encrypted_id = hex::encode(encrypted_id);
+        let webhook_url =
+            environment
+                .notification_webhook_base_url
+                .replacen("{id}", &encrypted_id, 1);
+        rt.handle()
+            .block_on(sdk.register_webhook(webhook_url.clone()))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to register notification webhook",
             )?;
-
-            let encrypted_id = encrypt(id.as_bytes(), &environment.notification_webhook_secret)
-                .map_to_permanent_failure("Failed to encrypt wallet pubkey id")?;
-            let encrypted_id = hex::encode(encrypted_id);
-
-            let webhook_url =
-                environment
-                    .notification_webhook_base_url
-                    .replacen("{id}", &encrypted_id, 1);
-
-            rt.handle()
-                .block_on(sdk.register_webhook(webhook_url.clone()))
-                .map_to_runtime_error(
-                    RuntimeErrorCode::NodeUnavailable,
-                    "Failed to register notification webhook",
-                )?;
-            data_store
-                .lock_unwrap()
-                .append_new_registered_notification_webhook_base_url(
-                    &environment.notification_webhook_base_url,
-                )?;
-            debug!(
-                "Successfully registered notification webhook with Breez SDK. URL: {webhook_url}"
-            );
-        }
+        debug!("Successfully registered notification webhook with Breez SDK. URL: {webhook_url}");
 
         Ok(LightningNode {
             user_preferences,
@@ -2296,7 +2278,9 @@ pub(crate) async fn start_sdk(
         },
     );
 
-    breez_config.working_dir = config.local_persistence_path.clone();
+    breez_config
+        .working_dir
+        .clone_from(&config.local_persistence_path);
     breez_config.exemptfee_msat = EXEMPT_FEE.msats;
     breez_config.maxfee_percent = MAX_FEE_PERMYRIAD as f64 / 100_f64;
     let connect_request = ConnectRequest {

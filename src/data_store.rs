@@ -8,7 +8,7 @@ use crate::analytics::AnalyticsConfig;
 use chrono::{DateTime, Utc};
 use crow::{PermanentFailureCode, TemporaryFailureCode};
 use perro::MapToError;
-use rusqlite::{backup, params, Connection, OptionalExtension, Params, Row};
+use rusqlite::{backup, params, Connection, Params, Row};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub(crate) const BACKUP_DB_FILENAME_SUFFIX: &str = ".backup";
@@ -397,33 +397,6 @@ impl DataStore {
                 status_from_row,
             )
             .map_to_permanent_failure("Failed to query analytics config")
-    }
-
-    pub fn append_new_registered_notification_webhook_base_url(
-        &mut self,
-        base_url: &str,
-    ) -> Result<()> {
-        self.backup_status = BackupStatus::WaitingForBackup;
-        self.conn
-            .execute(
-                "INSERT INTO webhook_base_url (url) VALUES (?1)",
-                (base_url,),
-            )
-            .map_to_permanent_failure("Failed to add analytics config to db")?;
-        Ok(())
-    }
-
-    pub fn retrieve_last_registered_notification_webhook_base_url(&self) -> Result<Option<String>> {
-        self.conn
-            .query_row(
-                "SELECT url, updated_at FROM webhook_base_url ORDER BY id DESC LIMIT 1",
-                (),
-                string_from_row,
-            )
-            .optional()
-            .map_to_permanent_failure(
-                "Failed to query last registered notification webhook base url",
-            )
     }
 
     pub fn store_lightning_address(&mut self, lightning_address: &str) -> Result<()> {
@@ -1268,40 +1241,6 @@ mod tests {
         assert_eq!(
             data_store.retrieve_analytics_config().unwrap(),
             AnalyticsConfig::Enabled
-        );
-    }
-
-    #[test]
-    fn test_persisting_last_registered_notification_webhook_base_url() {
-        let db_name = String::from("webhook_base_url.db3");
-        reset_db(&db_name);
-        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
-
-        assert_eq!(
-            data_store
-                .retrieve_last_registered_notification_webhook_base_url()
-                .unwrap(),
-            None
-        );
-
-        data_store
-            .append_new_registered_notification_webhook_base_url("base_url")
-            .unwrap();
-        assert_eq!(
-            data_store
-                .retrieve_last_registered_notification_webhook_base_url()
-                .unwrap(),
-            Some("base_url".to_string())
-        );
-
-        data_store
-            .append_new_registered_notification_webhook_base_url("base_url2")
-            .unwrap();
-        assert_eq!(
-            data_store
-                .retrieve_last_registered_notification_webhook_base_url()
-                .unwrap(),
-            Some("base_url2".to_string())
         );
     }
 
