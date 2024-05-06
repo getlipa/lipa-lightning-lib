@@ -304,6 +304,8 @@ pub enum NotificationHandlingErrorCode {
     NodeUnavailable,
     /// The specificed in-progress swap couldn't be found.
     InProgressSwapNotFound,
+    /// A payment was expected, but it was not received.
+    ExpectedPaymentNotReceived,
 }
 
 impl Display for NotificationHandlingErrorCode {

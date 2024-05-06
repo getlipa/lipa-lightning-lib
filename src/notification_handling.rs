@@ -13,9 +13,11 @@ use crate::{
 use breez_sdk_core::{
     BreezEvent, BreezServices, EventListener, InvoicePaidDetails, Payment, PaymentStatus,
 };
-use log::{debug, error};
+use log::debug;
 use parrot::AnalyticsClient;
-use perro::{ensure, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait};
+use perro::{
+    ensure, invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
+};
 use serde::Deserialize;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
@@ -50,22 +52,16 @@ pub enum Notification {
     },
 }
 
-/// An action to be taken by the consumer of this library upon calling [`handle_notification`].
-#[derive(Debug)]
-pub enum RecommendedAction {
-    None,
-    ShowNotification { notification: Notification },
-}
-
 /// Handles a notification.
 ///
 /// Notifications are used to wake up the node in order to process some request. Currently supported
 /// requests are:
 /// * Receive a payment from a previously issued bolt11 invoice.
+/// * Receive a payment from a confirmed swap.
 pub fn handle_notification(
     config: Config,
     notification_payload: String,
-) -> NotificationHandlingResult<RecommendedAction> {
+) -> NotificationHandlingResult<Notification> {
     enable_backtrace();
     if let Some(level) = config.file_logging_level {
         init_logger_once(
@@ -79,8 +75,7 @@ pub fn handle_notification(
     let payload = match serde_json::from_str::<Payload>(&notification_payload) {
         Ok(p) => p,
         Err(e) => {
-            error!("Notification payload not recognized. Error: {e} - JSON Payload: {notification_payload}");
-            return Ok(RecommendedAction::None);
+            invalid_input!("The provided payload was not recognized. Error: {e} - JSON Payload: {notification_payload}")
         }
     };
 
@@ -154,28 +149,28 @@ fn handle_payment_received_notification(
     sdk: Arc<BreezServices>,
     event_receiver: Receiver<BreezEvent>,
     payment_hash: String,
-) -> NotificationHandlingResult<RecommendedAction> {
+) -> NotificationHandlingResult<Notification> {
     // Check if the payment was already received
     if let Some(payment) = get_confirmed_payment(&rt, &sdk, &payment_hash)? {
-        return Ok(RecommendedAction::ShowNotification {
-            notification: Notification::Bolt11PaymentReceived {
-                amount_sat: payment.amount_msat / 1000,
-                payment_hash,
-            },
+        return Ok(Notification::Bolt11PaymentReceived {
+            amount_sat: payment.amount_msat / 1000,
+            payment_hash,
         });
     }
 
     // Wait for payment to be received
     if let Some(details) = wait_for_payment_with_timeout(event_receiver, &payment_hash)? {
-        return Ok(RecommendedAction::ShowNotification {
-            notification: Notification::Bolt11PaymentReceived {
-                amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
-                payment_hash,
-            },
+        return Ok(Notification::Bolt11PaymentReceived {
+            amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
+            payment_hash,
         });
     }
 
-    Ok(RecommendedAction::None)
+    runtime_error!(
+        NotificationHandlingErrorCode::ExpectedPaymentNotReceived,
+        "Expected incoming payment with hash {} but it was not received",
+        payment_hash
+    )
 }
 
 fn handle_address_txs_confirmed_notification(
@@ -183,7 +178,7 @@ fn handle_address_txs_confirmed_notification(
     sdk: Arc<BreezServices>,
     event_receiver: Receiver<BreezEvent>,
     address: String,
-) -> NotificationHandlingResult<RecommendedAction> {
+) -> NotificationHandlingResult<Notification> {
     let in_progress_swap = rt
         .handle()
         .block_on(sdk.in_progress_swap())
@@ -216,25 +211,25 @@ fn handle_address_txs_confirmed_notification(
     // Check if the payment was already received
     let payment_hash = hex::encode(in_progress_swap.payment_hash);
     if let Some(payment) = get_confirmed_payment(&rt, &sdk, &payment_hash)? {
-        return Ok(RecommendedAction::ShowNotification {
-            notification: Notification::OnchainPaymentSwappedIn {
-                amount_sat: payment.amount_msat / 1000,
-                payment_hash,
-            },
+        return Ok(Notification::OnchainPaymentSwappedIn {
+            amount_sat: payment.amount_msat / 1000,
+            payment_hash,
         });
     }
 
     // Wait for payment to arrive
     if let Some(details) = wait_for_payment_with_timeout(event_receiver, &payment_hash)? {
-        return Ok(RecommendedAction::ShowNotification {
-            notification: Notification::OnchainPaymentSwappedIn {
-                amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
-                payment_hash,
-            },
+        return Ok(Notification::OnchainPaymentSwappedIn {
+            amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
+            payment_hash,
         });
     }
 
-    Ok(RecommendedAction::None)
+    runtime_error!(
+        NotificationHandlingErrorCode::ExpectedPaymentNotReceived,
+        "Expected incoming payment with hash {} but it was not received",
+        payment_hash
+    )
 }
 
 fn get_confirmed_payment(
