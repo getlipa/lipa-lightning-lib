@@ -1925,7 +1925,9 @@ impl LightningNode {
             swap_fee: swap_fee.sats.as_sats().to_amount_up(&rate),
             onchain_fee: prepared_sweep.clone().onchain_fee_sat,
             channel_opening_fee: lsp_fees.lsp_fee.clone(),
-            total_fees: (swap_fee.sats + prepared_sweep.amount.sats + lsp_fees.lsp_fee.sats)
+            total_fees: (swap_fee.sats
+                + prepared_sweep.onchain_fee_sat.sats
+                + lsp_fees.lsp_fee.sats)
                 .as_sats()
                 .to_amount_up(&rate),
             lsp_fee_params: lsp_fees.lsp_fee_params,
