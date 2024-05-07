@@ -6,6 +6,8 @@ use aes_gcm::{aead::Aead, Nonce as AesNonce};
 use cipher::consts::U12;
 use cipher::{KeyInit, Unsigned};
 use perro::MapToError;
+use sha2::Digest;
+use sha2::Sha256;
 
 type NonceLength = U12;
 type Nonce = AesNonce<NonceLength>;
@@ -20,16 +22,16 @@ pub(crate) fn encrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
     Ok(ciphertext)
 }
 
-/// Encrypt using a static nonce.
-/// (This purposefully defeats the entire point of using nonces [*n*umber used *once*]).
-///
-/// CAUTION: This is dangerous because ciphertexts can be compared with each other since similar
-/// cleartext leads to similar ciphertext. This may reveal more information than you anticipate!!
+/// Deterministically encrypt using a plaintext and key derived nonce.
 ///
 /// In regular cases and if you're not absolutely sure what you are doing,
 /// use the safer [`encrypt`] instead.
 pub(crate) fn deterministic_encrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
-    let nonce = Nonce::from_slice(&[0; 12]);
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hasher.update(key);
+    let data_key_hash = hasher.finalize();
+    let nonce = Nonce::from_slice(&data_key_hash[0..12]);
 
     let mut ciphertext = encrypt_vanilla(data, key, nonce)?;
     ciphertext.extend_from_slice(nonce);
