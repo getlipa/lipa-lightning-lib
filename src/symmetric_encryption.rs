@@ -20,6 +20,18 @@ pub(crate) fn encrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
     Ok(ciphertext)
 }
 
+/// Encrypt using a deterministic nonce.
+///
+/// In most cases, you'll be interested in [`encrypt`].
+pub(crate) fn deterministic_encrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
+    let nonce = Nonce::from_slice(&[0; 12]);
+
+    let mut ciphertext = encrypt_vanilla(data, key, nonce)?;
+    ciphertext.extend_from_slice(nonce);
+
+    Ok(ciphertext)
+}
+
 pub(crate) fn decrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
     if data.len() <= NonceLength::USIZE {
         return Err(Error::InvalidInput {
@@ -78,6 +90,23 @@ mod tests {
         let ciphertext = encrypt_vanilla(&plaintext, &DUMMY_KEY, nonce).unwrap();
 
         assert_eq!(ciphertext, CIPHERTEXT.to_vec());
+    }
+
+    #[test]
+    fn test_deterministic_encryption() {
+        let plaintext = PLAINTEXT.to_vec();
+
+        let ciphertext_0 = deterministic_encrypt(&plaintext, &DUMMY_KEY).unwrap();
+        let ciphertext_1 = deterministic_encrypt(&plaintext, &DUMMY_KEY).unwrap();
+        let ciphertext_2 = deterministic_encrypt(&plaintext, &DUMMY_KEY).unwrap();
+        let ciphertext_3 = deterministic_encrypt(&plaintext, &DUMMY_KEY).unwrap();
+
+        assert_eq!(ciphertext_0, ciphertext_1);
+        assert_eq!(ciphertext_1, ciphertext_2);
+        assert_eq!(ciphertext_2, ciphertext_3);
+
+        let plaintext_dec = decrypt(&ciphertext_0, &DUMMY_KEY).unwrap();
+        assert_eq!(plaintext, plaintext_dec);
     }
 
     #[test]
