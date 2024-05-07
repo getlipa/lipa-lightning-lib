@@ -62,6 +62,8 @@ pub enum RecommendedAction {
 /// Notifications are used to wake up the node in order to process some request. Currently supported
 /// requests are:
 /// * Receive a payment from a previously issued bolt11 invoice.
+///
+/// Requires network: **yes**
 pub fn handle_notification(
     config: Config,
     notification_payload: String,
