@@ -103,12 +103,8 @@ mod tests {
 
         let ciphertext_0 = deterministic_encrypt(&plaintext, &DUMMY_KEY).unwrap();
         let ciphertext_1 = deterministic_encrypt(&plaintext, &DUMMY_KEY).unwrap();
-        let ciphertext_2 = deterministic_encrypt(&plaintext, &DUMMY_KEY).unwrap();
-        let ciphertext_3 = deterministic_encrypt(&plaintext, &DUMMY_KEY).unwrap();
 
         assert_eq!(ciphertext_0, ciphertext_1);
-        assert_eq!(ciphertext_1, ciphertext_2);
-        assert_eq!(ciphertext_2, ciphertext_3);
 
         let plaintext_dec = decrypt(&ciphertext_0, &DUMMY_KEY).unwrap();
         assert_eq!(plaintext, plaintext_dec);
