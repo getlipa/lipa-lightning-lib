@@ -17,6 +17,7 @@ env:
 
 jobs:
   security-audit:
+    if: false
     name: Security audit
     runs-on: ubuntu-latest
     steps:

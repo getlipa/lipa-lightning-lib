@@ -301,6 +301,14 @@ impl From<FailedSwapInfo> for ActionRequiredItem {
 }
 
 impl LightningNode {
+    /// Create a new instance of [`LightningNode`].
+    ///
+    /// Parameters:
+    /// * `config` - configuration parameters
+    /// * `events_callback` - a callbacks interface for the consumer of this library to be notified
+    /// of certain events.
+    ///
+    /// Requires network: **yes**
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
         enable_backtrace();
         fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
@@ -463,6 +471,8 @@ impl LightningNode {
     }
 
     /// Request some basic info about the node
+    ///
+    /// Requires network: **no**
     pub fn get_node_info(&self) -> Result<NodeInfo> {
         let node_state = self.sdk.node_info().map_to_runtime_error(
             RuntimeErrorCode::NodeUnavailable,
@@ -494,8 +504,8 @@ impl LightningNode {
     /// When *receiving* payments, a new channel MAY be required. A fee will be charged to the user.
     /// This does NOT impact *sending* payments.
     /// Get information about the fee charged by the LSP for opening new channels
-    /// Please keep in mind that this method doesn't make any network calls. It simply retrieves
-    /// previously fetched values that are frequently updated by a background task.
+    ///
+    /// Requires network: **no**
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
         let exchange_rate = self.get_exchange_rate();
         let lsp_fee = self.task_manager.lock_unwrap().get_lsp_fee()?;
@@ -513,6 +523,8 @@ impl LightningNode {
     ///
     /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
     /// provided to [`LightningNode::create_invoice`]
+    ///
+    /// Requires network: **yes**
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
         let req = OpenChannelFeeRequest {
             amount_msat: Some(amount_sat.as_sats().msats),
@@ -542,6 +554,8 @@ impl LightningNode {
     /// again every time the user is about to receive a payment.
     /// The limits stay the same regardless of what amount wants to receive (= no changes while
     /// he's typing the amount)
+    ///
+    /// Requires network: **no**
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
         // TODO: try to move this logic inside the SDK
         let lsp_min_fee_amount = self.query_lsp_fee()?.channel_minimum_fee;
@@ -564,6 +578,8 @@ impl LightningNode {
     /// * `description` - a description to be embedded into the created invoice
     /// * `metadata` - additional data about the invoice creation used for analytics purposes,
     /// used to improve the user experience
+    ///
+    /// Requires network: **yes**
     pub fn create_invoice(
         &self,
         amount_sat: u64,
@@ -614,6 +630,8 @@ impl LightningNode {
     }
 
     /// Decode a user-provided string (usually obtained from QR-code or pasted).
+    ///
+    /// Requires network: **yes**
     pub fn decode_data(&self, data: String) -> std::result::Result<DecodedData, DecodeDataError> {
         match self.rt.handle().block_on(parse(&data)) {
             Ok(InputType::Bolt11 { invoice }) => {
@@ -665,6 +683,8 @@ impl LightningNode {
     }
 
     /// Get the max routing fee mode that will be employed to restrict the fees for paying a given amount in sats
+    ///
+    /// Requires network: **no**
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
         get_payment_max_routing_fee_mode(amount_sat, &self.get_exchange_rate())
     }
@@ -673,6 +693,8 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `amount` - The to be spent amount.
+    ///
+    /// Requires network: **no**
     pub fn get_invoice_affordability(&self, amount_sat: u64) -> Result<InvoiceAffordability> {
         let amount = amount_sat.as_sats();
 
@@ -710,6 +732,8 @@ impl LightningNode {
     /// Parameters:
     /// * `invoice_details` - details of an invoice decode by [`LightningNode::decode_data`]
     /// * `metadata` - additional meta information about the payment, used by analytics to improve the user experience.
+    ///
+    /// Requires network: **yes**
     pub fn pay_invoice(
         &self,
         invoice_details: InvoiceDetails,
@@ -724,6 +748,8 @@ impl LightningNode {
     ///
     /// Additional Parameters:
     /// * `amount_sat` - amount in sats to be paid
+    ///
+    /// Requires network: **yes**
     pub fn pay_open_invoice(
         &self,
         invoice_details: InvoiceDetails,
@@ -789,6 +815,8 @@ impl LightningNode {
     /// [`LnUrlPayDetails`] must be respected)
     ///
     /// Returns the payment hash of the payment.
+    ///
+    /// Requires network: **yes**
     pub fn pay_lnurlp(
         &self,
         lnurl_pay_request_data: LnUrlPayRequestData,
@@ -836,6 +864,8 @@ impl LightningNode {
     /// List lightning addresses from the most recent used.
     ///
     /// Returns a list of lightning addresses.
+    ///
+    /// Requires network: **no**
     pub fn list_lightning_addresses(&self) -> Result<Vec<String>> {
         let list_payments_request = ListPaymentsRequest {
             filters: Some(vec![PaymentTypeFilter::Sent]),
@@ -874,6 +904,8 @@ impl LightningNode {
     /// * `amount_sat` - amount to be withdraw
     ///
     /// Returns the payment hash of the payment.
+    ///
+    /// Requires network: **yes**
     pub fn withdraw_lnurlw(
         &self,
         lnurl_withdraw_request_data: LnUrlWithdrawRequestData,
@@ -904,6 +936,8 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `number_of_completed_activities` - the maximum number of completed activities that will be returned
+    ///
+    /// Requires network: **no**
     pub fn get_latest_activities(
         &self,
         number_of_completed_activities: u32,
@@ -1019,6 +1053,8 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `hash` - hex representation of payment hash
+    ///
+    /// Requires network: **no**
     pub fn get_incoming_payment(&self, hash: String) -> Result<IncomingPaymentInfo> {
         if let Some(breez_payment) = self
             .rt
@@ -1061,6 +1097,8 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `hash` - hex representation of payment hash
+    ///
+    /// Requires network: **no**
     pub fn get_outgoing_payment(&self, hash: String) -> Result<OutgoingPaymentInfo> {
         let breez_payment = self
             .rt
@@ -1087,6 +1125,8 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `hash` - hex representation of payment hash
+    ///
+    /// Requires network: **no**
     pub fn get_activity(&self, hash: String) -> Result<Activity> {
         let payment = self
             .rt
@@ -1106,6 +1146,8 @@ impl LightningNode {
     /// Parameters:
     /// * `payment_hash` - The hash of the payment for which a personal note will be set.
     /// * `note` - The personal note.
+    ///
+    /// Requires network: **no**
     pub fn set_payment_personal_note(&self, payment_hash: String, note: String) -> Result<()> {
         let note = Some(note.trim().to_string()).filter(|s| !s.is_empty());
 
@@ -1300,6 +1342,8 @@ impl LightningNode {
 
     /// Call the method when the app goes to foreground, such that the user can interact with it.
     /// The library starts running the background tasks more frequently to improve user experience.
+    ///
+    /// Requires network: **no**
     pub fn foreground(&self) {
         self.task_manager.lock_unwrap().foreground();
     }
@@ -1307,6 +1351,8 @@ impl LightningNode {
     /// Call the method when the app goes to background, such that the user can not interact with it.
     /// The library stops running some unnecessary tasks and runs necessary tasks less frequently.
     /// It should save battery and internet traffic.
+    ///
+    /// Requires network: **no**
     pub fn background(&self) {
         self.task_manager.lock_unwrap().background();
     }
@@ -1319,6 +1365,8 @@ impl LightningNode {
     /// slow or unresponsive exchange rate service.
     /// The method will return an empty list if there is nothing persisted yet and
     /// the values are not yet fetched from the service.
+    ///
+    /// Requires network: **no**
     pub fn list_currency_codes(&self) -> Vec<String> {
         let rates = self.task_manager.lock_unwrap().get_exchange_rates();
         rates.iter().map(|r| r.currency_code.clone()).collect()
@@ -1333,6 +1381,8 @@ impl LightningNode {
     ///
     /// The return value is an optional to deal with the possibility
     /// of no exchange rate values being known.
+    ///
+    /// Requires network: **no**
     pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
         let rates = self.task_manager.lock_unwrap().get_exchange_rates();
         let currency_code = self.user_preferences.lock_unwrap().fiat_currency.clone();
@@ -1344,6 +1394,8 @@ impl LightningNode {
 
     /// Change the fiat currency (ISO 4217 currency code) - not all are supported
     /// The method [`LightningNode::list_currency_codes`] can used to list supported codes.
+    ///
+    /// Requires network: **no**
     pub fn change_fiat_currency(&self, fiat_currency: String) {
         self.user_preferences.lock_unwrap().fiat_currency = fiat_currency;
     }
@@ -1352,6 +1404,8 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `timezone_config` - the user's current timezone
+    ///
+    /// Requires network: **no**
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
         self.user_preferences.lock_unwrap().timezone_config = timezone_config;
     }
@@ -1360,6 +1414,8 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `version` - the version number being accepted.
+    ///
+    /// Requires network: **yes**
     pub fn accept_pocket_terms_and_conditions(&self, version: i64) -> Result<()> {
         self.auth
             .accept_terms_and_conditions(TermsAndConditions::Pocket, version)
@@ -1368,6 +1424,8 @@ impl LightningNode {
 
     /// Similar to [`get_terms_and_conditions_status`] with the difference that this method is pre-filling
     /// the environment and seed based on the node configuration.
+    ///
+    /// Requires network: **yes**
     pub fn get_terms_and_conditions_status(
         &self,
         terms_and_conditions: TermsAndConditions,
@@ -1387,6 +1445,8 @@ impl LightningNode {
     /// * `user_currency` - the fiat currency (ISO 4217 currency code) that will be sent for
     /// exchange. Not all are supported. A consumer of this library should find out about available
     /// ones using other sources.
+    ///
+    /// Requires network: **yes**
     pub fn register_fiat_topup(
         &self,
         email: Option<String>,
@@ -1417,6 +1477,9 @@ impl LightningNode {
         Ok(topup_info)
     }
 
+    /// Resets a previous fiat topups registration.
+    ///
+    /// Requires network: **no**
     pub fn reset_fiat_topup(&self) -> Result<()> {
         self.data_store.lock_unwrap().clear_fiat_topup_info()
     }
@@ -1425,6 +1488,8 @@ impl LightningNode {
     /// by [`LightningNode::query_uncompleted_offers`].
     ///
     /// Topup id can be obtained from [`OfferKind::Pocket`].
+    ///
+    /// Requires network: **yes**
     pub fn hide_topup(&self, id: String) -> Result<()> {
         self.offer_manager
             .hide_topup(id)
@@ -1437,6 +1502,8 @@ impl LightningNode {
     /// * Uncompleted offers (either available for collection or failed).
     /// * Unresolved failed swaps.
     /// * Available funds resulting from channel closes.
+    ///
+    /// Requires network: **yes**
     pub fn list_action_required_items(&self) -> Result<Vec<ActionRequiredItem>> {
         let uncompleted_offers = self.query_uncompleted_offers()?;
 
@@ -1461,6 +1528,8 @@ impl LightningNode {
     }
 
     /// Get a list of unclaimed fund offers
+    ///
+    /// Requires network: **yes**
     pub fn query_uncompleted_offers(&self) -> Result<Vec<OfferInfo>> {
         let topup_infos = self
             .offer_manager
@@ -1500,6 +1569,8 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `offer` - An uncompleted offer for which the lightning payout fee should get calculated.
+    ///
+    /// Requires network: **yes**
     pub fn calculate_lightning_payout_fee(&self, offer: OfferInfo) -> Result<Amount> {
         ensure!(
             offer.status != OfferStatus::REFUNDED && offer.status != OfferStatus::SETTLED,
@@ -1542,6 +1613,8 @@ impl LightningNode {
     /// Parameters:
     /// * `offer` - An offer that is still valid for collection. Must have its `lnurlw` field
     /// filled in.
+    ///
+    /// Requires network: **yes**
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
         let lnurlw_data = match self.rt.handle().block_on(parse(
             &offer
@@ -1601,6 +1674,8 @@ impl LightningNode {
     }
 
     /// Registers a new notification token. If a token has already been registered, it will be updated.
+    ///
+    /// Requires network: **yes**
     pub fn register_notification_token(
         &self,
         notification_token: String,
@@ -1621,6 +1696,8 @@ impl LightningNode {
     ///
     /// If the auth flow has never succeeded in this Auth instance, this method will require network
     /// access.
+    ///
+    /// Requires network: **yes**
     pub fn get_wallet_pubkey_id(&self) -> Result<String> {
         self.auth.get_wallet_pubkey_id().map_to_runtime_error(
             RuntimeErrorCode::AuthServiceUnavailable,
@@ -1635,6 +1712,8 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `payment_hash` - a payment hash represented in hex
+    ///
+    /// Requires network: **no**
     pub fn get_payment_uuid(&self, payment_hash: String) -> Result<String> {
         get_payment_uuid(payment_hash)
     }
@@ -1650,7 +1729,9 @@ impl LightningNode {
 
     /// Query the current recommended on-chain fee rate.
     ///
-    /// This is useful to obtain a fee rate to be used for [`LightningNode::sweep`]
+    /// This is useful to obtain a fee rate to be used for [`LightningNode::sweep`].
+    ///
+    /// Requires network: **yes**
     pub fn query_onchain_fee_rate(&self) -> Result<u32> {
         let recommended_fees = self
             .rt
@@ -1674,6 +1755,8 @@ impl LightningNode {
     /// Returns information on the prepared sweep, including the exact fee that results from
     /// using the provided fee rate. The method [`LightningNode::sweep`] can be used to broadcast
     /// the sweep transaction.
+    ///
+    /// Requires network: **yes**
     pub fn prepare_sweep(&self, address: String, onchain_fee_rate: u32) -> Result<SweepInfo> {
         let res = self
             .rt
@@ -1719,6 +1802,8 @@ impl LightningNode {
     /// * `sweep_info` - a prepared sweep info that can be obtained using [`LightningNode::prepare_sweep`]
     ///
     /// Returns the txid of the sweep transaction.
+    ///
+    /// Requires network: **yes**
     pub fn sweep(&self, sweep_info: SweepInfo) -> Result<String> {
         let txid = self
             .rt
@@ -1743,6 +1828,8 @@ impl LightningNode {
     /// Parameters:
     /// * `lsp_fee_params` - the lsp fee parameters to be used if a new channel needs to
     /// be opened. Can be obtained using [`LightningNode::calculate_lsp_fee`].
+    ///
+    /// Requires network: **yes**
     pub fn generate_swap_address(
         &self,
         lsp_fee_params: Option<OpeningFeeParams>,
@@ -1769,6 +1856,8 @@ impl LightningNode {
 
     /// Lists all unresolved failed swaps. Each individual failed swap can be recovered
     /// using [`LightningNode::resolve_failed_swap`].
+    ///
+    /// Requires network: **yes**
     pub fn get_unresolved_failed_swaps(&self) -> Result<Vec<FailedSwapInfo>> {
         Ok(self
             .rt
@@ -1798,6 +1887,8 @@ impl LightningNode {
     /// * `to_address` - the destination address to which funds will be sent
     /// * `onchain_fee_rate` - the fee rate that will be applied. The recommended one can be fetched
     /// using [`LightningNode::query_onchain_fee_rate`]
+    ///
+    /// Requires network: **yes**
     pub fn prepare_resolve_failed_swap(
         &self,
         failed_swap_info: FailedSwapInfo,
@@ -1843,6 +1934,8 @@ impl LightningNode {
     /// Returns the txid of the resolving transaction.
     ///
     /// Paid on-chain fees can be known in advance using [`LightningNode::prepare_resolve_failed_swap`].
+    ///
+    /// Requires network: **yes**
     pub fn resolve_failed_swap(
         &self,
         resolve_failed_swap_info: ResolveFailedSwapInfo,
@@ -1867,6 +1960,8 @@ impl LightningNode {
     /// Throws an [`RuntimeErrorCode::NoOnChainFundsToResolve`] error if no on-chain funds are available to resolve.
     ///
     /// Returns the fee information for the available resolving options.
+    ///
+    /// Requires network: **yes**
     pub fn get_channel_close_resolving_fees(&self) -> Result<ChannelCloseResolvingFees> {
         let rate = self.get_exchange_rate();
         let onchain_balance = self
@@ -1954,6 +2049,8 @@ impl LightningNode {
     /// Can be obtained with [`LightningNode::get_channel_close_resolving_fees`].
     ///
     /// Returns the txid of the sweeping tx.
+    ///
+    /// Requires network: **yes**
     pub fn swap_onchain_to_lightning(
         &self,
         sat_per_vbyte: u32,
@@ -1996,6 +2093,8 @@ impl LightningNode {
     /// Prints additional debug information to the logs.
     ///
     /// Throws an error in case that the necessary information can't be retrieved.
+    ///
+    /// Requires network: **yes**
     pub fn log_debug_info(&self) -> Result<()> {
         self.rt
             .handle()
@@ -2072,6 +2171,8 @@ impl LightningNode {
     }
 
     /// Returns the latest [`FiatTopupInfo`] if the user has registered for the fiat topup.
+    ///
+    /// Requires network: **no**
     pub fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupInfo>> {
         self.data_store
             .lock_unwrap()
@@ -2079,6 +2180,8 @@ impl LightningNode {
     }
 
     /// Returns the health check status of Breez and Greenlight services.
+    ///
+    /// Requires network: **yes**
     pub fn get_health_status(&self) -> Result<BreezHealthCheckStatus> {
         Ok(self
             .rt
@@ -2097,6 +2200,8 @@ impl LightningNode {
     ///
     /// If not feasible, it means the balance is either too high or too low for a reverse-swap to
     /// be used.
+    ///
+    /// Requires network: **yes**
     pub fn is_clear_wallet_feasible(&self) -> Result<bool> {
         let amount_sat = self
             .rt
@@ -2132,6 +2237,8 @@ impl LightningNode {
     /// This can fail if the balance is either too low or too high for it to be reverse-swapped.
     /// The method [`LightningNode::is_clear_wallet_feasible`] can be used to check if the balance
     /// is within the required range.
+    ///
+    /// Requires network: **yes**
     pub fn prepare_clear_wallet(&self) -> Result<ClearWalletInfo> {
         let amount_sat = self
             .rt
@@ -2179,6 +2286,8 @@ impl LightningNode {
     /// [`LightningNode::prepare_clear_wallet`].
     /// * `destination_onchain_address_data` - An on-chain address data instance. Can be obtained
     /// using [`LightningNode::decode_data`].
+    ///
+    /// Requires network: **yes**
     pub fn clear_wallet(
         &self,
         clear_wallet_info: ClearWalletInfo,
@@ -2202,6 +2311,8 @@ impl LightningNode {
     /// Set the analytics configuration.
     ///
     /// This can be used to completely prevent any analytics data from being reported.
+    ///
+    /// Requires network: **no**
     pub fn set_analytics_config(&self, config: AnalyticsConfig) -> Result<()> {
         *self.analytics_interceptor.config.lock_unwrap() = config.clone();
         self.data_store
@@ -2210,12 +2321,16 @@ impl LightningNode {
     }
 
     /// Get the currently configured analytics configuration.
+    ///
+    /// Requires network: **no**
     pub fn get_analytics_config(&self) -> Result<AnalyticsConfig> {
         self.data_store.lock_unwrap().retrieve_analytics_config()
     }
 
     /// Register a human-readable lightning address or return the previously
     /// registered one.
+    ///
+    /// Requires network: **yes**
     pub fn register_lightning_address(&self) -> Result<String> {
         let address = self
             .rt
@@ -2235,6 +2350,8 @@ impl LightningNode {
     }
 
     /// Query the registered lightning address.
+    ///
+    /// Requires network: **no**
     pub fn query_lightning_address(&self) -> Result<Option<String>> {
         let addresses = self
             .data_store
@@ -2305,6 +2422,8 @@ pub(crate) async fn start_sdk(
 /// * `environment` - the [`EnvironmentCode`] of the intended environment.
 /// * `seed` - the seed from the wallet for which the T&C will be accepted.
 /// * `version` - the version number being accepted.
+///
+/// Requires network: **yes**
 pub fn accept_terms_and_conditions(
     environment: EnvironmentCode,
     seed: Vec<u8>,
@@ -2358,6 +2477,8 @@ pub fn parse_lightning_address(address: &str) -> std::result::Result<(), ParseEr
 /// * `terms_and_conditions` - [`TermsAndConditions`] for which the status should be requested.
 ///
 /// Returns the status of the requested [`TermsAndConditions`].
+///
+/// Requires network: **yes**
 pub fn get_terms_and_conditions_status(
     environment: EnvironmentCode,
     seed: Vec<u8>,

@@ -58,6 +58,8 @@ pub enum Notification {
 /// requests are:
 /// * Receive a payment from a previously issued bolt11 invoice.
 /// * Receive a payment from a confirmed swap.
+///
+/// Requires network: **yes**
 pub fn handle_notification(
     config: Config,
     notification_payload: String,
