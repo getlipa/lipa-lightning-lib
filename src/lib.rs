@@ -85,7 +85,7 @@ pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Se
 pub use crate::swap::{
     FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo, SwapToLightningFees,
 };
-use crate::symmetric_encryption::encrypt;
+use crate::symmetric_encryption::deterministic_encrypt;
 use crate::task_manager::TaskManager;
 use crate::util::{
     replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
@@ -440,8 +440,9 @@ impl LightningNode {
             RuntimeErrorCode::AuthServiceUnavailable,
             "Failed to authenticate in order to get wallet pubkey id",
         )?;
-        let encrypted_id = encrypt(id.as_bytes(), &environment.notification_webhook_secret)
-            .map_to_permanent_failure("Failed to encrypt wallet pubkey id")?;
+        let encrypted_id =
+            deterministic_encrypt(id.as_bytes(), &environment.notification_webhook_secret)
+                .map_to_permanent_failure("Failed to encrypt wallet pubkey id")?;
         let encrypted_id = hex::encode(encrypted_id);
         let webhook_url =
             environment
