@@ -20,9 +20,14 @@ pub(crate) fn encrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
     Ok(ciphertext)
 }
 
-/// Encrypt using a deterministic nonce.
+/// Encrypt using a static nonce.
+/// (This purposefully defeats the entire point of using nonces [*n*umber used *once*]).
 ///
-/// In most cases, you'll be interested in [`encrypt`].
+/// CAUTION: This is dangerous because ciphertexts can be compared with each other since similar
+/// cleartext leads to similar ciphertext. This may reveal more information than you anticipate!!
+///
+/// In regular cases and if you're not absolutely sure what you are doing,
+/// use the safer [`encrypt`] instead.
 pub(crate) fn deterministic_encrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
     let nonce = Nonce::from_slice(&[0; 12]);
 
