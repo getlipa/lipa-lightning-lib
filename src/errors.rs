@@ -300,11 +300,14 @@ pub(crate) fn map_lnurl_withdraw_error(
 /// A code that specifies the NotificationHandlingError that occurred.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum NotificationHandlingErrorCode {
-    /// Information about the remote node isn't cached and couldn't be accessed. Could be a network error.
+    /// Information about the remote node isn't cached and couldn't be accessed.
+    /// Could be a network error.
     NodeUnavailable,
-    /// The specificed in-progress swap couldn't be found.
+    /// The notification payload implied the existence of an in-progress swap, but it couldn't be
+    /// found. Maybe another instance of the wallet completed the swap.
     InProgressSwapNotFound,
-    /// A payment was expected, but it was not received.
+    /// The notification payload implied the existence of an incoming payment, but it was not
+    /// received in time. Starting the app might help complete the payment.
     ExpectedPaymentNotReceived,
 }
 
