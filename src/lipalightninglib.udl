@@ -624,19 +624,13 @@ namespace lipalightninglib {
     void parse_lightning_address([ByRef] string address);
 
     [Throws=NotificationHandlingError]
-    RecommendedAction handle_notification(Config config, string notification_payload);
+    Notification handle_notification(Config config, string notification_payload);
 };
 
 dictionary Secret {
     sequence<string> mnemonic;
     string passphrase;
     bytes seed;
-};
-
-[Enum]
-interface RecommendedAction {
-    None();
-    ShowNotification(Notification notification);
 };
 
 [Enum]
@@ -770,4 +764,5 @@ interface NotificationHandlingError {
 enum NotificationHandlingErrorCode {
     "NodeUnavailable",
     "InProgressSwapNotFound",
+    "ExpectedPaymentNotReceived",
 };

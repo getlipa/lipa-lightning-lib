@@ -145,9 +145,9 @@ fn start_payment_received(words: &mut dyn Iterator<Item = &str>) -> Result<()> {
         }}"
     );
 
-    let action = handle_notification(config, notification_payload).unwrap();
+    let notification = handle_notification(config, notification_payload).unwrap();
 
-    println!("The recommended action is {action:?}");
+    println!("The returned notification is {notification:?}");
 
     Ok(())
 }
@@ -172,9 +172,9 @@ fn start_address_txs_confirmed(words: &mut dyn Iterator<Item = &str>) -> Result<
         }}"
     );
 
-    let action = handle_notification(config, notification_payload).unwrap();
+    let notification = handle_notification(config, notification_payload).unwrap();
 
-    println!("The recommended action is {action:?}");
+    println!("The returned notification is {notification:?}");
 
     Ok(())
 }
