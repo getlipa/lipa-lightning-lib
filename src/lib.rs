@@ -102,7 +102,7 @@ use breez_sdk_core::{
     PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRedeemOnchainFundsRequest,
     PrepareRefundRequest, ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
     ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest,
-    SendPaymentRequest,
+    SendPaymentRequest, UnspentTransactionOutput,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -129,6 +129,8 @@ use std::{env, fs};
 use uuid::Uuid;
 
 const LOGS_DIR: &str = "logs";
+
+const CLN_DUST_LIMIT_SAT: u64 = 546;
 
 pub(crate) const DB_FILENAME: &str = "db2.db3";
 
@@ -195,7 +197,7 @@ pub type PocketOfferError = TopupError;
 pub struct SweepInfo {
     pub address: String,
     pub onchain_fee_rate: u32,
-    pub onchain_fee_sat: Amount,
+    pub onchain_fee_amount: Amount,
     pub amount: Amount,
 }
 
@@ -1518,9 +1520,26 @@ impl LightningNode {
             .chain(failed_swaps.into_iter().map(|s| s.into()))
             .collect();
 
-        if available_channel_closes_funds.sats > 0 {
+        // CLN currently forces a min-emergency onchain balance of 546 (the dust limit)
+        // TODO: Replace CLN_DUST_LIMIT_SAT with 0 if/when
+        //      https://github.com/ElementsProject/lightning/issues/7131 is addressed
+        if available_channel_closes_funds.sats > CLN_DUST_LIMIT_SAT {
+            let utxos = self.get_node_utxos()?;
+
+            // If we already have a 546 sat UTXO, then we hide from the total amount available
+            let available_funds_sats = if utxos
+                .iter()
+                .any(|u| u.amount_millisatoshi == CLN_DUST_LIMIT_SAT * 1_000)
+            {
+                available_channel_closes_funds.sats
+            } else {
+                available_channel_closes_funds.sats - CLN_DUST_LIMIT_SAT
+            };
+
             action_required_items.push(ActionRequiredItem::ChannelClosesFundsAvailable {
-                available_funds: available_channel_closes_funds,
+                available_funds: available_funds_sats
+                    .as_sats()
+                    .to_amount_down(&self.get_exchange_rate()),
             })
         }
 
@@ -1787,10 +1806,26 @@ impl LightningNode {
             .sats;
 
         let rate = self.get_exchange_rate();
+
+        // Add the amount that won't be possible to be swept due to CLN's min-emergency limit (546 sats)
+        // TODO: remove CLN_DUST_LIMIT_SAT addition if/when
+        //      https://github.com/ElementsProject/lightning/issues/7131 is addressed
+        let utxos = self.get_node_utxos()?;
+        let onchain_fee_sat = if utxos
+            .iter()
+            .any(|u| u.amount_millisatoshi == CLN_DUST_LIMIT_SAT * 1_000)
+        {
+            res.tx_fee_sat
+        } else {
+            res.tx_fee_sat + CLN_DUST_LIMIT_SAT
+        };
+
+        let onchain_fee_amount = onchain_fee_sat.as_sats().to_amount_up(&rate);
+
         Ok(SweepInfo {
             address,
             onchain_fee_rate,
-            onchain_fee_sat: res.tx_fee_sat.as_sats().to_amount_up(&rate),
+            onchain_fee_amount,
             amount: (onchain_balance_sat - res.tx_fee_sat)
                 .as_sats()
                 .to_amount_up(&rate),
@@ -2009,7 +2044,7 @@ impl LightningNode {
         {
             return Ok(ChannelCloseResolvingFees {
                 swap_fees: None,
-                sweep_onchain_fee_estimate: prepared_sweep.onchain_fee_sat,
+                sweep_onchain_fee_estimate: prepared_sweep.onchain_fee_amount,
                 sat_per_vbyte,
             });
         }
@@ -2019,10 +2054,10 @@ impl LightningNode {
         let swap_fee = 0_u64.as_sats();
         let swap_to_lightning_fees = SwapToLightningFees {
             swap_fee: swap_fee.sats.as_sats().to_amount_up(&rate),
-            onchain_fee: prepared_sweep.clone().onchain_fee_sat,
+            onchain_fee: prepared_sweep.clone().onchain_fee_amount,
             channel_opening_fee: lsp_fees.lsp_fee.clone(),
             total_fees: (swap_fee.sats
-                + prepared_sweep.onchain_fee_sat.sats
+                + prepared_sweep.onchain_fee_amount.sats
                 + lsp_fees.lsp_fee.sats)
                 .as_sats()
                 .to_amount_up(&rate),
@@ -2031,7 +2066,7 @@ impl LightningNode {
 
         Ok(ChannelCloseResolvingFees {
             swap_fees: Some(swap_to_lightning_fees),
-            sweep_onchain_fee_estimate: prepared_sweep.onchain_fee_sat,
+            sweep_onchain_fee_estimate: prepared_sweep.onchain_fee_amount,
             sat_per_vbyte,
         })
     }
@@ -2372,6 +2407,15 @@ impl LightningNode {
             .handle()
             .block_on(self.sdk.report_issue(request))
             .log_ignore_error(Level::Warn, "Failed to report issue");
+    }
+
+    fn get_node_utxos(&self) -> Result<Vec<UnspentTransactionOutput>> {
+        let node_state = self
+            .sdk
+            .node_info()
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Couldn't get node info")?;
+
+        Ok(node_state.utxos)
     }
 }
 
