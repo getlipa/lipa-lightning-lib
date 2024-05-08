@@ -493,7 +493,7 @@ enum OfferStatus {
 dictionary SweepInfo {
     string address;
     u32 onchain_fee_rate;
-    Amount onchain_fee_sat;
+    Amount onchain_fee_amount;
     Amount amount;
 };
 
