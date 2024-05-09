@@ -12,6 +12,7 @@ use breez_sdk_core::{BreezServices, OpenChannelFeeRequest, OpeningFeeParams};
 use graphql::schema::{migrate_funds, migration_balance, MigrateFunds, MigrationBalance};
 use graphql::{build_client, post_blocking};
 use honey_badger::Auth;
+use log::info;
 use num_enum::TryFromPrimitive;
 use perro::{MapToError, OptionToError, ResultTrait};
 use reqwest::blocking::Client;
@@ -119,6 +120,20 @@ pub(crate) fn migrate_funds(
             Err(e)
         }
     }
+}
+
+pub(crate) fn log_fund_migration_data(seed: &[u8; 64]) -> Result<()> {
+    let (private_key, public_key) = derive_ldk_keys(seed)?;
+    let public_key = hex::encode(public_key.serialize());
+
+    let message = format!("I control the private key of the node {public_key}");
+    let message = Message::from_hashed_data::<sha256::Hash>(message.as_bytes());
+    let signature = private_key.sign_ecdsa(message).serialize_der().to_string();
+
+    info!("Legacy LDK node pubkey: {public_key}");
+    info!("Legacy LDK node signature: {signature}");
+
+    Ok(())
 }
 
 fn fetch_legacy_balance(client: &Client, backend_url: &str, public_key: String) -> Result<u64> {

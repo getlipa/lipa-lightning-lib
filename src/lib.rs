@@ -438,6 +438,8 @@ impl LightningNode {
         )
         .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
 
+        fund_migration::log_fund_migration_data(&strong_typed_seed)?;
+
         let id = auth.get_wallet_pubkey_id().map_to_runtime_error(
             RuntimeErrorCode::AuthServiceUnavailable,
             "Failed to authenticate in order to get wallet pubkey id",
