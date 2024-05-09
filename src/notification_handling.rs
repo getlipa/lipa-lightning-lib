@@ -161,7 +161,10 @@ fn handle_payment_received_notification(
     }
 
     // Wait for payment to be received
-    if let Some(details) = wait_for_payment_with_timeout(event_receiver, &payment_hash)? {
+    if let Some(details) = wait_for_payment_with_timeout(&event_receiver, &payment_hash)? {
+        // We want to wait as long as possible to decrease the likelihood of the signer being shut down
+        //  while HTLCs are still in-flight.
+        wait_for_synced_event(&event_receiver)?;
         return Ok(Notification::Bolt11PaymentReceived {
             amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
             payment_hash,
@@ -220,7 +223,10 @@ fn handle_address_txs_confirmed_notification(
     }
 
     // Wait for payment to arrive
-    if let Some(details) = wait_for_payment_with_timeout(event_receiver, &payment_hash)? {
+    if let Some(details) = wait_for_payment_with_timeout(&event_receiver, &payment_hash)? {
+        // We want to wait as long as possible to decrease the likelihood of the signer being shut down
+        //  while HTLCs are still in-flight.
+        wait_for_synced_event(&event_receiver)?;
         return Ok(Notification::OnchainPaymentSwappedIn {
             amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
             payment_hash,
@@ -256,7 +262,7 @@ fn get_confirmed_payment(
 }
 
 fn wait_for_payment_with_timeout(
-    event_receiver: Receiver<BreezEvent>,
+    event_receiver: &Receiver<BreezEvent>,
     payment_hash: &str,
 ) -> NotificationHandlingResult<Option<InvoicePaidDetails>> {
     let start = Instant::now();
@@ -273,6 +279,20 @@ fn wait_for_payment_with_timeout(
         }
     }
     Ok(None)
+}
+
+/// Wait for synced event without timeout.
+fn wait_for_synced_event(event_receiver: &Receiver<BreezEvent>) -> NotificationHandlingResult<()> {
+    loop {
+        match event_receiver.recv_timeout(Duration::from_secs(1)) {
+            Ok(BreezEvent::Synced) => return Ok(()),
+            Ok(_) => continue,
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => {
+                permanent_failure!("The SDK stopped running unexpectedly");
+            }
+        }
+    }
 }
 
 #[derive(Deserialize)]
