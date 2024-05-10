@@ -129,8 +129,9 @@ const MIGRATION_13_PAYMENT_PERSONAL_NOTE: &str = "
     ALTER TABLE payments ADD COLUMN personal_note TEXT DEFAULT NULL;
 ";
 
-const MIGRATION_14_RECEIVED_ON: &str = "
+const MIGRATION_14_LNURL_PAY_RECEIVE_DATA: &str = "
     ALTER TABLE payments ADD COLUMN received_on TEXT DEFAULT NULL;
+    ALTER TABLE payments ADD COLUMN received_lnurl_comment TEXT DEFAULT NULL;
 ";
 
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
@@ -154,7 +155,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_11_LAST_REGISTERED_NOTIFICATION_WEBHOOK_BASE_URL),
         M::up(MIGRATION_12_LIGHTNING_ADDRESSES),
         M::up(MIGRATION_13_PAYMENT_PERSONAL_NOTE),
-        M::up(MIGRATION_14_RECEIVED_ON),
+        M::up(MIGRATION_14_LNURL_PAY_RECEIVE_DATA),
     ])
 }
 

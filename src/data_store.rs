@@ -20,6 +20,7 @@ pub(crate) struct LocalPaymentData {
     pub offer: Option<OfferKind>,
     pub personal_note: Option<String>,
     pub received_on: Option<String>,
+    pub received_lnurl_comment: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -60,6 +61,8 @@ impl DataStore {
         user_preferences: UserPreferences,
         exchange_rates: Vec<ExchangeRate>,
         offer: Option<OfferKind>,
+        received_on: Option<String>,
+        received_lnurl_comment: Option<String>,
     ) -> Result<()> {
         self.backup_status = BackupStatus::WaitingForBackup;
         let tx = self
@@ -71,8 +74,9 @@ impl DataStore {
 
         tx.execute(
             "\
-            INSERT INTO payments (hash, timezone_id, timezone_utc_offset_secs, fiat_currency, exchange_rates_history_snaphot_id)\
-            VALUES (?1, ?2, ?3, ?4, ?5)\
+            INSERT INTO payments (hash, timezone_id, timezone_utc_offset_secs, fiat_currency, \
+            exchange_rates_history_snaphot_id, received_on, received_lnurl_comment)\
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)\
             ",
             (
                 payment_hash,
@@ -80,6 +84,8 @@ impl DataStore {
                 user_preferences.timezone_config.timezone_utc_offset_secs,
                 user_preferences.fiat_currency,
                 snapshot_id,
+                received_on,
+                received_lnurl_comment,
             ),
         )
         .map_to_permanent_failure("Failed to add payment info to db")?;
@@ -134,7 +140,7 @@ impl DataStore {
             SELECT timezone_id, timezone_utc_offset_secs, payments.fiat_currency, h.rate, h.updated_at,  \
             o.pocket_id, o.fiat_currency, o.rate, o.exchanged_at, o.topup_value_minor_units, \
             o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad, o.error, o.topup_value_sats, \
-            payments.personal_note, payments.received_on \
+            payments.personal_note, payments.received_on, payments.received_lnurl_comment \
             FROM payments \
             LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snaphot_id=h.snapshot_id \
                 AND payments.fiat_currency=h.fiat_currency \
@@ -254,21 +260,6 @@ impl DataStore {
                 params![personal_note, payment_hash],
             )
             .map_to_permanent_failure("Failed to store personal note in local db")?;
-
-        Ok(())
-    }
-
-    pub fn update_received_on(&mut self, payment_hash: &str, received_on: &str) -> Result<()> {
-        self.backup_status = BackupStatus::WaitingForBackup;
-        self.conn
-            .execute(
-                "
-                UPDATE payments \
-                SET received_on = ?1 \
-                WHERE hash=?2",
-                params![received_on, payment_hash],
-            )
-            .map_to_permanent_failure("Failed to store received_on in local db")?;
 
         Ok(())
     }
@@ -544,6 +535,7 @@ fn local_payment_data_from_row(row: &Row) -> rusqlite::Result<LocalPaymentData> 
     let offer = offer_kind_from_row(row)?;
     let personal_note = row.get(14)?;
     let received_on = row.get(15)?;
+    let received_lnurl_comment = row.get(16)?;
 
     Ok(LocalPaymentData {
         user_preferences: UserPreferences {
@@ -561,6 +553,7 @@ fn local_payment_data_from_row(row: &Row) -> rusqlite::Result<LocalPaymentData> 
         offer,
         personal_note,
         received_on,
+        received_lnurl_comment,
     })
 }
 
@@ -725,7 +718,14 @@ mod tests {
         };
 
         data_store
-            .store_payment_info("hash", user_preferences.clone(), Vec::new(), None)
+            .store_payment_info(
+                "hash",
+                user_preferences.clone(),
+                Vec::new(),
+                None,
+                None,
+                None,
+            )
             .unwrap();
 
         // The second call will not fail.
@@ -735,6 +735,8 @@ mod tests {
                 user_preferences.clone(),
                 exchange_rates.clone(),
                 Some(offer_kind.clone()),
+                None,
+                None,
             )
             .unwrap();
 
@@ -743,6 +745,8 @@ mod tests {
                 "hash - no offer",
                 user_preferences.clone(),
                 exchange_rates.clone(),
+                None,
+                None,
                 None,
             )
             .unwrap();
@@ -753,6 +757,8 @@ mod tests {
                 user_preferences.clone(),
                 exchange_rates,
                 Some(offer_kind_no_error.clone()),
+                Some("received_on".to_string()),
+                Some("received_lnurl_comment".to_string()),
             )
             .unwrap();
 
@@ -796,6 +802,14 @@ mod tests {
             local_payment_data.offer.as_ref().unwrap(),
             &offer_kind_no_error
         );
+        assert_eq!(
+            local_payment_data.received_on.as_ref().unwrap(),
+            "received_on"
+        );
+        assert_eq!(
+            local_payment_data.received_lnurl_comment.as_ref().unwrap(),
+            "received_lnurl_comment"
+        );
 
         let mut local_payment_data_with_note = local_payment_data.clone();
         local_payment_data_with_note.personal_note = Some(String::from("a note"));
@@ -821,21 +835,6 @@ mod tests {
         assert_eq!(
             local_payment_data_without_note_from_store,
             local_payment_data
-        );
-
-        data_store
-            .update_received_on("hash - no error", "Satoshi")
-            .unwrap();
-        let local_payment_data_with_received_on_from_store = data_store
-            .retrieve_payment_info("hash - no error")
-            .unwrap()
-            .unwrap();
-        let mut local_payment_data_with_received_on =
-            local_payment_data_without_note_from_store.clone();
-        local_payment_data_with_received_on.received_on = Some("Satoshi".to_string());
-        assert_eq!(
-            local_payment_data_with_received_on_from_store,
-            local_payment_data_with_received_on
         );
     }
     #[test]
@@ -1011,6 +1010,8 @@ mod tests {
                 user_preferences.clone(),
                 exchange_rates,
                 Some(offer.clone()),
+                None,
+                None,
             )
             .unwrap();
 

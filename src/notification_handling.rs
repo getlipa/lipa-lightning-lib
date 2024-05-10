@@ -1,3 +1,4 @@
+use crate::amount::AsSats;
 use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
 use crate::async_runtime::AsyncRuntime;
 use crate::auth::{build_async_auth, build_auth};
@@ -292,7 +293,7 @@ fn handle_lnurl_pay_request_notification(
         .handle()
         .block_on(sdk.receive_payment(ReceivePaymentRequest {
             amount_msat: data.amount_msat,
-            description: data.payer_comment.unwrap_or_default(),
+            description: String::new(),
             preimage: None,
             opening_fee_params: None,
             use_description_hash: None,
@@ -336,16 +337,10 @@ fn handle_lnurl_pay_request_notification(
             user_preferences,
             exchange_rates,
             None,
+            Some(data.recipient),
+            data.payer_comment,
         )
         .log_ignore_error(Level::Error, "Failed to persist payment info");
-
-    // Persist recipient information
-    data_store
-        .update_received_on(
-            &receive_payment_result.ln_invoice.payment_hash,
-            &data.recipient,
-        )
-        .log_ignore_error(Level::Error, "Failed to persist recipient info");
 
     // Submit created invoice to backend
     let async_auth = build_async_auth(&strong_typed_seed, &environment.backend_url)
@@ -363,7 +358,7 @@ fn handle_lnurl_pay_request_notification(
         .map_runtime_error_to(NotificationHandlingErrorCode::LipaServiceUnavailable)?;
 
     Ok(Notification::LnurlInvoiceCreated {
-        amount_sat: data.amount_msat / 1_000,
+        amount_sat: data.amount_msat.as_msats().sats_round_down(),
     })
 }
 

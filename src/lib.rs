@@ -1166,23 +1166,25 @@ impl LightningNode {
             .data_store
             .lock_unwrap()
             .retrieve_payment_info(&payment_details.payment_hash)?;
-        let (exchange_rate, tz_config, personal_note, offer, received_on) = match local_payment_data
-        {
-            Some(data) => (
-                Some(data.exchange_rate),
-                data.user_preferences.timezone_config,
-                data.personal_note,
-                data.offer,
-                data.received_on,
-            ),
-            None => (
-                self.get_exchange_rate(),
-                self.user_preferences.lock_unwrap().timezone_config.clone(),
-                None,
-                None,
-                None,
-            ),
-        };
+        let (exchange_rate, tz_config, personal_note, offer, received_on, received_lnurl_comment) =
+            match local_payment_data {
+                Some(data) => (
+                    Some(data.exchange_rate),
+                    data.user_preferences.timezone_config,
+                    data.personal_note,
+                    data.offer,
+                    data.received_on,
+                    data.received_lnurl_comment,
+                ),
+                None => (
+                    self.get_exchange_rate(),
+                    self.user_preferences.lock_unwrap().timezone_config.clone(),
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+            };
 
         if let Some(offer) = offer {
             let incoming_payment_info = IncomingPaymentInfo::new(
@@ -1191,6 +1193,7 @@ impl LightningNode {
                 tz_config,
                 personal_note,
                 received_on,
+                received_lnurl_comment,
             )?;
             let offer_kind = fill_payout_fee(
                 offer,
@@ -1215,6 +1218,7 @@ impl LightningNode {
                 tz_config,
                 personal_note,
                 received_on,
+                received_lnurl_comment,
             )?;
             Ok(Activity::Swap {
                 incoming_payment_info: Some(incoming_payment_info),
@@ -1227,6 +1231,7 @@ impl LightningNode {
                 tz_config,
                 personal_note,
                 received_on,
+                received_lnurl_comment,
             )?;
             Ok(Activity::IncomingPayment {
                 incoming_payment_info,
@@ -1339,6 +1344,7 @@ impl LightningNode {
             requested_amount,
             lsp_fees,
             received_on: None,
+            received_lnurl_comment: None,
         };
         Ok(incoming_payment_info)
     }
@@ -1743,7 +1749,7 @@ impl LightningNode {
         let exchange_rates = self.task_manager.lock_unwrap().get_exchange_rates();
         self.data_store
             .lock_unwrap()
-            .store_payment_info(hash, user_preferences, exchange_rates, offer)
+            .store_payment_info(hash, user_preferences, exchange_rates, offer, None, None)
             .log_ignore_error(Level::Error, "Failed to persist payment info")
     }
 
@@ -2820,6 +2826,7 @@ mod tests {
                 requested_amount: Amount::default(),
                 lsp_fees: Amount::default(),
                 received_on: None,
+                received_lnurl_comment: None,
             },
         };
 
@@ -2830,6 +2837,7 @@ mod tests {
                 requested_amount: Amount::default(),
                 lsp_fees: Amount::default(),
                 received_on: None,
+                received_lnurl_comment: None,
             },
             offer_kind: OfferKind::Pocket {
                 id: "123".to_string(),
@@ -2855,6 +2863,7 @@ mod tests {
                 requested_amount: Amount::default(),
                 lsp_fees: Amount::default(),
                 received_on: None,
+                received_lnurl_comment: None,
             },
             offer_kind: OfferKind::Pocket {
                 id: "234".to_string(),

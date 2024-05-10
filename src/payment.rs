@@ -150,6 +150,8 @@ pub struct IncomingPaymentInfo {
     pub lsp_fees: Amount,
     /// Which Lightning Address / Phone number this payment was received on.
     pub received_on: Option<String>,
+    /// Optional comment sent by the payer of an LNURL payment.
+    pub received_lnurl_comment: Option<String>,
 }
 
 impl IncomingPaymentInfo {
@@ -159,6 +161,7 @@ impl IncomingPaymentInfo {
         tz_config: TzConfig,
         personal_note: Option<String>,
         received_on: Option<String>,
+        received_lnurl_comment: Option<String>,
     ) -> Result<Self> {
         let lsp_fees = breez_payment
             .fee_msat
@@ -176,6 +179,7 @@ impl IncomingPaymentInfo {
             requested_amount,
             lsp_fees,
             received_on,
+            received_lnurl_comment,
         })
     }
 }

@@ -363,6 +363,7 @@ dictionary IncomingPaymentInfo {
     Amount requested_amount;
     Amount lsp_fees;
     string? received_on;
+    string? received_lnurl_comment;
 };
 
 dictionary OutgoingPaymentInfo {
