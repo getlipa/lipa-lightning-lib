@@ -570,8 +570,8 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-core"
-version = "0.4.0"
-source = "git+https://github.com/breez/breez-sdk?tag=0.4.0#b08215dc4fa98cadb50616a3702bc8f83afaf636"
+version = "0.4.1-rc2"
+source = "git+https://github.com/breez/breez-sdk?tag=0.4.1-rc2#7a2b03ffeac30775842964094c0e3087a55f78de"
 dependencies = [
  "aes",
  "anyhow",

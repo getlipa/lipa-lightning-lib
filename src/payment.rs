@@ -207,9 +207,7 @@ impl OutgoingPaymentInfo {
             }
         };
         let recipient = Recipient::new(data);
-        // TODO: Read the comment from `data`.
-        // let comment_for_recipient = data.lnurl_pay_comment.clone();
-        let comment_for_recipient = None;
+        let comment_for_recipient = data.lnurl_pay_comment.clone();
         let payment_info =
             PaymentInfo::new(breez_payment, exchange_rate, tz_config, personal_note)?;
         Ok(Self {
