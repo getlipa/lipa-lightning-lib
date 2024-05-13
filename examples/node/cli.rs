@@ -271,6 +271,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 "background" => {
                     node.background();
                 }
+                "closechannels" => {
+                    if let Err(message) = node.close_all_channels_with_current_lsp() {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "stop" => {
                     break;
                 }
@@ -412,6 +417,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("health", "health"));
     hints.insert(CommandHint::new("foreground", "foreground"));
     hints.insert(CommandHint::new("background", "background"));
+    hints.insert(CommandHint::new("closechannels", "closechannels"));
     hints.insert(CommandHint::new("stop", "stop"));
     hints.insert(CommandHint::new("help", "help"));
     hints.insert(CommandHint::new("h", "h"));
@@ -474,6 +480,8 @@ fn help() {
     println!();
     println!("  foreground");
     println!("  background");
+    println!();
+    println!("  closechannels");
     println!();
     println!("  stop");
 }

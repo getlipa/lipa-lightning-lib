@@ -2419,6 +2419,19 @@ impl LightningNode {
 
         Ok(node_state.utxos)
     }
+
+    // Only meant for example CLI use
+    #[doc(hidden)]
+    pub fn close_all_channels_with_current_lsp(&self) -> Result<()> {
+        self.rt
+            .handle()
+            .block_on(self.sdk.close_lsp_channels())
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to close channels",
+            )?;
+        Ok(())
+    }
 }
 
 pub(crate) async fn start_sdk(
