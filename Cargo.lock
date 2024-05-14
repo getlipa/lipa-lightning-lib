@@ -628,6 +628,7 @@ dependencies = [
  "lightning-invoice 0.28.0",
  "rand",
  "secp256k1 0.27.0",
+ "tokio",
 ]
 
 [[package]]
