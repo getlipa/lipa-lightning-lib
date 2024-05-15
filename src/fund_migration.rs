@@ -11,7 +11,7 @@ use bitcoin::Network;
 use breez_sdk_core::{BreezServices, OpenChannelFeeRequest, OpeningFeeParams};
 use graphql::schema::{migrate_funds, migration_balance, MigrateFunds, MigrationBalance};
 use graphql::{build_client, post_blocking};
-use honey_badger::Auth;
+use honeybadger::Auth;
 use log::info;
 use num_enum::TryFromPrimitive;
 use perro::{MapToError, OptionToError, ResultTrait};
