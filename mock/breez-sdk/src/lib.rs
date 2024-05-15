@@ -4,12 +4,10 @@ use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, InvoiceBuilder};
 use rand::{Rng, RngCore};
 use secp256k1::{Secp256k1, SecretKey};
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-
-const MAX_RECEIVABLE_MSAT: u64 = 1_000_000_000;
 
 const PAYEE_PUBKEY_DUMMY: &str =
     "020333076e35e398a0c14c8a0211563bbcdce5087cb300342cba09414e9b5f3605";
@@ -25,6 +23,7 @@ const LSP_BASE_FEE_MSAT: i64 = 1000;
 const LSP_FEE_RATE: f64 = 0.00001;
 const LSP_TIMELOCK_DELTA: u32 = 42;
 const LSP_MIN_HTLC_MSAT: i64 = 600;
+const LSP_ADDED_LIQUIDITY_ON_NEW_CHANNELS_MSAT: u64 = 50_000_000;
 const OPENING_FEE_PARAMS_MIN_MSAT: u64 = 5_000_000;
 const OPENING_FEE_PARAMS_PROPORTIONAL: u32 = 50;
 const OPENING_FEE_PARAMS_VALID_UNTIL: &str = "2030-02-16T11:46:49Z";
@@ -63,23 +62,35 @@ pub use breez_sdk_core::{
     SendPaymentRequest, SignMessageRequest, SwapStatus, UnspentTransactionOutput,
 };
 use breez_sdk_core::{
-    Config, LspInformation, MaxReverseSwapAmountResponse, NodeState, OpenChannelFeeResponse,
-    PrepareRedeemOnchainFundsResponse, PrepareRefundResponse, RecommendedFees,
-    RedeemOnchainFundsResponse, RefundResponse, ReverseSwapInfo, ReverseSwapPairInfo,
-    ReverseSwapStatus, SendOnchainResponse, SendPaymentResponse, ServiceHealthCheckResponse,
-    SignMessageResponse, SwapInfo,
+    ChannelState, Config, LspInformation, MaxReverseSwapAmountResponse, NodeState,
+    OpenChannelFeeResponse, PrepareRedeemOnchainFundsResponse, PrepareRefundResponse,
+    RecommendedFees, RedeemOnchainFundsResponse, RefundResponse, ReverseSwapInfo,
+    ReverseSwapPairInfo, ReverseSwapStatus, SendOnchainResponse, SendPaymentResponse,
+    ServiceHealthCheckResponse, SignMessageResponse, SwapInfo,
 };
 use chrono::Utc;
 use hex::FromHex;
 use lazy_static::lazy_static;
+use tokio::runtime::Handle;
 
 pub mod error {
     pub use breez_sdk_core::error::*;
 }
 
+#[derive(Clone)]
+struct Channel {
+    pub capacity_msat: u64,
+    pub local_balance_msat: u64,
+}
+
+impl Channel {
+    fn get_inbound_capacity_msat(&self) -> u64 {
+        self.capacity_msat - self.local_balance_msat
+    }
+}
+
 lazy_static! {
     static ref HEALTH_STATUS: Mutex<HealthCheckStatus> = Mutex::new(HealthCheckStatus::Operational);
-    static ref LN_BALANCE_MSAT: Mutex<u64> = Mutex::new(10_000_000);
     static ref PAYMENT_DELAY: Mutex<PaymentDelay> = Mutex::new(PaymentDelay::Immediate);
     static ref PAYMENT_OUTCOME: Mutex<PaymentOutcome> = Mutex::new(PaymentOutcome::Success);
     static ref PAYMENTS: Mutex<Vec<Payment>> = Mutex::new(Vec::new());
@@ -88,6 +99,9 @@ lazy_static! {
     static ref NODE_PRIVKEY: SecretKey =
         SecretKey::from_slice(&generate_32_random_bytes()).unwrap();
     static ref NODE_PUBKEY: String = NODE_PRIVKEY.public_key(&Secp256k1::new()).to_string();
+    static ref CHANNELS: Mutex<Vec<Channel>> = Mutex::new(Vec::new());
+    static ref CHANNELS_PENDING_CLOSE: Mutex<Vec<Channel>> = Mutex::new(Vec::new());
+    static ref CHANNELS_CLOSED: Mutex<Vec<Channel>> = Mutex::new(Vec::new());
 }
 
 #[derive(Debug)]
@@ -119,7 +133,15 @@ impl BreezServices {
         _req: ConnectRequest,
         event_listener: Box<dyn EventListener>,
     ) -> SdkResult<Arc<BreezServices>> {
-        Ok(Arc::new(BreezServices { event_listener }))
+        let sdk = Arc::new(BreezServices { event_listener });
+        let sdk_task = Arc::clone(&sdk);
+        Handle::current().spawn(async move {
+            loop {
+                let _ = sdk_task.sync().await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        });
+        Ok(sdk)
     }
     pub async fn send_payment(
         &self,
@@ -159,18 +181,19 @@ impl BreezServices {
 
                 let amount_msat = max(provided_amount_msat, invoice_amount_msat);
 
-                if *LN_BALANCE_MSAT.lock().unwrap() < amount_msat {
+                let routing_fee_msat = rand::thread_rng().gen_range(1000..4000);
+                if get_balance_msat() < amount_msat {
                     return Err(SendPaymentError::RouteNotFound {
                         err: "Ran out of routes".into(),
                     });
                 } else {
-                    *LN_BALANCE_MSAT.lock().unwrap() -= amount_msat;
+                    send_payment_mock_channels(amount_msat + routing_fee_msat);
                 }
 
                 let payment = create_payment(MockPayment {
                     payment_type: PaymentType::Sent,
                     amount_msat,
-                    fee_msat: 1234,
+                    fee_msat: routing_fee_msat,
                     description: None,
                     payment_hash: parsed_invoice.payment_hash,
                     payment_preimage,
@@ -314,7 +337,13 @@ impl BreezServices {
     pub async fn lnurl_pay(&self, req: LnUrlPayRequest) -> Result<LnUrlPayResult, LnUrlPayError> {
         let (payment_preimage, payment_hash) = generate_2_hashes();
 
-        *LN_BALANCE_MSAT.lock().unwrap() -= req.amount_msat + LNURL_PAY_FEE_MSAT;
+        if get_balance_msat() < req.amount_msat {
+            return Err(LnUrlPayError::RouteNotFound {
+                err: "Ran out of routes".into(),
+            });
+        } else {
+            send_payment_mock_channels(req.amount_msat + LNURL_PAY_FEE_MSAT);
+        }
 
         let payment = create_payment(MockPayment {
             payment_type: PaymentType::Sent,
@@ -352,15 +381,20 @@ impl BreezServices {
         &self,
         req: LnUrlWithdrawRequest,
     ) -> Result<LnUrlWithdrawResult, LnUrlWithdrawError> {
-        *LN_BALANCE_MSAT.lock().unwrap() += req.amount_msat;
+        let lsp_fee_msat = receive_payment_mock_channels(req.amount_msat);
+        if lsp_fee_msat > req.amount_msat {
+            return Err(LnUrlWithdrawError::InvalidAmount {
+                err: "Not enough to pay for channel opening fees".to_string(),
+            });
+        }
 
         let (payment_preimage, payment_hash) = generate_2_hashes();
         let bolt11 = "lnbc1pjlq2t3pp5e3ef7wmszlwxhfpx9cfnxx34gglg779fwnwx9mfm69pfapmymt0qdqqcqzzsxqyz5vqsp5x7k3pjq5y8vk473l6767fenletzwjeaqqukpg9tspfq584g8qp4q9qyyssq678xw6gf2ywl5seummdy8pc6xd0jpvzdexd4v4d3zjse9u6jf7239va4e4r4hhauqrymxu7dp790lv98dl0qhrt4yqxwll2ufkp304gqn6798s".to_string();
 
         let payment = create_payment(MockPayment {
             payment_type: PaymentType::Received,
-            amount_msat: req.amount_msat,
-            fee_msat: 0,
+            amount_msat: req.amount_msat - lsp_fee_msat,
+            fee_msat: lsp_fee_msat,
             description: None,
             payment_hash: payment_hash.clone(),
             payment_preimage,
@@ -409,12 +443,8 @@ impl BreezServices {
         &self,
         req: ReceivePaymentRequest,
     ) -> Result<ReceivePaymentResponse, ReceivePaymentError> {
-        let mut lsp_fee: Option<u64> = None;
         // Has nothing to do with receiving a payment, but is a mechanism to control the mock
         match req.description.as_str() {
-            "lsp.channel.required" => {
-                lsp_fee = Some(rand::thread_rng().gen_range(2_000_000..=100_000_000));
-            }
             "health.operational" => *HEALTH_STATUS.lock().unwrap() = HealthCheckStatus::Operational,
             "health.maintenance" => *HEALTH_STATUS.lock().unwrap() = HealthCheckStatus::Maintenance,
             "health.disruption" => {
@@ -442,34 +472,35 @@ impl BreezServices {
             "swaps.redeem" => *REDEEM_SWAPS.lock().unwrap() = true,
             "swaps.miss" => *REDEEM_SWAPS.lock().unwrap() = false,
             "mimic.pay2addr" => self.simulate_payments(PaymentType::Sent, 10, true),
+            "channels.close_largest" => close_channel_with_largest_balance(),
+            "channels.confirm_pending_closes" => confirm_pending_channel_closes(),
             _ => {}
         }
 
-        let (preimage, payment_hash) = generate_2_hashes_raw();
-        let preimage = format!("{:x}", preimage);
-        let payment_secret = PaymentSecret([42u8; 32]);
-
-        let invoice = InvoiceBuilder::new(Currency::Bitcoin)
-            .amount_milli_satoshis(req.amount_msat)
-            .description(req.description.clone())
-            .payment_hash(payment_hash)
-            .payment_secret(payment_secret)
-            .current_timestamp()
-            .min_final_cltv_expiry_delta(144)
-            .build_signed(|hash| Secp256k1::new().sign_ecdsa_recoverable(hash, &NODE_PRIVKEY))
-            .unwrap();
+        let (invoice, preimage, payment_hash) = create_invoice(req.amount_msat, &req.description);
 
         let description = Option::from(req.description);
 
+        let mut lsp_fee_msat_optional = None;
+
         if let PaymentOutcome::Success = &*PAYMENT_OUTCOME.lock().unwrap() {
-            *LN_BALANCE_MSAT.lock().unwrap() += req.amount_msat - lsp_fee.unwrap_or(0);
+            let lsp_fee_msat = receive_payment_mock_channels(req.amount_msat);
+            if lsp_fee_msat > req.amount_msat {
+                return Err(ReceivePaymentError::InvalidAmount {
+                    err: "Not enough to pay for channel opening fees".to_string(),
+                });
+            }
+
+            if lsp_fee_msat > 0 {
+                lsp_fee_msat_optional = Some(lsp_fee_msat);
+            }
 
             let payment = create_payment(MockPayment {
                 payment_type: PaymentType::Received,
-                amount_msat: req.amount_msat - lsp_fee.unwrap_or(0),
-                fee_msat: lsp_fee.unwrap_or(0),
+                amount_msat: req.amount_msat - lsp_fee_msat,
+                fee_msat: lsp_fee_msat,
                 description: description.clone(),
-                payment_hash: format!("{:x}", payment_hash),
+                payment_hash: payment_hash.clone(),
                 payment_preimage: preimage,
                 destination_pubkey: NODE_PUBKEY.to_string(),
                 bolt11: invoice.to_string(),
@@ -485,7 +516,7 @@ impl BreezServices {
             PAYMENTS.lock().unwrap().push(payment.clone());
             self.event_listener.on_event(BreezEvent::InvoicePaid {
                 details: InvoicePaidDetails {
-                    payment_hash: format!("{:x}", payment_hash),
+                    payment_hash: payment_hash.clone(),
                     bolt11: invoice.to_string(),
                     payment: Some(payment),
                 },
@@ -497,7 +528,7 @@ impl BreezServices {
                 bolt11: invoice.to_string(),
                 network: Network::Bitcoin,
                 payee_pubkey: NODE_PUBKEY.to_string(),
-                payment_hash: format!("{:x}", payment_hash),
+                payment_hash,
                 description,
                 description_hash: None,
                 amount_msat: Some(req.amount_msat),
@@ -508,7 +539,7 @@ impl BreezServices {
                 min_final_cltv_expiry_delta: 144,
             },
             opening_fee_params: None,
-            opening_fee_msat: lsp_fee,
+            opening_fee_msat: lsp_fee_msat_optional,
         })
     }
 
@@ -524,21 +555,21 @@ impl BreezServices {
     }
 
     pub fn node_info(&self) -> SdkResult<NodeState> {
-        let balance = *LN_BALANCE_MSAT.lock().unwrap();
+        let balance = get_balance_msat();
 
         Ok(NodeState {
             id: NODE_PUBKEY.to_string(),
             block_height: 1234567,
             channels_balance_msat: balance,
-            onchain_balance_msat: 0,
-            pending_onchain_balance_msat: 0,
+            onchain_balance_msat: get_onchain_balance_msat(),
+            pending_onchain_balance_msat: get_pending_onchain_balance_msat(),
             utxos: vec![],
             max_payable_msat: balance,
-            max_receivable_msat: MAX_RECEIVABLE_MSAT,
+            max_receivable_msat: get_inbound_liquidity_msat(),
             max_single_payment_amount_msat: balance,
             max_chan_reserve_msats: 0,
             connected_peers: vec![LSP_ID.to_string()],
-            inbound_liquidity_msats: MAX_RECEIVABLE_MSAT,
+            inbound_liquidity_msats: get_inbound_liquidity_msat(),
         })
     }
 
@@ -620,6 +651,8 @@ impl BreezServices {
         &self,
         _req: RedeemOnchainFundsRequest,
     ) -> SdkResult<RedeemOnchainFundsResponse> {
+        CHANNELS_CLOSED.lock().unwrap().clear();
+
         Ok(RedeemOnchainFundsResponse {
             txid: Vec::from_hex(TX_ID_DUMMY).unwrap(),
         })
@@ -638,17 +671,23 @@ impl BreezServices {
                     .unwrap()
                     .retain(|s| s.bitcoin_address != swap_address);
 
-                *LN_BALANCE_MSAT.lock().unwrap() += swap.confirmed_sats;
-
+                let lsp_fee_msat = receive_payment_mock_channels(swap.confirmed_sats);
+                if lsp_fee_msat > swap.confirmed_sats {
+                    return Err(SdkError::Generic {
+                        err: "Not enough to pay for channel opening fees".to_string(),
+                    });
+                }
+                let (invoice, payment_preimage, payment_hash) =
+                    create_invoice(swap.confirmed_sats, "Swap invoice");
                 let payment = create_payment(MockPayment {
                     payment_type: PaymentType::Received,
-                    amount_msat: swap.confirmed_sats,
-                    fee_msat: SWAP_FEE_SAT * 1_000,
+                    amount_msat: swap.confirmed_sats - lsp_fee_msat,
+                    fee_msat: lsp_fee_msat,
                     description: Some("swapped in".to_string()),
-                    payment_hash: hex::encode(&swap.payment_hash),
-                    payment_preimage: hex::encode(&swap.preimage),
+                    payment_hash,
+                    payment_preimage,
                     destination_pubkey: NODE_PUBKEY.to_string(),
-                    bolt11: swap.clone().bolt11.unwrap_or_default(),
+                    bolt11: invoice,
                     lnurl_pay_domain: None,
                     lnurl_pay_comment: None,
                     ln_address: None,
@@ -695,10 +734,23 @@ impl BreezServices {
 
     pub async fn open_channel_fee(
         &self,
-        _req: OpenChannelFeeRequest,
+        req: OpenChannelFeeRequest,
     ) -> SdkResult<OpenChannelFeeResponse> {
+        let fee_msat = match req.amount_msat {
+            None => None,
+            Some(amount_msat) => {
+                if get_inbound_liquidity_msat() < amount_msat {
+                    Some(max(
+                        OPENING_FEE_PARAMS_MIN_MSAT,
+                        amount_msat * OPENING_FEE_PARAMS_PROPORTIONAL as u64 / 10_000,
+                    ))
+                } else {
+                    Some(0)
+                }
+            }
+        };
         Ok(OpenChannelFeeResponse {
-            fee_msat: Some(0),
+            fee_msat,
             fee_params: OpeningFeeParams {
                 min_msat: OPENING_FEE_PARAMS_MIN_MSAT,
                 proportional: OPENING_FEE_PARAMS_PROPORTIONAL,
@@ -785,7 +837,7 @@ impl BreezServices {
     }
 
     pub async fn max_reverse_swap_amount(&self) -> SdkResult<MaxReverseSwapAmountResponse> {
-        let balance_sat = *LN_BALANCE_MSAT.lock().unwrap() / 1000;
+        let balance_sat = get_balance_msat() / 1000;
         let total_sat = if balance_sat > SWAP_FEE_SAT {
             balance_sat - SWAP_FEE_SAT
         } else {
@@ -808,8 +860,9 @@ impl BreezServices {
         let now = Utc::now().timestamp();
 
         let amount_msat = req.amount_sat * 1_000;
-        let fee_msat = *LN_BALANCE_MSAT.lock().unwrap() - amount_msat;
-        *LN_BALANCE_MSAT.lock().unwrap() -= amount_msat + fee_msat;
+
+        let routing_fee_msat = rand::thread_rng().gen_range(1000..4000);
+        send_payment_mock_channels(amount_msat + routing_fee_msat);
 
         let reverse_swap_info = ReverseSwapInfo {
             id: now.to_string(),
@@ -824,7 +877,7 @@ impl BreezServices {
         let payment = create_payment(MockPayment {
             payment_type: PaymentType::Sent,
             amount_msat,
-            fee_msat,
+            fee_msat: routing_fee_msat,
             description: None,
             payment_hash,
             payment_preimage,
@@ -904,7 +957,16 @@ impl BreezServices {
             time_lock_delta: LSP_TIMELOCK_DELTA,
             min_htlc_msat: LSP_MIN_HTLC_MSAT,
             lsp_pubkey: vec![],
-            opening_fee_params_list: OpeningFeeParamsMenu { values: vec![] },
+            opening_fee_params_list: OpeningFeeParamsMenu {
+                values: vec![OpeningFeeParams {
+                    min_msat: OPENING_FEE_PARAMS_MIN_MSAT,
+                    proportional: OPENING_FEE_PARAMS_PROPORTIONAL,
+                    valid_until: OPENING_FEE_PARAMS_VALID_UNTIL.to_string(),
+                    max_idle_time: OPENING_FEE_PARAMS_MAX_IDLE_TIME,
+                    max_client_to_self_delay: OPENING_FEE_PARAMS_MAX_CLIENT_TO_SELF_DELAY,
+                    promise: OPENING_FEE_PARAMS_PROMISE.to_string(),
+                }],
+            },
         })
     }
 
@@ -951,21 +1013,28 @@ impl BreezServices {
                 swap.total_incoming_txs = 1;
                 swap.unconfirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
                 swap.status = SwapStatus::WaitingConfirmation;
+                self.event_listener.on_event(BreezEvent::SwapUpdated {
+                    details: swap.clone(),
+                })
             }
             if now - swap.created_at > secs_until_onchain_conf {
                 swap.confirmed_at = Some(830_000);
+                swap.confirmed_sats = swap.unconfirmed_sats;
+                swap.unconfirmed_sats = 0;
                 swap.status = SwapStatus::Redeemable;
                 if *REDEEM_SWAPS.lock().unwrap() {
-                    let (payment_hash, payment_preimage) = generate_2_hashes();
+                    let (invoice, payment_preimage, payment_hash) =
+                        create_invoice(swap.confirmed_sats, "Swap invoice");
+                    let lsp_fee_msat = receive_payment_mock_channels(swap.confirmed_sats * 1_000);
                     let payment = create_payment(MockPayment {
                         payment_type: PaymentType::Received,
-                        amount_msat: swap.confirmed_sats * 1_000,
-                        fee_msat: 1234,
+                        amount_msat: swap.confirmed_sats * 1_000 - lsp_fee_msat,
+                        fee_msat: lsp_fee_msat,
                         description: None,
                         payment_hash,
                         payment_preimage,
                         destination_pubkey: PAYEE_PUBKEY_DUMMY.to_string(),
-                        bolt11: swap.bolt11.clone().unwrap_or(BOLT11_DUMMY.to_string()),
+                        bolt11: invoice.clone(),
                         lnurl_pay_domain: None,
                         lnurl_pay_comment: None,
                         ln_address: None,
@@ -979,14 +1048,18 @@ impl BreezServices {
                     self.event_listener.on_event(BreezEvent::InvoicePaid {
                         details: InvoicePaidDetails {
                             payment_hash: "".to_string(),
-                            bolt11: swap.bolt11.clone().unwrap_or(BOLT11_DUMMY.to_string()),
+                            bolt11: invoice,
                             payment: Some(payment),
                         },
                     });
+                    self.event_listener.on_event(BreezEvent::SwapUpdated {
+                        details: swap.clone(),
+                    })
                 } else {
                     swap.status = SwapStatus::Refundable;
-                    swap.unconfirmed_sats = 0;
-                    swap.confirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
+                    self.event_listener.on_event(BreezEvent::SwapUpdated {
+                        details: swap.clone(),
+                    })
                 }
             }
         });
@@ -1003,13 +1076,8 @@ impl BreezServices {
         number_of_payments: u32,
         ln_address: bool,
     ) {
-        let max_amount = LN_BALANCE_MSAT
-            .lock()
-            .unwrap()
-            .div_ceil(number_of_payments.into());
-
         for _ in 0..number_of_payments {
-            let amount_msat = rand::thread_rng().gen_range(1000..max_amount);
+            let amount_msat = rand::thread_rng().gen_range(1000..1_000_000_000);
             let (preimage, payment_hash) = generate_2_hashes();
 
             let ln_address = if ln_address {
@@ -1026,7 +1094,7 @@ impl BreezServices {
             let payment = create_payment(MockPayment {
                 payment_type: payment_type.clone(),
                 amount_msat,
-                fee_msat: 1234,
+                fee_msat: rand::thread_rng().gen_range(1000..4000),
                 description: None,
                 payment_hash,
                 payment_preimage: preimage,
@@ -1041,7 +1109,6 @@ impl BreezServices {
                 reverse_swap_info: None,
             });
 
-            *LN_BALANCE_MSAT.lock().unwrap() -= amount_msat;
             PAYMENTS.lock().unwrap().push(payment.clone());
         }
     }
@@ -1114,6 +1181,159 @@ pub async fn parse(input: &str) -> Result<InputType> {
             max_withdrawable: 30_000_000,
         },
     })
+}
+
+/// Returns channel opening fees in msats.
+fn receive_payment_mock_channels(amount_msat: u64) -> u64 {
+    if amount_msat <= get_inbound_liquidity_msat() {
+        let mut amount_left = amount_msat;
+        for c in CHANNELS.lock().unwrap().iter_mut() {
+            if c.get_inbound_capacity_msat() > 0 {
+                let amount_to_receive = min(amount_left, c.get_inbound_capacity_msat());
+                amount_left -= amount_to_receive;
+                c.local_balance_msat += amount_to_receive;
+            }
+            if amount_left == 0 {
+                break;
+            }
+        }
+        0
+    } else {
+        let mut channels = CHANNELS.lock().unwrap();
+        channels.push(Channel {
+            capacity_msat: amount_msat + LSP_ADDED_LIQUIDITY_ON_NEW_CHANNELS_MSAT,
+            local_balance_msat: amount_msat,
+        });
+        max(
+            OPENING_FEE_PARAMS_MIN_MSAT,
+            amount_msat * OPENING_FEE_PARAMS_PROPORTIONAL as u64 / 10_000,
+        )
+    }
+}
+
+fn send_payment_mock_channels(amount_with_fees_msat: u64) {
+    if amount_with_fees_msat > get_balance_msat() {
+        panic!("Not enough balance");
+    }
+
+    let mut amount_left = amount_with_fees_msat;
+    for c in CHANNELS.lock().unwrap().iter_mut() {
+        if c.local_balance_msat < amount_left {
+            amount_left -= c.local_balance_msat;
+            c.local_balance_msat = 0;
+        } else {
+            c.local_balance_msat -= amount_left;
+            break;
+        }
+    }
+}
+
+fn get_balance_msat() -> u64 {
+    CHANNELS
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|c| c.local_balance_msat)
+        .sum()
+}
+
+fn get_inbound_liquidity_msat() -> u64 {
+    CHANNELS
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|c| c.get_inbound_capacity_msat())
+        .sum()
+}
+
+fn close_channel_with_largest_balance() {
+    let mut channels = CHANNELS.lock().unwrap();
+    let max_index = channels
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, c)| c.local_balance_msat)
+        .map(|(i, _)| i);
+
+    if let Some(i) = max_index {
+        let c = channels.remove(i);
+        CHANNELS_PENDING_CLOSE.lock().unwrap().push(c.clone());
+
+        let now = Utc::now().timestamp();
+        PAYMENTS.lock().unwrap().push(Payment {
+            id: now.to_string(),
+            payment_type: PaymentType::ClosedChannel,
+            payment_time: now,
+            amount_msat: c.local_balance_msat,
+            fee_msat: 0,
+            status: PaymentStatus::Pending,
+            error: None,
+            description: None,
+            details: PaymentDetails::ClosedChannel {
+                data: ClosedChannelPaymentDetails {
+                    state: ChannelState::PendingClose,
+                    funding_txid: TX_ID_DUMMY.to_string(),
+                    short_channel_id: Some("mock_short_channel_id".to_string()),
+                    closing_txid: Some(TX_ID_DUMMY.to_string()),
+                },
+            },
+            metadata: None,
+        })
+    }
+}
+
+fn get_onchain_balance_msat() -> u64 {
+    CHANNELS_CLOSED
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|c| c.local_balance_msat)
+        .sum()
+}
+
+fn get_pending_onchain_balance_msat() -> u64 {
+    CHANNELS_PENDING_CLOSE
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|c| c.local_balance_msat)
+        .sum()
+}
+
+fn confirm_pending_channel_closes() {
+    CHANNELS_CLOSED
+        .lock()
+        .unwrap()
+        .append(CHANNELS_PENDING_CLOSE.lock().unwrap().as_mut());
+
+    PAYMENTS
+        .lock()
+        .unwrap()
+        .iter_mut()
+        .filter(|p| p.payment_type == PaymentType::ClosedChannel)
+        .for_each(|p| {
+            p.status = PaymentStatus::Complete;
+            if let PaymentDetails::ClosedChannel { ref mut data } = &mut p.details {
+                data.state = ChannelState::Closed
+            }
+        });
+}
+
+fn create_invoice(amount_msat: u64, description: &str) -> (String, String, String) {
+    let (preimage, payment_hash) = generate_2_hashes_raw();
+    let preimage = format!("{:x}", preimage);
+    let payment_secret = PaymentSecret([42u8; 32]);
+
+    let invoice = InvoiceBuilder::new(Currency::Bitcoin)
+        .amount_milli_satoshis(amount_msat)
+        .description(description.to_string())
+        .payment_hash(payment_hash)
+        .payment_secret(payment_secret)
+        .current_timestamp()
+        .min_final_cltv_expiry_delta(144)
+        .build_signed(|hash| Secp256k1::new().sign_ecdsa_recoverable(hash, &NODE_PRIVKEY))
+        .unwrap();
+
+    (invoice.to_string(), preimage, payment_hash.to_string())
 }
 
 fn generate_2_hashes() -> (String, String) {
