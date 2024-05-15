@@ -108,8 +108,8 @@ use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 use data_store::DataStore;
 use email_address::EmailAddress;
-use honey_badger::Auth;
-pub use honey_badger::{TermsAndConditions, TermsAndConditionsStatus};
+use honeybadger::Auth;
+pub use honeybadger::{TermsAndConditions, TermsAndConditionsStatus};
 use iban::Iban;
 use log::{debug, error, info, Level};
 use logger::init_logger_once;
@@ -260,7 +260,7 @@ pub struct LightningNode {
     user_preferences: Arc<Mutex<UserPreferences>>,
     sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
-    async_auth: Arc<honey_badger::asynchronous::Auth>,
+    async_auth: Arc<honeybadger::asynchronous::Auth>,
     fiat_topup_client: PocketClient,
     offer_manager: OfferManager,
     rt: AsyncRuntime,

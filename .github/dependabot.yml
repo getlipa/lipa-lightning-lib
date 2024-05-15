@@ -7,7 +7,7 @@ updates:
     open-pull-requests-limit: 10
     ignore:
       - dependency-name: "perro"
-      - dependency-name: "honey-badger"
+      - dependency-name: "honeybadger"
       - dependency-name: "mole"
       - dependency-name: "chameleon"
       - dependency-name: "crow"
