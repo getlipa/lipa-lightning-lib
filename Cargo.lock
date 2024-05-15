@@ -615,12 +615,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "breez-sdk-core"
+version = "0.4.1"
+source = "git+https://github.com/breez/breez-sdk?tag=0.4.1#4eb555cf822e52a40e04eb2eb7fc606d42db5c0d"
+dependencies = [
+ "aes",
+ "anyhow",
+ "base64 0.13.1",
+ "bip21",
+ "cbc",
+ "chrono",
+ "const_format",
+ "ecies",
+ "env_logger 0.10.2",
+ "flutter_rust_bridge",
+ "futures",
+ "gl-client",
+ "hex",
+ "lazy_static",
+ "log",
+ "miniz_oxide",
+ "once_cell",
+ "openssl",
+ "prost",
+ "querystring",
+ "rand",
+ "regex",
+ "reqwest",
+ "ripemd",
+ "rusqlite",
+ "rusqlite_migration",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "strum",
+ "strum_macros",
+ "tempfile",
+ "thiserror",
+ "tiny-bip39",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "zbase32",
+]
+
+[[package]]
 name = "breez-sdk-mock"
 version = "0.4.1-rc2"
 dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
- "breez-sdk-core",
+ "breez-sdk-core 0.4.1-rc2",
  "chrono",
  "hex",
  "lazy_static",
@@ -663,9 +709,9 @@ checksum = "514de17de45fdb8dc022b1a7975556c53c86f9f0aa5f534b98977b171857c2c9"
 
 [[package]]
 name = "camino"
-version = "1.1.6"
+version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c59e92b5a388f549b863a7bea62612c09f24c8393560709a54558a9abdfb3b9c"
+checksum = "e0ec6b951b160caa93cc0c7b209e5a3bff7aae9062213451ac99493cd844c239"
 dependencies = [
  "serde",
 ]
@@ -2175,7 +2221,7 @@ dependencies = [
  "anyhow",
  "bip39",
  "bitcoin 0.30.2",
- "breez-sdk-core",
+ "breez-sdk-core 0.4.1",
  "breez-sdk-mock",
  "camino",
  "chameleon",
@@ -3404,9 +3450,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.201"
+version = "1.0.202"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "780f1cebed1629e4753a1a38a3c72d30b97ec044f0aef68cb26650a3c5cf363c"
+checksum = "226b61a0d411b2ba5ff6d7f73a476ac4f8bb900373459cd00fab8512828ba395"
 dependencies = [
  "serde_derive",
 ]
@@ -3436,9 +3482,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.201"
+version = "1.0.202"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5e405930b9796f1c00bee880d03fc7e0bb4b9a11afc776885ffe84320da2865"
+checksum = "6048858004bcff69094cd972ed40a32500f153bd3be9f716b2eed2e8217c4838"
 dependencies = [
  "proc-macro2",
  "quote",

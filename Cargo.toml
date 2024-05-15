@@ -29,7 +29,7 @@ pigeon-mock = { path = "mock/wild/pigeon", optional = true }
 squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.21.2", optional = true }
 squirrel-mock = { path = "mock/wild/squirrel", optional = true }
 
-breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.4.1-rc2", optional = true }
+breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.4.1", optional = true }
 breez-sdk-mock = { path = "mock/breez-sdk", optional = true }
 
 aes-gcm = "0.10.3"
@@ -92,7 +92,7 @@ thousands = "0.2.0"
 lazy_static = "1.4.0"
 
 [build-dependencies]
-camino = "1.1.6"
+camino = "1.1.7"
 uniffi_bindgen = "0.27.0"
 
 # Use some of the binary size reduction strategies from https://github.com/johnthagen/min-sized-rust
