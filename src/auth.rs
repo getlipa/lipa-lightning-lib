@@ -1,8 +1,8 @@
 use crate::errors::Result;
 
 use crate::key_derivation::derive_auth_keys;
-use honey_badger::secrets::{generate_keypair, KeyPair};
-use honey_badger::{Auth, AuthLevel};
+use honeybadger::secrets::{generate_keypair, KeyPair};
+use honeybadger::{Auth, AuthLevel};
 use perro::MapToError;
 
 pub(crate) fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
@@ -19,9 +19,9 @@ pub(crate) fn build_auth(seed: &[u8; 64], graphql_url: String) -> Result<Auth> {
 pub(crate) fn build_async_auth(
     seed: &[u8; 64],
     graphql_url: String,
-) -> Result<honey_badger::asynchronous::Auth> {
+) -> Result<honeybadger::asynchronous::Auth> {
     let auth_keys = derive_auth_keys(seed)?;
-    honey_badger::asynchronous::Auth::new(
+    honeybadger::asynchronous::Auth::new(
         graphql_url,
         AuthLevel::Pseudonymous,
         auth_keys.into(),

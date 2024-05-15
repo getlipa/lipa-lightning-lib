@@ -1,5 +1,5 @@
 use crate::errors::SimpleError;
-use honey_badger::Auth;
+use honeybadger::Auth;
 use std::sync::Arc;
 use std::time::SystemTime;
 
