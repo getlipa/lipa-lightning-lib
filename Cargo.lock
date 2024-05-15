@@ -570,52 +570,6 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-core"
-version = "0.4.1-rc2"
-source = "git+https://github.com/breez/breez-sdk?tag=0.4.1-rc2#7a2b03ffeac30775842964094c0e3087a55f78de"
-dependencies = [
- "aes",
- "anyhow",
- "base64 0.13.1",
- "bip21",
- "cbc",
- "chrono",
- "const_format",
- "ecies",
- "env_logger 0.10.2",
- "flutter_rust_bridge",
- "futures",
- "gl-client",
- "hex",
- "lazy_static",
- "log",
- "miniz_oxide",
- "once_cell",
- "openssl",
- "prost",
- "querystring",
- "rand",
- "regex",
- "reqwest",
- "ripemd",
- "rusqlite",
- "rusqlite_migration",
- "serde",
- "serde_json",
- "serde_with",
- "strum",
- "strum_macros",
- "tempfile",
- "thiserror",
- "tiny-bip39",
- "tokio",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "zbase32",
-]
-
-[[package]]
-name = "breez-sdk-core"
 version = "0.4.1"
 source = "git+https://github.com/breez/breez-sdk?tag=0.4.1#4eb555cf822e52a40e04eb2eb7fc606d42db5c0d"
 dependencies = [
@@ -662,11 +616,11 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-mock"
-version = "0.4.1-rc2"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
- "breez-sdk-core 0.4.1-rc2",
+ "breez-sdk-core",
  "chrono",
  "hex",
  "lazy_static",
@@ -1000,7 +954,7 @@ version = "0.1.0"
 dependencies = [
  "crow",
  "graphql",
- "honey-badger",
+ "honeybadger",
  "isocountry",
  "isolanguage-1",
  "lazy_static",
@@ -2221,7 +2175,7 @@ dependencies = [
  "anyhow",
  "bip39",
  "bitcoin 0.30.2",
- "breez-sdk-core 0.4.1",
+ "breez-sdk-core",
  "breez-sdk-mock",
  "camino",
  "chameleon",
@@ -2666,7 +2620,7 @@ name = "parrot-mock"
 version = "0.1.0"
 dependencies = [
  "graphql",
- "honey-badger",
+ "honeybadger",
  "parrot",
 ]
 
@@ -2747,7 +2701,7 @@ name = "pigeon-mock"
 version = "0.1.0"
 dependencies = [
  "graphql",
- "honey-badger",
+ "honeybadger",
 ]
 
 [[package]]
@@ -3722,7 +3676,7 @@ name = "squirrel-mock"
 version = "0.1.0"
 dependencies = [
  "graphql",
- "honey-badger",
+ "honeybadger",
  "squirrel",
 ]
 

@@ -1,4 +1,4 @@
-use honey_badger::asynchronous::Auth;
+use honeybadger::asynchronous::Auth;
 
 const LIGHTNING_ADDRESS_STUB: &str = "static.mock@wallet.lipa.swiss";
 

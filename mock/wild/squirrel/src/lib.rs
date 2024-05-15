@@ -1,5 +1,5 @@
 use graphql::errors::*;
-use honey_badger::asynchronous::Auth;
+use honeybadger::asynchronous::Auth;
 use std::sync::Arc;
 
 pub use squirrel::Backup;

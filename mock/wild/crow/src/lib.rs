@@ -1,5 +1,5 @@
 use graphql::ExchangeRate;
-use honey_badger::Auth;
+use honeybadger::Auth;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
