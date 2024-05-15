@@ -1116,6 +1116,11 @@ impl BreezServices {
     pub async fn generate_diagnostic_data(&self) -> SdkResult<String> {
         Ok("Dummy diagnostics".to_string())
     }
+
+    pub async fn close_lsp_channels(&self) -> SdkResult<Vec<String>> {
+        // No need to implement this in the mock
+        Ok(Vec::new())
+    }
 }
 
 pub async fn parse(input: &str) -> Result<InputType> {
