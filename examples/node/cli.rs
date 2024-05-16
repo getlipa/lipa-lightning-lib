@@ -22,7 +22,7 @@ use uniffi_lipalightninglib::{
     ExchangeRate, FailedSwapInfo, FiatValue, IncomingPaymentInfo, InvoiceCreationMetadata,
     InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails, LnUrlWithdrawDetails,
     MaxRoutingFeeMode, OfferInfo, OfferKind, OutgoingPaymentInfo, PaymentInfo, PaymentMetadata,
-    TzConfig,
+    Recipient, TzConfig,
 };
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
@@ -102,6 +102,15 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 "d" | "decodedata" => {
                     if let Err(message) = decode_data(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
+                    }
+                }
+                "parsephonenumber" => {
+                    let number = words.collect::<Vec<_>>().join(" ");
+                    let allowed_countries =
+                        vec!["AT".to_string(), "CH".to_string(), "DE".to_string()];
+                    match node.parse_phone_number(number, allowed_countries) {
+                        Ok(address) => println!("{address}"),
+                        Err(message) => println!("{}", format!("{message:#}").red()),
                     }
                 }
                 "getmaxroutingfeemode" => {
@@ -194,8 +203,18 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
-                "listlightningaddresses" => match node.list_lightning_addresses() {
-                    Ok(list) => println!("{}", list.join("\n")),
+                "listrecipients" => match node.list_recipients() {
+                    Ok(list) => {
+                        let list = list
+                            .into_iter()
+                            .map(|r| match r {
+                                Recipient::LightningAddress { address } => address,
+                                Recipient::PhoneNumber { e164 } => e164,
+                                r => panic!("{r:?}"),
+                            })
+                            .collect::<Vec<_>>();
+                        println!("{}", list.join("\n"));
+                    }
                     Err(message) => eprintln!("{}", format!("{message:#}").red()),
                 },
                 "paymentuuid" => match payment_uuid(node, &mut words) {
@@ -323,6 +342,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("d <data>", "d "));
     hints.insert(CommandHint::new("decodedata <data>", "decodedata "));
     hints.insert(CommandHint::new(
+        "parsephonenumber <phone number>",
+        "parsephonenumber ",
+    ));
+    hints.insert(CommandHint::new(
         "getmaxroutingfeemode <payment amount in SAT>",
         "getmaxroutingfeemode ",
     ));
@@ -382,10 +405,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "listactivities [number of activities = 2]",
         "listactivities ",
     ));
-    hints.insert(CommandHint::new(
-        "listlightningaddresses",
-        "listlightningaddresses",
-    ));
+    hints.insert(CommandHint::new("listrecipients", "listrecipients"));
     hints.insert(CommandHint::new(
         "registerlightningaddress",
         "registerlightningaddress",
@@ -442,6 +462,7 @@ fn help() {
     println!();
     println!("  i | invoice <amount in SAT> [description]");
     println!("  d | decodedata <data>");
+    println!("  parsephonenumber <phone number>");
     println!("  getmaxroutingfeemode <payment amount in SAT>");
     println!("  getinvoiceaffordability <amount in SAT>");
     println!("  p | payinvoice <invoice>");
@@ -463,7 +484,7 @@ fn help() {
     println!();
     println!("  o | overview [number of activities = 10] [fun mode = false]");
     println!("  l | listactivities [number of activities = 2]");
-    println!("  listlightningaddresses");
+    println!("  listrecipients");
     println!("  registerlightningaddress");
     println!("  querylightningaddress");
     println!("  paymentuuid <payment hash>");
