@@ -309,6 +309,10 @@ pub enum NotificationHandlingErrorCode {
     /// The notification payload implied the existence of an incoming payment, but it was not
     /// received in time. Starting the app might help complete the payment.
     ExpectedPaymentNotReceived,
+    /// An inbound payment was rejected as it required opening a new channel.
+    InsufficientInboundLiquidity,
+    /// A request to one of lipa's services failed.
+    LipaServiceUnavailable,
 }
 
 impl Display for NotificationHandlingErrorCode {
