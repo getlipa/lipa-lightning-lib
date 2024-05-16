@@ -304,12 +304,13 @@ fn handle_lnurl_pay_request_notification(
             NotificationHandlingErrorCode::NodeUnavailable,
             "Failed to create invoice",
         )?;
-    if receive_payment_result.opening_fee_msat.is_some() {
-        runtime_error!(
+    ensure!(
+        receive_payment_result.opening_fee_msat.is_none(),
+        runtime_error(
             NotificationHandlingErrorCode::InsufficientInboundLiquidity,
             "Rejecting an inbound LNURL-pay payment because of insufficient inbound liquidity"
-        );
-    }
+        )
+    );
 
     // Invoice is not persisted in invoices table because we are not interested in unpaid invoices
     // resulting from incoming LNURL payments

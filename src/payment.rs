@@ -149,7 +149,7 @@ pub struct IncomingPaymentInfo {
     /// LSP fees paid. The amount is only paid if successful.
     pub lsp_fees: Amount,
     /// Which Lightning Address / Phone number this payment was received on.
-    pub received_on: Option<String>,
+    pub received_on: Option<Recipient>,
     /// Optional comment sent by the payer of an LNURL payment.
     pub received_lnurl_comment: Option<String>,
 }
@@ -174,6 +174,7 @@ impl IncomingPaymentInfo {
             .to_amount_down(exchange_rate);
         let payment_info =
             PaymentInfo::new(breez_payment, exchange_rate, tz_config, personal_note)?;
+        let received_on = received_on.map(|r| Recipient::from_str(&r));
         Ok(Self {
             payment_info,
             requested_amount,
@@ -214,7 +215,7 @@ impl OutgoingPaymentInfo {
                 permanent_failure!("OutgoingPaymentInfo cannot be created from channel close")
             }
         };
-        let recipient = Recipient::new(data);
+        let recipient = Recipient::from_ln_payment_details(data);
         let comment_for_recipient = data.lnurl_pay_comment.clone();
         let payment_info =
             PaymentInfo::new(breez_payment, exchange_rate, tz_config, personal_note)?;
@@ -236,7 +237,7 @@ pub enum Recipient {
 }
 
 impl Recipient {
-    pub(crate) fn new(payment_details: &LnPaymentDetails) -> Recipient {
+    pub(crate) fn from_ln_payment_details(payment_details: &LnPaymentDetails) -> Self {
         if let Some(address) = &payment_details.ln_address {
             Recipient::LightningAddress {
                 address: address.to_string(),
@@ -244,6 +245,17 @@ impl Recipient {
         } else if let Some(lnurlp_domain) = &payment_details.lnurl_pay_domain {
             Recipient::LnUrlPayDomain {
                 domain: lnurlp_domain.to_string(),
+            }
+        } else {
+            Recipient::Unknown
+        }
+    }
+
+    pub(crate) fn from_str(str: &str) -> Self {
+        if parser::parse_lightning_address(str).is_ok() {
+            // TODO: check if lightning address matches phone number format
+            Recipient::LightningAddress {
+                address: str.to_string(),
             }
         } else {
             Recipient::Unknown

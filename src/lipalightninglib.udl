@@ -362,7 +362,7 @@ dictionary IncomingPaymentInfo {
     PaymentInfo payment_info;
     Amount requested_amount;
     Amount lsp_fees;
-    string? received_on;
+    Recipient? received_on;
     string? received_lnurl_comment;
 };
 
