@@ -48,6 +48,11 @@ fn main() {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "lnurl_pay_request" => {
+                    if let Err(message) = start_lnurl_pay_request(&mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "stop" => {
                     break;
                 }
@@ -74,6 +79,10 @@ fn setup_editor() -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new(
         "address_txs_confirmed <address>",
         "address_txs_confirmed ",
+    ));
+    hints.insert(CommandHint::new(
+        "lnurl_pay_request <amount_msat> <id> <recipient> [payer_comment]",
+        "lnurl_pay_request ",
     ));
     hints.insert(CommandHint::new("stop", "stop"));
     let hinter = CommandHinter { hints };
@@ -123,6 +132,7 @@ fn help() {
     println!("  h | help");
     println!("  payment_received <hash>");
     println!("  address_txs_confirmed <address>");
+    println!("  lnurl_pay_request <amount_msat> <id> <recipient> [payer_comment]");
     println!("  stop");
 }
 
@@ -154,10 +164,9 @@ fn start_payment_received(words: &mut dyn Iterator<Item = &str>) -> Result<()> {
 
 fn start_address_txs_confirmed(words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let address = words.next().ok_or(anyhow!("Address is required"))?;
-    let environment = words.next().unwrap_or("local");
 
     println!("Starting a handle_notification(address_txs_confirmed) test run.");
-    println!("Environment: {environment}");
+    println!("Environment: {}", ENVIRONMENT.as_str());
     println!("Swap address we are interested in: {address}");
     println!();
 
@@ -168,6 +177,44 @@ fn start_address_txs_confirmed(words: &mut dyn Iterator<Item = &str>) -> Result<
          \"template\": \"address_txs_confirmed\",
          \"data\": {{
           \"payment_hash\": \"{address}\"
+         }}
+        }}"
+    );
+
+    let notification = handle_notification(config, notification_payload).unwrap();
+
+    println!("The returned notification is {notification:?}");
+
+    Ok(())
+}
+
+fn start_lnurl_pay_request(words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let amount_msat: u64 = words
+        .next()
+        .ok_or(anyhow!("amount_msat is required"))?
+        .parse()?;
+    let id = words.next().ok_or(anyhow!("id is required"))?;
+    let recipient = words.next().ok_or(anyhow!("recipient is required"))?;
+    let payer_comment = words.collect::<Vec<_>>().join(" ");
+
+    println!("Starting a handle_notification(lnurl_pay_request) test run.");
+    println!("Environment: {}", ENVIRONMENT.as_str());
+    println!("Amount (msat): {amount_msat}");
+    println!("ID: {id}");
+    println!("Recipient: {recipient}");
+    println!("Payer Comment: {payer_comment}");
+    println!();
+
+    let config = get_config();
+
+    let notification_payload = format!(
+        "{{
+         \"template\": \"lnurl_pay_request\",
+         \"data\": {{
+          \"amount_msat\": {amount_msat},
+          \"recipient\": \"{recipient}\",
+          \"payer_comment\": \"{payer_comment}\",
+          \"id\": \"{id}\"
          }}
         }}"
     );
