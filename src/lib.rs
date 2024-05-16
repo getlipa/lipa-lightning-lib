@@ -330,13 +330,10 @@ impl LightningNode {
         let environment = Environment::load(config.environment)?;
 
         let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)?;
-        let auth = Arc::new(build_auth(
-            &strong_typed_seed,
-            environment.backend_url.clone(),
-        )?);
+        let auth = Arc::new(build_auth(&strong_typed_seed, &environment.backend_url)?);
         let async_auth = Arc::new(build_async_auth(
             &strong_typed_seed,
-            environment.backend_url.clone(),
+            &environment.backend_url,
         )?);
 
         let user_preferences = Arc::new(Mutex::new(UserPreferences {
@@ -440,25 +437,7 @@ impl LightningNode {
 
         fund_migration::log_fund_migration_data(&strong_typed_seed)?;
 
-        let id = auth.get_wallet_pubkey_id().map_to_runtime_error(
-            RuntimeErrorCode::AuthServiceUnavailable,
-            "Failed to authenticate in order to get wallet pubkey id",
-        )?;
-        let encrypted_id =
-            deterministic_encrypt(id.as_bytes(), &environment.notification_webhook_secret)
-                .map_to_permanent_failure("Failed to encrypt wallet pubkey id")?;
-        let encrypted_id = hex::encode(encrypted_id);
-        let webhook_url =
-            environment
-                .notification_webhook_base_url
-                .replacen("{id}", &encrypted_id, 1);
-        rt.handle()
-            .block_on(sdk.register_webhook(webhook_url.clone()))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to register notification webhook",
-            )?;
-        debug!("Successfully registered notification webhook with Breez SDK. URL: {webhook_url}");
+        register_webhook_url(&rt, &sdk, &auth, &environment)?;
 
         Ok(LightningNode {
             user_preferences,
@@ -1187,24 +1166,35 @@ impl LightningNode {
             .data_store
             .lock_unwrap()
             .retrieve_payment_info(&payment_details.payment_hash)?;
-        let (exchange_rate, tz_config, personal_note, offer) = match local_payment_data {
-            Some(data) => (
-                Some(data.exchange_rate),
-                data.user_preferences.timezone_config,
-                data.personal_note,
-                data.offer,
-            ),
-            None => (
-                self.get_exchange_rate(),
-                self.user_preferences.lock_unwrap().timezone_config.clone(),
-                None,
-                None,
-            ),
-        };
+        let (exchange_rate, tz_config, personal_note, offer, received_on, received_lnurl_comment) =
+            match local_payment_data {
+                Some(data) => (
+                    Some(data.exchange_rate),
+                    data.user_preferences.timezone_config,
+                    data.personal_note,
+                    data.offer,
+                    data.received_on,
+                    data.received_lnurl_comment,
+                ),
+                None => (
+                    self.get_exchange_rate(),
+                    self.user_preferences.lock_unwrap().timezone_config.clone(),
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+            };
 
         if let Some(offer) = offer {
-            let incoming_payment_info =
-                IncomingPaymentInfo::new(breez_payment, &exchange_rate, tz_config, personal_note)?;
+            let incoming_payment_info = IncomingPaymentInfo::new(
+                breez_payment,
+                &exchange_rate,
+                tz_config,
+                personal_note,
+                received_on,
+                received_lnurl_comment,
+            )?;
             let offer_kind = fill_payout_fee(
                 offer,
                 incoming_payment_info.requested_amount.sats.as_msats(),
@@ -1222,15 +1212,27 @@ impl LightningNode {
                     .with_timezone(tz_config.clone()),
                 paid_amount: s.paid_msat.as_msats().to_amount_down(&exchange_rate),
             };
-            let incoming_payment_info =
-                IncomingPaymentInfo::new(breez_payment, &exchange_rate, tz_config, personal_note)?;
+            let incoming_payment_info = IncomingPaymentInfo::new(
+                breez_payment,
+                &exchange_rate,
+                tz_config,
+                personal_note,
+                received_on,
+                received_lnurl_comment,
+            )?;
             Ok(Activity::Swap {
                 incoming_payment_info: Some(incoming_payment_info),
                 swap_info,
             })
         } else if breez_payment.payment_type == breez_sdk_core::PaymentType::Received {
-            let incoming_payment_info =
-                IncomingPaymentInfo::new(breez_payment, &exchange_rate, tz_config, personal_note)?;
+            let incoming_payment_info = IncomingPaymentInfo::new(
+                breez_payment,
+                &exchange_rate,
+                tz_config,
+                personal_note,
+                received_on,
+                received_lnurl_comment,
+            )?;
             Ok(Activity::IncomingPayment {
                 incoming_payment_info,
             })
@@ -1341,6 +1343,8 @@ impl LightningNode {
             payment_info,
             requested_amount,
             lsp_fees,
+            received_on: None,
+            received_lnurl_comment: None,
         };
         Ok(incoming_payment_info)
     }
@@ -1745,7 +1749,7 @@ impl LightningNode {
         let exchange_rates = self.task_manager.lock_unwrap().get_exchange_rates();
         self.data_store
             .lock_unwrap()
-            .store_payment_info(hash, user_preferences, exchange_rates, offer)
+            .store_payment_info(hash, user_preferences, exchange_rates, offer, None, None)
             .log_ignore_error(Level::Error, "Failed to persist payment info")
     }
 
@@ -2492,7 +2496,7 @@ pub fn accept_terms_and_conditions(
     enable_backtrace();
     let environment = Environment::load(environment)?;
     let seed = sanitize_input::strong_type_seed(&seed)?;
-    let auth = build_auth(&seed, environment.backend_url)?;
+    let auth = build_auth(&seed, &environment.backend_url)?;
     auth.accept_terms_and_conditions(TermsAndConditions::Lipa, version)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
@@ -2547,7 +2551,7 @@ pub fn get_terms_and_conditions_status(
     enable_backtrace();
     let environment = Environment::load(environment)?;
     let seed = sanitize_input::strong_type_seed(&seed)?;
-    let auth = build_auth(&seed, environment.backend_url)?;
+    let auth = build_auth(&seed, &environment.backend_url)?;
     auth.get_terms_and_conditions_status(terms_and_conditions)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
@@ -2663,6 +2667,33 @@ fn filter_out_and_log_corrupted_payments(
         );
         None
     }
+}
+
+pub(crate) fn register_webhook_url(
+    rt: &AsyncRuntime,
+    sdk: &BreezServices,
+    auth: &Auth,
+    environment: &Environment,
+) -> Result<()> {
+    let id = auth.get_wallet_pubkey_id().map_to_runtime_error(
+        RuntimeErrorCode::AuthServiceUnavailable,
+        "Failed to authenticate in order to get wallet pubkey id",
+    )?;
+    let encrypted_id =
+        deterministic_encrypt(id.as_bytes(), &environment.notification_webhook_secret)
+            .map_to_permanent_failure("Failed to encrypt wallet pubkey id")?;
+    let encrypted_id = hex::encode(encrypted_id);
+    let webhook_url = environment
+        .notification_webhook_base_url
+        .replacen("{id}", &encrypted_id, 1);
+    rt.handle()
+        .block_on(sdk.register_webhook(webhook_url.clone()))
+        .map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to register notification webhook",
+        )?;
+    debug!("Successfully registered notification webhook with Breez SDK. URL: {webhook_url}");
+    Ok(())
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
@@ -2794,6 +2825,8 @@ mod tests {
                 payment_info: payment_info.clone(),
                 requested_amount: Amount::default(),
                 lsp_fees: Amount::default(),
+                received_on: None,
+                received_lnurl_comment: None,
             },
         };
 
@@ -2803,6 +2836,8 @@ mod tests {
                 payment_info: payment_info.clone(),
                 requested_amount: Amount::default(),
                 lsp_fees: Amount::default(),
+                received_on: None,
+                received_lnurl_comment: None,
             },
             offer_kind: OfferKind::Pocket {
                 id: "123".to_string(),
@@ -2827,6 +2862,8 @@ mod tests {
                 payment_info,
                 requested_amount: Amount::default(),
                 lsp_fees: Amount::default(),
+                received_on: None,
+                received_lnurl_comment: None,
             },
             offer_kind: OfferKind::Pocket {
                 id: "234".to_string(),

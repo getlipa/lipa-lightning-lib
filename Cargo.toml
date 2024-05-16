@@ -15,14 +15,14 @@ name = "uniffi_lipalightninglib"
 [dependencies]
 parser = { path = "parser" }
 
-chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.21.3" }
-crow = { git = "https://github.com/getlipa/wild", tag = "v1.21.3" }
-graphql = { git = "https://github.com/getlipa/wild", tag = "v1.21.3" }
-honeybadger = { git = "https://github.com/getlipa/wild", tag = "v1.21.3" }
-parrot = { git = "https://github.com/getlipa/wild", tag = "v1.21.3" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
+crow = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
+honeybadger = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
+parrot = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
-pigeon = { git = "https://github.com/getlipa/wild", tag = "v1.21.3" }
-squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.21.3" }
+pigeon = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
+squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.4.1" }
 

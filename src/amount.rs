@@ -19,6 +19,17 @@ pub(crate) struct Msats {
     pub msats: u64,
 }
 
+impl Msats {
+    #[allow(dead_code)]
+    pub(crate) fn sats_round_up(&self) -> u64 {
+        round(self.msats, Rounding::Up)
+    }
+
+    pub(crate) fn sats_round_down(&self) -> u64 {
+        round(self.msats, Rounding::Down)
+    }
+}
+
 #[allow(clippy::wrong_self_convention)]
 pub(crate) trait AsSats {
     fn as_sats(self) -> Sats;
@@ -174,5 +185,13 @@ mod tests {
         assert_eq!(fiat.currency_code, "EUR");
         assert_eq!(fiat.minor_units, 290);
         assert_eq!(fiat.converted_at, now);
+    }
+
+    #[test]
+    fn rounding_msats_to_sats() {
+        let msats = 12349123u64.as_msats();
+
+        assert_eq!(msats.sats_round_down(), 12349);
+        assert_eq!(msats.sats_round_up(), 12350);
     }
 }
