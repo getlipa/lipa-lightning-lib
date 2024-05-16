@@ -754,6 +754,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "chameleon-mock"
+version = "0.1.0"
+dependencies = [
+ "chameleon",
+ "graphql",
+ "honeybadger-mock",
+ "lazy_static",
+ "rand",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -954,7 +965,7 @@ version = "0.1.0"
 dependencies = [
  "crow",
  "graphql",
- "honeybadger",
+ "honeybadger-mock",
  "isocountry",
  "isolanguage-1",
  "lazy_static",
@@ -1797,6 +1808,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "honeybadger-mock"
+version = "0.1.0"
+dependencies = [
+ "graphql",
+ "honeybadger",
+ "log",
+ "rand",
+ "secp256k1 0.27.0",
+ "tokio",
+]
+
+[[package]]
 name = "http"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2179,6 +2202,7 @@ dependencies = [
  "breez-sdk-mock",
  "camino",
  "chameleon",
+ "chameleon-mock",
  "chrono",
  "cipher",
  "colored",
@@ -2190,6 +2214,7 @@ dependencies = [
  "graphql",
  "hex",
  "honeybadger",
+ "honeybadger-mock",
  "iban_validate",
  "lazy_static",
  "log",
@@ -2620,7 +2645,7 @@ name = "parrot-mock"
 version = "0.1.0"
 dependencies = [
  "graphql",
- "honeybadger",
+ "honeybadger-mock",
  "parrot",
 ]
 
@@ -2701,7 +2726,7 @@ name = "pigeon-mock"
 version = "0.1.0"
 dependencies = [
  "graphql",
- "honeybadger",
+ "honeybadger-mock",
 ]
 
 [[package]]
@@ -3676,7 +3701,7 @@ name = "squirrel-mock"
 version = "0.1.0"
 dependencies = [
  "graphql",
- "honeybadger",
+ "honeybadger-mock",
  "squirrel",
 ]
 
