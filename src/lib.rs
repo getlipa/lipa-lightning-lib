@@ -33,6 +33,7 @@ mod migrations;
 mod notification_handling;
 mod offer;
 mod payment;
+mod phone_number;
 mod random;
 mod recovery;
 mod sanitize_input;
@@ -62,8 +63,8 @@ use crate::errors::{
 };
 pub use crate::errors::{
     DecodeDataError, Error as LnError, LnUrlPayError, LnUrlPayErrorCode, LnUrlPayResult,
-    MnemonicError, NotificationHandlingError, NotificationHandlingErrorCode, PayError,
-    PayErrorCode, PayResult, Result, RuntimeErrorCode, SimpleError, UnsupportedDataType,
+    MnemonicError, NotificationHandlingError, NotificationHandlingErrorCode, ParsePhoneNumberError,
+    PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode, SimpleError, UnsupportedDataType,
 };
 use crate::event::LipaEventListener;
 pub use crate::exchange_rate_provider::ExchangeRate;
@@ -80,6 +81,8 @@ pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
 pub use crate::payment::{
     IncomingPaymentInfo, OutgoingPaymentInfo, PaymentInfo, PaymentState, Recipient,
 };
+use crate::phone_number::lightning_address_to_phone_number;
+pub use crate::phone_number::PhoneNumber;
 pub use crate::recovery::recover_lightning_node;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
 pub use crate::swap::{
@@ -613,6 +616,25 @@ impl LightningNode {
         ))
     }
 
+    /// Parse a phone number, check against the list of allowed country.
+    ///
+    /// Returns a possible lightning address, which can be checked for existence
+    /// with [`LightningNode::decode_data`].
+    ///
+    /// Requires network: **no**
+    pub fn parse_phone_number(
+        &self,
+        phone_number: String,
+    ) -> std::result::Result<String, ParsePhoneNumberError> {
+        let phone_number = PhoneNumber::parse(&phone_number)?;
+        // TODO: Validate against the list from Firebase.
+        ensure!(
+            phone_number.country_code.as_ref() == "CH",
+            ParsePhoneNumberError::UnsupportedCountry
+        );
+        Ok(phone_number.to_lightning_address(&self.environment.lipa_lightning_domain))
+    }
+
     /// Decode a user-provided string (usually obtained from QR-code or pasted).
     ///
     /// Requires network: **yes**
@@ -845,12 +867,12 @@ impl LightningNode {
         Ok(payment_hash)
     }
 
-    /// List lightning addresses from the most recent used.
+    /// List recipients from the most recent used.
     ///
-    /// Returns a list of lightning addresses.
+    /// Returns a list of recipients (lightning addresses or phone numbers for now).
     ///
     /// Requires network: **no**
-    pub fn list_lightning_addresses(&self) -> Result<Vec<String>> {
+    pub fn list_recipients(&self) -> Result<Vec<Recipient>> {
         let list_payments_request = ListPaymentsRequest {
             filters: Some(vec![PaymentTypeFilter::Sent]),
             metadata_filters: None,
@@ -878,7 +900,22 @@ impl LightningNode {
         lightning_addresses.sort();
         lightning_addresses.dedup_by_key(|p| p.0.clone());
         lightning_addresses.sort_by_key(|p| p.1);
-        Ok(lightning_addresses.into_iter().map(|p| p.0).collect())
+
+        let ro_recipient = |address: String| {
+            let e164 = lightning_address_to_phone_number(
+                &address,
+                &self.environment.lipa_lightning_domain,
+            );
+            match e164 {
+                Some(e164) => Recipient::PhoneNumber { e164 },
+                None => Recipient::LightningAddress { address },
+            }
+        };
+        let recipients = lightning_addresses
+            .into_iter()
+            .map(|p| ro_recipient(p.0))
+            .collect();
+        Ok(recipients)
     }
 
     /// Withdraw an LNURL-withdraw the provided amount.
@@ -1237,8 +1274,13 @@ impl LightningNode {
                 incoming_payment_info,
             })
         } else if breez_payment.payment_type == breez_sdk_core::PaymentType::Sent {
-            let outgoing_payment_info =
-                OutgoingPaymentInfo::new(breez_payment, &exchange_rate, tz_config, personal_note)?;
+            let outgoing_payment_info = OutgoingPaymentInfo::new(
+                breez_payment,
+                &exchange_rate,
+                tz_config,
+                personal_note,
+                &self.environment.lipa_lightning_domain,
+            )?;
             Ok(Activity::OutgoingPayment {
                 outgoing_payment_info,
             })

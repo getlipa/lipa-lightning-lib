@@ -24,6 +24,9 @@ interface LightningNode {
     [Throws=DecodeDataError]
     DecodedData decode_data(string data);
 
+    [Throws=ParsePhoneNumberError]
+    string parse_phone_number(string phone_number);
+
     MaxRoutingFeeMode get_payment_max_routing_fee_mode(u64 amount_sat);
 
     [Throws=LnError]
@@ -51,7 +54,7 @@ interface LightningNode {
     void set_payment_personal_note(string payment_hash, string note);
 
     [Throws=LnError]
-    sequence<string> list_lightning_addresses();
+    sequence<Recipient> list_recipients();
 
     [Throws=LnUrlWithdrawError]
     string withdraw_lnurlw(LnUrlWithdrawRequestData lnurl_withdraw_request_data, u64 amount_sat);
@@ -591,6 +594,7 @@ dictionary SwapToLightningFees {
 interface Recipient {
     LightningAddress(string address);
     LnUrlPayDomain(string domain);
+    PhoneNumber(string e164);
     Unknown();
 };
 
@@ -717,6 +721,15 @@ interface DecodeDataError {
     LnUrlError(string msg);
     Unsupported(UnsupportedDataType typ);
     Unrecognized(string msg);
+};
+
+[Error]
+interface ParsePhoneNumberError {
+    ParsingError();
+    MissingCountryCode();
+    InvalidCountryCode();
+    InvalidPhoneNumber();
+    UnsupportedCountry();
 };
 
 [Error]

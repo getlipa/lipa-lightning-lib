@@ -329,3 +329,17 @@ impl NotificationHandlingErrorCode {
         Self::NodeUnavailable
     }
 }
+
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum ParsePhoneNumberError {
+    #[error("ParsingError")]
+    ParsingError,
+    #[error("MissingCountryCode")]
+    MissingCountryCode,
+    #[error("InvalidCountryCode")]
+    InvalidCountryCode,
+    #[error("InvalidPhoneNumber")]
+    InvalidPhoneNumber,
+    #[error("UnsupportedCountry")]
+    UnsupportedCountry,
+}

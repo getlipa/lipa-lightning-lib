@@ -3,6 +3,7 @@ use std::ops::Add;
 use crate::amount::{AsSats, ToAmount};
 use crate::config::WithTimezone;
 use crate::lnurl::parse_metadata;
+use crate::phone_number::lightning_address_to_phone_number;
 use crate::util::unix_timestamp_to_system_time;
 use crate::{Amount, ExchangeRate, InvoiceDetails, Result, TzConfig, TzTime};
 
@@ -204,6 +205,7 @@ impl OutgoingPaymentInfo {
         exchange_rate: &Option<ExchangeRate>,
         tz_config: TzConfig,
         personal_note: Option<String>,
+        lipa_lightning_domain: &str,
     ) -> Result<Self> {
         let network_fees = breez_payment
             .fee_msat
@@ -215,7 +217,7 @@ impl OutgoingPaymentInfo {
                 permanent_failure!("OutgoingPaymentInfo cannot be created from channel close")
             }
         };
-        let recipient = Recipient::from_ln_payment_details(data);
+        let recipient = Recipient::from_ln_payment_details(data, lipa_lightning_domain);
         let comment_for_recipient = data.lnurl_pay_comment.clone();
         let payment_info =
             PaymentInfo::new(breez_payment, exchange_rate, tz_config, personal_note)?;
@@ -233,12 +235,19 @@ impl OutgoingPaymentInfo {
 pub enum Recipient {
     LightningAddress { address: String },
     LnUrlPayDomain { domain: String },
+    PhoneNumber { e164: String },
     Unknown,
 }
 
 impl Recipient {
-    pub(crate) fn from_ln_payment_details(payment_details: &LnPaymentDetails) -> Self {
+    pub(crate) fn from_ln_payment_details(
+        payment_details: &LnPaymentDetails,
+        lipa_lightning_domain: &str,
+    ) -> Self {
         if let Some(address) = &payment_details.ln_address {
+            if let Some(e164) = lightning_address_to_phone_number(address, lipa_lightning_domain) {
+                return Recipient::PhoneNumber { e164 };
+            }
             Recipient::LightningAddress {
                 address: address.to_string(),
             }
