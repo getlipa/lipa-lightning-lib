@@ -163,6 +163,7 @@ impl IncomingPaymentInfo {
         personal_note: Option<String>,
         received_on: Option<String>,
         received_lnurl_comment: Option<String>,
+        lipa_lightning_domain: &str,
     ) -> Result<Self> {
         let lsp_fees = breez_payment
             .fee_msat
@@ -175,7 +176,8 @@ impl IncomingPaymentInfo {
             .to_amount_down(exchange_rate);
         let payment_info =
             PaymentInfo::new(breez_payment, exchange_rate, tz_config, personal_note)?;
-        let received_on = received_on.map(|r| Recipient::from_str(&r));
+        let received_on =
+            received_on.map(|r| Recipient::from_lightning_address(&r, lipa_lightning_domain));
         Ok(Self {
             payment_info,
             requested_amount,
@@ -260,14 +262,12 @@ impl Recipient {
         }
     }
 
-    pub(crate) fn from_str(str: &str) -> Self {
-        if parser::parse_lightning_address(str).is_ok() {
-            // TODO: check if lightning address matches phone number format
-            Recipient::LightningAddress {
-                address: str.to_string(),
-            }
-        } else {
-            Recipient::Unknown
+    pub(crate) fn from_lightning_address(address: &str, lipa_lightning_domain: &str) -> Self {
+        match lightning_address_to_phone_number(address, lipa_lightning_domain) {
+            Some(e164) => Recipient::PhoneNumber { e164 },
+            None => Recipient::LightningAddress {
+                address: address.to_string(),
+            },
         }
     }
 }

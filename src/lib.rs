@@ -81,7 +81,6 @@ pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
 pub use crate::payment::{
     IncomingPaymentInfo, OutgoingPaymentInfo, PaymentInfo, PaymentState, Recipient,
 };
-use crate::phone_number::lightning_address_to_phone_number;
 pub use crate::phone_number::PhoneNumber;
 pub use crate::recovery::recover_lightning_node;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
@@ -902,19 +901,11 @@ impl LightningNode {
         lightning_addresses.dedup_by_key(|p| p.0.clone());
         lightning_addresses.sort_by_key(|p| p.1);
 
-        let to_recipient = |address: String| {
-            let e164 = lightning_address_to_phone_number(
-                &address,
-                &self.environment.lipa_lightning_domain,
-            );
-            match e164 {
-                Some(e164) => Recipient::PhoneNumber { e164 },
-                None => Recipient::LightningAddress { address },
-            }
-        };
         let recipients = lightning_addresses
             .into_iter()
-            .map(|p| to_recipient(p.0))
+            .map(|p| {
+                Recipient::from_lightning_address(&p.0, &self.environment.lipa_lightning_domain)
+            })
             .collect();
         Ok(recipients)
     }
@@ -1232,6 +1223,7 @@ impl LightningNode {
                 personal_note,
                 received_on,
                 received_lnurl_comment,
+                &self.environment.lipa_lightning_domain,
             )?;
             let offer_kind = fill_payout_fee(
                 offer,
@@ -1257,6 +1249,7 @@ impl LightningNode {
                 personal_note,
                 received_on,
                 received_lnurl_comment,
+                &self.environment.lipa_lightning_domain,
             )?;
             Ok(Activity::Swap {
                 incoming_payment_info: Some(incoming_payment_info),
@@ -1270,6 +1263,7 @@ impl LightningNode {
                 personal_note,
                 received_on,
                 received_lnurl_comment,
+                &self.environment.lipa_lightning_domain,
             )?;
             Ok(Activity::IncomingPayment {
                 incoming_payment_info,
