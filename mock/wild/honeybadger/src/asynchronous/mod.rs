@@ -24,12 +24,6 @@ impl Auth {
         Some("dummy-pubkey-id".to_string())
     }
 
-    // todo remove?
-    // Not exposed in UDL, used in tests.
-    pub async fn refresh_token(&self) -> Result<String> {
-        self.query_token().await
-    }
-
     pub async fn accept_terms_and_conditions(
         &self,
         _terms: TermsAndConditions,
