@@ -580,8 +580,6 @@ impl BreezServices {
     }
 
     pub async fn list_payments(&self, req: ListPaymentsRequest) -> SdkResult<Vec<Payment>> {
-        self.sync().await?;
-
         let payment_type_filter = req
             .filters
             .as_ref()
@@ -807,8 +805,6 @@ impl BreezServices {
     }
 
     pub async fn in_progress_swap(&self) -> SdkResult<Option<SwapInfo>> {
-        self.sync().await?;
-
         Ok(SWAPS
             .lock()
             .unwrap()
@@ -900,8 +896,6 @@ impl BreezServices {
     }
 
     pub async fn list_refundables(&self) -> SdkResult<Vec<SwapInfo>> {
-        self.sync().await?;
-
         let swaps = SWAPS.lock().unwrap().clone();
         Ok(swaps
             .into_iter()
