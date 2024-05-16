@@ -22,6 +22,7 @@ pub(crate) struct Environment {
     pub pocket_url: String,
     pub notification_webhook_base_url: String,
     pub notification_webhook_secret: [u8; 32],
+    pub lipa_lightning_domain: String,
 }
 
 impl Environment {
@@ -33,6 +34,7 @@ impl Environment {
         let notification_webhook_base_url =
             get_notification_webhook_base_url(environment).to_string();
         let notification_webhook_secret = get_notification_webhook_secret(environment)?;
+        let lipa_lightning_domain = get_lipa_lightning_domain(environment).to_string();
 
         Ok(match environment {
             EnvironmentCode::Local => Self {
@@ -43,6 +45,7 @@ impl Environment {
                 pocket_url: env!("POCKET_URL_LOCAL").to_string(),
                 notification_webhook_base_url,
                 notification_webhook_secret,
+                lipa_lightning_domain,
             },
             EnvironmentCode::Dev => Self {
                 network: Network::Bitcoin,
@@ -52,6 +55,7 @@ impl Environment {
                 pocket_url: env!("POCKET_URL_DEV").to_string(),
                 notification_webhook_base_url,
                 notification_webhook_secret,
+                lipa_lightning_domain,
             },
             EnvironmentCode::Stage => Self {
                 network: Network::Bitcoin,
@@ -61,6 +65,7 @@ impl Environment {
                 pocket_url: env!("POCKET_URL_STAGE").to_string(),
                 notification_webhook_base_url,
                 notification_webhook_secret,
+                lipa_lightning_domain,
             },
             EnvironmentCode::Prod => Self {
                 network: Network::Bitcoin,
@@ -70,6 +75,7 @@ impl Environment {
                 pocket_url: env!("POCKET_URL_PROD").to_string(),
                 notification_webhook_base_url,
                 notification_webhook_secret,
+                lipa_lightning_domain,
             },
         })
     }
@@ -103,4 +109,13 @@ fn get_notification_webhook_secret(environment_code: EnvironmentCode) -> Result<
 
     <[u8; 32]>::from_hex(secret_hex)
         .map_to_permanent_failure("Failed to parse embedded notification webhook secret")
+}
+
+fn get_lipa_lightning_domain(environment_code: EnvironmentCode) -> &'static str {
+    match environment_code {
+        EnvironmentCode::Local => env!("LIPA_LIGHTNING_DOMAIN_LOCAL"),
+        EnvironmentCode::Dev => env!("LIPA_LIGHTNING_DOMAIN_DEV"),
+        EnvironmentCode::Stage => env!("LIPA_LIGHTNING_DOMAIN_STAGE"),
+        EnvironmentCode::Prod => env!("LIPA_LIGHTNING_DOMAIN_PROD"),
+    }
 }
