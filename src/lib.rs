@@ -625,11 +625,12 @@ impl LightningNode {
     pub fn parse_phone_number(
         &self,
         phone_number: String,
+        allowed_countries_country_iso_3166_1_alpha_2: Vec<String>,
     ) -> std::result::Result<String, ParsePhoneNumberError> {
         let phone_number = PhoneNumber::parse(&phone_number)?;
-        // TODO: Validate against the list from Firebase.
         ensure!(
-            phone_number.country_code.as_ref() == "CH",
+            allowed_countries_country_iso_3166_1_alpha_2
+                .contains(&phone_number.country_code.as_ref().to_string()),
             ParsePhoneNumberError::UnsupportedCountry
         );
         Ok(phone_number.to_lightning_address(&self.environment.lipa_lightning_domain))
@@ -901,7 +902,7 @@ impl LightningNode {
         lightning_addresses.dedup_by_key(|p| p.0.clone());
         lightning_addresses.sort_by_key(|p| p.1);
 
-        let ro_recipient = |address: String| {
+        let to_recipient = |address: String| {
             let e164 = lightning_address_to_phone_number(
                 &address,
                 &self.environment.lipa_lightning_domain,
@@ -913,7 +914,7 @@ impl LightningNode {
         };
         let recipients = lightning_addresses
             .into_iter()
-            .map(|p| ro_recipient(p.0))
+            .map(|p| to_recipient(p.0))
             .collect();
         Ok(recipients)
     }

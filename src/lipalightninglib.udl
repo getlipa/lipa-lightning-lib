@@ -25,7 +25,7 @@ interface LightningNode {
     DecodedData decode_data(string data);
 
     [Throws=ParsePhoneNumberError]
-    string parse_phone_number(string phone_number);
+    string parse_phone_number(string phone_number, sequence<string> allowed_countries_country_iso_3166_1_alpha_2);
 
     MaxRoutingFeeMode get_payment_max_routing_fee_mode(u64 amount_sat);
 
