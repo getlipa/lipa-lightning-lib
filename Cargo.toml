@@ -16,7 +16,8 @@ name = "uniffi_lipalightninglib"
 [dependencies]
 parser = { path = "parser" }
 
-chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.21.3" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.21.3", optional = true }
+chameleon-mock = { path = "mock/wild/chameleon", optional = true }
 crow = { git = "https://github.com/getlipa/wild", tag = "v1.21.3", optional = true }
 crow-mock = { path = "mock/wild/crow", optional = true }
 graphql = { git = "https://github.com/getlipa/wild", tag = "v1.21.3" }
@@ -58,8 +59,8 @@ uniffi = "0.27.0"
 uuid = { version = "1.8.0", features = ["v5"] }
 
 [features]
-default = ["dep:breez-sdk-core", "dep:squirrel", "dep:parrot", "dep:pigeon", "dep:crow", "dep:honeybadger"]
-mock-deps = ["dep:breez-sdk-mock", "dep:squirrel-mock", "dep:parrot-mock", "dep:pigeon-mock", "dep:crow-mock", "dep:honeybadger-mock"]
+default = ["dep:breez-sdk-core", "dep:chameleon", "dep:crow", "dep:honeybadger", "dep:parrot", "dep:pigeon", "dep:squirrel"]
+mock-deps = ["dep:breez-sdk-mock", "dep:chameleon-mock", "dep:crow-mock", "dep:honeybadger-mock", "dep:parrot-mock", "dep:pigeon-mock", "dep:squirrel-mock"]
 
 # Bundle sqlite for all targets except iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]
