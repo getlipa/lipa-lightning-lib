@@ -15,14 +15,14 @@ name = "uniffi_lipalightninglib"
 [dependencies]
 parser = { path = "parser" }
 
-chameleon = { git = "https://github.com/getlipa/wild", branch = "feature/implement-registration-of-lnurlp-invoices" }
-crow = { git = "https://github.com/getlipa/wild", branch = "feature/implement-registration-of-lnurlp-invoices" }
-graphql = { git = "https://github.com/getlipa/wild", branch = "feature/implement-registration-of-lnurlp-invoices" }
-honeybadger = { git = "https://github.com/getlipa/wild", branch = "feature/implement-registration-of-lnurlp-invoices" }
-parrot = { git = "https://github.com/getlipa/wild", branch = "feature/implement-registration-of-lnurlp-invoices" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
+crow = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
+honeybadger = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
+parrot = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
-pigeon = { git = "https://github.com/getlipa/wild", branch = "feature/implement-registration-of-lnurlp-invoices" }
-squirrel = { git = "https://github.com/getlipa/wild", branch = "feature/implement-registration-of-lnurlp-invoices" }
+pigeon = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
+squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
 
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.4.1" }
 
