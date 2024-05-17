@@ -163,6 +163,15 @@ interface LightningNode {
 
     [Throws=LnError]
     string? query_lightning_address();
+
+    [Throws=LnError]
+    string? query_verified_phone_number();
+
+    [Throws=LnError]
+    void request_phone_number_verification(string phone_number);
+
+    [Throws=LnError]
+    void verify_phone_number(string phone_number, string otp);
 };
 
 dictionary Config {

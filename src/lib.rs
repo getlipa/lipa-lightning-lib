@@ -2439,6 +2439,67 @@ impl LightningNode {
         Ok(addresses.into_iter().next())
     }
 
+    /// Query for a previously verified phone number.
+    ///
+    /// Requires network: **yes**
+    pub fn query_verified_phone_number(&self) -> Result<Option<String>> {
+        self.rt
+            .handle()
+            .block_on(pigeon::query_verified_phone_number(
+                &self.environment.backend_url,
+                &self.async_auth,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to query verified phone number",
+            )
+    }
+
+    /// Start the verification process for a new phone number. This will trigger an SMS containing
+    /// an OTPto be sent to the provided `phone_number`. To conclude the verification process,
+    /// the method [`LightningNode::verify_phone_number`] should be called next.
+    ///
+    /// Parameters:
+    /// * `phone_number` - the phone number to be registered. Needs to be checked for validity using
+    /// [LightningNode::parse_phone_number].
+    ///
+    /// Requires network: **yes**
+    pub fn request_phone_number_verification(&self, phone_number: String) -> Result<()> {
+        self.rt
+            .handle()
+            .block_on(pigeon::request_phone_number_verification(
+                &self.environment.backend_url,
+                &self.async_auth,
+                phone_number,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to register phone number",
+            )
+    }
+
+    /// Finish the verification process for a new phone number.
+    ///
+    /// Parameters:
+    /// * `phone_number` - the phone number to be verified.
+    /// * `otp` - the OTP code sent as an SMS to the phone number.
+    ///
+    /// Requires network: **yes**
+    pub fn verify_phone_number(&self, phone_number: String, otp: String) -> Result<()> {
+        self.rt
+            .handle()
+            .block_on(pigeon::verify_phone_number(
+                &self.environment.backend_url,
+                &self.async_auth,
+                phone_number,
+                otp,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to submit phone number registration otp",
+            )
+    }
+
     fn report_send_payment_issue(&self, payment_hash: String) {
         debug!("Reporting failure of payment: {payment_hash}");
         let data = ReportPaymentFailureDetails {
