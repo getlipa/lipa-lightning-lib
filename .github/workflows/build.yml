@@ -51,7 +51,7 @@ jobs:
         target: [ x86_64-apple-ios, aarch64-apple-ios, aarch64-apple-ios-sim ]
     steps:
       - name: Install rust
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@v1.0.6
         with:
           toolchain: 1.77.1
           profile: minimal
@@ -87,7 +87,7 @@ jobs:
         target: [ aarch64-linux-android, armv7-linux-androideabi, i686-linux-android ]
     steps:
       - name: Install rust
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@v1.0.6
         with:
           toolchain: 1.77.1
           profile: minimal
