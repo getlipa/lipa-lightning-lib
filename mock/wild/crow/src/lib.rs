@@ -80,7 +80,11 @@ impl OfferManager {
             .unwrap()
             .clone()
             .iter()
-            .filter(|t| t.status != TopupStatus::SETTLED && t.status != TopupStatus::REFUNDED)
+            .filter(|t| {
+                t.status == TopupStatus::READY
+                    || t.status == TopupStatus::FAILED
+                    || t.status == TopupStatus::REFUNDED
+            })
             .cloned()
             .collect())
     }
