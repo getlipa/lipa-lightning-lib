@@ -40,7 +40,7 @@ bitcoin = "0.30.1"
 chrono = { version = "0.4.38", default-features = false, features = ["serde"] }
 cipher = "0.4.4"
 email_address = "0.2.4"
-file-rotate = "0.7.5"
+file-rotate = "0.7.6"
 hex = "0.4.3"
 iban_validate = "4.0.1"
 log = "0.4.21"
@@ -54,7 +54,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = { version = "0.10.8", features = [] }
 simplelog = { version = "0.12.2" }
-thiserror = "1.0.60"
+thiserror = "1.0.61"
 tokio = { version = "1.37.0", features = ["rt-multi-thread", "time", "sync"] }
 uniffi = "0.27.0"
 uuid = { version = "1.8.0", features = ["v5"] }
