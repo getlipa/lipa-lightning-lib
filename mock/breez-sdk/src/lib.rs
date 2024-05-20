@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bitcoin::hashes::{sha256, Hash};
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, InvoiceBuilder};
@@ -381,12 +381,8 @@ impl BreezServices {
         &self,
         req: LnUrlWithdrawRequest,
     ) -> Result<LnUrlWithdrawResult, LnUrlWithdrawError> {
-        let lsp_fee_msat = receive_payment_mock_channels(req.amount_msat);
-        if lsp_fee_msat > req.amount_msat {
-            return Err(LnUrlWithdrawError::InvalidAmount {
-                err: "Not enough to pay for channel opening fees".to_string(),
-            });
-        }
+        let lsp_fee_msat = receive_payment_mock_channels(req.amount_msat)
+            .map_err(|e| LnUrlWithdrawError::InvalidAmount { err: e.to_string() })?;
 
         let (payment_preimage, payment_hash) = generate_2_hashes();
         let bolt11 = "lnbc1pjlq2t3pp5e3ef7wmszlwxhfpx9cfnxx34gglg779fwnwx9mfm69pfapmymt0qdqqcqzzsxqyz5vqsp5x7k3pjq5y8vk473l6767fenletzwjeaqqukpg9tspfq584g8qp4q9qyyssq678xw6gf2ywl5seummdy8pc6xd0jpvzdexd4v4d3zjse9u6jf7239va4e4r4hhauqrymxu7dp790lv98dl0qhrt4yqxwll2ufkp304gqn6798s".to_string();
@@ -484,12 +480,8 @@ impl BreezServices {
         let mut lsp_fee_msat_optional = None;
 
         if let PaymentOutcome::Success = &*PAYMENT_OUTCOME.lock().unwrap() {
-            let lsp_fee_msat = receive_payment_mock_channels(req.amount_msat);
-            if lsp_fee_msat > req.amount_msat {
-                return Err(ReceivePaymentError::InvalidAmount {
-                    err: "Not enough to pay for channel opening fees".to_string(),
-                });
-            }
+            let lsp_fee_msat = receive_payment_mock_channels(req.amount_msat)
+                .map_err(|e| ReceivePaymentError::InvalidAmount { err: e.to_string() })?;
 
             if lsp_fee_msat > 0 {
                 lsp_fee_msat_optional = Some(lsp_fee_msat);
@@ -669,12 +661,9 @@ impl BreezServices {
                     .unwrap()
                     .retain(|s| s.bitcoin_address != swap_address);
 
-                let lsp_fee_msat = receive_payment_mock_channels(swap.confirmed_sats);
-                if lsp_fee_msat > swap.confirmed_sats {
-                    return Err(SdkError::Generic {
-                        err: "Not enough to pay for channel opening fees".to_string(),
-                    });
-                }
+                let lsp_fee_msat = receive_payment_mock_channels(swap.confirmed_sats)
+                    .map_err(|e| SdkError::Generic { err: e.to_string() })?;
+
                 let (invoice, payment_preimage, payment_hash) =
                     create_invoice(swap.confirmed_sats, "Swap invoice");
                 let payment = create_payment(MockPayment {
@@ -933,7 +922,7 @@ impl BreezServices {
     }
 
     pub async fn sync(&self) -> SdkResult<()> {
-        self.simulate_swaps();
+        self.simulate_swaps()?;
 
         self.event_listener.on_event(BreezEvent::Synced);
         Ok(())
@@ -994,7 +983,7 @@ impl BreezServices {
     //                    the payment will be automatically redeemed if REDEEM_SWAPS is true as soon as sync is called (can be triggered by calling listactivities)
     //                    you can create new swaps again
     // if REDEEM_SWAPS is off, use refundfailedswap to clear up list
-    fn simulate_swaps(&self) {
+    fn simulate_swaps(&self) -> Result<()> {
         let now = Utc::now();
         let now = now.timestamp();
         let secs_until_tx_in_mempool = 20;
@@ -1002,7 +991,7 @@ impl BreezServices {
 
         let mut swaps = SWAPS.lock().unwrap();
 
-        swaps.iter_mut().for_each(|swap| {
+        let _: Result<()> = swaps.iter_mut().try_for_each(|swap| {
             if now - swap.created_at > secs_until_tx_in_mempool {
                 swap.total_incoming_txs = 1;
                 swap.unconfirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
@@ -1019,7 +1008,7 @@ impl BreezServices {
                 if *REDEEM_SWAPS.lock().unwrap() {
                     let (invoice, payment_preimage, payment_hash) =
                         create_invoice(swap.confirmed_sats, "Swap invoice");
-                    let lsp_fee_msat = receive_payment_mock_channels(swap.confirmed_sats * 1_000);
+                    let lsp_fee_msat = receive_payment_mock_channels(swap.confirmed_sats * 1_000)?;
                     let payment = create_payment(MockPayment {
                         payment_type: PaymentType::Received,
                         amount_msat: swap.confirmed_sats * 1_000 - lsp_fee_msat,
@@ -1055,13 +1044,15 @@ impl BreezServices {
                         details: swap.clone(),
                     })
                 }
-            }
+            };
+            Ok(())
         });
 
         // remove settled swaps
         swaps.retain(|swap| {
             now - swap.created_at < secs_until_onchain_conf || swap.status != SwapStatus::Completed
         });
+        Ok(())
     }
 
     fn simulate_payments(
@@ -1183,7 +1174,8 @@ pub async fn parse(input: &str) -> Result<InputType> {
 }
 
 /// Returns channel opening fees in msats.
-fn receive_payment_mock_channels(amount_msat: u64) -> u64 {
+/// Fails if a channel is needed and amount_msat is not enough to cover it.
+fn receive_payment_mock_channels(amount_msat: u64) -> Result<u64> {
     if amount_msat <= get_inbound_liquidity_msat() {
         let mut amount_left = amount_msat;
         for c in CHANNELS.lock().unwrap().iter_mut() {
@@ -1196,17 +1188,23 @@ fn receive_payment_mock_channels(amount_msat: u64) -> u64 {
                 break;
             }
         }
-        0
+        Ok(0)
     } else {
         let mut channels = CHANNELS.lock().unwrap();
-        channels.push(Channel {
-            capacity_msat: amount_msat + LSP_ADDED_LIQUIDITY_ON_NEW_CHANNELS_MSAT,
-            local_balance_msat: amount_msat,
-        });
-        max(
+        let lsp_fee = max(
             OPENING_FEE_PARAMS_MIN_MSAT,
             amount_msat * OPENING_FEE_PARAMS_PROPORTIONAL as u64 / 10_000,
-        )
+        );
+        if amount_msat < lsp_fee {
+            return Err(anyhow!(
+                "Invalid amount_msat ({amount_msat}) - not enough to cover channel opening fees ({lsp_fee})"
+            ));
+        }
+        channels.push(Channel {
+            capacity_msat: amount_msat + LSP_ADDED_LIQUIDITY_ON_NEW_CHANNELS_MSAT,
+            local_balance_msat: amount_msat - lsp_fee,
+        });
+        Ok(lsp_fee)
     }
 }
 
