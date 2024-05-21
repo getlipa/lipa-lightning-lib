@@ -1,8 +1,8 @@
 use crate::errors::Result;
-use crate::fiat_topup::FiatTopupInfo;
 use crate::fund_migration::MigrationStatus;
 use crate::migrations::migrate;
 use crate::{ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
+use pocket_client::FiatTopupInfo;
 
 use crate::analytics::AnalyticsConfig;
 use chrono::{DateTime, Utc};
@@ -648,9 +648,9 @@ mod tests {
     use crate::{ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
 
     use crate::analytics::AnalyticsConfig;
-    use crate::fiat_topup::FiatTopupInfo;
     use crow::TopupError::TemporaryFailure;
     use crow::{PermanentFailureCode, TemporaryFailureCode};
+    use pocket_client::FiatTopupInfo;
     use std::fs;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};

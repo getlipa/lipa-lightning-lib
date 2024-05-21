@@ -21,7 +21,6 @@ mod environment;
 mod errors;
 mod event;
 mod exchange_rate_provider;
-mod fiat_topup;
 mod fund_migration;
 mod invoice_details;
 mod key_derivation;
@@ -69,8 +68,6 @@ pub use crate::errors::{
 use crate::event::LipaEventListener;
 pub use crate::exchange_rate_provider::ExchangeRate;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
-pub use crate::fiat_topup::FiatTopupInfo;
-use crate::fiat_topup::PocketClient;
 pub use crate::invoice_details::InvoiceDetails;
 use crate::key_derivation::derive_persistence_encryption_key;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
@@ -92,6 +89,8 @@ use crate::task_manager::TaskManager;
 use crate::util::{
     replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
 };
+pub use pocket_client::FiatTopupInfo;
+use pocket_client::PocketClient;
 
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{ReceiveOnchainError, SendPaymentError};
@@ -104,7 +103,7 @@ use breez_sdk_core::{
     PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRedeemOnchainFundsRequest,
     PrepareRefundRequest, ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
     ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest,
-    SendPaymentRequest, UnspentTransactionOutput,
+    SendPaymentRequest, SignMessageRequest, UnspentTransactionOutput,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -400,11 +399,11 @@ impl LightningNode {
 
         let offer_manager = OfferManager::new(environment.backend_url.clone(), Arc::clone(&auth));
 
-        let fiat_topup_client = PocketClient::new(
-            environment.pocket_url.clone(),
-            Arc::clone(&sdk),
-            rt.handle(),
-        )?;
+        let fiat_topup_client = PocketClient::new(environment.pocket_url.clone())
+            .map_to_runtime_error(
+                RuntimeErrorCode::OfferServiceUnavailable,
+                "Couldn't create a fiat topup client",
+            )?;
 
         let backup_client =
             RemoteBackupClient::new(environment.backend_url.clone(), Arc::clone(&async_auth));
@@ -1508,9 +1507,26 @@ impl LightningNode {
             EmailAddress::from_str(email).map_to_invalid_input("Invalid email")?;
         }
 
+        let sdk = Arc::clone(&self.sdk);
+        let sign_message = |message| async move {
+            sdk.sign_message(SignMessageRequest { message })
+                .await
+                .ok()
+                .map(|r| r.signature)
+        };
         let topup_info = self
-            .fiat_topup_client
-            .register_pocket_fiat_topup(&user_iban, user_currency)?;
+            .rt
+            .handle()
+            .block_on(self.fiat_topup_client.register_pocket_fiat_topup(
+                &user_iban,
+                user_currency,
+                self.get_node_info()?.node_pubkey,
+                sign_message,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::OfferServiceUnavailable,
+                "Failed to register pocket fiat topup",
+            )?;
 
         self.data_store
             .lock_unwrap()

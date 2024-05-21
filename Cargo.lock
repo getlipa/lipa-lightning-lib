@@ -2145,6 +2145,7 @@ dependencies = [
  "perro",
  "phonenumber",
  "pigeon",
+ "pocket_client",
  "qrcode",
  "rand",
  "regex",
@@ -2710,6 +2711,17 @@ name = "plain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
+
+[[package]]
+name = "pocket_client"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "log",
+ "perro",
+ "reqwest",
+ "serde",
+]
 
 [[package]]
 name = "poly1305"

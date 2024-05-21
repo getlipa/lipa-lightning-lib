@@ -1,6 +1,7 @@
 [workspace]
 members = [
-    "parser"
+    "parser",
+    "pocket_client"
 ]
 
 [package]
@@ -14,6 +15,7 @@ name = "uniffi_lipalightninglib"
 
 [dependencies]
 parser = { path = "parser" }
+pocket_client = { path = "pocket_client" }
 
 chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
 crow = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
