@@ -18,7 +18,6 @@ lazy_static! {
 }
 
 const REFUND_EMAIL: &str = "refund@top.up";
-const SETTLE_EMAIL: &str = "settle@top.up";
 const FAIL_EMAIL: &str = "fail@top.up";
 
 pub struct OfferManager {}
@@ -34,7 +33,6 @@ impl OfferManager {
         if let Some(email) = email {
             match email.as_str() {
                 REFUND_EMAIL => status = TopupStatus::REFUNDED,
-                SETTLE_EMAIL => status = TopupStatus::SETTLED,
                 FAIL_EMAIL => status = TopupStatus::FAILED,
                 _ => {}
             }
