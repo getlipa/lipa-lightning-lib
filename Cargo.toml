@@ -16,7 +16,8 @@ name = "uniffi_lipalightninglib"
 
 [dependencies]
 parser = { path = "parser" }
-pocketclient = { path = "pocketclient" }
+pocketclient = { path = "pocketclient", optional = true }
+pocketclient-mock = { path = "mock/pocketclient", optional = true }
 
 chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.23.0", optional = true }
 chameleon-mock = { path = "mock/wild/chameleon", optional = true }
@@ -62,8 +63,8 @@ uniffi = "0.27.0"
 uuid = { version = "1.8.0", features = ["v5"] }
 
 [features]
-default = ["dep:breez-sdk-core", "dep:chameleon", "dep:crow", "dep:honeybadger", "dep:parrot", "dep:pigeon", "dep:squirrel"]
-mock-deps = ["dep:breez-sdk-mock", "dep:chameleon-mock", "dep:crow-mock", "dep:honeybadger-mock", "dep:parrot-mock", "dep:pigeon-mock", "dep:squirrel-mock"]
+default = ["dep:breez-sdk-core", "dep:chameleon", "dep:crow", "dep:honeybadger", "dep:parrot", "dep:pigeon", "dep:squirrel", "dep:pocketclient"]
+mock-deps = ["dep:breez-sdk-mock", "dep:chameleon-mock", "dep:crow-mock", "dep:honeybadger-mock", "dep:parrot-mock", "dep:pigeon-mock", "dep:squirrel-mock", "dep:pocketclient-mock"]
 
 # Bundle sqlite for all targets except iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]

@@ -2233,6 +2233,7 @@ dependencies = [
  "pigeon",
  "pigeon-mock",
  "pocketclient",
+ "pocketclient-mock",
  "qrcode",
  "rand",
  "regex",
@@ -2827,6 +2828,14 @@ dependencies = [
  "perro",
  "reqwest",
  "serde",
+]
+
+[[package]]
+name = "pocketclient-mock"
+version = "0.1.0"
+dependencies = [
+ "perro",
+ "pocketclient",
 ]
 
 [[package]]
