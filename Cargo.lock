@@ -747,7 +747,7 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.22.0#adf19cb171038363e74ead74e1a1f55447d835da"
+source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -951,7 +951,7 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.22.0#adf19cb171038363e74ead74e1a1f55447d835da"
+source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -1602,7 +1602,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.22.0#adf19cb171038363e74ead74e1a1f55447d835da"
+source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1794,7 +1794,7 @@ dependencies = [
 [[package]]
 name = "honeybadger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.22.0#adf19cb171038363e74ead74e1a1f55447d835da"
+source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
 dependencies = [
  "base64 0.22.0",
  "bdk",
@@ -2232,6 +2232,7 @@ dependencies = [
  "phonenumber",
  "pigeon",
  "pigeon-mock",
+ "pocket_client",
  "qrcode",
  "rand",
  "regex",
@@ -2656,7 +2657,7 @@ dependencies = [
 [[package]]
 name = "parrot"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.22.0#adf19cb171038363e74ead74e1a1f55447d835da"
+source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -2758,7 +2759,7 @@ dependencies = [
 [[package]]
 name = "pigeon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.22.0#adf19cb171038363e74ead74e1a1f55447d835da"
+source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -2770,6 +2771,7 @@ version = "0.1.0"
 dependencies = [
  "graphql",
  "honeybadger-mock",
+ "lazy_static",
 ]
 
 [[package]]
@@ -2815,6 +2817,17 @@ name = "plain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
+
+[[package]]
+name = "pocket_client"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "log",
+ "perro",
+ "reqwest",
+ "serde",
+]
 
 [[package]]
 name = "poly1305"
@@ -3758,7 +3771,7 @@ checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 [[package]]
 name = "squirrel"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.22.0#adf19cb171038363e74ead74e1a1f55447d835da"
+source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
 dependencies = [
  "bdk",
  "graphql",

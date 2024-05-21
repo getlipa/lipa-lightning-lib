@@ -21,7 +21,6 @@ mod environment;
 mod errors;
 mod event;
 mod exchange_rate_provider;
-mod fiat_topup;
 mod fund_migration;
 mod invoice_details;
 mod key_derivation;
@@ -69,8 +68,6 @@ pub use crate::errors::{
 use crate::event::LipaEventListener;
 pub use crate::exchange_rate_provider::ExchangeRate;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
-pub use crate::fiat_topup::FiatTopupInfo;
-use crate::fiat_topup::PocketClient;
 pub use crate::invoice_details::InvoiceDetails;
 use crate::key_derivation::derive_persistence_encryption_key;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
@@ -92,6 +89,8 @@ use crate::task_manager::TaskManager;
 use crate::util::{
     replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
 };
+pub use pocket_client::FiatTopupInfo;
+use pocket_client::PocketClient;
 
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{ReceiveOnchainError, SendPaymentError};
@@ -104,7 +103,7 @@ use breez_sdk_core::{
     PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRedeemOnchainFundsRequest,
     PrepareRefundRequest, ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
     ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest,
-    SendPaymentRequest, UnspentTransactionOutput,
+    SendPaymentRequest, SignMessageRequest, UnspentTransactionOutput,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -270,6 +269,7 @@ pub struct LightningNode {
     task_manager: Arc<Mutex<TaskManager>>,
     analytics_interceptor: Arc<AnalyticsInterceptor>,
     environment: Environment,
+    allowed_countries_country_iso_3166_1_alpha_2: Vec<String>,
 }
 
 /// Contains the fee information for the options to resolve on-chain funds from channel closes.
@@ -407,11 +407,11 @@ impl LightningNode {
 
         let offer_manager = OfferManager::new(environment.backend_url.clone(), Arc::clone(&auth));
 
-        let fiat_topup_client = PocketClient::new(
-            environment.pocket_url.clone(),
-            Arc::clone(&sdk),
-            rt.handle(),
-        )?;
+        let fiat_topup_client = PocketClient::new(environment.pocket_url.clone())
+            .map_to_runtime_error(
+                RuntimeErrorCode::OfferServiceUnavailable,
+                "Couldn't create a fiat topup client",
+            )?;
 
         let backup_client =
             RemoteBackupClient::new(environment.backend_url.clone(), Arc::clone(&async_auth));
@@ -463,6 +463,8 @@ impl LightningNode {
             task_manager,
             analytics_interceptor,
             environment,
+            allowed_countries_country_iso_3166_1_alpha_2: config
+                .phone_number_allowed_countries_iso_3166_1_alpha_2,
         })
     }
 
@@ -625,24 +627,31 @@ impl LightningNode {
         ))
     }
 
-    /// Parse a phone number, check against the list of allowed country.
+    /// Parse a phone number, check against the list of allowed countries (set in [`Config`]).
     ///
     /// Returns a possible lightning address, which can be checked for existence
     /// with [`LightningNode::decode_data`].
     ///
     /// Requires network: **no**
-    pub fn parse_phone_number(
+    pub fn parse_phone_number_to_lightning_address(
         &self,
         phone_number: String,
-        allowed_countries_country_iso_3166_1_alpha_2: Vec<String>,
     ) -> std::result::Result<String, ParsePhoneNumberError> {
+        let phone_number = self.parse_phone_number(phone_number)?;
+        Ok(phone_number.to_lightning_address(&self.environment.lipa_lightning_domain))
+    }
+
+    fn parse_phone_number(
+        &self,
+        phone_number: String,
+    ) -> std::result::Result<PhoneNumber, ParsePhoneNumberError> {
         let phone_number = PhoneNumber::parse(&phone_number)?;
         ensure!(
-            allowed_countries_country_iso_3166_1_alpha_2
+            self.allowed_countries_country_iso_3166_1_alpha_2
                 .contains(&phone_number.country_code.as_ref().to_string()),
             ParsePhoneNumberError::UnsupportedCountry
         );
-        Ok(phone_number.to_lightning_address(&self.environment.lipa_lightning_domain))
+        Ok(phone_number)
     }
 
     /// Decode a user-provided string (usually obtained from QR-code or pasted).
@@ -1518,9 +1527,26 @@ impl LightningNode {
             EmailAddress::from_str(email).map_to_invalid_input("Invalid email")?;
         }
 
+        let sdk = Arc::clone(&self.sdk);
+        let sign_message = |message| async move {
+            sdk.sign_message(SignMessageRequest { message })
+                .await
+                .ok()
+                .map(|r| r.signature)
+        };
         let topup_info = self
-            .fiat_topup_client
-            .register_pocket_fiat_topup(&user_iban, user_currency)?;
+            .rt
+            .handle()
+            .block_on(self.fiat_topup_client.register_pocket_fiat_topup(
+                &user_iban,
+                user_currency,
+                self.get_node_info()?.node_pubkey,
+                sign_message,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::OfferServiceUnavailable,
+                "Failed to register pocket fiat topup",
+            )?;
 
         self.data_store
             .lock_unwrap()
@@ -2454,6 +2480,73 @@ impl LightningNode {
             .lock_unwrap()
             .retrieve_lightning_addresses()?;
         Ok(addresses.into_iter().next())
+    }
+
+    /// Query for a previously verified phone number.
+    ///
+    /// Requires network: **yes**
+    pub fn query_verified_phone_number(&self) -> Result<Option<String>> {
+        self.rt
+            .handle()
+            .block_on(pigeon::query_verified_phone_number(
+                &self.environment.backend_url,
+                &self.async_auth,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to query verified phone number",
+            )
+    }
+
+    /// Start the verification process for a new phone number. This will trigger an SMS containing
+    /// an OTP to be sent to the provided `phone_number`. To conclude the verification process,
+    /// the method [`LightningNode::verify_phone_number`] should be called next.
+    ///
+    /// Parameters:
+    /// * `phone_number` - the phone number to be registered. Needs to be checked for validity using
+    /// [LightningNode::parse_phone_number_to_lightning_address].
+    ///
+    /// Requires network: **yes**
+    pub fn request_phone_number_verification(&self, phone_number: String) -> Result<()> {
+        let phone_number =
+            PhoneNumber::parse(&phone_number).map_to_invalid_input("Invalid phone number")?;
+
+        self.rt
+            .handle()
+            .block_on(pigeon::request_phone_number_verification(
+                &self.environment.backend_url,
+                &self.async_auth,
+                phone_number.e164,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to register phone number",
+            )
+    }
+
+    /// Finish the verification process for a new phone number.
+    ///
+    /// Parameters:
+    /// * `phone_number` - the phone number to be verified.
+    /// * `otp` - the OTP code sent as an SMS to the phone number.
+    ///
+    /// Requires network: **yes**
+    pub fn verify_phone_number(&self, phone_number: String, otp: String) -> Result<()> {
+        let phone_number =
+            PhoneNumber::parse(&phone_number).map_to_invalid_input("Invalid phone number")?;
+
+        self.rt
+            .handle()
+            .block_on(pigeon::verify_phone_number(
+                &self.environment.backend_url,
+                &self.async_auth,
+                phone_number.e164,
+                otp,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to submit phone number registration otp",
+            )
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {

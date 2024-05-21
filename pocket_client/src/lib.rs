@@ -1,15 +1,9 @@
-use crate::async_runtime::Handle;
-use crate::errors::{Result, RuntimeErrorCode};
-use crate::runtime_error;
-
-use breez_sdk_core::{BreezServices, SignMessageRequest};
 use chrono::{DateTime, Utc};
-use log::error;
-use perro::Error::RuntimeError;
-use perro::MapToError;
+use perro::{ensure, runtime_error, MapToError, OptionToError};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::fmt::{Display, Formatter};
+use std::future::Future;
 use std::time::Duration;
 
 /// Information about a fiat top-up registration
@@ -124,90 +118,115 @@ pub struct CreateOrderResponse {
     payout_method: PayoutMethod,
 }
 
-pub(crate) struct PocketClient {
+pub struct PocketClient {
     pocket_url: String,
-    client: reqwest::blocking::Client,
-    sdk: Arc<BreezServices>,
-    rt_handle: Handle,
+    client: reqwest::Client,
 }
 
+/// A code that specifies the Pocket client error that occurred
+#[derive(Debug, PartialEq, Eq)]
+pub enum PocketClientErrorCode {
+    ServiceUnavailable,
+    UnexpectedResponse,
+    SignerFailure,
+}
+
+impl Display for PocketClientErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+pub type PocketClientError = perro::Error<PocketClientErrorCode>;
+pub type Result<T> = std::result::Result<T, PocketClientError>;
+
 impl PocketClient {
-    pub fn new(pocket_url: String, sdk: Arc<BreezServices>, rt_handle: Handle) -> Result<Self> {
-        let client = reqwest::blocking::Client::builder()
+    pub fn new(pocket_url: String) -> Result<Self> {
+        let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(20))
             .build()
-            .map_to_permanent_failure("Failed to build reqwest client for PocketClient")?;
-        Ok(Self {
-            pocket_url,
-            client,
-            sdk,
-            rt_handle,
-        })
+            .map_to_permanent_failure("Failed to build a Pocket Client instance")?;
+        Ok(Self { pocket_url, client })
     }
 
-    pub fn register_pocket_fiat_topup(
+    pub async fn register_pocket_fiat_topup<S, Fut>(
         &self,
         user_iban: &str,
         user_currency: String,
-    ) -> Result<FiatTopupInfo> {
-        let challenge_response = self.request_challenge()?;
+        node_pubkey: String,
+        sign_message: S,
+    ) -> Result<FiatTopupInfo>
+    where
+        S: FnOnce(String) -> Fut,
+        Fut: Future<Output = Option<String>>,
+    {
+        let challenge_response = self.request_challenge().await?;
 
-        let create_order_response =
-            self.create_order(challenge_response, user_iban, user_currency)?;
+        let create_order_response = self
+            .create_order(
+                challenge_response,
+                user_iban,
+                user_currency,
+                node_pubkey,
+                sign_message,
+            )
+            .await?;
 
         Ok(FiatTopupInfo::from_pocket_create_order_response(
             create_order_response,
         ))
     }
 
-    fn request_challenge(&self) -> Result<ChallengeResponse> {
+    async fn request_challenge(&self) -> Result<ChallengeResponse> {
         let raw_response = self
             .client
             .post(format!("{}/v1/challenges", self.pocket_url))
             .send()
+            .await
             .map_to_runtime_error(
-                RuntimeErrorCode::OfferServiceUnavailable,
+                PocketClientErrorCode::ServiceUnavailable,
                 "Failed to get a response from the Pocket API",
             )?;
 
-        if raw_response.status() != StatusCode::CREATED {
-            error!(
-                "Got unexpected response to Pocket challenge request: Pocket API returned status {}", raw_response.status()
-            );
-            runtime_error!(
-                RuntimeErrorCode::OfferServiceUnavailable,
-                "Got unexpected response to Pocket challenge request: Pocket API returned status {}", raw_response.status());
-        }
+        ensure!(
+            raw_response.status() == StatusCode::CREATED,
+            runtime_error(
+                PocketClientErrorCode::UnexpectedResponse,
+                "Got unexpected response to Pocket challenge request: Pocket API returned status"
+            )
+        );
 
         raw_response
             .json::<ChallengeResponse>()
+            .await
             .map_to_runtime_error(
-                RuntimeErrorCode::OfferServiceUnavailable,
+                PocketClientErrorCode::UnexpectedResponse,
                 "Failed to parse ChallengeResponse",
             )
     }
 
     #[cfg(not(feature = "mock-deps"))]
-    fn create_order(
+    async fn create_order<S, Fut>(
         &self,
         challenge_response: ChallengeResponse,
         user_iban: &str,
         user_currency: String,
-    ) -> Result<CreateOrderResponse> {
+        node_pubkey: String,
+        sign_message: S,
+    ) -> Result<CreateOrderResponse>
+    where
+        S: FnOnce(String) -> Fut,
+        Fut: Future<Output = Option<String>>,
+    {
         let message = format!(
             "I confirm my bitcoin wallet. [{}]",
             challenge_response.token
         );
 
-        let signature = self.sign_message(message.clone())?;
-        let node_pubkey = self
-            .sdk
-            .node_info()
-            .map_err(|e| RuntimeError {
-                code: RuntimeErrorCode::NodeUnavailable,
-                msg: e.to_string(),
-            })?
-            .id;
+        let signature = sign_message(message.clone()).await.ok_or_runtime_error(
+            PocketClientErrorCode::SignerFailure,
+            "Failed to create signature",
+        )?;
 
         let create_order_request = CreateOrderRequest {
             active: true,
@@ -228,24 +247,25 @@ impl PocketClient {
             .post(format!("{}/v1/orders", self.pocket_url))
             .json(&create_order_request)
             .send()
+            .await
             .map_to_runtime_error(
-                RuntimeErrorCode::OfferServiceUnavailable,
+                PocketClientErrorCode::ServiceUnavailable,
                 "Failed to get a response from the Pocket API",
             )?;
 
-        if raw_response.status() != StatusCode::CREATED {
-            error!(
-                "Got unexpected response to Pocket order creation request: Pocket API returned status {}", raw_response.status()
-            );
-            runtime_error!(
-                RuntimeErrorCode::OfferServiceUnavailable,
-                "Got unexpected response to Pocket order creation request: Pocket API returned status {}", raw_response.status());
-        }
+        ensure!(
+            raw_response.status() == StatusCode::CREATED,
+            runtime_error(
+                PocketClientErrorCode::UnexpectedResponse,
+                "Got unexpected response to Pocket order creation request: Pocket API returned status {}"
+            )
+        );
 
         raw_response
             .json::<CreateOrderResponse>()
+            .await
             .map_to_runtime_error(
-                RuntimeErrorCode::OfferServiceUnavailable,
+                PocketClientErrorCode::UnexpectedResponse,
                 "Failed to parse CreateOrderResponse",
             )
     }
@@ -288,13 +308,5 @@ impl PocketClient {
                 signature: "".to_string(),
             },
         })
-    }
-
-    fn sign_message(&self, message: String) -> Result<String> {
-        Ok(self
-            .rt_handle
-            .block_on(self.sdk.sign_message(SignMessageRequest { message }))
-            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Couldn't sign message")?
-            .signature)
     }
 }

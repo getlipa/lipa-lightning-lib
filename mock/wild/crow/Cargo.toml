@@ -7,8 +7,8 @@ edition = "2021"
 name = "crow"
 
 [dependencies]
-crow = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
-graphql = { git = "https://github.com/getlipa/wild", tag = "v1.22.0" }
+crow = { git = "https://github.com/getlipa/wild", tag = "v1.23.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.23.0" }
 honeybadger-mock = { path = "../honeybadger" }
 isocountry = { version = "0.3.2" }
 isolanguage-1 = { version = "0.2.2" }
