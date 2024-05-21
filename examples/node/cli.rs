@@ -106,9 +106,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 }
                 "parsephonenumber" => {
                     let number = words.collect::<Vec<_>>().join(" ");
-                    let allowed_countries =
-                        vec!["AT".to_string(), "CH".to_string(), "DE".to_string()];
-                    match node.parse_phone_number(number, allowed_countries) {
+                    match node.parse_phone_number_to_lightning_address(number) {
                         Ok(address) => println!("{address}"),
                         Err(message) => println!("{}", format!("{message:#}").red()),
                     }

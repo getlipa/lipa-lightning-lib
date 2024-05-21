@@ -25,7 +25,7 @@ interface LightningNode {
     DecodedData decode_data(string data);
 
     [Throws=ParsePhoneNumberError]
-    string parse_phone_number(string phone_number, sequence<string> allowed_countries_country_iso_3166_1_alpha_2);
+    string parse_phone_number_to_lightning_address(string phone_number);
 
     MaxRoutingFeeMode get_payment_max_routing_fee_mode(u64 amount_sat);
 
@@ -181,6 +181,7 @@ dictionary Config {
     string local_persistence_path;
     TzConfig timezone_config;
     Level? file_logging_level;
+    sequence<string> phone_number_allowed_countries_iso_3166_1_alpha_2;
 };
 
 enum EnvironmentCode {
