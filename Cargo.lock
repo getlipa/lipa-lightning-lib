@@ -2145,7 +2145,7 @@ dependencies = [
  "perro",
  "phonenumber",
  "pigeon",
- "pocket_client",
+ "pocketclient",
  "qrcode",
  "rand",
  "regex",
@@ -2713,7 +2713,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
-name = "pocket_client"
+name = "pocketclient"
 version = "0.1.0"
 dependencies = [
  "chrono",
