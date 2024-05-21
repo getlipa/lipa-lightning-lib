@@ -21,6 +21,8 @@ pub struct Config {
     /// If a value is provided, logs using the provided level will be created in the provided
     /// `local_persistence_path`.
     pub file_logging_level: Option<log::Level>,
+    /// The list of allowed countries for the use of phone numbers as identifiers.
+    pub phone_number_allowed_countries_iso_3166_1_alpha_2: Vec<String>,
 }
 
 /// An object that holds timezone configuration values necessary for 3L to do timestamp annotation. These values get tied

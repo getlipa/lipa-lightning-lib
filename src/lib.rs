@@ -269,6 +269,7 @@ pub struct LightningNode {
     task_manager: Arc<Mutex<TaskManager>>,
     analytics_interceptor: Arc<AnalyticsInterceptor>,
     environment: Environment,
+    allowed_countries_country_iso_3166_1_alpha_2: Vec<String>,
 }
 
 /// Contains the fee information for the options to resolve on-chain funds from channel closes.
@@ -452,6 +453,8 @@ impl LightningNode {
             task_manager,
             analytics_interceptor,
             environment,
+            allowed_countries_country_iso_3166_1_alpha_2: config
+                .phone_number_allowed_countries_iso_3166_1_alpha_2,
         })
     }
 
@@ -614,24 +617,31 @@ impl LightningNode {
         ))
     }
 
-    /// Parse a phone number, check against the list of allowed country.
+    /// Parse a phone number, check against the list of allowed countries (set in [`Config`]).
     ///
     /// Returns a possible lightning address, which can be checked for existence
     /// with [`LightningNode::decode_data`].
     ///
     /// Requires network: **no**
-    pub fn parse_phone_number(
+    pub fn parse_phone_number_to_lightning_address(
         &self,
         phone_number: String,
-        allowed_countries_country_iso_3166_1_alpha_2: Vec<String>,
     ) -> std::result::Result<String, ParsePhoneNumberError> {
+        let phone_number = self.parse_phone_number(phone_number)?;
+        Ok(phone_number.to_lightning_address(&self.environment.lipa_lightning_domain))
+    }
+
+    fn parse_phone_number(
+        &self,
+        phone_number: String,
+    ) -> std::result::Result<PhoneNumber, ParsePhoneNumberError> {
         let phone_number = PhoneNumber::parse(&phone_number)?;
         ensure!(
-            allowed_countries_country_iso_3166_1_alpha_2
+            self.allowed_countries_country_iso_3166_1_alpha_2
                 .contains(&phone_number.country_code.as_ref().to_string()),
             ParsePhoneNumberError::UnsupportedCountry
         );
-        Ok(phone_number.to_lightning_address(&self.environment.lipa_lightning_domain))
+        Ok(phone_number)
     }
 
     /// Decode a user-provided string (usually obtained from QR-code or pasted).
@@ -2453,6 +2463,73 @@ impl LightningNode {
             .lock_unwrap()
             .retrieve_lightning_addresses()?;
         Ok(addresses.into_iter().next())
+    }
+
+    /// Query for a previously verified phone number.
+    ///
+    /// Requires network: **yes**
+    pub fn query_verified_phone_number(&self) -> Result<Option<String>> {
+        self.rt
+            .handle()
+            .block_on(pigeon::query_verified_phone_number(
+                &self.environment.backend_url,
+                &self.async_auth,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to query verified phone number",
+            )
+    }
+
+    /// Start the verification process for a new phone number. This will trigger an SMS containing
+    /// an OTP to be sent to the provided `phone_number`. To conclude the verification process,
+    /// the method [`LightningNode::verify_phone_number`] should be called next.
+    ///
+    /// Parameters:
+    /// * `phone_number` - the phone number to be registered. Needs to be checked for validity using
+    /// [LightningNode::parse_phone_number_to_lightning_address].
+    ///
+    /// Requires network: **yes**
+    pub fn request_phone_number_verification(&self, phone_number: String) -> Result<()> {
+        let phone_number =
+            PhoneNumber::parse(&phone_number).map_to_invalid_input("Invalid phone number")?;
+
+        self.rt
+            .handle()
+            .block_on(pigeon::request_phone_number_verification(
+                &self.environment.backend_url,
+                &self.async_auth,
+                phone_number.e164,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to register phone number",
+            )
+    }
+
+    /// Finish the verification process for a new phone number.
+    ///
+    /// Parameters:
+    /// * `phone_number` - the phone number to be verified.
+    /// * `otp` - the OTP code sent as an SMS to the phone number.
+    ///
+    /// Requires network: **yes**
+    pub fn verify_phone_number(&self, phone_number: String, otp: String) -> Result<()> {
+        let phone_number =
+            PhoneNumber::parse(&phone_number).map_to_invalid_input("Invalid phone number")?;
+
+        self.rt
+            .handle()
+            .block_on(pigeon::verify_phone_number(
+                &self.environment.backend_url,
+                &self.async_auth,
+                phone_number.e164,
+                otp,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to submit phone number registration otp",
+            )
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {

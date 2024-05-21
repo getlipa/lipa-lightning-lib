@@ -106,9 +106,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 }
                 "parsephonenumber" => {
                     let number = words.collect::<Vec<_>>().join(" ");
-                    let allowed_countries =
-                        vec!["AT".to_string(), "CH".to_string(), "DE".to_string()];
-                    match node.parse_phone_number(number, allowed_countries) {
+                    match node.parse_phone_number_to_lightning_address(number) {
                         Ok(address) => println!("{address}"),
                         Err(message) => println!("{}", format!("{message:#}").red()),
                     }
@@ -275,6 +273,32 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     Ok(address) => println!("{address:?}"),
                     Err(message) => println!("{}", format!("{message:#}").red()),
                 },
+                "registerphonenumber" => {
+                    let phone_number = words.collect::<Vec<_>>().join(" ");
+                    match node.request_phone_number_verification(phone_number) {
+                        Ok(_) => {}
+                        Err(message) => println!("{}", format!("{message:#}").red()),
+                    }
+                }
+                "verifyphonenumber" => {
+                    let otp = words.next().ok_or_else(|| "OTP is required".to_string());
+                    let otp = match otp {
+                        Ok(a) => a.to_string(),
+                        Err(e) => {
+                            println!("{}", e.red());
+                            return;
+                        }
+                    };
+                    let phone_number = words.collect::<Vec<_>>().join(" ");
+                    match node.verify_phone_number(phone_number, otp) {
+                        Ok(_) => {}
+                        Err(message) => println!("{}", format!("{message:#}").red()),
+                    }
+                }
+                "queryverifiedphonenumber" => match node.query_verified_phone_number() {
+                    Ok(n) => println!("Verified phone number: {n:?}"),
+                    Err(message) => println!("{}", format!("{message:#}").red()),
+                },
                 "logdebug" => {
                     if let Err(message) = node.log_debug_info() {
                         println!("{}", format!("{message:#}").red());
@@ -382,6 +406,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("resettopup", "resettopup"));
     hints.insert(CommandHint::new("getregisteredtopup", "getregisteredtopup"));
     hints.insert(CommandHint::new("listoffers", "listoffers"));
+    hints.insert(CommandHint::new("collectlastoffer", "collectlastoffer"));
     hints.insert(CommandHint::new(
         "calculatelightningpayoutfee <offer id>",
         "calculatelightningpayoutfee ",
@@ -413,6 +438,18 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new(
         "querylightningaddress",
         "querylightningaddress",
+    ));
+    hints.insert(CommandHint::new(
+        "registerphonenumber <phone number>",
+        "registerphonenumber ",
+    ));
+    hints.insert(CommandHint::new(
+        "verifyphonenumber <otp> <phone number>",
+        "verifyphonenumber ",
+    ));
+    hints.insert(CommandHint::new(
+        "queryverifiedphonenumber",
+        "queryverifiedphonenumber",
     ));
     hints.insert(CommandHint::new(
         "paymentuuid <payment hash>",
@@ -478,6 +515,7 @@ fn help() {
     println!("  resettopup");
     println!("  getregisteredtopup");
     println!("  listoffers");
+    println!("  collectlastoffer");
     println!("  calculatelightningpayoutfee <offer id>");
     println!();
     println!("  listactionableitems");
@@ -487,6 +525,9 @@ fn help() {
     println!("  listrecipients");
     println!("  registerlightningaddress");
     println!("  querylightningaddress");
+    println!("  registerphonenumber <phone number>");
+    println!("  verifyphonenumber <otp> <phone number>");
+    println!("  queryverifiedphonenumber");
     println!("  paymentuuid <payment hash>");
     println!("  personalnote <payment hash> [note]");
     println!();

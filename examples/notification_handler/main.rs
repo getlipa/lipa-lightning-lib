@@ -125,6 +125,11 @@ fn get_config() -> Config {
             timezone_utc_offset_secs: 60 * 60,
         },
         file_logging_level: Some(Level::Debug),
+        phone_number_allowed_countries_iso_3166_1_alpha_2: vec![
+            "AT".to_string(),
+            "CH".to_string(),
+            "DE".to_string(),
+        ],
     }
 }
 
