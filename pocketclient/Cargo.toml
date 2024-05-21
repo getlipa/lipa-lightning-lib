@@ -1,5 +1,5 @@
 [package]
-name = "pocket_client"
+name = "pocketclient"
 version = "0.1.0"
 edition = "2021"
 

@@ -192,7 +192,7 @@ impl PocketClient {
             raw_response.status() == StatusCode::CREATED,
             runtime_error(
                 PocketClientErrorCode::UnexpectedResponse,
-                "Got unexpected response to Pocket challenge request: Pocket API returned status"
+                "Got unexpected response to Pocket challenge request"
             )
         );
 
@@ -257,7 +257,7 @@ impl PocketClient {
             raw_response.status() == StatusCode::CREATED,
             runtime_error(
                 PocketClientErrorCode::UnexpectedResponse,
-                "Got unexpected response to Pocket order creation request: Pocket API returned status {}"
+                "Got unexpected response to Pocket order creation request"
             )
         );
 

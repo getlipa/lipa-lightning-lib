@@ -2,7 +2,7 @@
 members = [
     "mock/breez-sdk",
     "parser",
-    "pocket_client"
+    "pocketclient"
 ]
 
 [package]
@@ -16,7 +16,7 @@ name = "uniffi_lipalightninglib"
 
 [dependencies]
 parser = { path = "parser" }
-pocket_client = { path = "pocket_client" }
+pocketclient = { path = "pocketclient" }
 
 chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.23.0", optional = true }
 chameleon-mock = { path = "mock/wild/chameleon", optional = true }
