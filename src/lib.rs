@@ -73,7 +73,7 @@ use crate::key_derivation::derive_persistence_encryption_key;
 pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
 pub use crate::lnurl::{LnUrlPayDetails, LnUrlWithdrawDetails};
 use crate::locker::Locker;
-pub use crate::notification_handling::{handle_notification, Notification};
+pub use crate::notification_handling::{handle_notification, Notification, NotificationToggles};
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
 pub use crate::payment::{
     IncomingPaymentInfo, OutgoingPaymentInfo, PaymentInfo, PaymentState, Recipient,

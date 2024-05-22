@@ -640,7 +640,7 @@ namespace lipalightninglib {
     void parse_lightning_address([ByRef] string address);
 
     [Throws=NotificationHandlingError]
-    Notification handle_notification(Config config, string notification_payload);
+    Notification handle_notification(Config config, string notification_payload, NotificationToggles notification_toggles);
 };
 
 dictionary Secret {
@@ -654,6 +654,12 @@ interface Notification {
     Bolt11PaymentReceived(u64 amount_sat, string payment_hash);
     OnchainPaymentSwappedIn(u64 amount_sat, string payment_hash);
     LnurlInvoiceCreated(u64 amount_sat);
+};
+
+dictionary NotificationToggles {
+    boolean payment_received_is_enabled;
+    boolean address_txs_confirmed_is_enabled;
+    boolean lnurl_pay_request_is_enabled;
 };
 
 //
@@ -793,4 +799,5 @@ enum NotificationHandlingErrorCode {
     "ExpectedPaymentNotReceived",
     "InsufficientInboundLiquidity",
     "LipaServiceUnavailable",
+    "NotificationDisabledInNotificationToggles",
 };

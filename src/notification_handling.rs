@@ -61,6 +61,13 @@ pub enum Notification {
     LnurlInvoiceCreated { amount_sat: u64 },
 }
 
+/// A configuration struct used to enable/disable processing of different payloads in [`handle_notification`].
+pub struct NotificationToggles {
+    pub payment_received_is_enabled: bool,
+    pub address_txs_confirmed_is_enabled: bool,
+    pub lnurl_pay_request_is_enabled: bool,
+}
+
 /// Handles a notification.
 ///
 /// Notifications are used to wake up the node in order to process some request. Currently supported
@@ -72,6 +79,7 @@ pub enum Notification {
 pub fn handle_notification(
     config: Config,
     notification_payload: String,
+    notification_toggles: NotificationToggles,
 ) -> NotificationHandlingResult<Notification> {
     enable_backtrace();
     if let Some(level) = config.file_logging_level {
@@ -89,6 +97,30 @@ pub fn handle_notification(
             invalid_input!("The provided payload was not recognized. Error: {e} - JSON Payload: {notification_payload}")
         }
     };
+
+    match payload {
+        Payload::PaymentReceived { .. } => ensure!(
+            notification_toggles.payment_received_is_enabled,
+            runtime_error(
+                NotificationHandlingErrorCode::NotificationDisabledInNotificationToggles,
+                "PaymentReceived notification dismissed due to disabled setting in NotificationToggles"
+            )
+        ),
+        Payload::AddressTxsConfirmed { .. } => ensure!(
+            notification_toggles.address_txs_confirmed_is_enabled,
+            runtime_error(
+                NotificationHandlingErrorCode::NotificationDisabledInNotificationToggles,
+                "AddressTxsConfirmed notification dismissed due to disabled setting in NotificationToggles"
+            )
+        ),
+        Payload::LnurlPayRequest { .. } => ensure!(
+            notification_toggles.lnurl_pay_request_is_enabled,
+            runtime_error(
+                NotificationHandlingErrorCode::NotificationDisabledInNotificationToggles,
+                "LnurlPayRequest notification dismissed due to disabled setting in NotificationToggles"
+            )
+        ),
+    }
 
     let rt = AsyncRuntime::new()
         .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;

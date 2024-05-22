@@ -12,7 +12,7 @@ use rustyline::{CompletionType, Editor};
 use std::collections::HashSet;
 use std::env;
 use uniffi_lipalightninglib::{
-    handle_notification, mnemonic_to_secret, Config, EnvironmentCode, TzConfig,
+    handle_notification, mnemonic_to_secret, Config, EnvironmentCode, NotificationToggles, TzConfig,
 };
 
 static BASE_DIR: &str = ".3l_node";
@@ -160,7 +160,16 @@ fn start_payment_received(words: &mut dyn Iterator<Item = &str>) -> Result<()> {
         }}"
     );
 
-    let notification = handle_notification(config, notification_payload).unwrap();
+    let notification = handle_notification(
+        config,
+        notification_payload,
+        NotificationToggles {
+            payment_received_is_enabled: true,
+            address_txs_confirmed_is_enabled: true,
+            lnurl_pay_request_is_enabled: true,
+        },
+    )
+    .unwrap();
 
     println!("The returned notification is {notification:?}");
 
@@ -186,7 +195,16 @@ fn start_address_txs_confirmed(words: &mut dyn Iterator<Item = &str>) -> Result<
         }}"
     );
 
-    let notification = handle_notification(config, notification_payload).unwrap();
+    let notification = handle_notification(
+        config,
+        notification_payload,
+        NotificationToggles {
+            payment_received_is_enabled: true,
+            address_txs_confirmed_is_enabled: true,
+            lnurl_pay_request_is_enabled: true,
+        },
+    )
+    .unwrap();
 
     println!("The returned notification is {notification:?}");
 
@@ -224,7 +242,16 @@ fn start_lnurl_pay_request(words: &mut dyn Iterator<Item = &str>) -> Result<()> 
         }}"
     );
 
-    let notification = handle_notification(config, notification_payload).unwrap();
+    let notification = handle_notification(
+        config,
+        notification_payload,
+        NotificationToggles {
+            payment_received_is_enabled: true,
+            address_txs_confirmed_is_enabled: true,
+            lnurl_pay_request_is_enabled: true,
+        },
+    )
+    .unwrap();
 
     println!("The returned notification is {notification:?}");
 
