@@ -313,6 +313,9 @@ pub enum NotificationHandlingErrorCode {
     InsufficientInboundLiquidity,
     /// A request to one of lipa's services failed.
     LipaServiceUnavailable,
+    /// The notification payload is disabled in the provided
+    /// [`NotificationToggles`](crate::notification_handling::NotificationToggles).
+    NotificationDisabledInNotificationToggles,
 }
 
 impl Display for NotificationHandlingErrorCode {
