@@ -648,6 +648,9 @@ impl LightningNode {
     ///
     /// Requires network: **yes**
     pub fn decode_data(&self, data: String) -> std::result::Result<DecodedData, DecodeDataError> {
+        // TODO: remove the following workaround when Breez SDK supports capitalized lightning prefix
+        let data = data.replacen("LIGHTNING:", "lightning:", 1);
+
         match self.rt.handle().block_on(parse(&data)) {
             Ok(InputType::Bolt11 { invoice }) => {
                 ensure!(
