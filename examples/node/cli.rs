@@ -1342,12 +1342,11 @@ fn sweep(node: &LightningNode, address: String) -> Result<String> {
 }
 
 fn clear_wallet_info(node: &LightningNode) -> Result<()> {
-    if !node.is_clear_wallet_feasible()? {
-        return Err(anyhow!(
-            "Clearing the wallet isn't feasible at the moment due to the available funds being \
+    ensure!(
+        node.is_clear_wallet_feasible()?,
+        "Clearing the wallet isn't feasible at the moment due to the available funds being \
         either too low or too high"
-        ));
-    }
+    );
 
     let clear_wallet_info = node.prepare_clear_wallet()?;
 

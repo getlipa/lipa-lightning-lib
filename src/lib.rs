@@ -658,6 +658,9 @@ impl LightningNode {
     ///
     /// Requires network: **yes**
     pub fn decode_data(&self, data: String) -> std::result::Result<DecodedData, DecodeDataError> {
+        // TODO: remove the following workaround when Breez SDK supports capitalized lightning prefix
+        let data = data.replacen("LIGHTNING:", "lightning:", 1);
+
         match self.rt.handle().block_on(parse(&data)) {
             Ok(InputType::Bolt11 { invoice }) => {
                 ensure!(
@@ -2338,10 +2341,10 @@ impl LightningNode {
         let reverse_swap_info = self
             .rt
             .handle()
-            .block_on(self.sdk.fetch_reverse_swap_fees(ReverseSwapFeesRequest {
-                send_amount_sat: None,
-                claim_tx_feerate: None,
-            }))
+            .block_on(
+                self.sdk
+                    .fetch_reverse_swap_fees(ReverseSwapFeesRequest::default()),
+            )
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to fetch reverse swap fees",
