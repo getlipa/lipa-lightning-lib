@@ -13,7 +13,6 @@ const PAYEE_PUBKEY_DUMMY: &str =
     "020333076e35e398a0c14c8a0211563bbcdce5087cb300342cba09414e9b5f3605";
 const SAMPLE_PAYMENT_SECRET: &str =
     "91f65d26832cb762a96c455d253f3cb4c3005ad9089d2df8612ffdf7a6b7f92f";
-const BOLT11_DUMMY: &str = "lnbc1486290n1pj74h6psp5tmna0gruf44rx0h7xgl2xsmn5xhjnaxktct40pkfg4m9kssytn0spp5qhpx9s8rvmw6jtzkelslve9zfuhpp2w7hn9s6q7xvdnds5jemr2qdpa2pskjepqw3hjq3r0deshgefqw3hjqjzjgcs8vv3qyq5y7unyv4ezqj2y8gszjxqy9ghlcqpjrzjqvutcqr0g2ltxthh82s8l24gy74xe862kelrywc6ktsx2gejgk26szcqygqqy6qqqyqqqqlgqqqq86qqyg9qxpqysgqzjnfufxw375gpqf9cvzd5jxyqqtm56fuw960wyel2ld3he403r7x6uyw59g5sfsj5rclycd09a8p8r2pnyrcanlg27e2a67nh5g248sp7p7s8z";
 
 const LSP_ID: &str = "c0ff3e11-2222-3333-4444-555555555555";
 const LSP_NAME: &str = "notdiem.lsp.mock";
@@ -335,7 +334,7 @@ impl BreezServices {
     }
 
     pub async fn lnurl_pay(&self, req: LnUrlPayRequest) -> Result<LnUrlPayResult, LnUrlPayError> {
-        let (payment_preimage, payment_hash) = generate_2_hashes();
+        let (invoice, preimage, payment_hash) = create_invoice(req.amount_msat, "");
 
         if get_balance_msat() < req.amount_msat {
             return Err(LnUrlPayError::RouteNotFound {
@@ -351,9 +350,9 @@ impl BreezServices {
             fee_msat: LNURL_PAY_FEE_MSAT,
             description: None,
             payment_hash: payment_hash.clone(),
-            payment_preimage,
+            payment_preimage: preimage,
             destination_pubkey: PAYEE_PUBKEY_DUMMY.to_string(),
-            bolt11: BOLT11_DUMMY.to_string(),
+            bolt11: invoice,
             lnurl_pay_domain: Some(req.data.domain.clone()),
             lnurl_pay_comment: req.comment.clone(),
             ln_address: req.data.ln_address.clone(),
@@ -384,8 +383,8 @@ impl BreezServices {
         let lsp_fee_msat = receive_payment_mock_channels(req.amount_msat)
             .map_err(|e| LnUrlWithdrawError::InvalidAmount { err: e.to_string() })?;
 
-        let (payment_preimage, payment_hash) = generate_2_hashes();
-        let bolt11 = "lnbc1pjlq2t3pp5e3ef7wmszlwxhfpx9cfnxx34gglg779fwnwx9mfm69pfapmymt0qdqqcqzzsxqyz5vqsp5x7k3pjq5y8vk473l6767fenletzwjeaqqukpg9tspfq584g8qp4q9qyyssq678xw6gf2ywl5seummdy8pc6xd0jpvzdexd4v4d3zjse9u6jf7239va4e4r4hhauqrymxu7dp790lv98dl0qhrt4yqxwll2ufkp304gqn6798s".to_string();
+        let (invoice, preimage, payment_hash) =
+            create_invoice(req.amount_msat, &req.description.unwrap_or_default());
 
         let payment = create_payment(MockPayment {
             payment_type: PaymentType::Received,
@@ -393,9 +392,9 @@ impl BreezServices {
             fee_msat: lsp_fee_msat,
             description: None,
             payment_hash: payment_hash.clone(),
-            payment_preimage,
+            payment_preimage: preimage,
             destination_pubkey: NODE_PUBKEY.clone(),
-            bolt11: bolt11.clone(),
+            bolt11: invoice.clone(),
             lnurl_pay_domain: None,
             lnurl_pay_comment: None,
             ln_address: None,
@@ -410,7 +409,7 @@ impl BreezServices {
         self.event_listener.on_event(BreezEvent::InvoicePaid {
             details: InvoicePaidDetails {
                 payment_hash: payment_hash.clone(),
-                bolt11: bolt11.clone(),
+                bolt11: invoice.clone(),
                 payment: Some(payment),
             },
         });
@@ -418,7 +417,7 @@ impl BreezServices {
         Ok(LnUrlWithdrawResult::Ok {
             data: breez_sdk_core::LnUrlWithdrawSuccessData {
                 invoice: LNInvoice {
-                    bolt11,
+                    bolt11: invoice,
                     network: Network::Bitcoin,
                     payee_pubkey: NODE_PUBKEY.clone(),
                     payment_hash,
@@ -858,16 +857,16 @@ impl BreezServices {
             status: ReverseSwapStatus::Initial,
         };
 
-        let (payment_hash, payment_preimage) = generate_2_hashes();
+        let (invoice, preimage, payment_hash) = create_invoice(amount_msat, "");
         let payment = create_payment(MockPayment {
             payment_type: PaymentType::Sent,
             amount_msat,
             fee_msat: routing_fee_msat,
             description: None,
             payment_hash,
-            payment_preimage,
+            payment_preimage: preimage,
             destination_pubkey: PAYEE_PUBKEY_DUMMY.to_string(),
-            bolt11: BOLT11_DUMMY.to_string(),
+            bolt11: invoice,
             lnurl_pay_domain: None,
             lnurl_pay_comment: None,
             ln_address: None,
@@ -1063,7 +1062,7 @@ impl BreezServices {
     ) {
         for _ in 0..number_of_payments {
             let amount_msat = rand::thread_rng().gen_range(1000..1_000_000_000);
-            let (preimage, payment_hash) = generate_2_hashes();
+            let (invoice, preimage, payment_hash) = create_invoice(amount_msat, "");
 
             let ln_address = if ln_address {
                 let mut rng = rand::thread_rng();
@@ -1084,7 +1083,7 @@ impl BreezServices {
                 payment_hash,
                 payment_preimage: preimage,
                 destination_pubkey: PAYEE_PUBKEY_DUMMY.to_string(),
-                bolt11: BOLT11_DUMMY.to_string(),
+                bolt11: invoice,
                 lnurl_pay_domain: None,
                 lnurl_pay_comment: None,
                 ln_address,
