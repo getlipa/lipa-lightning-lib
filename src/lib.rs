@@ -648,9 +648,6 @@ impl LightningNode {
     ///
     /// Requires network: **yes**
     pub fn decode_data(&self, data: String) -> std::result::Result<DecodedData, DecodeDataError> {
-        // TODO: remove the following workaround when Breez SDK supports capitalized lightning prefix
-        let data = data.replacen("LIGHTNING:", "lightning:", 1);
-
         match self.rt.handle().block_on(parse(&data)) {
             Ok(InputType::Bolt11 { invoice }) => {
                 ensure!(
@@ -2311,6 +2308,7 @@ impl LightningNode {
     ///
     /// Requires network: **yes**
     pub fn is_clear_wallet_feasible(&self) -> Result<bool> {
+        #[allow(deprecated)]
         let amount_sat = self
             .rt
             .handle()
@@ -2348,6 +2346,7 @@ impl LightningNode {
     ///
     /// Requires network: **yes**
     pub fn prepare_clear_wallet(&self) -> Result<ClearWalletInfo> {
+        #[allow(deprecated)]
         let amount_sat = self
             .rt
             .handle()
@@ -2401,6 +2400,7 @@ impl LightningNode {
         clear_wallet_info: ClearWalletInfo,
         destination_onchain_address_data: BitcoinAddressData,
     ) -> Result<()> {
+        #[allow(deprecated)]
         self.rt
             .handle()
             .block_on(self.sdk.send_onchain(SendOnchainRequest {
