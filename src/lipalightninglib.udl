@@ -24,6 +24,9 @@ interface LightningNode {
     [Throws=DecodeDataError]
     DecodedData decode_data(string data);
 
+    [Throws=ParsePhoneNumberPrefixError]
+    void parse_phone_number_prefix(string phone_number);
+
     [Throws=ParsePhoneNumberError]
     string parse_phone_number_to_lightning_address(string phone_number);
 
@@ -737,6 +740,13 @@ interface DecodeDataError {
     LnUrlError(string msg);
     Unsupported(UnsupportedDataType typ);
     Unrecognized(string msg);
+};
+
+[Error]
+interface ParsePhoneNumberPrefixError {
+    Incomplete();
+    InvalidCharacter(u32 at);
+    UnsupportedCountry();
 };
 
 [Error]

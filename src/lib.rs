@@ -63,7 +63,8 @@ use crate::errors::{
 pub use crate::errors::{
     DecodeDataError, Error as LnError, LnUrlPayError, LnUrlPayErrorCode, LnUrlPayResult,
     MnemonicError, NotificationHandlingError, NotificationHandlingErrorCode, ParsePhoneNumberError,
-    PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode, SimpleError, UnsupportedDataType,
+    ParsePhoneNumberPrefixError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode,
+    SimpleError, UnsupportedDataType,
 };
 use crate::event::LipaEventListener;
 pub use crate::exchange_rate_provider::ExchangeRate;
@@ -79,6 +80,7 @@ pub use crate::payment::{
     IncomingPaymentInfo, OutgoingPaymentInfo, PaymentInfo, PaymentState, Recipient,
 };
 pub use crate::phone_number::PhoneNumber;
+use crate::phone_number::PhoneNumberPrefixParser;
 pub use crate::recovery::recover_lightning_node;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
 pub use crate::swap::{
@@ -270,6 +272,7 @@ pub struct LightningNode {
     analytics_interceptor: Arc<AnalyticsInterceptor>,
     environment: Environment,
     allowed_countries_country_iso_3166_1_alpha_2: Vec<String>,
+    phone_number_prefix_parser: PhoneNumberPrefixParser,
 }
 
 /// Contains the fee information for the options to resolve on-chain funds from channel closes.
@@ -441,6 +444,9 @@ impl LightningNode {
 
         register_webhook_url(&rt, &sdk, &auth, &environment)?;
 
+        let phone_number_prefix_parser =
+            PhoneNumberPrefixParser::new(&config.phone_number_allowed_countries_iso_3166_1_alpha_2);
+
         Ok(LightningNode {
             user_preferences,
             sdk,
@@ -455,6 +461,7 @@ impl LightningNode {
             environment,
             allowed_countries_country_iso_3166_1_alpha_2: config
                 .phone_number_allowed_countries_iso_3166_1_alpha_2,
+            phone_number_prefix_parser,
         })
     }
 
@@ -617,7 +624,20 @@ impl LightningNode {
         ))
     }
 
-    /// Parse a phone number, check against the list of allowed countries (set in [`Config`]).
+    /// Parse a phone number prefix, check against the list of allowed countries
+    /// (set in [`Config::phone_number_allowed_countries_iso_3166_1_alpha_2`]).
+    /// The parser is not strict, it parses some invalid prefixes as valid.
+    ///
+    /// Requires network: **no**
+    pub fn parse_phone_number_prefix(
+        &self,
+        phone_number_prefix: String,
+    ) -> std::result::Result<(), ParsePhoneNumberPrefixError> {
+        self.phone_number_prefix_parser.parse(&phone_number_prefix)
+    }
+
+    /// Parse a phone number, check against the list of allowed countries
+    /// (set in [`Config::phone_number_allowed_countries_iso_3166_1_alpha_2`]).
     ///
     /// Returns a possible lightning address, which can be checked for existence
     /// with [`LightningNode::decode_data`].
@@ -2662,6 +2682,8 @@ impl From<parser::ParseError> for ParseError {
 
 /// Try to parse the provided string as a lightning address, return [`ParseError`]
 /// precisely indicating why parsing failed.
+///
+/// Requires network: **no**
 pub fn parse_lightning_address(address: &str) -> std::result::Result<(), ParseError> {
     parser::parse_lightning_address(address).map_err(ParseError::from)
 }
