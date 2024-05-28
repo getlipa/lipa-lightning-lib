@@ -29,8 +29,6 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
-const TIMEOUT: Duration = Duration::from_secs(60);
-
 /// A notification to be displayed to the user.
 #[derive(Debug)]
 pub enum Notification {
@@ -74,12 +72,14 @@ pub struct NotificationToggles {
 /// requests are:
 /// * Receive a payment from a previously issued bolt11 invoice.
 /// * Receive a payment from a confirmed swap.
+/// * Issue an invoice in order to receive an LNURL payment.
 ///
 /// Requires network: **yes**
 pub fn handle_notification(
     config: Config,
     notification_payload: String,
     notification_toggles: NotificationToggles,
+    timeout: Duration,
 ) -> NotificationHandlingResult<Notification> {
     enable_backtrace();
     if let Some(level) = config.file_logging_level {
@@ -90,6 +90,8 @@ pub fn handle_notification(
         .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
     }
     debug!("Started handling a notification.");
+
+    let timeout_instant = Instant::now() + timeout;
 
     let payload = match serde_json::from_str::<Payload>(&notification_payload) {
         Ok(p) => p,
@@ -140,10 +142,10 @@ pub fn handle_notification(
 
     match payload {
         Payload::PaymentReceived { payment_hash } => {
-            handle_payment_received_notification(rt, sdk, rx, payment_hash)
+            handle_payment_received_notification(rt, sdk, rx, payment_hash, timeout_instant)
         }
         Payload::AddressTxsConfirmed { address } => {
-            handle_address_txs_confirmed_notification(rt, sdk, rx, address)
+            handle_address_txs_confirmed_notification(rt, sdk, rx, address, timeout_instant)
         }
         Payload::LnurlPayRequest { data } => {
             handle_lnurl_pay_request_notification(rt, sdk, config, data)
@@ -193,6 +195,7 @@ fn handle_payment_received_notification(
     sdk: Arc<BreezServices>,
     event_receiver: Receiver<BreezEvent>,
     payment_hash: String,
+    timeout_instant: Instant,
 ) -> NotificationHandlingResult<Notification> {
     // Check if the payment was already received
     if let Some(payment) = get_confirmed_payment(&rt, &sdk, &payment_hash)? {
@@ -203,7 +206,9 @@ fn handle_payment_received_notification(
     }
 
     // Wait for payment to be received
-    if let Some(details) = wait_for_payment_with_timeout(&event_receiver, &payment_hash)? {
+    if let Some(details) =
+        wait_for_payment_with_timeout(&event_receiver, &payment_hash, timeout_instant)?
+    {
         // We want to wait as long as possible to decrease the likelihood of the signer being shut down
         //  while HTLCs are still in-flight.
         wait_for_synced_event(&event_receiver)?;
@@ -225,6 +230,7 @@ fn handle_address_txs_confirmed_notification(
     sdk: Arc<BreezServices>,
     event_receiver: Receiver<BreezEvent>,
     address: String,
+    timeout_instant: Instant,
 ) -> NotificationHandlingResult<Notification> {
     let in_progress_swap = rt
         .handle()
@@ -265,7 +271,9 @@ fn handle_address_txs_confirmed_notification(
     }
 
     // Wait for payment to arrive
-    if let Some(details) = wait_for_payment_with_timeout(&event_receiver, &payment_hash)? {
+    if let Some(details) =
+        wait_for_payment_with_timeout(&event_receiver, &payment_hash, timeout_instant)?
+    {
         // We want to wait as long as possible to decrease the likelihood of the signer being shut down
         //  while HTLCs are still in-flight.
         wait_for_synced_event(&event_receiver)?;
@@ -419,9 +427,9 @@ fn get_confirmed_payment(
 fn wait_for_payment_with_timeout(
     event_receiver: &Receiver<BreezEvent>,
     payment_hash: &str,
+    timeout_instant: Instant,
 ) -> NotificationHandlingResult<Option<InvoicePaidDetails>> {
-    let start = Instant::now();
-    while Instant::now().duration_since(start) < TIMEOUT {
+    while Instant::now() < timeout_instant {
         match event_receiver.recv_timeout(Duration::from_secs(1)) {
             Ok(BreezEvent::InvoicePaid { details }) if details.payment_hash == payment_hash => {
                 return Ok(Some(details))

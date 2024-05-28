@@ -640,7 +640,7 @@ namespace lipalightninglib {
     void parse_lightning_address([ByRef] string address);
 
     [Throws=NotificationHandlingError]
-    Notification handle_notification(Config config, string notification_payload, NotificationToggles notification_toggles);
+    Notification handle_notification(Config config, string notification_payload, NotificationToggles notification_toggles, duration timeout);
 };
 
 dictionary Secret {
