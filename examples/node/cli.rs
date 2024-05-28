@@ -1281,6 +1281,10 @@ fn print_incoming_payment(payment: IncomingPaymentInfo) -> Result<()> {
         amount_to_string(&payment.lsp_fees),
     );
     println!("      Received on:      {:?}", payment.received_on);
+    println!(
+        "      LNURL comment:    {:?}",
+        payment.received_lnurl_comment
+    );
     Ok(())
 }
 
