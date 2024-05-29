@@ -44,7 +44,7 @@ fn unicode_label(s: &str) -> IResult<&str, Label> {
 }
 
 fn label(s: &str) -> IResult<&str, Label> {
-    let r: IResult<&str, &str> = tag_no_case("xn--")(s);
+    let r: IResult<_, _> = tag_no_case("xn--")(s);
     match r {
         Ok((s, _tag)) => punycode_label(s),
         Err(_) => unicode_label(s),

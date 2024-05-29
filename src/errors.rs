@@ -334,6 +334,16 @@ impl NotificationHandlingErrorCode {
 }
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum ParsePhoneNumberPrefixError {
+    #[error("Incomplete")]
+    Incomplete,
+    #[error("InvalidCharacter at {at}")]
+    InvalidCharacter { at: u32 },
+    #[error("UnsupportedCountry")]
+    UnsupportedCountry,
+}
+
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ParsePhoneNumberError {
     #[error("ParsingError")]
     ParsingError,

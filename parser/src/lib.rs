@@ -1,7 +1,9 @@
 mod domain;
 mod lightning_address;
+mod phone_number;
 
-use lightning_address::lightning_address;
+use crate::lightning_address::lightning_address;
+use crate::phone_number::phone_number;
 use nom::character::complete::space0;
 use nom::error::Error;
 use nom::sequence::delimited;
@@ -36,10 +38,40 @@ pub fn parse_lightning_address(address: &str) -> Result<(), ParseError> {
     }
 }
 
+pub fn parse_phone_number(number: &str) -> Result<String, ParseError> {
+    let r = delimited(space0, phone_number, space0)(number).finish();
+    match r {
+        Ok(("", digits)) if digits.is_empty() => Err(ParseError::Incomplete),
+        Ok(("", digits)) => Ok(digits),
+        Ok((rem, _digits)) => Err(ParseError::ExcessSuffix(number.len() - rem.len())),
+        Err(Error { input: "", .. }) => Err(ParseError::Incomplete),
+        Err(Error { input, .. }) => {
+            Err(ParseError::UnexpectedCharacter(number.len() - input.len()))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::parse_lightning_address as p;
+    use super::parse_phone_number as pn;
     use super::*;
+
+    #[test]
+    fn test_parse_phone_number() {
+        assert_eq!(pn(""), Err(ParseError::Incomplete));
+        assert_eq!(pn("  "), Err(ParseError::Incomplete));
+        assert_eq!(pn(" +"), Err(ParseError::Incomplete));
+        assert_eq!(pn(" +1"), Ok("1".to_string()));
+        assert_eq!(pn(" +12"), Ok("12".to_string()));
+        assert_eq!(pn(" +12 "), Ok("12".to_string()));
+        assert_eq!(pn(" +123"), Ok("123".to_string()));
+        assert_eq!(pn(" +12 3"), Ok("123".to_string()));
+
+        assert_eq!(pn("+123~"), Err(ParseError::ExcessSuffix(4)));
+        assert_eq!(pn("+12+"), Err(ParseError::ExcessSuffix(3)));
+        assert_eq!(pn("+12~"), Err(ParseError::ExcessSuffix(3)));
+    }
 
     #[test]
     fn test_parse_lightning_address() {

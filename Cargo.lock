@@ -615,12 +615,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "breez-sdk-core"
+version = "0.4.1"
+source = "git+https://github.com/breez/breez-sdk?tag=0.4.2-rc1#76cd730e298d330ad4922fccc5296ab020201f36"
+dependencies = [
+ "aes",
+ "anyhow",
+ "base64 0.13.1",
+ "bip21",
+ "cbc",
+ "chrono",
+ "const_format",
+ "ecies",
+ "env_logger 0.10.2",
+ "flutter_rust_bridge",
+ "futures",
+ "gl-client",
+ "hex",
+ "lazy_static",
+ "log",
+ "miniz_oxide",
+ "once_cell",
+ "openssl",
+ "prost",
+ "querystring",
+ "rand",
+ "regex",
+ "reqwest",
+ "ripemd",
+ "rusqlite",
+ "rusqlite_migration",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "strum",
+ "strum_macros",
+ "tempfile",
+ "thiserror",
+ "tiny-bip39",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "zbase32",
+]
+
+[[package]]
 name = "breez-sdk-mock"
 version = "0.4.1"
 dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
- "breez-sdk-core",
+ "breez-sdk-core 0.4.1 (git+https://github.com/breez/breez-sdk?tag=0.4.1)",
  "chrono",
  "hex",
  "lazy_static",
@@ -2204,7 +2250,7 @@ dependencies = [
  "anyhow",
  "bip39",
  "bitcoin 0.30.2",
- "breez-sdk-core",
+ "breez-sdk-core 0.4.1 (git+https://github.com/breez/breez-sdk?tag=0.4.2-rc1)",
  "breez-sdk-mock",
  "camino",
  "chameleon",

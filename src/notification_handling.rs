@@ -89,7 +89,7 @@ pub fn handle_notification(
         )
         .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
     }
-    debug!("Started handling a notification.");
+    debug!("Started handling a notification with payload: {notification_payload}");
 
     let timeout_instant = Instant::now() + timeout;
 
