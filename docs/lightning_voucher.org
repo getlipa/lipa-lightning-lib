@@ -34,13 +34,15 @@ The user's wallet then checks the voucher and sends satoshis to the redeemer.
 3. the issuer sends the voucher with =preimage= to the recipient (redeemer) off-band
 4. the redeemer requests the lipa server with the =preimage= to resolve the voucher
 5. the lipa server computes =hash=, finds voucher details, and returns them to the redeemer
-6. the redeemer issues an invoice, sends to lipa server
-7. the lipa server forwards the invoice to the issuer (by sending a notification)
-8. the issuer checks that the invoice was indeed issued by him and was not redeemed yet
+6. the redeemer issues an invoice, sends to the lipa server
+7. the lipa server forwards the voucher and the invoice to the issuer (by sending a notification)
+8. the issuer checks that the voucher was indeed issued by him and was not redeemed yet
 9. the issuer pays the invoice
 *** Passcode
-Adding a passcode (a piece of information sent along with the voucher) to the scheme
-makes it impossible for the lipa server to steal funds by redeeming vouchers to their own wallet.
+A passcode is a secret piece of information sent along with the voucher to the redeemer.
+The redeemer binds their invoice to the passcode and sends them to the lipa server
+without revealing the passcode itself.
+The issuer then verifies that the invoice was bound to the original passcode.
 ** 🔐 Security Model
 The scheme is non-custodial; no one holds custody of the funds.
 *** Without Passcode
