@@ -1,0 +1,10 @@
+{% macro open_card(title) %}
+<div class="card">
+  <div class="card-header">{{ title }}</div>
+  <div class="card-body">
+{% endmacro open_card %}
+
+{% macro close_card() %}
+  </div>
+</div>
+{% endmacro close_card %}

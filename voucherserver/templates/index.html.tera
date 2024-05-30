@@ -1,0 +1,6 @@
+{% extends "base" %}
+{% import "macros" as macros %}
+
+{% block body %}
+
+{% endblock body %}

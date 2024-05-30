@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600&display=swap" rel="stylesheet"/>
+
+    <title>Lightning Voucher</title>
+    <style>
+      body {
+          margin: 0;
+          padding: 0;
+		  font-family: Lexend, Arial, Helvetica, sans-serif;
+		  font-weight: 300;
+      }
+
+      header {
+          background-color: #2374AB;
+          color: white;
+          text-align: center;
+          padding: 0.1em;
+      }
+	  a {
+          color: #2374AB;
+	  }
+
+      main {
+          padding: 20px;
+      }
+
+      footer {
+          background-color: #2374AB;
+          color: white;
+          text-align: center;
+          padding-top: 1em;
+          padding-bottom: 1em;
+          bottom: 0;
+          width: 100%;
+		  a {
+			  color: white;
+		  }
+      }
+
+      .card {
+          overflow: hidden;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .card-header {
+          background-color: #F0F0F0;
+          color: #404040;
+          padding: 10px;
+          text-align: left;
+          font-size: 120%;
+          font-weight: bold;
+      }
+
+      .card-body {
+          padding: 10px;
+      }
+
+	  .form {
+		  text-align: center;
+	  }
+
+	  #invoiceInput {
+          width: 100%;
+      }
+
+	  header a {
+          color: #fff;
+		  text-decoration: none;
+	  }
+
+      main {
+          padding: 20px;
+      }
+
+      .invoice {
+          font-size: 120%;
+          word-wrap: break-word;
+      }
+
+	  table {
+          border-collapse: collapse;
+          width: 100%;
+      }
+      th, td {
+          border: 1px solid #ddd;
+          padding: 8px;
+          text-align: left;
+      }
+	  .leftTableColumn {
+          text-align: right;
+	      width: 10px;
+	  }
+	  .empty {
+          color: #555;
+		  font-style: italic;
+	  }
+	  .warning-container {
+            background-color: #ffc107;
+            border: 2px solid #ffca28;
+            border-radius: 5px;
+            padding: 5px;
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+      .warning-icon {
+            font-size: 36px;
+            color: #ff9800;
+      }
+    </style>
+    <script>
+      function redirectToInputValue() {
+          var invoice = document.getElementById('invoiceInput').value.trim();
+          window.location.href = '/' + encodeURIComponent(invoice);
+      }
+    </script>
+  </head>
+
+  <body>
+	<header>
+      <h1><a href="/">🎟️ Lightning Voucher</a></h1>
+	</header>
+
+	<main>
+	  
+	  {% block body %}{% endblock body %}
+
+    </main>
+
+	<footer>
+	  <div>
+		<svg class="logo-wrapper" height="20" viewBox="0 0 688.16 397.24" x="0px" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" y="0px">
+		  <title>Lipa logo</title>
+		  <g class="logo" fill="#fff">
+			<path class="st0" d="M640.67,107.32h-31.42v9.92c-15.36-9.85-33.68-15.49-53.33-15.24c-52.98,0.68-96.1,45.01-95.38,97.99c0.72,52.76,43.71,95.3,96.64,95.3c19.18,0,37.04-5.61,52.07-15.24v9.79h54.76V130.66C664.01,117.77,653.56,107.32,640.67,107.32zM564.4,243.46c-24.75,0-44.82-20.06-44.82-44.82s20.06-44.82,44.82-44.82s44.82,20.06,44.82,44.82S589.15,243.46,564.4,243.46z"></path>
+			<path class="st0" d="M345.99,102c-19.66-0.25-37.97,5.4-53.33,15.25v-9.93h-54.76v266.48h31.42c12.89,0,23.34-10.45,23.34-23.34v-70.42c15.04,9.64,32.9,15.26,52.09,15.26c52.93,0,95.92-42.55,96.64-95.31C442.1,147,398.97,102.67,345.99,102z M337.52,243.46c-24.75,0-44.82-20.06-44.82-44.82s20.06-44.82,44.82-44.82s44.82,20.06,44.82,44.82S362.27,243.46,337.52,243.46z"></path>
+			<path class="st0" d="M176.71,107.32h-31.42v182.6h54.76V130.66C200.05,117.77,189.6,107.32,176.71,107.32z"></path>
+			<path class="st0" d="M172.66,23.44c-17.89,0-32.85,14.97-32.85,32.85c0,17.89,14.97,32.85,32.85,32.85c17.89,0,32.86-14.97,32.86-32.85C205.52,38.41,190.55,23.44,172.66,23.44z"></path>
+			<path class="st0" d="M78.86,205.3V46.78c0-12.89-10.45-23.34-23.34-23.34H24.01V205.3c0,46.66,38.04,84.62,84.8,84.62v-54.85C92.29,235.07,78.86,221.72,78.86,205.3z"></path>
+		  </g>
+		</svg>
+	  </div>
+	  <div>
+		Made by
+		<a href="https://lipa.swiss" target="_blank">lipa</a> —
+		<a href="https://github.com/getlipa/invoice-detective" target="_blank">Github page</a>
+	  </div>
+	</footer>
+  </body>
+</html>

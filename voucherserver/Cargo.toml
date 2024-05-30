@@ -1,0 +1,10 @@
+[package]
+name = "voucherserver"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hex = "0.4.3"
+rocket = { version = "0.5.0" }
+rocket_dyn_templates = { version = "0.1.0", features = ["tera"] }
+sha2 = "0.10.8"

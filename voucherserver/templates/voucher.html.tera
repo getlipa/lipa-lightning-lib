@@ -1,0 +1,27 @@
+{% extends "base" %}
+{% import "macros" as macros %}
+
+{% block invoice %}{% endblock invoice %}
+
+{% block body %}
+
+{% if error %}
+
+  {{ macros::open_card(title="💥 Error") }}
+    {{ error }}
+  {{ macros::close_card() }}
+
+{% else %}
+
+  {{ macros::open_card(title="Voucher") }}
+    Voucher <strong>{{ preimage }}</strong><br/>
+    for <b>{{ voucher.amount_sats }}</b> sats<br/>
+    with hash <pre>{{ voucher.hash }}</pre>
+  {{ macros::close_card() }}
+
+{% endif %}
+
+<br/>
+<div><a href="/">← back</a></div>
+
+{% endblock body %}

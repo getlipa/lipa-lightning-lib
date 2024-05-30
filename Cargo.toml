@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "parser",
-    "pocketclient"
+    "pocketclient",
+    "voucherserver",
 ]
 
 [package]
