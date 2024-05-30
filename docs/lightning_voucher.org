@@ -38,13 +38,18 @@ The user's wallet then checks the voucher and sends satoshis to the redeemer.
 7. the lipa server forwards the voucher and the invoice to the issuer (by sending a notification)
 8. the issuer checks that the voucher was indeed issued by him and was not redeemed yet
 9. the issuer pays the invoice
-*** Passcode
-A passcode is a secret piece of information sent along with the voucher to the redeemer.
-The redeemer binds their invoice to the passcode and sends them to the lipa server
-without revealing the passcode itself.
-The issuer then verifies that the invoice was bound to the original passcode.
+*** Passcode (Sealing)
+A =passcode= is a secret piece of information sent along with the voucher to the redeemer.
+The redeemer *seals* their invoice (and the voucher) with the =passcode= and
+sends the invoice and the =seal= to the lipa server (without revealing the =passcode= itself).
+The issuer then verifies the =seal=.
+The lipa server cannot reuse the seal for another invoice because the seal is /bound/ to the invoice.
 ** 🔐 Security Model
-The scheme is non-custodial; no one holds custody of the funds.
+The scheme is *non-custodial*; no one holds custody of the funds.\\
+The web server can manipulate some metadata about vouchers,
+such as the amount range, as long as it stays within the valid range
+(otherwise, the issuer validation will fail).
+(This might be mitigated by including the metadata in the =hash=.)
 *** Without Passcode
 The web server *can steal funds* by replacing the invoice sent by the redeemer
 (similar to the Lightning Address problem). Malicious intent is required for this to happen.
@@ -107,14 +112,14 @@ return amount_range, expiration_date
 	
 recipient -> recipient: issue **invoice**
 opt With passcode
-	recipient -> recipient: compute **passcode_hash**\nas hash(**passcode** + **invoice**)
+	recipient -> recipient: seal **invoice** with **passcode**\nas **seal** = hash(**passcode** + **invoice** + **preimage**)
 end
 
-recipient -> server ++: **preimage**, **invoice**\n(**passcode_hash** if with passcode)
-server -> issuer ++: **preimage**, **invoice**\n(**passcode_hash** if with passcode)
-issuer -> issuer: check local voucher by **preimage**,\ncheck that **invoice** matches
+recipient -> server ++: **preimage**, **invoice**\n(**seal** if with passcode)
+server -> issuer ++: **preimage**, **invoice**\n(**seal** if with passcode)
+issuer -> issuer: find local voucher by **preimage**,\nvalidate that **invoice** matches
 opt With passcode
-	issuer -> issuer: check that\nhash(**passcode** + **invoice**) == **passcode_hash**
+	issuer -> issuer: validate **seal**\nhash(**passcode** + **invoice** + **preimage**) == **seal**
 end
 issuer -> server: ok
 server -> recipient --: ok				
