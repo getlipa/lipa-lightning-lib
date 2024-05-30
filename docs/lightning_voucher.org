@@ -1,8 +1,8 @@
-#+title: Lightning Voucher
+#+title: 🎟️ Lightning Voucher
 
 * Background
 Sending to a phone number is a great feature, but what if the recipient is not registered with lipa?
-Wouldn't it be great if we could text or email satoshis instead, allowing the recipient
+Wouldn't it be great if we could /text or email satoshis/ instead, allowing the recipient
 to withdraw the satoshis using any Lightning wallet?
 ** 📖 Story
 You had lunch with your friend and he paid for you.
@@ -54,18 +54,23 @@ The scheme is almost *trustless*: the web server can only deny voucher registrat
 ** 🙈 Privacy
 - redeemer of a voucher does not learn anything about the issuer
 - web server knows issuer of a voucher, number of vouchers, associated amounts, all timing, redeemer of vouchers on redemption
+** 🚧 Limitations
+- redemption fails if the issuer is offline
+- vouchers are intended for one-time use only
+- implementing the *passcode* feature requires some changes to the LUD:
+  - trivial logic on the web server
+  - moderate logic on the issuer's side
+  - moderate logic on the redeemer's side
 ** ➕ Additional Features
 - if a voucher is never redeemed, the issuer retains satoshis
 - the issuer can set an expiration date for the voucher
 - the issuer can recall a previously issued voucher
 - the issuer is notified upon voucher redemption
-** 🚧 Limitations
-- vouchers are intended for one-time use only
-- redemption fails if the issuer is offline
-- implementing the *passcode* feature requires some changes to the LUD:
-  - trivial logic on the web server
-  - moderate logic on the issuer's side
-  - moderate logic on the redeemer's side
+- a voucher can be safely retried to be redeemed if the previous attempt failed
+** 💼 Usecases
+- send bitcoin as /a kind of/ a bearer asset (the example from the story)
+- a gift
+- print on phisical vochers as promotion
 ** 👍 Benefits
 - during voucher resolution, we can promote lipa wallet (since it is a web page)
 
