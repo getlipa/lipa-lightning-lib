@@ -1,0 +1,117 @@
+#+title: Lightning Voucher
+
+* Background
+Sending to a phone number is a great feature, but what if the recipient is not registered with lipa?
+Wouldn't it be great if we could text or email satoshis instead, allowing the recipient
+to withdraw the satoshis using any Lightning wallet?
+** 📖 Story
+You had lunch with your friend and he paid for you.
+After you return home, you want to pay him back.
+You open your lipa wallet and realize that you do not know his Lightning address,
+but you have his phone number.
+You try to send to his phone number, but the wallet says that the phone number
+is not registered and suggests you text him a *voucher* that can be redeemed by any Lightning wallet.
+Your friend receives a message with the voucher from you;
+it is basically an LNURL-withdraw, so he withdraws to his Lightning wallet.
+You get a notification on your phone that the voucher was redeemed.
+** ♊ Existing Solutions
+- River Link (https://river.com/river-link) offers something very similar,
+  but you have to have a River account to issue such vouchers (anyone can redeem).
+  And of course, River is a custodial service.
+- https://tipcards.io allows issuing similar vouchers, but it is also a custodial service.
+  Additionally, if no one redeems your voucher, you have to track it yourself.
+
+* Lightning Voucher
+I propose a *non-custodial* trust-minimized scheme which can be implemented today.
+Alternatively, an almost *trustless* scheme could be achieved with some changes to the LNURL-withdraw standard.
+Vouchers are issued by lipa wallet users and registered on the lipa server.
+A voucher would look like =https://lipa.swiss/w?lightning=lnurl12344...=.
+When someone tries to redeem such a voucher, the lipa server sends a notification to the user's phone.
+The user's wallet then checks the voucher and sends satoshis to the redeemer.
+** 🪜 Steps
+1. the issuer issues a voucher by generating a =preimage= and hashing it to =hash=
+2. the issuer registers the voucher on the lipa server by =hash=
+3. the issuer sends the voucher with =preimage= to the recipient (redeemer) off-band
+4. the redeemer requests the lipa server with the =preimage= to resolve the voucher
+5. the lipa server computes =hash=, finds voucher details, and returns them to the redeemer
+6. the redeemer issues an invoice, sends to lipa server
+7. the lipa server forwards the invoice to the issuer (by sending a notification)
+8. the issuer checks that the invoice was indeed issued by him and was not redeemed yet
+9. the issuer pays the invoice
+*** Passcode
+Adding a passcode (a piece of information sent along with the voucher) to the scheme
+makes it impossible for the lipa server to steal funds by redeeming vouchers to their own wallet.
+** 🔐 Security Model
+The scheme is non-custodial; no one holds custody of the funds.
+*** Without Passcode
+The web server *can steal funds* by replacing the invoice sent by the redeemer
+(similar to the Lightning Address problem). Malicious intent is required for this to happen.
+The risk is somewhat minimized by limiting the timeframe when such an attack is possible
+to the moment of voucher resolution (step 4).
+Therefore, if a voucher is never redeemed, it cannot be stolen.
+*** With Passcode
+The scheme is almost *trustless*: the web server can only deny voucher registration or redemption.
+** 🙈 Privacy
+- redeemer of a voucher does not learn anything about the issuer
+- web server knows issuer of a voucher, number of vouchers, associated amounts, all timing, redeemer of vouchers on redemption
+** ➕ Additional Features
+- if a voucher is never redeemed, the issuer retains satoshis
+- the issuer can set an expiration date for the voucher
+- the issuer can recall a previously issued voucher
+- the issuer is notified upon voucher redemption
+** 🚧 Limitations
+- vouchers are intended for one-time use only
+- redemption fails if the issuer is offline
+- implementing the *passcode* feature requires some changes to the LUD:
+  - trivial logic on the web server
+  - moderate logic on the issuer's side
+  - moderate logic on the redeemer's side
+** 👍 Benefits
+- during voucher resolution, we can promote lipa wallet (since it is a web page)
+
+* Sequence Diagram
+[[./diagram.png]]
+#+begin_src plantuml
+@startuml
+actor Issuer as issuer
+participant "Lipa Web Server" as server
+actor Recipient as recipient
+
+== Voucher issuance ==
+
+activate issuer
+issuer -> issuer: generate **preimage** and **hash** it
+issuer -> server: **hash**, amount_range, expiration_date
+
+issuer --> recipient: server URL with **preimage**\ni.e. https://lipa.swiss/w?lightning=<preimage>
+
+opt With passcode
+	issuer -> issuer: generate **passcode** and associate with **hash**
+	issuer --> recipient: **passcode**
+end
+deactivate issuer	
+
+== Voucher redemption ==
+
+recipient -> server ++: resolve URL with **preimage**
+activate recipient
+server -> server: hash **preimage**, find voucher
+return amount_range, expiration_date
+	
+recipient -> recipient: issue **invoice**
+opt With passcode
+	recipient -> recipient: compute **passcode_hash**\nas hash(**passcode** + **invoice**)
+end
+
+recipient -> server ++: **preimage**, **invoice**\n(**passcode_hash** if with passcode)
+server -> issuer ++: **preimage**, **invoice**\n(**passcode_hash** if with passcode)
+issuer -> issuer: check local voucher by **preimage**,\ncheck that **invoice** matches
+opt With passcode
+	issuer -> issuer: check that\nhash(**passcode** + **invoice**) == **passcode_hash**
+end
+issuer -> server: ok
+server -> recipient --: ok				
+deactivate recipient
+issuer --> recipient --: pay **invoice**
+@enduml
+#+end_src
