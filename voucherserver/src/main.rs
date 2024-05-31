@@ -17,9 +17,23 @@ struct Voucher {
 
 type VoucherMap = Mutex<HashMap<String, Voucher>>;
 
+#[derive(Debug, Clone)]
+struct Redemption {
+    preimage: String,
+    invoice: String,
+    seal: Option<String>,
+}
+type Redemptions = Mutex<Vec<Redemption>>;
+
 #[get("/")]
-fn index() -> Template {
-    Template::render("index", context![])
+async fn index(redemptions: &State<Redemptions>) -> String {
+    let redemptions = redemptions
+        .lock()
+        .await
+        .iter()
+        .map(|v| json::object!{preimage: v.preimage.clone(), invoice: v.invoice.clone(), seal: v.seal.clone(),})
+        .collect::<Vec<_>>();
+    json::object! {redemptions: redemptions}.to_string()
 }
 
 #[post("/<hash>/<amount_sats>")]
@@ -63,13 +77,24 @@ async fn lnurl(preimage: String, vouchers: &State<VoucherMap>) -> Option<String>
 }
 
 #[get("/lnurl?<k1>&<pr>")]
-async fn submit_lnurl(k1: String, pr: String, vouchers: &State<VoucherMap>) -> Option<String> {
+async fn submit_lnurl(
+    k1: String,
+    pr: String,
+    vouchers: &State<VoucherMap>,
+    redemptions: &State<Redemptions>,
+) -> Option<String> {
     let preimage = k1;
     let hash = sha256(&preimage);
     let hash = dbg!(hash);
     if let Some(_voucher) = vouchers.lock().await.get(&hash) {
         // TODO: Validate invoice amount, seal if required.
         println!("Redeem voucher {preimage} to {pr}");
+        let redemption = Redemption {
+            preimage,
+            invoice: pr,
+            seal: None,
+        };
+        redemptions.lock().await.push(redemption);
         return Some(json::object! {status: "OK"}.to_string());
     }
     None
@@ -93,7 +118,7 @@ async fn resolve_voucher(lightning: &str, vouchers: &State<VoucherMap>) -> Optio
 #[launch]
 fn rocket() -> _ {
     let config = Config {
-        port: 8001,
+        port: 8081,
         address: Ipv4Addr::new(0, 0, 0, 0).into(),
         log_level: rocket::config::LogLevel::Normal,
         ..Config::debug_default()
@@ -104,6 +129,7 @@ fn rocket() -> _ {
             routes![index, post_voucher, resolve_voucher, lnurl, submit_lnurl],
         )
         .manage(VoucherMap::default())
+        .manage(Redemptions::default())
         .attach(Template::fairing())
 }
 
