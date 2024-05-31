@@ -14,9 +14,9 @@
 {% else %}
 
   {{ macros::open_card(title="Voucher") }}
-    Voucher <strong>{{ preimage }}</strong><br/>
+    <strong>{{ preimage }}</strong><br/>
     for <b>{{ voucher.amount_sats }}</b> sats<br/>
-    with hash <pre>{{ voucher.hash }}</pre>
+    with hash <code>{{ voucher.hash }}</code>
   {{ macros::close_card() }}
 
 {% endif %}
