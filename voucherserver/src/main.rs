@@ -52,8 +52,8 @@ async fn lnurl(preimage: String, vouchers: &State<VoucherMap>) -> Option<String>
         let json = json::object! {
             tag: "withdrawRequest",
             callback: format!("{DOMAIN}/lnurl"),
-            maxSendable: voucher.amount_sats,
-            minSendable: voucher.amount_sats,
+            maxSendable: voucher.amount_sats * 1000,
+            minSendable: voucher.amount_sats * 1000,
             k1: preimage,
             seal_required: voucher.seal_required,
         };
@@ -68,7 +68,7 @@ async fn submit_lnurl(k1: String, pr: String, vouchers: &State<VoucherMap>) -> O
     let hash = sha256(&preimage);
     let hash = dbg!(hash);
     if let Some(_voucher) = vouchers.lock().await.get(&hash) {
-        // TODO: Validate that invoice for the right amount.
+        // TODO: Validate invoice amount, seal if required.
         println!("Redeem voucher {preimage} to {pr}");
         return Some(json::object! {status: "OK"}.to_string());
     }
@@ -93,7 +93,7 @@ async fn resolve_voucher(lightning: &str, vouchers: &State<VoucherMap>) -> Optio
 #[launch]
 fn rocket() -> _ {
     let config = Config {
-        port: 8000,
+        port: 8001,
         address: Ipv4Addr::new(0, 0, 0, 0).into(),
         log_level: rocket::config::LogLevel::Normal,
         ..Config::debug_default()
