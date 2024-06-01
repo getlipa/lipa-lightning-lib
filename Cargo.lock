@@ -2415,6 +2415,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
+ "bech32 0.11.0",
  "bip39",
  "bitcoin 0.30.2",
  "breez-sdk-core",

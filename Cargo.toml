@@ -30,6 +30,7 @@ squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.23.0" }
 breez-sdk-core = { git = "https://github.com/andrei-21/breez-sdk", rev = "0a43b271" }
 
 aes-gcm = "0.10.3"
+bech32 = "0.11.0"
 bip39 = "2.0.0"
 bitcoin = "0.30.1"
 chrono = { version = "0.4.38", default-features = false, features = ["serde"] }

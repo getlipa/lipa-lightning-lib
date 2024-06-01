@@ -322,6 +322,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 "stop" => {
                     break;
                 }
+                "voucherissue" => {
+                    if let Err(message) = issue_voucher(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 _ => println!(
                     "{}",
                     "Unknown command. See \"help\" for available commands.".red()
@@ -330,6 +335,18 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
         }
     }
     let _ = rl.append_history(history_path);
+}
+
+fn issue_voucher(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let amount_sat: u32 = words
+        .next()
+        .ok_or(anyhow!("Amount in SAT is required"))?
+        .parse()
+        .context("Amount should be a positive integer number")?;
+    let passcode = words.next().map(String::from);
+    let voucher = node.issue_voucher(amount_sat, passcode)?;
+    println!("{voucher}");
+    Ok(())
 }
 
 fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {

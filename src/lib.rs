@@ -41,6 +41,7 @@ mod swap;
 mod symmetric_encryption;
 mod task_manager;
 mod util;
+mod voucher;
 
 pub use crate::activity::{Activity, ChannelCloseInfo, ChannelCloseState, ListActivitiesResponse};
 pub use crate::amount::{Amount, FiatValue};
@@ -91,6 +92,7 @@ use crate::task_manager::TaskManager;
 use crate::util::{
     replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
 };
+use crate::voucher::VoucherServer;
 pub use pocketclient::FiatTopupInfo;
 use pocketclient::PocketClient;
 
@@ -2610,6 +2612,15 @@ impl LightningNode {
                 "Failed to close channels",
             )?;
         Ok(())
+    }
+
+    pub fn issue_voucher(&self, amount_sat: u32, passcode: Option<String>) -> Result<String> {
+        let voucher_server = VoucherServer::new();
+        let voucher = self
+            .rt
+            .handle()
+            .block_on(voucher_server.issue_voucher(amount_sat, passcode))?;
+        Ok(voucher.fallback)
     }
 }
 

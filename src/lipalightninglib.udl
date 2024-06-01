@@ -175,6 +175,9 @@ interface LightningNode {
 
     [Throws=LnError]
     void verify_phone_number(string phone_number, string otp);
+
+    [Throws=LnError]
+    string issue_voucher(u32 amount_sat, string? passcode);
 };
 
 dictionary Config {
