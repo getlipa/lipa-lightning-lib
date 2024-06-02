@@ -101,7 +101,7 @@ impl VoucherServer {
         let hash = sha256::Hash::hash(preimage.as_bytes());
         let hash = hex::encode(hash);
 
-        let url = format!("{URL}/{hash}/{amount_sat}");
+        let url = format!("{URL}/{hash}/{amount_sat}/{}", passcode.is_some());
         let response = client
             .post(url)
             .send()
@@ -134,8 +134,6 @@ impl VoucherServer {
         self.data_store
             .lock_unwrap()
             .store_voucher(voucher.clone())?;
-
-        // TODO: Store voucher.
 
         Ok(voucher)
     }
