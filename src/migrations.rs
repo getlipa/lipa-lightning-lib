@@ -134,6 +134,19 @@ const MIGRATION_14_LNURL_PAY_RECEIVE_DATA: &str = "
     ALTER TABLE payments ADD COLUMN received_lnurl_comment TEXT DEFAULT NULL;
 ";
 
+const MIGRATION_15_VOUCHERS: &str = "
+    CREATE TABLE vouchers (
+        id INTEGER NOT NULL PRIMARY KEY,
+        hash TEXT NOT NULL,
+        preimage TEXT NOT NULL,
+        amount_sat INTEGER NOT NULL,
+        passcode TEXT NULL,
+        lnurl TEXT NOT NULL,
+        fallback TEXT NOT NULL,
+        invoice TEXT NULL
+    );
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -156,6 +169,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_12_LIGHTNING_ADDRESSES),
         M::up(MIGRATION_13_PAYMENT_PERSONAL_NOTE),
         M::up(MIGRATION_14_LNURL_PAY_RECEIVE_DATA),
+        M::up(MIGRATION_15_VOUCHERS),
     ])
 }
 

@@ -2615,12 +2615,22 @@ impl LightningNode {
     }
 
     pub fn issue_voucher(&self, amount_sat: u32, passcode: Option<String>) -> Result<String> {
-        let voucher_server = VoucherServer::new();
+        let voucher_server = VoucherServer::new(Arc::clone(&self.data_store));
         let voucher = self
             .rt
             .handle()
             .block_on(voucher_server.issue_voucher(amount_sat, passcode))?;
         Ok(voucher.fallback)
+    }
+
+    pub fn list_vouchers(&self) -> Result<Vec<String>> {
+        let voucher_server = VoucherServer::new(Arc::clone(&self.data_store));
+        let vouchers = voucher_server
+            .list_vouchers()?
+            .into_iter()
+            .map(|v| v.fallback)
+            .collect();
+        Ok(vouchers)
     }
 }
 

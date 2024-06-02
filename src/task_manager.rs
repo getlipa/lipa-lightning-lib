@@ -3,12 +3,14 @@ use crate::data_store::{BackupStatus, DataStore};
 use crate::errors::Result;
 use crate::exchange_rate_provider::{ExchangeRate, ExchangeRateProvider};
 use crate::locker::Locker;
+use crate::voucher::VoucherServer;
 use crate::{BreezHealthCheckStatus, EventsCallback, RuntimeErrorCode};
-use std::env;
-
+use crate::util::LogIgnoreError;
 use crate::backup::BackupManager;
-use breez_sdk_core::{BreezServices, OpeningFeeParams};
-use log::{debug, error};
+
+use std::env;
+use breez_sdk_core::{BreezServices, OpeningFeeParams, SendPaymentRequest};
+use log::{debug, error, Level};
 use perro::OptionToError;
 use std::sync::{Arc, Mutex};
 use tokio::time::Duration;
@@ -129,6 +131,8 @@ impl TaskManager {
             self.task_handles
                 .push(self.start_health_status_check(period));
         }
+
+		self.task_handles.push(self.redeem_vouchers());
     }
 
     fn start_breez_sync(&self, period: Duration) -> RepeatingTaskHandle {
@@ -173,6 +177,28 @@ impl TaskManager {
             }
         })
     }
+
+	fn redeem_vouchers(&self) -> RepeatingTaskHandle {
+        let sdk = Arc::clone(&self.sdk);
+        let data_store = Arc::clone(&self.data_store);
+        self.runtime_handle.spawn_repeating_task(Duration::from_secs(5), move || {
+            let sdk = Arc::clone(&sdk);
+			let data_store = Arc::clone(&data_store);
+            async move {
+                debug!("Starting redeem vouchers task");
+				let voucher_server = VoucherServer::new(data_store);
+				match voucher_server.redeem_vouchers().await {
+					Ok(Some(invoice)) => sdk.send_payment(SendPaymentRequest {
+						bolt11: invoice,
+						amount_msat: None,
+						label: None,
+					}).await.log_ignore_error(Level::Error, "Failed to pay invoice for voucher"),
+					Ok(None) => (),
+					Err(e) => error!("Failed redeem vouchers: {e}"),
+				}
+			}
+		})
+	}
 
     fn start_lsp_fee_update(&self, period: Duration) -> RepeatingTaskHandle {
         let sdk = Arc::clone(&self.sdk);

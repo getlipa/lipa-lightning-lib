@@ -178,6 +178,9 @@ interface LightningNode {
 
     [Throws=LnError]
     string issue_voucher(u32 amount_sat, string? passcode);
+
+    [Throws=LnError]
+	sequence<string> list_vouchers();
 };
 
 dictionary Config {

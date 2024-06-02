@@ -1,19 +1,23 @@
-use crate::Result;
+use crate::data_store::DataStore;
+use crate::{locker::Locker, Result};
 
 use bitcoin::hashes::{sha256, Hash};
 use perro::{ensure, permanent_failure, MapToError};
 use rand::RngCore;
 use reqwest::StatusCode;
 use serde::Deserialize;
-use std::time::Duration;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Voucher {
-    hash: String,
-    preimage: String,
-    amount_sat: u32,
-    passcode: Option<String>,
-    lnurl: String,
+    pub hash: String,
+    pub preimage: String,
+    pub amount_sat: u32,
+    pub passcode: Option<String>,
+    pub lnurl: String,
     pub fallback: String,
 }
 
@@ -23,11 +27,62 @@ struct PostVoucherResponse {
     url_prefix: String,
 }
 
-pub struct VoucherServer {}
+#[derive(Debug, Deserialize)]
+struct VoucherRedemption {
+    preimage: String,
+    invoice: String,
+    seal: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct VoucherRedemptions {
+    redemptions: Vec<VoucherRedemption>,
+}
+
+pub struct VoucherServer {
+    data_store: Arc<Mutex<DataStore>>,
+}
 
 impl VoucherServer {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(data_store: Arc<Mutex<DataStore>>) -> Self {
+        Self { data_store }
+    }
+
+    pub async fn redeem_vouchers(&self) -> Result<Option<String>> {
+        const URL: &str = "https://voucher.zzd.es";
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(20))
+            .build()
+            .map_to_permanent_failure("Failed to build a Pocket Client instance")?;
+        let response = client
+            .get(URL)
+            .send()
+            .await
+            .map_to_permanent_failure("Failed to post voucher")?;
+        ensure!(
+            response.status() == StatusCode::OK,
+            permanent_failure("Failed to list voucher redemptions, status code")
+        );
+        let response = response
+            .json::<VoucherRedemptions>()
+            .await
+            .map_to_permanent_failure("Failed to parse VoucherResmptions")?;
+
+        for redemption in response.redemptions {
+            let voucher = self
+                .data_store
+                .lock_unwrap()
+                .retrieve_voucher(redemption.preimage.clone());
+            if let Ok(_voucher) = voucher {
+                // TODO: Check that the voucher amount.
+                // TODO: Check the seal if required.
+                self.data_store
+                    .lock_unwrap()
+                    .set_voucher_redemption(redemption.preimage, redemption.invoice.clone())?;
+                return Ok(Some(redemption.invoice));
+            }
+        }
+        Ok(None)
     }
 
     pub async fn issue_voucher(
@@ -76,9 +131,17 @@ impl VoucherServer {
             fallback,
         };
 
+        self.data_store
+            .lock_unwrap()
+            .store_voucher(voucher.clone())?;
+
         // TODO: Store voucher.
-        println!("Voucher generated: {voucher:?}");
+
         Ok(voucher)
+    }
+
+    pub fn list_vouchers(&self) -> Result<Vec<Voucher>> {
+        self.data_store.lock_unwrap().list_vouchers()
     }
 }
 

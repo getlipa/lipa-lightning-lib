@@ -1,6 +1,7 @@
 use crate::errors::Result;
 use crate::fund_migration::MigrationStatus;
 use crate::migrations::migrate;
+use crate::voucher::Voucher;
 use crate::{ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
 use pocketclient::FiatTopupInfo;
 
@@ -429,6 +430,46 @@ impl DataStore {
         .map_to_permanent_failure("Failed to query lightning addresses")
     }
 
+    pub fn store_voucher(&self, voucher: Voucher) -> Result<()> {
+        self.conn
+            .execute(
+                "INSERT INTO vouchers (hash, preimage, amount_sat, passcode, lnurl, fallback) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                (voucher.hash, voucher.preimage, voucher.amount_sat, voucher.passcode, voucher.lnurl, voucher.fallback,),
+            )
+            .map_to_permanent_failure("Failed to add lightning address to db")?;
+
+        Ok(())
+    }
+
+    pub fn retrieve_voucher(&self, preimage: String) -> Result<Voucher> {
+        self.conn
+            .query_row(
+                "SELECT hash, preimage, amount_sat, passcode, lnurl, fallback FROM vouchers WHERE preimage = ?1 and invoice IS NULL LIMIT 1",
+                (preimage,),
+                voucher_from_row,
+            )
+            .map_to_permanent_failure("Failed to query funds migration status")
+    }
+
+    pub fn set_voucher_redemption(&self, preimage: String, invoice: String) -> Result<()> {
+        self.conn
+            .execute(
+                "UPDATE vouchers SET invoice = ?1 WHERE preimage = ?2",
+                (invoice, preimage),
+            )
+            .map_to_permanent_failure("Failed to set redemption invoice to db")?;
+        Ok(())
+    }
+
+    pub fn list_vouchers(&self) -> Result<Vec<Voucher>> {
+        self.query_map(
+                "SELECT hash, preimage, amount_sat, passcode, lnurl, fallback FROM vouchers ORDER BY id",
+                (),
+                voucher_from_row,
+            )
+            .map_to_permanent_failure("Failed to query analytics config")
+    }
+
     fn query_map<T, P, F>(
         &self,
         statement: &str,
@@ -448,6 +489,23 @@ impl DataStore {
 
 fn string_from_row(row: &Row) -> rusqlite::Result<String> {
     row.get(0)
+}
+
+fn voucher_from_row(row: &Row) -> rusqlite::Result<Voucher> {
+    let hash = row.get(0)?;
+    let preimage = row.get(1)?;
+    let amount_sat: u32 = row.get(2)?;
+    let passcode: Option<String> = row.get(3)?;
+    let lnurl = row.get(4)?;
+    let fallback = row.get(5)?;
+    Ok(Voucher {
+        hash,
+        preimage,
+        amount_sat,
+        passcode,
+        lnurl,
+        fallback,
+    })
 }
 
 // Store all provided exchange rates.

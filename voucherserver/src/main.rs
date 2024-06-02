@@ -66,9 +66,10 @@ async fn lnurl(preimage: String, vouchers: &State<VoucherMap>) -> Option<String>
         let json = json::object! {
             tag: "withdrawRequest",
             callback: format!("{DOMAIN}/lnurl"),
-            maxSendable: voucher.amount_sats * 1000,
-            minSendable: voucher.amount_sats * 1000,
             k1: preimage,
+            minWithdrawable: voucher.amount_sats * 1000,
+            maxWithdrawable: voucher.amount_sats * 1000,
+            defaultDescription: "Lightning Voucher",
             seal_required: voucher.seal_required,
         };
         return Some(json.to_string());

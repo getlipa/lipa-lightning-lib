@@ -327,6 +327,10 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "voucherlist" => match node.list_vouchers() {
+                    Ok(vouchers) => println!("{}", vouchers.join("\n")),
+                    Err(message) => println!("{}", format!("{message:#}").red()),
+                },
                 _ => println!(
                     "{}",
                     "Unknown command. See \"help\" for available commands.".red()
