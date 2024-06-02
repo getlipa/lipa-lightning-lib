@@ -18,7 +18,7 @@
     for <b>{{ voucher.amount_sats }}</b> sats<br/>
 	{% if voucher.seal_required %}
       <strong>Passcode will be required</strong><br/>
-	{& endif %}
+	{% endif %}
       with hash <code>{{ voucher.hash }}</code>
 
     <div id="qrcode"></div>
