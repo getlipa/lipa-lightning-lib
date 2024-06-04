@@ -49,7 +49,7 @@ impl VoucherServer {
         Self { data_store }
     }
 
-    pub async fn redeem_vouchers(&self) -> Result<Option<String>> {
+    pub async fn redeem_vouchers(&self) -> Result<Option<(String, String)>> {
         const URL: &str = "https://voucher.zzd.es";
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(20))
@@ -92,7 +92,7 @@ impl VoucherServer {
                 self.data_store
                     .lock_unwrap()
                     .set_voucher_redemption(redemption.preimage, redemption.invoice.clone())?;
-                return Ok(Some(redemption.invoice));
+                return Ok(Some((voucher.hash, redemption.invoice)));
             }
         }
         Ok(None)
@@ -149,6 +149,25 @@ impl VoucherServer {
             .store_voucher(voucher.clone())?;
 
         Ok(voucher)
+    }
+
+    pub async fn cancel_voucher(&self, hash: String) -> Result<()> {
+        const URL: &str = "https://voucher.zzd.es";
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(20))
+            .build()
+            .map_to_permanent_failure("Failed to build a Pocket Client instance")?;
+        let url = format!("{URL}/{hash}");
+        let response = client
+            .delete(url)
+            .send()
+            .await
+            .map_to_permanent_failure("Failed to post voucher")?;
+        ensure!(
+            response.status() == StatusCode::OK,
+            permanent_failure("Failed to pose voucher, status code")
+        );
+        Ok(())
     }
 
     pub fn list_vouchers(&self) -> Result<Vec<Voucher>> {

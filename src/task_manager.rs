@@ -189,14 +189,19 @@ impl TaskManager {
                     debug!("Starting redeem vouchers task");
                     let voucher_server = VoucherServer::new(data_store);
                     match voucher_server.redeem_vouchers().await {
-                        Ok(Some(invoice)) => sdk
-                            .send_payment(SendPaymentRequest {
+                        Ok(Some((hash, invoice))) => {
+                            sdk.send_payment(SendPaymentRequest {
                                 bolt11: invoice,
                                 amount_msat: None,
                                 label: None,
                             })
                             .await
-                            .log_ignore_error(Level::Error, "Failed to pay invoice for voucher"),
+                            .log_ignore_error(Level::Error, "Failed to pay invoice for voucher");
+                            voucher_server.cancel_voucher(hash).await.log_ignore_error(
+                                Level::Error,
+                                "Failed to cancel redeemed voucher",
+                            );
+                        }
                         Ok(None) => (),
                         Err(e) => error!("Failed redeem vouchers: {e}"),
                     }

@@ -63,7 +63,7 @@ The scheme is almost *trustless*: the web server can only deny voucher registrat
 - web server knows issuer of a voucher, number of vouchers, associated amounts, all timing, redeemer of vouchers on redemption
 ** 🚧 Limitations
 - redemption fails if the issuer is offline
-- vouchers are intended for one-time use only
+- vouchers are single-use only
 - implementing the *passcode* feature requires some changes to the LUD:
   - trivial logic on the web server
   - moderate logic on the issuer's side
@@ -73,6 +73,7 @@ The scheme is almost *trustless*: the web server can only deny voucher registrat
 - the issuer can set an expiration date for the voucher
 - the issuer can recall a previously issued voucher
 - the issuer is notified upon voucher redemption
+- a voucher can have an amount range (a form of tipping)
 - a voucher can be safely retried to be redeemed if the previous attempt failed
 ** 💼 Usecases
 - send bitcoin as /a kind of/ a bearer asset (the example from the story)

@@ -14,14 +14,19 @@
 {% else %}
 
   {{ macros::open_card(title="Voucher") }}
-    <strong>{{ preimage }}</strong><br/>
+    <div>{{ preimage }}</div>
     for <b>{{ voucher.amount_sats }}</b> sats<br/>
 	{% if voucher.seal_required %}
-      <strong style="color: yellow;">Passcode will be required</strong><br/>
+      <div><strong style="color: yellow;">Passcode will be required</strong></div>
 	{% endif %}
       with hash <code>{{ voucher.hash }}</code>
 
+	  {% if valid %}
     <div id="qrcode"></div>
+	  {% else %}
+      <div><strong style="color: red;">Voucher has been canceled or redeemed</strong></div>
+	  {% endif %}
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>
         var qrcode = new QRCode(document.getElementById("qrcode"), {

@@ -1,5 +1,5 @@
 use rocket::serde::Serialize;
-use rocket::{futures::lock::Mutex, get, launch, post, routes, Config, State};
+use rocket::{delete, futures::lock::Mutex, get, launch, post, routes, Config, State};
 use rocket_dyn_templates::{context, Template};
 use sha2::Digest;
 use sha2::Sha256;
@@ -7,12 +7,20 @@ use std::{collections::HashMap, net::Ipv4Addr};
 
 const DOMAIN: &str = "https://voucher.zzd.es";
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(crate = "rocket::serde")]
+enum VoucherState {
+    Valid,
+    Canceled,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(crate = "rocket::serde")]
 struct Voucher {
     hash: String,
     amount_sats: u32,
     seal_required: bool,
+    state: VoucherState,
 }
 
 type VoucherMap = Mutex<HashMap<String, Voucher>>;
@@ -48,6 +56,7 @@ async fn post_voucher(
         hash: hash.clone(),
         amount_sats,
         seal_required,
+        state: VoucherState::Valid,
     };
     println!("New voucher registered: {voucher:?}");
     //    let lnurl_raw = format!("{DOMAIN}/lnurl/{hash}");
@@ -61,6 +70,13 @@ async fn post_voucher(
         url_prefix: format!("{DOMAIN}?lightning="),
     }
     .to_string()
+}
+
+#[delete("/<hash>")]
+async fn delete_voucher(hash: &str, vouchers: &State<VoucherMap>) {
+    if let Some(voucher) = vouchers.lock().await.get_mut(hash) {
+        voucher.state = VoucherState::Canceled;
+    }
 }
 
 #[get("/lnurl/<preimage>")]
@@ -94,6 +110,12 @@ async fn submit_lnurl(
     let hash = sha256(&preimage);
     let hash = dbg!(hash);
     if let Some(voucher) = vouchers.lock().await.get(&hash) {
+        if voucher.state != VoucherState::Valid {
+            return Some(
+                json::object! {status: "ERROR", reason: "Voucher has been canceled or redeemed"}
+                    .to_string(),
+            );
+        }
         if voucher.seal_required && seal.is_none() {
             return Some(json::object! {status: "ERROR", reason: "Seal is required"}.to_string());
         }
@@ -121,9 +143,10 @@ async fn resolve_voucher(lightning: &str, vouchers: &State<VoucherMap>) -> Optio
     let hash = dbg!(hash);
     if let Some(voucher) = vouchers.lock().await.get(&hash) {
         let lnurl = lightning;
+        let valid = voucher.state == VoucherState::Valid;
         return Some(Template::render(
             "voucher",
-            context![preimage, voucher, lnurl],
+            context![preimage, voucher, lnurl, valid],
         ));
     }
     None
@@ -140,7 +163,14 @@ fn rocket() -> _ {
     rocket::custom(&config)
         .mount(
             "/",
-            routes![index, post_voucher, resolve_voucher, lnurl, submit_lnurl],
+            routes![
+                index,
+                post_voucher,
+                delete_voucher,
+                resolve_voucher,
+                lnurl,
+                submit_lnurl
+            ],
         )
         .manage(VoucherMap::default())
         .manage(Redemptions::default())
