@@ -439,7 +439,7 @@ impl BreezServices {
         req: ReceivePaymentRequest,
     ) -> Result<ReceivePaymentResponse, ReceivePaymentError> {
         // Has nothing to do with receiving a payment, but is a mechanism to control the mock
-        match req.description.as_str() {
+        match req.description.to_lowercase().as_str() {
             "health.operational" => *HEALTH_STATUS.lock().unwrap() = HealthCheckStatus::Operational,
             "health.maintenance" => *HEALTH_STATUS.lock().unwrap() = HealthCheckStatus::Maintenance,
             "health.disruption" => {
