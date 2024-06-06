@@ -58,7 +58,7 @@ impl LnUrlWithdrawDetails {
     ) -> Self {
         Self {
             min_withdrawable: request_data
-                .max_withdrawable
+                .min_withdrawable
                 .as_msats()
                 .to_amount_up(exchange_rate),
             max_withdrawable: request_data
