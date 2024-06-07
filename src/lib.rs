@@ -951,6 +951,10 @@ impl LightningNode {
 
     /// Withdraw an LNURL-withdraw the provided amount.
     ///
+    /// A successful return means the LNURL-withdraw service has started a payment.
+    /// Only after the event [`EventsCallback::payment_received`] can the payment be considered
+    /// received.
+    ///
     /// Parameters:
     /// * `lnurl_withdraw_request_data` - LNURL-withdraw request data as obtained from [`LightningNode::decode_data`]
     /// * `amount_sat` - amount to be withdraw
