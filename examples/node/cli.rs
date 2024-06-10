@@ -22,7 +22,7 @@ use uniffi_lipalightninglib::{
     ExchangeRate, FailedSwapInfo, FiatValue, IncomingPaymentInfo, InvoiceCreationMetadata,
     InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails, LnUrlWithdrawDetails,
     MaxRoutingFeeMode, OfferInfo, OfferKind, OutgoingPaymentInfo, PaymentInfo, PaymentMetadata,
-    Recipient, TzConfig,
+    RangeHit, Recipient, TzConfig,
 };
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
@@ -1346,11 +1346,11 @@ fn sweep(node: &LightningNode, address: String) -> Result<String> {
 }
 
 fn clear_wallet_info(node: &LightningNode) -> Result<()> {
-    ensure!(
-        node.is_clear_wallet_feasible()?,
-        "Clearing the wallet isn't feasible at the moment due to the available funds being \
-        either too low or too high"
-    );
+    match node.is_clear_wallet_feasible()? {
+        RangeHit::Below { min } => bail!("Balance is below min: {}", amount_to_string(&min)),
+        RangeHit::In => (),
+        RangeHit::Above { max } => bail!("Balance is above max: {}", amount_to_string(&max)),
+    };
 
     let clear_wallet_info = node.prepare_clear_wallet()?;
 

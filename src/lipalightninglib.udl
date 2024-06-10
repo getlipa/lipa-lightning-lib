@@ -147,7 +147,7 @@ interface LightningNode {
     BreezHealthCheckStatus get_health_status();
 
     [Throws=LnError]
-    boolean is_clear_wallet_feasible();
+    RangeHit is_clear_wallet_feasible();
 
     [Throws=LnError]
     ClearWalletInfo prepare_clear_wallet();
@@ -205,6 +205,13 @@ enum Level {
     "Info",
     "Debug",
     "Trace",
+};
+
+[Enum]
+interface RangeHit {
+    Below(Amount min);
+    In();
+    Above(Amount max);
 };
 
 callback interface EventsCallback {
@@ -581,12 +588,22 @@ enum InvoiceAffordability {
     "Affordable",
 };
 
+dictionary PrepareOnchainPaymentResponse {
+    string fees_hash;
+    f64 fees_percentage;
+    u64 fees_lockup;
+    u64 fees_claim;
+    u64 sender_amount_sat;
+    u64 recipient_amount_sat;
+    u64 total_fees;
+};
+
 dictionary ClearWalletInfo {
     Amount clear_amount;
     Amount total_estimated_fees;
     Amount onchain_fee;
     Amount swap_fee;
-    string fees_hash;
+    PrepareOnchainPaymentResponse prepare_response;
 };
 
 dictionary ChannelCloseResolvingFees {
