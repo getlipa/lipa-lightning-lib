@@ -20,6 +20,7 @@ You get a notification on your phone that the voucher was redeemed.
   And of course, River is a custodial service.
 - https://tipcards.io allows issuing similar vouchers, but it is also a custodial service.
   Additionally, if no one redeems your voucher, you have to track it yourself.
+- A ecash based solution, but it will required ecash (non lightning-native).
 
 * Lightning Voucher
 I propose a *non-custodial* trust-minimized scheme which can be implemented today.
@@ -75,12 +76,14 @@ The scheme is almost *trustless*: the web server can only deny voucher registrat
 - the issuer is notified upon voucher redemption
 - a voucher can have an amount range (a form of tipping)
 - a voucher can be safely retried to be redeemed if the previous attempt failed
+- safe to post online or offline in a public space
 ** 💼 Usecases
 - send bitcoin as /a kind of/ a bearer asset (the example from the story)
 - a gift
 - print on phisical vochers as promotion
 ** 👍 Benefits
 - during voucher resolution, we can promote lipa wallet (since it is a web page)
+- lightning-native no need for ecash
 
 * Sequence Diagram
 [[./diagram.png]]
@@ -128,3 +131,9 @@ deactivate recipient
 issuer --> recipient --: pay **invoice**
 @enduml
 #+end_src
+
+* 💡 Further Ideas
+- use base64 for preimage to make the resulting URL shorter
+- encrypt voucher metadata (amount range, expiration date, description) with preimage
+  to minimize data on the web server
+
