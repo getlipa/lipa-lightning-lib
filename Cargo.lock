@@ -1096,9 +1096,9 @@ dependencies = [
 
 [[package]]
 name = "data-encoding"
-version = "2.5.0"
+version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e962a19be5cfc3f3bf6dd8f61eb50107f356ad6270fbb3ed41476571db78be5"
+checksum = "e8566979429cf69b49a5c740c60791108e86440e8be149bbea4fe54d2c32d6e2"
 
 [[package]]
 name = "der-parser"
@@ -2395,6 +2395,21 @@ dependencies = [
  "lightning",
  "num-traits",
  "secp256k1 0.24.3",
+]
+
+[[package]]
+name = "lightningvoucher"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "bech32 0.11.0",
+ "cipher",
+ "data-encoding",
+ "generic-array",
+ "rand",
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

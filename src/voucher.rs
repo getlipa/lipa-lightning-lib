@@ -2,7 +2,6 @@ use crate::data_store::DataStore;
 use crate::{locker::Locker, Result};
 
 use bitcoin::hashes::{sha256, Hash};
-// use breez_sdk_core::parse_invoice;
 use perro::{ensure, permanent_failure, MapToError};
 use rand::RngCore;
 use reqwest::StatusCode;
