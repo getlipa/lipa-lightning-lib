@@ -50,7 +50,7 @@ sha2 = { version = "0.10.8", features = [] }
 simplelog = { version = "0.12.2" }
 thiserror = "1.0.61"
 tokio = { version = "1.38.0", features = ["rt-multi-thread", "time", "sync"] }
-uniffi = "0.27.0"
+uniffi = "0.28.0"
 uuid = { version = "1.8.0", features = ["v5"] }
 
 # Bundle sqlite for all targets except iOS.
@@ -86,7 +86,7 @@ lazy_static = "1.4.0"
 
 [build-dependencies]
 camino = "1.1.7"
-uniffi_bindgen = "0.27.0"
+uniffi_bindgen = "0.28.0"
 
 # Use some of the binary size reduction strategies from https://github.com/johnthagen/min-sized-rust
 [profile.release]
