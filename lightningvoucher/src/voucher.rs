@@ -3,16 +3,16 @@ use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, Nonce};
 use cipher::consts::U32;
 use cipher::Unsigned;
 use rand::rngs::OsRng;
-use secp256k1::{generate_keypair, PublicKey, SecretKey};
+use secp256k1::ecdsa::Signature;
+use secp256k1::hashes::{sha256, Hash};
+use secp256k1::{generate_keypair, Message, PublicKey, SecretKey, SECP256K1};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::time::{Duration, SystemTime};
 
 type U32Bytes = generic_array::GenericArray<u8, U32>;
 
 pub fn key_to_hash(key: &PublicKey) -> String {
-    let hash = sha256(&key.serialize());
-    data_encoding::HEXLOWER.encode(&hash)
+    sha256::Hash::hash(&key.serialize()).to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -27,12 +27,13 @@ pub struct VoucherMetadata {
 pub struct Voucher {
     pub redeemer_key: PublicKey,
     pub metadata: VoucherMetadata,
+    pub signature: Signature,
 }
 
 #[derive(Debug)]
 pub struct EncryptedVoucher {
     pub hash: String,
-    pub metadata: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl Voucher {
@@ -51,53 +52,64 @@ impl Voucher {
             issued_at,
             expires_at: issued_at.checked_add(expires_in).unwrap(),
         };
+
+        let metadata_json = serde_json::to_string(&metadata).unwrap();
+        let message =
+            Message::from_hashed_data::<secp256k1::hashes::sha256::Hash>(metadata_json.as_bytes());
+        let signature = SECP256K1.sign_ecdsa(&message, &issuer_key);
+
         let voucher = Self {
             redeemer_key,
             metadata,
+            signature,
         };
         (voucher, issuer_key)
     }
 
     pub fn encrypt(&self) -> EncryptedVoucher {
-        let cipher =
-            Aes256Gcm::new_from_slice(&self.redeemer_key.x_only_public_key().0.serialize())
-                .unwrap();
+        let hash = key_to_hash(&self.redeemer_key);
+
+        let cipher = Aes256Gcm::new(&symmetric_key(&self.redeemer_key));
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let metadata = serde_json::to_string(&self.metadata).unwrap();
-        let mut metadata = cipher.encrypt(&nonce, metadata.as_bytes()).unwrap();
-        metadata.extend_from_slice(&nonce);
+        let mut data = cipher.encrypt(&nonce, metadata.as_bytes()).unwrap();
+        data.extend_from_slice(&nonce);
+        data.extend_from_slice(&self.signature.serialize_compact());
 
-        let hash = key_to_hash(&self.redeemer_key);
-        EncryptedVoucher { hash, metadata }
+        EncryptedVoucher { hash, data }
     }
 
-    pub fn decrypt(redeemer_key: PublicKey, metadata: &[u8]) -> Self {
+    pub fn decrypt(redeemer_key: PublicKey, data: &[u8]) -> Self {
         const NONCE_SIZE: usize = <Aes256Gcm as AeadCore>::NonceSize::USIZE;
-        if metadata.len() < NONCE_SIZE {}
+        if data.len() < NONCE_SIZE {}
 
-        let nonce_start = metadata.len() - NONCE_SIZE;
-        let (metadata, nonce) = metadata.split_at(nonce_start);
+        let signature_start = data.len() - 64;
+        let (data, signature) = data.split_at(signature_start);
+
+        let nonce_start = data.len() - NONCE_SIZE;
+        let (metadata, nonce) = data.split_at(nonce_start);
+
         let nonce = Nonce::from_slice(nonce);
         let cipher = Aes256Gcm::new(&symmetric_key(&redeemer_key));
         let metadata = cipher.decrypt(nonce, metadata).unwrap();
         let metadata = String::from_utf8(metadata).unwrap();
         let metadata: VoucherMetadata = serde_json::from_str(&metadata).unwrap();
 
+        let signature = Signature::from_compact(signature).unwrap();
+        // TODO: Verify signature.
+
         Self {
             redeemer_key,
             metadata,
+            signature,
         }
     }
+
+    // TODO: Add methods for redeemer.
 }
 
 fn symmetric_key(key: &PublicKey) -> U32Bytes {
     key.x_only_public_key().0.serialize().into()
-}
-
-fn sha256(data: &[u8]) -> U32Bytes {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    hasher.finalize()
 }
 
 #[cfg(test)]
@@ -113,7 +125,7 @@ mod tests {
         println!("{voucher:?}");
         // Store voucher to the local db.
         let encrypted = voucher.encrypt();
-        println!("{encrypted:?}");
+        println!("{}", encrypted.hash);
         // Register encrypted voucher on the server.
         let lnurl_prefix = "https://zzd.es/lnurl/";
         let lnurl = encode(&voucher, lnurl_prefix);
@@ -121,11 +133,11 @@ mod tests {
         // Send lnurl to the recipient.
 
         // Server.
-        let key = decode(&lnurl);
-        let hash = key_to_hash(&key);
+        let redeemer_key = decode(&lnurl);
+        let hash = key_to_hash(&redeemer_key);
         println!("{hash}");
         // Look up encrypted metadata by hash.
-        let v = Voucher::decrypt(key, &encrypted.metadata);
+        let v = Voucher::decrypt(redeemer_key, &encrypted.data);
         println!("{v:?}");
         let r = to_lnurl_response(&v, lnurl_prefix);
         println!("{r}");

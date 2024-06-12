@@ -23,6 +23,7 @@ pub fn decode(lnurl: &str) -> PublicKey {
 
 pub fn to_lnurl_response(voucher: &Voucher, lnurl_prefix: &str) -> String {
     let m = &voucher.metadata;
+    let signature = data_encoding::HEXLOWER.encode(&voucher.signature.serialize_compact());
     json!({
         "tag": "withdrawRequest",
         "callback": lnurl_prefix,
@@ -30,6 +31,7 @@ pub fn to_lnurl_response(voucher: &Voucher, lnurl_prefix: &str) -> String {
         "minWithdrawable": m.amount_range_sat.0 * 1000,
         "maxWithdrawable": m.amount_range_sat.1 * 1000,
         "defaultDescription": m.description,
+        "signature": signature,
     })
     .to_string()
 }
