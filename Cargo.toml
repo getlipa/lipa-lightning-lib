@@ -86,7 +86,7 @@ lazy_static = "1.4.0"
 
 [build-dependencies]
 camino = "1.1.7"
-uniffi_bindgen = "0.27.0"
+uniffi_bindgen = "0.28.0"
 
 # Use some of the binary size reduction strategies from https://github.com/johnthagen/min-sized-rust
 [profile.release]
