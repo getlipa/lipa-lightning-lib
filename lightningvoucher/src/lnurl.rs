@@ -1,7 +1,7 @@
 use crate::voucher::Voucher;
 
 use secp256k1::PublicKey;
-use serde_json::json;
+use serde_json::Value;
 
 pub fn encode(voucher: &Voucher, lnurl_prefix: &str) -> String {
     let hrp = bech32::Hrp::parse("lnurl").expect("valid hrp");
@@ -21,19 +21,21 @@ pub fn decode(lnurl: &str) -> PublicKey {
     PublicKey::from_slice(&redeemer_key).unwrap()
 }
 
-pub fn to_lnurl_response(voucher: &Voucher, lnurl_prefix: &str) -> String {
-    let m = &voucher.metadata;
+pub fn to_lnurl_response(voucher: &Voucher, lnurl_prefix: String) -> String {
     let signature = data_encoding::HEXLOWER.encode(&voucher.signature.serialize_compact());
-    json!({
-        "tag": "withdrawRequest",
-        "callback": lnurl_prefix,
-        "k1": encode_key(&voucher.redeemer_key),
-        "minWithdrawable": m.amount_range_sat.0 * 1000,
-        "maxWithdrawable": m.amount_range_sat.1 * 1000,
-        "defaultDescription": m.description,
-        "signature": signature,
-    })
-    .to_string()
+    let mut json = serde_json::to_value(&voucher.metadata).unwrap();
+    let map = json.as_object_mut().unwrap();
+    map.insert(
+        "tag".to_string(),
+        Value::String("withdrawRequest".to_string()),
+    );
+    map.insert("callback".to_string(), Value::String(lnurl_prefix));
+    map.insert(
+        "k1".to_string(),
+        Value::String(encode_key(&voucher.redeemer_key)),
+    );
+    map.insert("signature".to_string(), Value::String(signature));
+    json.to_string()
 }
 
 fn encode_key(key: &PublicKey) -> String {

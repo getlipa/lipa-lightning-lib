@@ -6,7 +6,7 @@ use rand::rngs::OsRng;
 use secp256k1::ecdsa::Signature;
 use secp256k1::hashes::{sha256, Hash};
 use secp256k1::{generate_keypair, Message, PublicKey, SecretKey, SECP256K1};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::time::{Duration, SystemTime};
 
 type U32Bytes = generic_array::GenericArray<u8, U32>;
@@ -15,12 +15,71 @@ pub fn key_to_hash(key: &PublicKey) -> String {
     sha256::Hash::hash(&key.serialize()).to_string()
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct VoucherMetadata {
-    pub amount_range_sat: (u32, u32),
+    pub amount_range_sat: (u64, u64),
     pub description: String,
     pub issued_at: SystemTime,
     pub expires_at: SystemTime,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VoucherMetadataJson {
+    min_withdrawable: u64,
+    max_withdrawable: u64,
+    default_description: String,
+    expires_at: u64,
+}
+
+impl From<&VoucherMetadata> for VoucherMetadataJson {
+    fn from(m: &VoucherMetadata) -> Self {
+        let expires_at = m
+            .expires_at
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        Self {
+            min_withdrawable: m.amount_range_sat.0 * 1000,
+            max_withdrawable: m.amount_range_sat.1 * 1000,
+            default_description: m.description.clone(),
+            expires_at,
+        }
+    }
+}
+
+impl From<VoucherMetadataJson> for VoucherMetadata {
+    fn from(v: VoucherMetadataJson) -> Self {
+        let min = v.min_withdrawable / 1000;
+        let max = v.max_withdrawable / 1000;
+        // TODO: Do better.
+        let issued_at = SystemTime::now();
+        let expires_at = SystemTime::now();
+        VoucherMetadata {
+            amount_range_sat: (min, max),
+            description: v.default_description,
+            issued_at,
+            expires_at,
+        }
+    }
+}
+
+impl Serialize for VoucherMetadata {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        VoucherMetadataJson::from(self).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for VoucherMetadata {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        VoucherMetadataJson::deserialize(deserializer).map(VoucherMetadataJson::into)
+    }
 }
 
 #[derive(Debug)]
@@ -38,13 +97,15 @@ pub struct EncryptedVoucher {
 
 impl Voucher {
     pub fn generate(
-        amount_range_sat: (u32, u32),
+        amount_range_sat: (u64, u64),
         description: String,
         expires_in: Duration,
     ) -> (Self, SecretKey) {
         let (issuer_key, redeemer_key) = generate_keypair(&mut rand::thread_rng());
 
-        if amount_range_sat.0 > amount_range_sat.1 {}
+        if amount_range_sat.0 > amount_range_sat.1 {
+            panic!("min should be less or equal than max");
+        }
         let issued_at = SystemTime::now();
         let metadata = VoucherMetadata {
             amount_range_sat,
@@ -81,7 +142,9 @@ impl Voucher {
 
     pub fn decrypt(redeemer_key: PublicKey, data: &[u8]) -> Self {
         const NONCE_SIZE: usize = <Aes256Gcm as AeadCore>::NonceSize::USIZE;
-        if data.len() < NONCE_SIZE {}
+        if data.len() < NONCE_SIZE {
+            panic!("data is too short");
+        }
 
         let signature_start = data.len() - 64;
         let (data, signature) = data.split_at(signature_start);
@@ -109,6 +172,7 @@ impl Voucher {
 }
 
 fn symmetric_key(key: &PublicKey) -> U32Bytes {
+    // TODO: Hash with something to get "random" bytes.
     key.x_only_public_key().0.serialize().into()
 }
 
@@ -139,7 +203,7 @@ mod tests {
         // Look up encrypted metadata by hash.
         let v = Voucher::decrypt(redeemer_key, &encrypted.data);
         println!("{v:?}");
-        let r = to_lnurl_response(&v, lnurl_prefix);
+        let r = to_lnurl_response(&v, lnurl_prefix.to_string());
         println!("{r}");
     }
 }
