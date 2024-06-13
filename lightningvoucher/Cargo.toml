@@ -8,6 +8,7 @@ aes-gcm = { version = "0.10", features = ["rand_core"] }
 bech32 = "0.11"
 cipher = "0.4"
 data-encoding = "2"
+ecies = "0.2.7"
 generic-array = "0.14"
 rand = "0.8"
 secp256k1 = { version = "0.27", features = ["rand", "global-context", "bitcoin-hashes"] }

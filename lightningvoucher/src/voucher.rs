@@ -15,7 +15,7 @@ pub fn key_to_hash(key: &PublicKey) -> String {
     sha256::Hash::hash(&key.serialize()).to_string()
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VoucherMetadata {
     pub amount_range_sat: (u64, u64),
     pub description: String,
@@ -171,7 +171,28 @@ impl Voucher {
         }
     }
 
-    // TODO: Add methods for redeemer.
+    pub fn verify(redeemer_key: PublicKey, metadata: VoucherMetadata, signature: &str) -> Self {
+        let signature = data_encoding::HEXLOWER
+            .decode(signature.as_bytes())
+            .unwrap();
+        let signature = Signature::from_compact(&signature).unwrap();
+        // TODO: Verify signature.
+        Self {
+            redeemer_key,
+            metadata,
+            signature,
+        }
+    }
+
+    pub fn encrypt_invoice(&self, invoice: &str) -> String {
+        // TODO: Encrypt.
+        invoice.to_string()
+    }
+
+    pub fn redeem(&self, _invoice: &str) {
+        // TODO: Decode invoice.
+        // TODO: Check amount.
+    }
 }
 
 fn symmetric_key(key: &PublicKey) -> U32Bytes {
@@ -207,6 +228,12 @@ mod tests {
         let voucher = Voucher::decrypt(redeemer_key, &encrypted.data);
         println!("Voucher: {voucher:?}");
         let response = to_lnurl_response(&voucher, lnurl_prefix.to_string());
-        println!("Response: {response}");
+        println!("Json_response: {response}");
+
+        // Redeemer.
+        let response: Response = serde_json::from_str(&response).unwrap();
+        println!("Response: {response:?}");
+        let voucher = Voucher::verify(redeemer_key, response.metadata, &response.signature);
+        println!("Voucher: {voucher:?}");
     }
 }
