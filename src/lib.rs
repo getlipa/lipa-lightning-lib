@@ -963,7 +963,7 @@ impl LightningNode {
             .block_on(self.sdk.lnurl_withdraw(LnUrlWithdrawRequest {
                 data: lnurl_withdraw_request_data,
                 amount_msat: amount_sat.as_sats().msats,
-                description: Some("LNURL Withdrawal".into()),
+                description: None,
             }))
             .map_err(map_lnurl_withdraw_error)?
         {
