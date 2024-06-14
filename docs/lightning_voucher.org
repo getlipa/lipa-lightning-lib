@@ -20,7 +20,7 @@ You get a notification on your phone that the voucher was redeemed.
   And of course, River is a custodial service.
 - https://tipcards.io allows issuing similar vouchers, but it is also a custodial service.
   Additionally, if no one redeems your voucher, you have to track it yourself.
-- A ecash based solution, but it will required ecash (non lightning-native).
+- Ecash based solutions, but it will required ecash (not lightning-native).
 
 * Lightning Voucher
 I propose a *non-custodial* trust-minimized scheme which can be implemented today.
@@ -29,28 +29,29 @@ Vouchers are issued by lipa wallet users and registered on the lipa server.
 A voucher would look like =https://lipa.swiss/w?lightning=lnurl12344...=.
 When someone tries to redeem such a voucher, the lipa server sends a notification to the user's phone.
 The user's wallet then checks the voucher and sends satoshis to the redeemer.
+** TODO Update the steps
 ** 🪜 Steps
-1. the issuer issues a voucher by generating a =preimage= and hashing it to =hash=
-2. the issuer registers the voucher on the lipa server by =hash=
-3. the issuer sends the voucher with =preimage= to the recipient (redeemer) off-band
-4. the redeemer requests the lipa server with the =preimage= to resolve the voucher
-5. the lipa server computes =hash=, finds voucher details, and returns them to the redeemer
-6. the redeemer issues an invoice, sends to the lipa server
-7. the lipa server forwards the voucher and the invoice to the issuer (by sending a notification)
-8. the issuer checks that the voucher was indeed issued by him and was not redeemed yet
-9. the issuer pays the invoice
-*** Passcode (Sealing)
+1. the issuer generates a voucher as a pair of private/public keys: =issuer_key=, =redeemer_key=
+2. the issuer encrypts the voucher metadata with =redeemer_key= (using symmetric cryptography)
+3. the issuer registers the encrypted voucher on the lipa server by =hash= (as a hash of =redeemer_key=)
+4. the issuer sends the voucher with =redeemer_key= to the recipient (redeemer) off-band
+5. the redeemer requests the lipa server with the =redeemer_key= to resolve the voucher
+6. the lipa server computes =hash=, finds voucher metadata, decrypts it, and returns it to the redeemer
+7. the redeemer issues an *invoice*, (optinally encrypts it with =redeemer_key= for =issuer_key=), sends to the lipa server
+8. the lipa server forwards the voucher and the *invoice* to the issuer (by sending a notification)
+9. the issuer (decrypts the *invoice*), checks that the voucher was indeed issued by him and was not redeemed yet
+10. the issuer pays the *invoice*
+*** Passcode
 A =passcode= is a secret piece of information sent along with the voucher to the redeemer.
-The redeemer *seals* their invoice (and the voucher) with the =passcode= and
-sends the invoice and the =seal= to the lipa server (without revealing the =passcode= itself).
-The issuer then verifies the =seal=.
-The lipa server cannot reuse the seal for another invoice because the seal is /bound/ to the invoice.
+The redeemer *encypts* their invoice with the =passcode= (as =encrypt(passcode + invoice)=)
+and sends it to the lipa server (without revealing the =passcode= itself).
+The issuer then decrypts the encrypted invoice.
 ** 🔐 Security Model
 The scheme is *non-custodial*; no one holds custody of the funds.\\
 The web server can manipulate some metadata about vouchers,
 such as the amount range, as long as it stays within the valid range
 (otherwise, the issuer validation will fail).
-(This might be mitigated by including the metadata in the =hash=.)
+Such a manipulation can be detected by the redeemer by checking the =signature=.
 *** Without Passcode
 The web server *can steal funds* by replacing the invoice sent by the redeemer
 (similar to the Lightning Address problem). Malicious intent is required for this to happen.
@@ -58,10 +59,13 @@ The risk is somewhat minimized by limiting the timeframe when such an attack is 
 to the moment of voucher resolution (step 4).
 Therefore, if a voucher is never redeemed, it cannot be stolen.
 *** With Passcode
-The scheme is almost *trustless*: the web server can only deny voucher registration or redemption.
+The scheme is almost *trustless* (/even with a weak passcode!/):
+the web server can only deny voucher registration or redemption.
 ** 🙈 Privacy
 - redeemer of a voucher does not learn anything about the issuer
-- web server knows issuer of a voucher, number of vouchers, associated amounts, all timing, redeemer of vouchers on redemption
+- web server knows issuer of a voucher, number of vouchers
+- on redemption web server learns associated amounts, redeemer of *only* the voucher vouchers
+  (not invoice if the redeemer encrypts it)
 ** 🚧 Limitations
 - redemption fails if the issuer is offline
 - vouchers are single-use only
@@ -77,63 +81,72 @@ The scheme is almost *trustless*: the web server can only deny voucher registrat
 - a voucher can have an amount range (a form of tipping)
 - a voucher can be safely retried to be redeemed if the previous attempt failed
 - safe to post online or offline in a public space
+- transparent encryption upgrade (if the redeemer is capable)
 ** 💼 Usecases
 - send bitcoin as /a kind of/ a bearer asset (the example from the story)
 - a gift
-- print on phisical vochers as promotion
+- print on phisical vochers for promotion
 ** 👍 Benefits
 - during voucher resolution, we can promote lipa wallet (since it is a web page)
+  (also stating that it is more private and secure to redeem the voucher with lipa wallet)
+- plays nicely with *send to phone number feature*
+- surpasses *referral program*
 - lightning-native no need for ecash
 
 * Sequence Diagram
+#+ATTR_HTML: :alt Sequence diagram
 [[./diagram.png]]
 #+begin_src plantuml
 @startuml
 actor Issuer as issuer
 participant "Lipa Web Server" as server
-actor Recipient as recipient
+actor Redeemer as redeemer
 
 == Voucher issuance ==
 
 activate issuer
-issuer -> issuer: generate **preimage** and **hash** it
-issuer -> server: **hash**, amount_range, expiration_date
+issuer -> issuer: generate secret **issuer_key**,\ncompute public key **redeemer_key**
+issuer -> issuer: sign voucher with **issuer_key** to **signature**
+issuer -> issuer: encrypt voucher data with **redeemer_key** to **data**\n(as with a symmetric key)
+issuer -> issuer: compute **hash** of **redeemer_key**
+issuer -> server ++: **hash**, **data**
+return **lnurl_prefix**
 
-issuer --> recipient: server URL with **preimage**\ni.e. https://lipa.swiss/w?lightning=<preimage>
+issuer --> redeemer: server URL with **redeemer_key**\ni.e. https://lipa.swiss/w?lightning=<redeemer_key>
 
 opt With passcode
-	issuer -> issuer: generate **passcode** and associate with **hash**
-	issuer --> recipient: **passcode**
+    issuer -> issuer: generate **passcode** and associate with **redeemer_key**
+    issuer --> redeemer: **passcode**
 end
 deactivate issuer	
 
 == Voucher redemption ==
 
-recipient -> server ++: resolve URL with **preimage**
-activate recipient
-server -> server: hash **preimage**, find voucher
-return amount_range, expiration_date
-	
-recipient -> recipient: issue **invoice**
-opt With passcode
-	recipient -> recipient: seal **invoice** with **passcode**\nas **seal** = hash(**passcode** + **invoice** + **preimage**)
+redeemer -> server ++: resolve URL with **redeemer_key**
+activate redeemer
+server -> server: hash **redeemer_key**, find voucher
+server -> server: decrypt **data** with **redeemer_key**, check **signature**
+return amount_range, expiration_date, **signature**
+
+redeemer -> redeemer: check **signature**
+redeemer -> redeemer: issue **invoice**
+opt Encryption-aware redeemer
+    alt Without passcode
+        redeemer -> redeemer: encrypt **invoice**\nwith **redeemer_key** for **issuer_key**
+    else With passcode
+        redeemer -> redeemer: encrypt (**passcode** + **invoice**)\nwith **redeemer_key** for **issuer_key**
+    end
 end
 
-recipient -> server ++: **preimage**, **invoice**\n(**seal** if with passcode)
-server -> issuer ++: **preimage**, **invoice**\n(**seal** if with passcode)
-issuer -> issuer: find local voucher by **preimage**,\nvalidate that **invoice** matches
-opt With passcode
-	issuer -> issuer: validate **seal**\nhash(**passcode** + **invoice** + **preimage**) == **seal**
-end
+redeemer -> server ++: **redeemer_key**, **invoice**
+server -> issuer ++: **redeemer_key**, **invoice**
+issuer -> issuer: find local voucher by **redeemer_key**
+issuer -> issuer: decrypt and validate **invoice**
 issuer -> server: ok
-server -> recipient --: ok				
-deactivate recipient
-issuer --> recipient --: pay **invoice**
+server -> redeemer --: ok				
+deactivate redeemer
+
+issuer --> redeemer --: pay **invoice**
 @enduml
 #+end_src
-
-* 💡 Further Ideas
-- use base64 for preimage to make the resulting URL shorter
-- encrypt voucher metadata (amount range, expiration date, description) with preimage
-  to minimize data on the web server
 
