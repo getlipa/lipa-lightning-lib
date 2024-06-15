@@ -130,7 +130,7 @@ impl Voucher {
     pub fn encrypt(&self) -> EncryptedVoucher {
         let hash = key_to_hash(&self.redeemer_key);
 
-        let cipher = Aes256Gcm::new(&symmetric_key(&self.redeemer_key));
+        let cipher = Aes256Gcm::new(&derive_symmetric_key(&self.redeemer_key));
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let metadata = serde_json::to_string(&self.metadata).unwrap();
         let mut data = cipher.encrypt(&nonce, metadata.as_bytes()).unwrap();
@@ -155,7 +155,7 @@ impl Voucher {
         let (metadata, nonce) = data.split_at(nonce_start);
 
         let nonce = Nonce::from_slice(nonce);
-        let cipher = Aes256Gcm::new(&symmetric_key(&redeemer_key));
+        let cipher = Aes256Gcm::new(&derive_symmetric_key(&redeemer_key));
         let metadata_json = cipher.decrypt(nonce, metadata).unwrap();
         let message = Message::from_hashed_data::<secp256k1::hashes::sha256::Hash>(&metadata_json);
         SECP256K1
@@ -177,6 +177,7 @@ impl Voucher {
             .unwrap();
         let signature = Signature::from_compact(&signature).unwrap();
         // TODO: Verify signature.
+        // TODO: Check expiration date.
         Self {
             redeemer_key,
             metadata,
@@ -184,18 +185,31 @@ impl Voucher {
         }
     }
 
-    pub fn encrypt_invoice(&self, invoice: &str) -> String {
-        // TODO: Encrypt.
-        invoice.to_string()
+    pub fn encrypt_invoice(&self, invoice: &str) -> Vec<u8> {
+        let pubkey = self.redeemer_key.serialize_uncompressed();
+        ecies::encrypt(&pubkey, invoice.as_bytes()).unwrap()
     }
 
-    pub fn redeem(&self, _invoice: &str) {
-        // TODO: Decode invoice.
+    #[cfg(feature = "breez")]
+    pub fn redeem(&self, issuer_key: &SecretKey, invoice: &[u8]) -> breez_sdk_core::LNInvoice {
+        let invoice = if !invoice.starts_with(b"lnbc1") {
+            let secret_key = issuer_key.secret_bytes();
+            ecies::decrypt(&secret_key, invoice).unwrap()
+        } else {
+            invoice.to_vec()
+        };
+        let invoice = std::str::from_utf8(&invoice).unwrap();
+        let invoice = breez_sdk_core::parse_invoice(invoice).unwrap();
         // TODO: Check amount.
+        if invoice.amount_msat.unwrap_or_default() < self.metadata.amount_range_sat.0 {
+            println!("Invoice amount is below the voucher mim amount");
+        }
+        // TODO: Check expiration date.
+        invoice
     }
 }
 
-fn symmetric_key(key: &PublicKey) -> U32Bytes {
+fn derive_symmetric_key(key: &PublicKey) -> U32Bytes {
     // TODO: Hash with something to get "random" bytes.
     key.x_only_public_key().0.serialize().into()
 }
@@ -208,7 +222,7 @@ mod tests {
     #[test]
     fn it_works() {
         // Client.
-        let (voucher, _issuer_key) =
+        let (voucher, issuer_key) =
             Voucher::generate((10, 12), "Descr".to_string(), Duration::from_secs(60));
         println!("Voucher: {voucher:?}");
         // Store voucher and issuer_key to the local db.
@@ -235,5 +249,15 @@ mod tests {
         println!("Response: {response:?}");
         let voucher = Voucher::verify(redeemer_key, response.metadata, &response.signature);
         println!("Voucher: {voucher:?}");
+        let invoice = "lnbc120n1pjcxr98dp923jhxarfdenjqur9dejxjmn8ypcxz7tdv4h8gpp5p0547ufczxajsnzwylyw082p2mz6cwswmr0z0uyhmgpfn06gc7tqxqrrsssp546n87knlt8hedp9cp30rkgtcduw2hrr00ex62msawwzfqszh0k7s9qrsgqcqzysrzjqfj2v2jrqltsrsz2g6v5ee04xga3eg5vsrrxku7xx8dukzvs6m5r2avk07w5uftf4sqqqqlgqqqqqzsqygs6sp6j4mwstpvjd648cmtndazpnfvhnsh9ff8frgrkmx3jarm0vxyqf822a2d9sefxzyqwlm5epvtcyj5rjpu09lsy4jffu7t0a7xxgqpzsw6v";
+        let encrypted_invoice = voucher.encrypt_invoice(invoice);
+        println!(
+            "EncryptedInvoice: {}",
+            data_encoding::HEXLOWER.encode(&encrypted_invoice)
+        );
+
+        // Issuer.
+        let invoice = voucher.redeem(&issuer_key, &encrypted_invoice);
+        println!("Invoice: {}", invoice.bolt11);
     }
 }
