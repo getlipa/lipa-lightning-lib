@@ -1,19 +1,13 @@
+use crate::key::RedeemerKey;
+
 use aes_gcm::aead::Aead;
-use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, Nonce};
-use cipher::consts::U32;
+use aes_gcm::{AeadCore, Aes256Gcm, Nonce};
 use cipher::Unsigned;
 use rand::rngs::OsRng;
 use secp256k1::ecdsa::Signature;
-use secp256k1::hashes::{sha256, Hash};
-use secp256k1::{generate_keypair, Message, PublicKey, SecretKey, SECP256K1};
+use secp256k1::{generate_keypair, Message, SecretKey, SECP256K1};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::time::{Duration, SystemTime};
-
-type U32Bytes = generic_array::GenericArray<u8, U32>;
-
-pub fn key_to_hash(key: &PublicKey) -> String {
-    sha256::Hash::hash(&key.serialize()).to_string()
-}
 
 #[derive(Debug, Clone)]
 pub struct VoucherMetadata {
@@ -84,7 +78,7 @@ impl<'de> Deserialize<'de> for VoucherMetadata {
 
 #[derive(Debug)]
 pub struct Voucher {
-    pub redeemer_key: PublicKey,
+    pub redeemer_key: RedeemerKey,
     pub metadata: VoucherMetadata,
     pub signature: Signature,
 }
@@ -102,6 +96,7 @@ impl Voucher {
         expires_in: Duration,
     ) -> (Self, SecretKey) {
         let (issuer_key, redeemer_key) = generate_keypair(&mut rand::thread_rng());
+        let redeemer_key = RedeemerKey::new(redeemer_key);
 
         if amount_range_sat.0 > amount_range_sat.1 {
             panic!("min should be less or equal than max");
@@ -128,9 +123,9 @@ impl Voucher {
     }
 
     pub fn encrypt(&self) -> EncryptedVoucher {
-        let hash = key_to_hash(&self.redeemer_key);
+        let hash = self.redeemer_key.hash();
 
-        let cipher = Aes256Gcm::new(&derive_symmetric_key(&self.redeemer_key));
+        let cipher = self.redeemer_key.derive_symmetric_key();
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let metadata = serde_json::to_string(&self.metadata).unwrap();
         let mut data = cipher.encrypt(&nonce, metadata.as_bytes()).unwrap();
@@ -140,7 +135,7 @@ impl Voucher {
         EncryptedVoucher { hash, data }
     }
 
-    pub fn decrypt(redeemer_key: PublicKey, data: &[u8]) -> Self {
+    pub fn decrypt(redeemer_key: RedeemerKey, data: &[u8]) -> Self {
         const NONCE_SIZE: usize = <Aes256Gcm as AeadCore>::NonceSize::USIZE;
         const SIGNATURE_SIZE: usize = 64;
         if data.len() < NONCE_SIZE + SIGNATURE_SIZE {
@@ -155,11 +150,11 @@ impl Voucher {
         let (metadata, nonce) = data.split_at(nonce_start);
 
         let nonce = Nonce::from_slice(nonce);
-        let cipher = Aes256Gcm::new(&derive_symmetric_key(&redeemer_key));
+        let cipher = redeemer_key.derive_symmetric_key();
         let metadata_json = cipher.decrypt(nonce, metadata).unwrap();
         let message = Message::from_hashed_data::<secp256k1::hashes::sha256::Hash>(&metadata_json);
         SECP256K1
-            .verify_ecdsa(&message, &signature, &redeemer_key)
+            .verify_ecdsa(&message, &signature, &redeemer_key.key)
             .unwrap();
 
         let metadata: VoucherMetadata = serde_json::from_slice(&metadata_json).unwrap();
@@ -171,7 +166,7 @@ impl Voucher {
         }
     }
 
-    pub fn verify(redeemer_key: PublicKey, metadata: VoucherMetadata, signature: &str) -> Self {
+    pub fn verify(redeemer_key: RedeemerKey, metadata: VoucherMetadata, signature: &str) -> Self {
         let signature = data_encoding::HEXLOWER
             .decode(signature.as_bytes())
             .unwrap();
@@ -186,7 +181,7 @@ impl Voucher {
     }
 
     pub fn encrypt_invoice(&self, invoice: &str) -> Vec<u8> {
-        let pubkey = self.redeemer_key.serialize_uncompressed();
+        let pubkey = self.redeemer_key.key.serialize_uncompressed();
         ecies::encrypt(&pubkey, invoice.as_bytes()).unwrap()
     }
 
@@ -209,11 +204,6 @@ impl Voucher {
     }
 }
 
-fn derive_symmetric_key(key: &PublicKey) -> U32Bytes {
-    // TODO: Hash with something to get "random" bytes.
-    key.x_only_public_key().0.serialize().into()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,7 +211,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        // Client.
+        // Issuer.
         let (voucher, issuer_key) =
             Voucher::generate((10, 12), "Descr".to_string(), Duration::from_secs(60));
         println!("Voucher: {voucher:?}");
@@ -230,13 +220,13 @@ mod tests {
         println!("Hash: {}", encrypted.hash);
         // Register encrypted voucher on the server.
         let lnurl_prefix = "https://zzd.es/lnurl/";
-        let lnurl = encode(&voucher, lnurl_prefix);
+        let lnurl = encode(&voucher.redeemer_key, lnurl_prefix);
         println!("LNURL: {lnurl}");
         // Send lnurl to the recipient.
 
         // Server.
         let redeemer_key = decode(&lnurl);
-        let hash = key_to_hash(&redeemer_key);
+        let hash = redeemer_key.hash();
         println!("Hash: {hash}");
         // Look up encrypted data by hash.
         let voucher = Voucher::decrypt(redeemer_key, &encrypted.data);
@@ -245,6 +235,7 @@ mod tests {
         println!("Json_response: {response}");
 
         // Redeemer.
+        let redeemer_key = decode(&lnurl);
         let response: Response = serde_json::from_str(&response).unwrap();
         println!("Response: {response:?}");
         let voucher = Voucher::verify(redeemer_key, response.metadata, &response.signature);
