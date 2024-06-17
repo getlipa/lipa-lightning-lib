@@ -62,9 +62,9 @@ use crate::errors::{
 };
 pub use crate::errors::{
     DecodeDataError, Error as LnError, LnUrlPayError, LnUrlPayErrorCode, LnUrlPayResult,
-    MnemonicError, NotificationHandlingError, NotificationHandlingErrorCode, ParsePhoneNumberError,
-    ParsePhoneNumberPrefixError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode,
-    SimpleError, UnsupportedDataType,
+    MnemonicError, NotificationHandlingError, NotificationHandlingErrorCode, ParseError,
+    ParsePhoneNumberError, ParsePhoneNumberPrefixError, PayError, PayErrorCode, PayResult, Result,
+    RuntimeErrorCode, SimpleError, UnsupportedDataType,
 };
 use crate::event::LipaEventListener;
 pub use crate::exchange_rate_provider::ExchangeRate;
@@ -102,10 +102,11 @@ use breez_sdk_core::{
     ConnectRequest, EventListener, GreenlightCredentials, GreenlightNodeConfig, InputType,
     ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
     LnUrlWithdrawRequestData, Network, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
-    PaymentDetails, PaymentStatus, PaymentTypeFilter, PrepareRedeemOnchainFundsRequest,
+    PayOnchainRequest, PaymentDetails, PaymentStatus, PaymentTypeFilter,
+    PrepareOnchainPaymentRequest, PrepareOnchainPaymentResponse, PrepareRedeemOnchainFundsRequest,
     PrepareRefundRequest, ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
-    ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest,
-    SendPaymentRequest, SignMessageRequest, UnspentTransactionOutput,
+    ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendPaymentRequest,
+    SignMessageRequest, UnspentTransactionOutput,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -136,6 +137,16 @@ const LOGS_DIR: &str = "logs";
 const CLN_DUST_LIMIT_SAT: u64 = 546;
 
 pub(crate) const DB_FILENAME: &str = "db2.db3";
+
+/// Represent the result of comparision of a value with a given range.
+pub enum RangeHit {
+    /// The value is below the left side of the range.
+    Below { min: Amount },
+    /// The value is whithin the range.
+    In,
+    /// The value is above the right side of the range.
+    Above { max: Amount },
+}
 
 /// The fee charged by the Lightning Service Provider (LSP) for opening a channel with the node.
 /// This fee is being charged at the time of the channel creation.
@@ -249,8 +260,7 @@ pub struct ClearWalletInfo {
     pub onchain_fee: Amount,
     /// Estimate for the fee paid to the swap service.
     pub swap_fee: Amount,
-    /// Hash that shouldn't be altered.
-    pub fees_hash: String,
+    prepare_response: PrepareOnchainPaymentResponse,
 }
 
 const MAX_FEE_PERMYRIAD: u16 = 150;
@@ -2344,23 +2354,11 @@ impl LightningNode {
 
     /// Check if clearing the wallet is feasible.
     ///
-    /// If not feasible, it means the balance is either too high or too low for a reverse-swap to
-    /// be used.
+    /// Meaning that the balance is within the range of what can be reverse-swapped.
     ///
     /// Requires network: **yes**
-    pub fn is_clear_wallet_feasible(&self) -> Result<bool> {
-        #[allow(deprecated)]
-        let amount_sat = self
-            .rt
-            .handle()
-            .block_on(self.sdk.max_reverse_swap_amount())
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to get max reverse swap amount",
-            )?
-            .total_sat;
-
-        let reverse_swap_info = self
+    pub fn check_clear_wallet_feasibility(&self) -> Result<RangeHit> {
+        let limits = self
             .rt
             .handle()
             .block_on(
@@ -2371,59 +2369,78 @@ impl LightningNode {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to fetch reverse swap fees",
             )?;
-
-        Ok(amount_sat >= reverse_swap_info.min && amount_sat <= reverse_swap_info.max)
+        let balance_sat = self
+            .sdk
+            .node_info()
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to read node info",
+            )?
+            .channels_balance_msat
+            .as_msats()
+            .sats_round_down();
+        let exchange_rate = self.get_exchange_rate();
+        let range_hit = match balance_sat {
+            balance_sat if balance_sat < limits.min => RangeHit::Below {
+                min: limits.min.as_sats().to_amount_up(&exchange_rate),
+            },
+            balance_sat if balance_sat <= limits.max => RangeHit::In,
+            balance_sat if limits.max < balance_sat => RangeHit::Above {
+                max: limits.max.as_sats().to_amount_down(&exchange_rate),
+            },
+            _ => permanent_failure!("Unreachable code in check_clear_wallet_feasibility()"),
+        };
+        Ok(range_hit)
     }
 
     /// Prepares a reverse swap that sends all funds in LN channels. This is possible because the
     /// route to the swap service is known, so fees can be known in advance.
     ///
-    /// The return includes fee estimates and must be provided to [`LightningNode::clear_wallet`] in
-    /// order to execute the clear operation.
-    ///
     /// This can fail if the balance is either too low or too high for it to be reverse-swapped.
-    /// The method [`LightningNode::is_clear_wallet_feasible`] can be used to check if the balance
+    /// The method [`LightningNode::check_clear_wallet_feasibility`] can be used to check if the balance
     /// is within the required range.
     ///
     /// Requires network: **yes**
     pub fn prepare_clear_wallet(&self) -> Result<ClearWalletInfo> {
-        #[allow(deprecated)]
-        let amount_sat = self
+        let claim_tx_feerate = self.query_onchain_fee_rate()?;
+        let limits = self
             .rt
             .handle()
-            .block_on(self.sdk.max_reverse_swap_amount())
+            .block_on(self.sdk.onchain_payment_limits())
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
-                "Failed to get max reverse swap amount",
-            )?
-            .total_sat;
-
-        let reverse_swap_info = self
+                "Failed to get on-chain payment limits",
+            )?;
+        let prepare_response = self
             .rt
             .handle()
-            .block_on(self.sdk.fetch_reverse_swap_fees(ReverseSwapFeesRequest {
-                send_amount_sat: Some(amount_sat),
-                claim_tx_feerate: None,
-            }))
+            .block_on(
+                self.sdk
+                    .prepare_onchain_payment(PrepareOnchainPaymentRequest {
+                        amount_sat: limits.max_sat,
+                        amount_type: breez_sdk_core::SwapAmountType::Send,
+                        claim_tx_feerate,
+                    }),
+            )
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
-                "Failed to fetch reverse swap fees",
+                "Failed to prepare on-chain payment",
             )?;
 
-        let total_fees_sat = reverse_swap_info.total_fees.ok_or_permanent_failure(
-            "No total reverse swap fee estimation provided when amount was present",
-        )?;
-        let onchain_fee_sat = reverse_swap_info.fees_claim + reverse_swap_info.fees_lockup;
-        let swap_fee_sat =
-            ((amount_sat as f64) * reverse_swap_info.fees_percentage / 100_f64) as u64;
+        let total_fees_sat = prepare_response.total_fees;
+        let onchain_fee_sat = prepare_response.fees_claim + prepare_response.fees_lockup;
+        let swap_fee_sat = total_fees_sat - onchain_fee_sat;
         let exchange_rate = self.get_exchange_rate();
 
         Ok(ClearWalletInfo {
-            clear_amount: amount_sat.as_sats().to_amount_up(&exchange_rate),
+            clear_amount: prepare_response
+                .sender_amount_sat
+                .as_sats()
+                .to_amount_up(&exchange_rate),
             total_estimated_fees: total_fees_sat.as_sats().to_amount_up(&exchange_rate),
             onchain_fee: onchain_fee_sat.as_sats().to_amount_up(&exchange_rate),
             swap_fee: swap_fee_sat.as_sats().to_amount_up(&exchange_rate),
-            fees_hash: reverse_swap_info.fees_hash,
+            prepare_response,
         })
     }
 
@@ -2441,14 +2458,11 @@ impl LightningNode {
         clear_wallet_info: ClearWalletInfo,
         destination_onchain_address_data: BitcoinAddressData,
     ) -> Result<()> {
-        #[allow(deprecated)]
         self.rt
             .handle()
-            .block_on(self.sdk.send_onchain(SendOnchainRequest {
-                amount_sat: clear_wallet_info.clear_amount.sats,
-                onchain_recipient_address: destination_onchain_address_data.address,
-                pair_hash: clear_wallet_info.fees_hash,
-                sat_per_vbyte: self.query_onchain_fee_rate()?,
+            .block_on(self.sdk.pay_onchain(PayOnchainRequest {
+                recipient_address: destination_onchain_address_data.address,
+                prepare_res: clear_wallet_info.prepare_response,
             }))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
@@ -2673,32 +2687,6 @@ pub fn accept_terms_and_conditions(
     let auth = build_auth(&seed, &environment.backend_url)?;
     auth.accept_terms_and_conditions(TermsAndConditions::Lipa, version)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
-}
-
-/// Enum representing possible errors why parsing could fail.
-#[derive(Debug, thiserror::Error)]
-pub enum ParseError {
-    /// Parsing failed because parsed string was not complete.
-    /// Additional characters are needed to make the string valid.
-    /// It makes parsed string a valid prefix of a valid string.
-    #[error("Incomplete")]
-    Incomplete,
-
-    /// Parsing failed because an unexpected character at position `at` was met.
-    /// The character **has to be removed**.
-    #[error("InvalidCharacter at {at}")]
-    InvalidCharacter { at: u32 },
-}
-
-impl From<parser::ParseError> for ParseError {
-    fn from(error: parser::ParseError) -> Self {
-        match error {
-            parser::ParseError::Incomplete => ParseError::Incomplete,
-            parser::ParseError::UnexpectedCharacter(at) | parser::ParseError::ExcessSuffix(at) => {
-                ParseError::InvalidCharacter { at: at as u32 }
-            }
-        }
-    }
 }
 
 /// Try to parse the provided string as a lightning address, return [`ParseError`]
