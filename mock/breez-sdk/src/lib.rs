@@ -32,7 +32,7 @@ const OPENING_FEE_PARAMS_PROMISE: &str = "promite";
 
 const SWAP_MIN_AMOUNT_SAT: u64 = 1_000;
 const SWAP_MAX_AMOUNT_SAT: u64 = 1_000_000;
-const SWAP_FEE_SAT: u64 = 1_500;
+const SWAPPER_ROUTING_FEE_SAT: u64 = 150;
 const SWAP_TX_WEIGHT: u64 = 800;
 const SAT_PER_VBYTE: u64 = 12;
 const SWAP_FEE_PERCENTAGE: f64 = 0.5;
@@ -53,19 +53,20 @@ pub use breez_sdk_core::{
     InputType, InvoicePaidDetails, LNInvoice, ListPaymentsRequest, LnPaymentDetails,
     LnUrlPayRequest, LnUrlPayRequestData, LnUrlPayResult, LnUrlWithdrawRequest,
     LnUrlWithdrawRequestData, LnUrlWithdrawResult, MetadataItem, Network, NodeConfig,
-    OpenChannelFeeRequest, OpeningFeeParams, OpeningFeeParamsMenu, Payment, PaymentDetails,
-    PaymentFailedData, PaymentStatus, PaymentType, PaymentTypeFilter,
+    OnchainPaymentLimitsResponse, OpenChannelFeeRequest, OpeningFeeParams, OpeningFeeParamsMenu,
+    PayOnchainRequest, Payment, PaymentDetails, PaymentFailedData, PaymentStatus, PaymentType,
+    PaymentTypeFilter, PrepareOnchainPaymentRequest, PrepareOnchainPaymentResponse,
     PrepareRedeemOnchainFundsRequest, PrepareRefundRequest, ReceiveOnchainRequest,
     ReceivePaymentRequest, ReceivePaymentResponse, RedeemOnchainFundsRequest, RefundRequest,
     ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest,
-    SendPaymentRequest, SignMessageRequest, SwapStatus, UnspentTransactionOutput,
+    SendPaymentRequest, SignMessageRequest, SwapAmountType, SwapStatus, UnspentTransactionOutput,
 };
 use breez_sdk_core::{
-    ChannelState, Config, LspInformation, MaxReverseSwapAmountResponse, NodeState,
-    OpenChannelFeeResponse, PrepareRedeemOnchainFundsResponse, PrepareRefundResponse,
-    RecommendedFees, RedeemOnchainFundsResponse, RefundResponse, ReverseSwapInfo,
-    ReverseSwapPairInfo, ReverseSwapStatus, SendOnchainResponse, SendPaymentResponse,
-    ServiceHealthCheckResponse, SignMessageResponse, SwapInfo,
+    ChannelState, Config, LspInformation, NodeState, OpenChannelFeeResponse, PayOnchainResponse,
+    PrepareRedeemOnchainFundsResponse, PrepareRefundResponse, RecommendedFees,
+    RedeemOnchainFundsResponse, RefundResponse, ReverseSwapInfo, ReverseSwapPairInfo,
+    ReverseSwapStatus, SendPaymentResponse, ServiceHealthCheckResponse, SignMessageResponse,
+    SwapInfo,
 };
 use chrono::Utc;
 use hex::FromHex;
@@ -820,22 +821,45 @@ impl BreezServices {
         })
     }
 
-    pub async fn max_reverse_swap_amount(&self) -> SdkResult<MaxReverseSwapAmountResponse> {
+    pub async fn onchain_payment_limits(&self) -> SdkResult<OnchainPaymentLimitsResponse> {
         let balance_sat = get_balance_msat() / 1000;
-        let total_sat = if balance_sat > SWAP_FEE_SAT {
-            balance_sat - SWAP_FEE_SAT
+        let (min_sat, max_sat) = if balance_sat > SWAPPER_ROUTING_FEE_SAT {
+            (
+                SWAPPER_ROUTING_FEE_SAT,
+                balance_sat - SWAPPER_ROUTING_FEE_SAT,
+            )
         } else {
-            0
+            (0, 0)
         };
-
-        Ok(MaxReverseSwapAmountResponse { total_sat })
+        Ok(OnchainPaymentLimitsResponse { min_sat, max_sat })
     }
 
-    pub async fn send_onchain(
+    pub async fn prepare_onchain_payment(
         &self,
-        req: SendOnchainRequest,
-    ) -> Result<SendOnchainResponse, SendOnchainError> {
-        if req.amount_sat < SWAP_MIN_AMOUNT_SAT {
+        req: PrepareOnchainPaymentRequest,
+    ) -> Result<PrepareOnchainPaymentResponse, SendOnchainError> {
+        let fees_lockup = 500;
+        let fees_claim = 500;
+        let total_fees = ((req.amount_sat as f64) / 100.0 * SWAP_FEE_PERCENTAGE) as u64
+            + fees_lockup
+            + fees_claim;
+        let recipient_amount_sat = req.amount_sat - total_fees;
+        Ok(PrepareOnchainPaymentResponse {
+            fees_hash: "this-should-be-a-hash.dummy".to_string(),
+            fees_percentage: SWAP_FEE_PERCENTAGE,
+            fees_lockup,
+            fees_claim,
+            sender_amount_sat: req.amount_sat,
+            recipient_amount_sat,
+            total_fees,
+        })
+    }
+
+    pub async fn pay_onchain(
+        &self,
+        req: PayOnchainRequest,
+    ) -> Result<PayOnchainResponse, SendOnchainError> {
+        if req.prepare_res.sender_amount_sat < SWAP_MIN_AMOUNT_SAT {
             return Err(SendOnchainError::PaymentFailed {
                 err: "Insufficient funds".to_string(),
             });
@@ -843,17 +867,17 @@ impl BreezServices {
 
         let now = Utc::now().timestamp();
 
-        let amount_msat = req.amount_sat * 1_000;
+        let amount_msat = req.prepare_res.sender_amount_sat * 1_000;
 
-        let routing_fee_msat = rand::thread_rng().gen_range(1000..4000);
+        let routing_fee_msat = SWAPPER_ROUTING_FEE_SAT * 1000;
         send_payment_mock_channels(amount_msat + routing_fee_msat);
 
         let reverse_swap_info = ReverseSwapInfo {
             id: now.to_string(),
-            claim_pubkey: req.onchain_recipient_address,
+            claim_pubkey: req.recipient_address,
             lockup_txid: Some("LOCKUP-TXID-DUMMY".to_string()),
             claim_txid: Some("CLAIM-TXID-DUMMY".to_string()),
-            onchain_amount_sat: req.amount_sat,
+            onchain_amount_sat: req.prepare_res.sender_amount_sat,
             status: ReverseSwapStatus::Initial,
         };
 
@@ -880,7 +904,7 @@ impl BreezServices {
         self.event_listener
             .on_event(BreezEvent::PaymentSucceed { details: payment });
 
-        Ok(SendOnchainResponse { reverse_swap_info })
+        Ok(PayOnchainResponse { reverse_swap_info })
     }
 
     pub async fn list_refundables(&self) -> SdkResult<Vec<SwapInfo>> {
