@@ -62,9 +62,9 @@ use crate::errors::{
 };
 pub use crate::errors::{
     DecodeDataError, Error as LnError, LnUrlPayError, LnUrlPayErrorCode, LnUrlPayResult,
-    MnemonicError, NotificationHandlingError, NotificationHandlingErrorCode, ParsePhoneNumberError,
-    ParsePhoneNumberPrefixError, PayError, PayErrorCode, PayResult, Result, RuntimeErrorCode,
-    SimpleError, UnsupportedDataType,
+    MnemonicError, NotificationHandlingError, NotificationHandlingErrorCode, ParseError,
+    ParsePhoneNumberError, ParsePhoneNumberPrefixError, PayError, PayErrorCode, PayResult, Result,
+    RuntimeErrorCode, SimpleError, UnsupportedDataType,
 };
 use crate::event::LipaEventListener;
 pub use crate::exchange_rate_provider::ExchangeRate;
@@ -2656,32 +2656,6 @@ pub fn accept_terms_and_conditions(
     let auth = build_auth(&seed, &environment.backend_url)?;
     auth.accept_terms_and_conditions(TermsAndConditions::Lipa, version)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
-}
-
-/// Enum representing possible errors why parsing could fail.
-#[derive(Debug, thiserror::Error)]
-pub enum ParseError {
-    /// Parsing failed because parsed string was not complete.
-    /// Additional characters are needed to make the string valid.
-    /// It makes parsed string a valid prefix of a valid string.
-    #[error("Incomplete")]
-    Incomplete,
-
-    /// Parsing failed because an unexpected character at position `at` was met.
-    /// The character **has to be removed**.
-    #[error("InvalidCharacter at {at}")]
-    InvalidCharacter { at: u32 },
-}
-
-impl From<parser::ParseError> for ParseError {
-    fn from(error: parser::ParseError) -> Self {
-        match error {
-            parser::ParseError::Incomplete => ParseError::Incomplete,
-            parser::ParseError::UnexpectedCharacter(at) | parser::ParseError::ExcessSuffix(at) => {
-                ParseError::InvalidCharacter { at: at as u32 }
-            }
-        }
-    }
 }
 
 /// Try to parse the provided string as a lightning address, return [`ParseError`]
