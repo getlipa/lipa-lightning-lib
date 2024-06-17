@@ -147,7 +147,7 @@ interface LightningNode {
     BreezHealthCheckStatus get_health_status();
 
     [Throws=LnError]
-    RangeHit is_clear_wallet_feasible();
+    RangeHit check_clear_wallet_feasibility();
 
     [Throws=LnError]
     ClearWalletInfo prepare_clear_wallet();

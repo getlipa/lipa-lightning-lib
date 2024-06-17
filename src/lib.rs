@@ -2337,11 +2337,10 @@ impl LightningNode {
 
     /// Check if clearing the wallet is feasible.
     ///
-    /// If not feasible, it means the balance is either too high or too low for a reverse-swap to
-    /// be used.
+    /// Meaning that the balance is within the range of what can be reverse-swapped.
     ///
     /// Requires network: **yes**
-    pub fn is_clear_wallet_feasible(&self) -> Result<RangeHit> {
+    pub fn check_clear_wallet_feasibility(&self) -> Result<RangeHit> {
         let limits = self
             .rt
             .handle()
@@ -2372,7 +2371,7 @@ impl LightningNode {
             balance_sat if limits.max < balance_sat => RangeHit::Above {
                 max: limits.max.as_sats().to_amount_down(&exchange_rate),
             },
-            _ => permanent_failure!("Unreachable code in is_clear_wallet_feasible()"),
+            _ => permanent_failure!("Unreachable code in check_clear_wallet_feasibility()"),
         };
         Ok(range_hit)
     }
@@ -2381,7 +2380,7 @@ impl LightningNode {
     /// route to the swap service is known, so fees can be known in advance.
     ///
     /// This can fail if the balance is either too low or too high for it to be reverse-swapped.
-    /// The method [`LightningNode::is_clear_wallet_feasible`] can be used to check if the balance
+    /// The method [`LightningNode::check_clear_wallet_feasibility`] can be used to check if the balance
     /// is within the required range.
     ///
     /// Requires network: **yes**

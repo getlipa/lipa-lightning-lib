@@ -1346,7 +1346,7 @@ fn sweep(node: &LightningNode, address: String) -> Result<String> {
 }
 
 fn clear_wallet_info(node: &LightningNode) -> Result<()> {
-    match node.is_clear_wallet_feasible()? {
+    match node.check_clear_wallet_feasibility()? {
         RangeHit::Below { min } => bail!("Balance is below min: {}", amount_to_string(&min)),
         RangeHit::In => (),
         RangeHit::Above { max } => bail!("Balance is above max: {}", amount_to_string(&max)),
