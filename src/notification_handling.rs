@@ -307,8 +307,13 @@ fn handle_lnurl_pay_request_notification(
             NotificationHandlingErrorCode::NodeUnavailable,
             "Failed to query open channel fees",
         )?;
+
+    let strong_typed_seed = get_strong_typed_seed(&config)?;
+    let environment = get_environment(&config)?;
+
     if let Some(fee_msat) = open_channel_fee_response.fee_msat {
         if fee_msat > 0 {
+            report_insuficcient_inbound_liquidity(rt, &environment, &strong_typed_seed, &data.id)?;
             runtime_error!(
                 NotificationHandlingErrorCode::InsufficientInboundLiquidity,
                 "Rejecting an inbound LNURL-pay payment because of insufficient inbound liquidity"
@@ -316,8 +321,6 @@ fn handle_lnurl_pay_request_notification(
         }
     }
 
-    let strong_typed_seed = get_strong_typed_seed(&config)?;
-    let environment = get_environment(&config)?;
     let auth = build_auth(&strong_typed_seed, &environment.backend_url).map_to_runtime_error(
         NotificationHandlingErrorCode::LipaServiceUnavailable,
         "Failed to authenticate against backend",
@@ -344,13 +347,13 @@ fn handle_lnurl_pay_request_notification(
             NotificationHandlingErrorCode::NodeUnavailable,
             "Failed to create invoice",
         )?;
-    ensure!(
-        receive_payment_result.opening_fee_msat.is_none(),
-        runtime_error(
+    if receive_payment_result.opening_fee_msat.is_some() {
+        report_insuficcient_inbound_liquidity(rt, &environment, &strong_typed_seed, &data.id)?;
+        runtime_error!(
             NotificationHandlingErrorCode::InsufficientInboundLiquidity,
             "Rejecting an inbound LNURL-pay payment because of insufficient inbound liquidity"
         )
-    );
+    }
 
     // Invoice is not persisted in invoices table because we are not interested in unpaid invoices
     // resulting from incoming LNURL payments
@@ -394,13 +397,34 @@ fn handle_lnurl_pay_request_notification(
             &environment.backend_url,
             &async_auth,
             data.id,
-            receive_payment_result.ln_invoice.bolt11,
+            Some(receive_payment_result.ln_invoice.bolt11),
         ))
         .map_runtime_error_to(NotificationHandlingErrorCode::LipaServiceUnavailable)?;
 
     Ok(Notification::LnurlInvoiceCreated {
         amount_sat: data.amount_msat.as_msats().sats_round_down().sats,
     })
+}
+
+fn report_insuficcient_inbound_liquidity(
+    rt: AsyncRuntime,
+    environment: &Environment,
+    strong_typed_seed: &[u8; 64],
+    id: &str,
+) -> NotificationHandlingResult<()> {
+    let async_auth = build_async_auth(strong_typed_seed, &environment.backend_url)
+        .map_to_runtime_error(
+            NotificationHandlingErrorCode::LipaServiceUnavailable,
+            "Failed to authenticate against backend",
+        )?;
+    rt.handle()
+        .block_on(submit_lnurl_pay_invoice(
+            &environment.backend_url,
+            &async_auth,
+            id.to_string(),
+            None,
+        ))
+        .map_runtime_error_to(NotificationHandlingErrorCode::LipaServiceUnavailable)
 }
 
 fn get_confirmed_payment(
