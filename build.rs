@@ -1,7 +1,7 @@
 use camino::Utf8Path;
 use std::env;
-use uniffi_bindgen::bindings::kotlin::gen_kotlin::KotlinBindingGenerator;
-use uniffi_bindgen::bindings::swift::gen_swift::SwiftBindingGenerator;
+use uniffi_bindgen::bindings::KotlinBindingGenerator;
+use uniffi_bindgen::bindings::SwiftBindingGenerator;
 
 fn main() {
     let udl_file = Utf8Path::new("src/lipalightninglib.udl");

@@ -333,6 +333,32 @@ impl NotificationHandlingErrorCode {
     }
 }
 
+/// Enum representing possible errors why parsing could fail.
+#[derive(Debug, thiserror::Error)]
+pub enum ParseError {
+    /// Parsing failed because parsed string was not complete.
+    /// Additional characters are needed to make the string valid.
+    /// It makes parsed string a valid prefix of a valid string.
+    #[error("Incomplete")]
+    Incomplete,
+
+    /// Parsing failed because an unexpected character at position `at` was met.
+    /// The character **has to be removed**.
+    #[error("InvalidCharacter at {at}")]
+    InvalidCharacter { at: u32 },
+}
+
+impl From<parser::ParseError> for ParseError {
+    fn from(error: parser::ParseError) -> Self {
+        match error {
+            parser::ParseError::Incomplete => ParseError::Incomplete,
+            parser::ParseError::UnexpectedCharacter(at) | parser::ParseError::ExcessSuffix(at) => {
+                ParseError::InvalidCharacter { at: at as u32 }
+            }
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ParsePhoneNumberPrefixError {
     #[error("Incomplete")]

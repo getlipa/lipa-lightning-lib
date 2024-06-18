@@ -1,13 +1,12 @@
 use crate::errors::{Error, Result};
 use crate::random;
 
-use aes_gcm::Aes256Gcm;
-use aes_gcm::{aead::Aead, Nonce as AesNonce};
+use aes_gcm::aead::Aead;
+use aes_gcm::{Aes256Gcm, Nonce as AesNonce};
 use cipher::consts::U12;
 use cipher::{KeyInit, Unsigned};
 use perro::MapToError;
-use sha2::Digest;
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 
 type NonceLength = U12;
 type Nonce = AesNonce<NonceLength>;
