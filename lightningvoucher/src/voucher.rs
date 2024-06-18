@@ -250,5 +250,7 @@ mod tests {
         // Issuer.
         let invoice = voucher.redeem(&issuer_key, &encrypted_invoice);
         println!("Invoice: {}", invoice.bolt11);
+        // Persist invoice.
+        // Try to pay.
     }
 }

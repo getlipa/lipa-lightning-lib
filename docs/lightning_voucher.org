@@ -64,8 +64,8 @@ the web server can only deny voucher registration or redemption.
 ** 🙈 Privacy
 - redeemer of a voucher does not learn anything about the issuer
 - web server knows issuer of a voucher, number of vouchers
-- on redemption web server learns associated amounts, redeemer of *only* the voucher vouchers
-  (not invoice if the redeemer encrypts it)
+- web server learns associated amounts, expiration date, redeemer ip addres *only* at the redemption
+  (redeemer's invoice if the redeemer does not encrypt it)
 ** 🚧 Limitations
 - redemption fails if the issuer is offline
 - vouchers are single-use only
@@ -96,7 +96,7 @@ the web server can only deny voucher registration or redemption.
 * Sequence Diagram
 #+ATTR_HTML: :alt Sequence diagram
 [[./diagram.png]]
-#+begin_src plantuml
+#+begin_src plantuml :file diagram.png
 @startuml
 actor Issuer as issuer
 participant "Lipa Web Server" as server
@@ -128,7 +128,9 @@ server -> server: hash **redeemer_key**, find voucher
 server -> server: decrypt **data** with **redeemer_key**, check **signature**
 return amount_range, expiration_date, **signature**
 
-redeemer -> redeemer: check **signature**
+opt Encryption-aware redeemer
+    redeemer -> redeemer: check **signature**
+end
 redeemer -> redeemer: issue **invoice**
 opt Encryption-aware redeemer
     alt Without passcode
