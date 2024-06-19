@@ -1092,7 +1092,7 @@ impl BreezServices {
                 let mut rng = rand::thread_rng();
                 let prefix: Vec<u8> = (0..10).map(|_| rng.gen_range(b'a'..=b'z')).collect();
                 Some(format!(
-                    "{}@lipa.swiss",
+                    "{}@wallet.lipa.swiss",
                     String::from_utf8(prefix.to_vec()).unwrap()
                 ))
             } else {
