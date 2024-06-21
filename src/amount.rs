@@ -63,7 +63,7 @@ impl Permyriad {
         Msats { msats }
     }
 
-    pub fn to_percents(&self) -> f64 {
+    pub fn to_percentage(&self) -> f64 {
         (self.0 as f64) / 100_f64
     }
 }

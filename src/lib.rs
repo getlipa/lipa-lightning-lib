@@ -2640,7 +2640,7 @@ pub(crate) async fn start_sdk(
         .working_dir
         .clone_from(&config.local_persistence_path);
     breez_config.exemptfee_msat = EXEMPT_FEE.msats;
-    breez_config.maxfee_percent = MAX_FEE_PERMYRIAD.to_percents();
+    breez_config.maxfee_percent = MAX_FEE_PERMYRIAD.to_percentage();
     let connect_request = ConnectRequest {
         config: breez_config,
         seed: config.seed.clone(),
