@@ -60,7 +60,7 @@ interface LightningNode {
     sequence<Recipient> list_recipients();
 
     [Throws=LnUrlWithdrawError]
-    string withdraw_lnurlw(LnUrlWithdrawRequestData lnurl_withdraw_request_data, u64 amount_sat);
+    string withdraw_lnurlw(LnUrlWithdrawRequestData lnurl_withdraw_request_data, u64 amount_sat, string? passcode);
 
     void foreground();
 

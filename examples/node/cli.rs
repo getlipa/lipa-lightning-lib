@@ -409,7 +409,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "paylnurlp ",
     ));
     hints.insert(CommandHint::new(
-        "withdrawlnurlw <lnurlw> <amount in SAT>",
+        "withdrawlnurlw <lnurlw> <amount in SAT> [passcode]",
         "withdrawlnurlw ",
     ));
 
@@ -526,7 +526,7 @@ fn help() {
     println!("  p | payinvoice <invoice>");
     println!("  payopeninvoice <invoice> <amount in SAT>");
     println!("  paylnurlp <lnurlp> <amount in SAT> [comment]");
-    println!("  withdrawlnurlw <lnurlw> <amount in SAT>");
+    println!("  withdrawlnurlw <lnurlw> <amount in SAT> [passcode]");
     println!();
     println!("  getswapaddress");
     println!("  listfailedswaps");
@@ -1057,6 +1057,8 @@ fn withdraw_lnurlw(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
         .parse()
         .context("Amount should be a positive integer number")?;
 
+    let passcode = words.next().map(String::from);
+
     let lnurlw_details = match node.decode_data(lnurlw.into()) {
         Ok(DecodedData::LnUrlWithdraw {
             lnurl_withdraw_details,
@@ -1073,7 +1075,7 @@ fn withdraw_lnurlw(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
         Err(_) => bail!("Invalid lnurlw"),
     };
 
-    let hash = node.withdraw_lnurlw(lnurlw_details.request_data, amount)?;
+    let hash = node.withdraw_lnurlw(lnurlw_details.request_data, amount, passcode)?;
     println!("Started to withdraw lnurlw - payment hash is {hash}");
 
     Ok(())

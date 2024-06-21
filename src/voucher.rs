@@ -2,6 +2,7 @@ use crate::data_store::DataStore;
 use crate::{locker::Locker, Result};
 
 use bitcoin::hashes::{sha256, Hash};
+// use breez_sdk_core::parse_invoice;
 use perro::{ensure, permanent_failure, MapToError};
 use rand::RngCore;
 use reqwest::StatusCode;
@@ -73,9 +74,21 @@ impl VoucherServer {
                 .data_store
                 .lock_unwrap()
                 .retrieve_voucher(redemption.preimage.clone());
-            if let Ok(_voucher) = voucher {
+            if let Ok(voucher) = voucher {
                 // TODO: Check that the voucher amount.
-                // TODO: Check the seal if required.
+                //				let invoice = parse_invoice(&redemption.invoice).map_to_permanent_failure("Invalid invoice")?;
+                log::info!("Received seal: {:?}", redemption.seal);
+                if let Some(passcode) = voucher.passcode {
+                    let data = passcode.clone() + &redemption.invoice;
+                    log::info!("checking: data to seal: {data} with {passcode}");
+
+                    let seal = sha256::Hash::hash(data.as_bytes());
+                    let seal = hex::encode(seal);
+                    log::info!("Computed seal: {}", seal);
+                    if Some(seal) != redemption.seal {
+                        permanent_failure!("Invalid seal");
+                    }
+                }
                 self.data_store
                     .lock_unwrap()
                     .set_voucher_redemption(redemption.preimage, redemption.invoice.clone())?;

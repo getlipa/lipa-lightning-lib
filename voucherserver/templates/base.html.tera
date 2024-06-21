@@ -114,6 +114,10 @@
             font-size: 36px;
             color: #ff9800;
       }
+	  #qrcode {
+	  padding: 20px;
+	  background-color: #888888;
+	  }
     </style>
     <script>
       function redirectToInputValue() {

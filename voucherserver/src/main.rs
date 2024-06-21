@@ -37,7 +37,12 @@ async fn index(redemptions: &State<Redemptions>) -> String {
 }
 
 #[post("/<hash>/<amount_sats>/<seal_required>")]
-async fn post_voucher(hash: String, amount_sats: u32, seal_required: bool,vouchers: &State<VoucherMap>) -> String {
+async fn post_voucher(
+    hash: String,
+    amount_sats: u32,
+    seal_required: bool,
+    vouchers: &State<VoucherMap>,
+) -> String {
     const DOMAIN: &str = "https://voucher.zzd.es";
     let voucher = Voucher {
         hash: hash.clone(),
@@ -81,7 +86,7 @@ async fn lnurl(preimage: String, vouchers: &State<VoucherMap>) -> Option<String>
 async fn submit_lnurl(
     k1: String,
     pr: String,
-	seal: Option<String>,
+    seal: Option<String>,
     vouchers: &State<VoucherMap>,
     redemptions: &State<Redemptions>,
 ) -> Option<String> {
@@ -89,9 +94,9 @@ async fn submit_lnurl(
     let hash = sha256(&preimage);
     let hash = dbg!(hash);
     if let Some(voucher) = vouchers.lock().await.get(&hash) {
-		if voucher.seal_required && seal.is_none() {
-			return Some(json::object! {status: "ERROR", reason: "Seal is required"}.to_string());
-		}
+        if voucher.seal_required && seal.is_none() {
+            return Some(json::object! {status: "ERROR", reason: "Seal is required"}.to_string());
+        }
         // TODO: Validate invoice amount.
         println!("Redeem voucher {preimage} to {pr}");
         let redemption = Redemption {
@@ -115,8 +120,11 @@ async fn resolve_voucher(lightning: &str, vouchers: &State<VoucherMap>) -> Optio
     let hash = sha256(preimage);
     let hash = dbg!(hash);
     if let Some(voucher) = vouchers.lock().await.get(&hash) {
-		let lnurl = lightning;
-        return Some(Template::render("voucher", context![preimage, voucher, lnurl]));
+        let lnurl = lightning;
+        return Some(Template::render(
+            "voucher",
+            context![preimage, voucher, lnurl],
+        ));
     }
     None
 }

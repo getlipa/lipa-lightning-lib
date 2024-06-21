@@ -17,18 +17,17 @@
     <strong>{{ preimage }}</strong><br/>
     for <b>{{ voucher.amount_sats }}</b> sats<br/>
 	{% if voucher.seal_required %}
-      <strong>Passcode will be required</strong><br/>
+      <strong style="color: yellow;">Passcode will be required</strong><br/>
 	{% endif %}
       with hash <code>{{ voucher.hash }}</code>
 
     <div id="qrcode"></div>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>
         var qrcode = new QRCode(document.getElementById("qrcode"), {
             text: "{{ lnurl }}",
-            width: 128,
-            height: 128,
+            width: 512,
+            height: 512,
         });
     </script>
 	

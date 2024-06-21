@@ -967,6 +967,7 @@ impl LightningNode {
         &self,
         lnurl_withdraw_request_data: LnUrlWithdrawRequestData,
         amount_sat: u64,
+        passcode: Option<String>,
     ) -> LnUrlWithdrawResult<String> {
         let payment_hash = match self
             .rt
@@ -974,7 +975,7 @@ impl LightningNode {
             .block_on(self.sdk.lnurl_withdraw(LnUrlWithdrawRequest {
                 data: lnurl_withdraw_request_data,
                 amount_msat: amount_sat.as_sats().msats,
-                description: None,
+                description: passcode,
             }))
             .map_err(map_lnurl_withdraw_error)?
         {
