@@ -2363,9 +2363,12 @@ impl LightningNode {
             .as_msats()
             .sats_round_down();
         let exchange_rate = self.get_exchange_rate();
+
+        // Accomodating lightning network routing fees.
+        let min = limits.min + limits.min * (MAX_FEE_PERMYRIAD as u64) / 10000;
         let range_hit = match balance_sat {
-            balance_sat if balance_sat < limits.min => RangeHit::Below {
-                min: limits.min.as_sats().to_amount_up(&exchange_rate),
+            balance_sat if balance_sat < min => RangeHit::Below {
+                min: min.as_sats().to_amount_up(&exchange_rate),
             },
             balance_sat if balance_sat <= limits.max => RangeHit::In,
             balance_sat if limits.max < balance_sat => RangeHit::Above {
