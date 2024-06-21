@@ -121,7 +121,7 @@ impl VoucherServer {
             .map_to_permanent_failure("Failed to post voucher")?;
         ensure!(
             response.status() == StatusCode::OK,
-            permanent_failure("Failed to pose voucher, status code")
+            permanent_failure("Failed to post voucher, status code")
         );
         let response = response
             .json::<PostVoucherResponse>()
@@ -164,7 +164,7 @@ impl VoucherServer {
             .map_to_permanent_failure("Failed to post voucher")?;
         ensure!(
             response.status() == StatusCode::OK,
-            permanent_failure("Failed to pose voucher, status code")
+            permanent_failure("Failed to post voucher, status code")
         );
         Ok(())
     }
