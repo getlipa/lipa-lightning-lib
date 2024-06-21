@@ -399,7 +399,7 @@ fn handle_lnurl_pay_request_notification(
         .map_runtime_error_to(NotificationHandlingErrorCode::LipaServiceUnavailable)?;
 
     Ok(Notification::LnurlInvoiceCreated {
-        amount_sat: data.amount_msat.as_msats().sats_round_down(),
+        amount_sat: data.amount_msat.as_msats().sats_round_down().sats,
     })
 }
 

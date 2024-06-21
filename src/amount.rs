@@ -20,13 +20,14 @@ pub(crate) struct Msats {
 }
 
 impl Msats {
-    #[allow(dead_code)]
-    pub(crate) fn sats_round_up(&self) -> u64 {
-        round(self.msats, Rounding::Up)
+    pub(crate) fn sats_round_up(&self) -> Sats {
+        let sats = round(self.msats, Rounding::Up);
+        Sats::new(sats)
     }
 
-    pub(crate) fn sats_round_down(&self) -> u64 {
-        round(self.msats, Rounding::Down)
+    pub(crate) fn sats_round_down(&self) -> Sats {
+        let sats = round(self.msats, Rounding::Down);
+        Sats::new(sats)
     }
 }
 
@@ -51,6 +52,19 @@ impl AsSats for u32 {
     }
     fn as_msats(self) -> Msats {
         Msats { msats: self as u64 }
+    }
+}
+
+pub(crate) struct Permyriad(pub u16);
+
+impl Permyriad {
+    pub fn of(&self, sats: &Sats) -> Msats {
+        let msats = sats.sats * (self.0 as u64) / 10;
+        Msats { msats }
+    }
+
+    pub fn to_percents(&self) -> f64 {
+        (self.0 as f64) / 100_f64
     }
 }
 
@@ -191,7 +205,17 @@ mod tests {
     fn rounding_msats_to_sats() {
         let msats = 12349123u64.as_msats();
 
-        assert_eq!(msats.sats_round_down(), 12349);
-        assert_eq!(msats.sats_round_up(), 12350);
+        assert_eq!(msats.sats_round_down().sats, 12349);
+        assert_eq!(msats.sats_round_up().sats, 12350);
     }
+
+    #[test]
+	#[rustfmt::skip]
+	fn permyriad() {
+		assert_eq!(Permyriad(10000).of(&Sats::new(1234)).msats, 1234000);
+		assert_eq!(Permyriad( 1000).of(&Sats::new(1234)).msats,  123400);
+		assert_eq!(Permyriad(  100).of(&Sats::new(1234)).msats,   12340);
+		assert_eq!(Permyriad(   10).of(&Sats::new(1234)).msats,    1234);
+		assert_eq!(Permyriad(    1).of(&Sats::new(1234)).msats,     123);
+	}
 }
