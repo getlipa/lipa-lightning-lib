@@ -44,7 +44,7 @@ mod util;
 
 pub use crate::activity::{Activity, ChannelCloseInfo, ChannelCloseState, ListActivitiesResponse};
 pub use crate::amount::{Amount, FiatValue};
-use crate::amount::{AsSats, Msats, Sats, ToAmount};
+use crate::amount::{AsSats, Msats, Permyriad, Sats, ToAmount};
 use crate::analytics::{derive_analytics_keys, AnalyticsConfig, AnalyticsInterceptor};
 pub use crate::analytics::{InvoiceCreationMetadata, PaymentMetadata};
 use crate::async_runtime::AsyncRuntime;
@@ -263,7 +263,7 @@ pub struct ClearWalletInfo {
     prepare_response: PrepareOnchainPaymentResponse,
 }
 
-const MAX_FEE_PERMYRIAD: u16 = 150;
+const MAX_FEE_PERMYRIAD: Permyriad = Permyriad(150);
 const EXEMPT_FEE: Sats = Sats::new(21);
 
 /// The main class/struct of this library. Constructing an instance will initiate the Lightning node and
@@ -747,11 +747,10 @@ impl LightningNode {
 
         let max_fee_msats = match routing_fee_mode {
             MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
-                (amount_sat * (max_fee_permyriad as u64) / 10000).as_sats()
+                Permyriad(max_fee_permyriad).of(&amount).msats
             }
-            MaxRoutingFeeMode::Absolute { max_fee_amount } => max_fee_amount.sats.as_sats(),
-        }
-        .msats;
+            MaxRoutingFeeMode::Absolute { max_fee_amount } => max_fee_amount.sats.as_sats().msats,
+        };
 
         let node_state = self.sdk.node_info().map_to_runtime_error(
             RuntimeErrorCode::NodeUnavailable,
@@ -2361,11 +2360,13 @@ impl LightningNode {
             )?
             .channels_balance_msat
             .as_msats()
-            .sats_round_down();
+            .sats_round_down()
+            .sats;
         let exchange_rate = self.get_exchange_rate();
 
         // Accomodating lightning network routing fees.
-        let min = limits.min + limits.min * (MAX_FEE_PERMYRIAD as u64) / 10000;
+        let routing_fee = MAX_FEE_PERMYRIAD.of(&limits.min.as_sats()).sats_round_up();
+        let min = limits.min + routing_fee.sats;
         let range_hit = match balance_sat {
             balance_sat if balance_sat < min => RangeHit::Below {
                 min: min.as_sats().to_amount_up(&exchange_rate),
@@ -2639,7 +2640,7 @@ pub(crate) async fn start_sdk(
         .working_dir
         .clone_from(&config.local_persistence_path);
     breez_config.exemptfee_msat = EXEMPT_FEE.msats;
-    breez_config.maxfee_percent = MAX_FEE_PERMYRIAD as f64 / 100_f64;
+    breez_config.maxfee_percent = MAX_FEE_PERMYRIAD.to_percentage();
     let connect_request = ConnectRequest {
         config: breez_config,
         seed: config.seed.clone(),
@@ -2722,13 +2723,14 @@ fn get_payment_max_routing_fee_mode(
     amount_sat: u64,
     exchange_rate: &Option<ExchangeRate>,
 ) -> MaxRoutingFeeMode {
-    if amount_sat * (MAX_FEE_PERMYRIAD as u64) / 10 < EXEMPT_FEE.msats {
+    let relative_fee = MAX_FEE_PERMYRIAD.of(&amount_sat.as_sats());
+    if relative_fee.msats < EXEMPT_FEE.msats {
         MaxRoutingFeeMode::Absolute {
             max_fee_amount: EXEMPT_FEE.to_amount_up(exchange_rate),
         }
     } else {
         MaxRoutingFeeMode::Relative {
-            max_fee_permyriad: MAX_FEE_PERMYRIAD,
+            max_fee_permyriad: MAX_FEE_PERMYRIAD.0,
         }
     }
 }
@@ -2882,7 +2884,7 @@ mod tests {
     #[test]
     fn test_get_payment_max_routing_fee_mode_absolute() {
         let max_routing_mode = get_payment_max_routing_fee_mode(
-            EXEMPT_FEE.msats / ((MAX_FEE_PERMYRIAD as u64) / 10) - 1,
+            EXEMPT_FEE.msats / ((MAX_FEE_PERMYRIAD.0 as u64) / 10) - 1,
             &None,
         );
 
@@ -2899,13 +2901,13 @@ mod tests {
     #[test]
     fn test_get_payment_max_routing_fee_mode_relative() {
         let max_routing_mode = get_payment_max_routing_fee_mode(
-            EXEMPT_FEE.msats / ((MAX_FEE_PERMYRIAD as u64) / 10),
+            EXEMPT_FEE.msats / ((MAX_FEE_PERMYRIAD.0 as u64) / 10),
             &None,
         );
 
         match max_routing_mode {
             MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
-                assert_eq!(max_fee_permyriad, MAX_FEE_PERMYRIAD);
+                assert_eq!(max_fee_permyriad, MAX_FEE_PERMYRIAD.0);
             }
             _ => {
                 panic!("Unexpected variant");
