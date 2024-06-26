@@ -11,6 +11,7 @@ cipher = "0.4"
 data-encoding = "2"
 ecies = { version = "0.2", default-features = false, features = ["pure"] }
 generic-array = "0.14"
+perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
 rand = "0.8"
 secp256k1 = { version = "0.27", features = ["rand", "global-context", "bitcoin-hashes"] }
 serde = { version = "1", features = ["derive"] }

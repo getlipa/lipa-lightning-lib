@@ -1,8 +1,10 @@
+use crate::errors::{Result, RuntimeErrorCode};
 use crate::key::RedeemerKey;
 
 use aes_gcm::aead::Aead;
 use aes_gcm::{AeadCore, Aes256Gcm, Nonce};
 use cipher::Unsigned;
+use perro::{ensure, invalid_input, runtime_error, MapToError, OptionToError};
 use rand::rngs::OsRng;
 use secp256k1::ecdsa::Signature;
 use secp256k1::{generate_keypair, Message, SecretKey, SECP256K1};
@@ -31,7 +33,7 @@ impl From<&VoucherMetadata> for VoucherMetadataJson {
         let expires_at = m
             .expires_at
             .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         Self {
             min_withdrawable: m.amount_range_sat.0 * 1000,
@@ -59,7 +61,7 @@ impl From<VoucherMetadataJson> for VoucherMetadata {
 }
 
 impl Serialize for VoucherMetadata {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -68,7 +70,7 @@ impl Serialize for VoucherMetadata {
 }
 
 impl<'de> Deserialize<'de> for VoucherMetadata {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -94,22 +96,27 @@ impl Voucher {
         amount_range_sat: (u64, u64),
         description: String,
         expires_in: Duration,
-    ) -> (Self, SecretKey) {
-        let (issuer_key, redeemer_key) = generate_keypair(&mut rand::thread_rng());
-        let redeemer_key = RedeemerKey::new(redeemer_key);
-
-        if amount_range_sat.0 > amount_range_sat.1 {
-            panic!("min should be less or equal than max");
-        }
+    ) -> Result<(Self, SecretKey)> {
+        ensure!(
+            amount_range_sat.0 <= amount_range_sat.1,
+            invalid_input("min should be less or equal than max")
+        );
         let issued_at = SystemTime::now();
+        let expires_at = issued_at
+            .checked_add(expires_in)
+            .ok_or_invalid_input("Failed to add expiration duration to now moment")?;
         let metadata = VoucherMetadata {
             amount_range_sat,
             description,
             issued_at,
-            expires_at: issued_at.checked_add(expires_in).unwrap(),
+            expires_at,
         };
 
-        let metadata_json = serde_json::to_string(&metadata).unwrap();
+        let (issuer_key, redeemer_key) = generate_keypair(&mut rand::thread_rng());
+        let redeemer_key = RedeemerKey::new(redeemer_key);
+
+        let metadata_json = serde_json::to_string(&metadata)
+            .map_to_permanent_failure("Failed to serialize metadata")?;
         let message =
             Message::from_hashed_data::<secp256k1::hashes::sha256::Hash>(metadata_json.as_bytes());
         let signature = SECP256K1.sign_ecdsa(&message, &issuer_key);
@@ -119,7 +126,7 @@ impl Voucher {
             metadata,
             signature,
         };
-        (voucher, issuer_key)
+        Ok((voucher, issuer_key))
     }
 
     pub fn encrypt(&self) -> EncryptedVoucher {
@@ -186,21 +193,53 @@ impl Voucher {
     }
 
     #[cfg(feature = "breez")]
-    pub fn redeem(&self, issuer_key: &SecretKey, invoice: &[u8]) -> breez_sdk_core::LNInvoice {
-        let invoice = if !invoice.starts_with(b"lnbc1") {
-            let secret_key = issuer_key.secret_bytes();
-            ecies::decrypt(&secret_key, invoice).unwrap()
-        } else {
-            invoice.to_vec()
+    pub fn redeem(
+        &self,
+        issuer_key: &SecretKey,
+        invoice: &[u8],
+    ) -> Result<breez_sdk_core::LNInvoice> {
+        let invoice = match invoice.starts_with(b"lnbc1") {
+            true => invoice.to_vec(),
+            false => {
+                let secret_key = issuer_key.secret_bytes();
+                ecies::decrypt(&secret_key, invoice).map_to_runtime_error(
+                    RuntimeErrorCode::DecryptionFailed,
+                    "Faild to decrypt invoice",
+                )?
+            }
         };
-        let invoice = std::str::from_utf8(&invoice).unwrap();
-        let invoice = breez_sdk_core::parse_invoice(invoice).unwrap();
-        // TODO: Check amount.
-        if invoice.amount_msat.unwrap_or_default() < self.metadata.amount_range_sat.0 {
-            println!("Invoice amount is below the voucher mim amount");
-        }
-        // TODO: Check expiration date.
-        invoice
+        let invoice =
+            std::str::from_utf8(&invoice).map_to_invalid_input("Invalid invoice utf8 string")?;
+        let invoice =
+            breez_sdk_core::parse_invoice(invoice).map_to_invalid_input("Invalid invoice")?;
+        let amount_msat = invoice
+            .amount_msat
+            .ok_or_invalid_input("Invoice does not specify amount")?;
+        let amount_sat = amount_msat / 1000;
+        ensure!(
+            self.metadata.amount_range_sat.0 <= amount_sat,
+            runtime_error(
+                RuntimeErrorCode::InvoiceAmountNotInRange,
+                "Invoice amount is below the voucher range"
+            )
+        );
+        ensure!(
+            amount_sat <= self.metadata.amount_range_sat.1,
+            runtime_error(
+                RuntimeErrorCode::InvoiceAmountNotInRange,
+                "Invoice amount is above the voucher range"
+            )
+        );
+        ensure!(
+            !self.is_expired(),
+            runtime_error(RuntimeErrorCode::VoucherHasExpired, "Voucher has expired")
+        );
+        Ok(invoice)
+    }
+
+    pub fn is_expired(&self) -> bool {
+        // TODO: self.metadata.expires_at < SystemTime::now()
+        false
     }
 }
 
@@ -213,7 +252,7 @@ mod tests {
     fn it_works() {
         // Issuer.
         let (voucher, issuer_key) =
-            Voucher::generate((10, 12), "Descr".to_string(), Duration::from_secs(60));
+            Voucher::generate((10, 12), "Descr".to_string(), Duration::from_secs(60)).unwrap();
         println!("Voucher: {voucher:?}");
         // Store voucher and issuer_key to the local db.
         let encrypted = voucher.encrypt();
@@ -249,7 +288,7 @@ mod tests {
 
         // Issuer.
         let invoice = voucher.redeem(&issuer_key, &encrypted_invoice);
-        println!("Invoice: {}", invoice.bolt11);
+        println!("Invoice: {}", invoice.unwrap().bolt11);
         // Persist invoice.
         // Try to pay.
     }
