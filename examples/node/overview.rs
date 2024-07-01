@@ -106,6 +106,10 @@ fn print_activity(activity: Activity) -> Result<()> {
             // TODO: implement print of pending swap
             Ok(())
         }
+        Activity::ReverseSwap {
+            outgoing_payment_info,
+            ..
+        } => print_outgoing_payment(outgoing_payment_info),
         Activity::ChannelClose { channel_close_info } => print_channel_close(channel_close_info),
     }
 }

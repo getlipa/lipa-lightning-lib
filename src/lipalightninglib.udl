@@ -350,6 +350,7 @@ interface Activity {
     OutgoingPayment(OutgoingPaymentInfo outgoing_payment_info);
     OfferClaim(IncomingPaymentInfo incoming_payment_info, OfferKind offer_kind);
     Swap(IncomingPaymentInfo? incoming_payment_info, SwapInfo swap_info);
+    ReverseSwap(OutgoingPaymentInfo outgoing_payment_info, ReverseSwapInfo reverse_swap_info);
     ChannelClose(ChannelCloseInfo channel_close_info);
 };
 
@@ -547,6 +548,20 @@ dictionary SwapInfo {
     string bitcoin_address;
     TzTime created_at;
     Amount paid_amount;
+};
+
+dictionary ReverseSwapInfo {
+    Amount paid_onchain_amount;
+    string? claim_txid;
+    ReverseSwapStatus status;
+};
+
+enum ReverseSwapStatus {
+    "Initial",
+    "InProgress",
+    "Cancelled",
+    "CompletedSeen",
+    "CompletedConfirmed",
 };
 
 enum PaymentSource {
