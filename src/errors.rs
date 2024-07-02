@@ -1,4 +1,5 @@
 use crate::{invalid_input, permanent_failure, runtime_error};
+
 use breez_sdk_core::error::SendPaymentError;
 use std::fmt::{Display, Formatter};
 
@@ -237,8 +238,8 @@ pub(crate) fn map_send_payment_error(err: SendPaymentError) -> PayError {
     }
 }
 
-pub(crate) fn map_lnurl_pay_error(error: breez_sdk_core::error::LnUrlPayError) -> LnUrlPayError {
-    use breez_sdk_core::error::LnUrlPayError;
+pub(crate) fn map_lnurl_pay_error(error: breez_sdk_core::LnUrlPayError) -> LnUrlPayError {
+    use breez_sdk_core::LnUrlPayError;
     match error {
         LnUrlPayError::InvalidUri { err } => invalid_input(format!("InvalidUri: {err}")),
         LnUrlPayError::AlreadyPaid => permanent_failure("LNURL pay invoice has been already paid"),
@@ -274,9 +275,9 @@ pub(crate) fn map_lnurl_pay_error(error: breez_sdk_core::error::LnUrlPayError) -
 }
 
 pub(crate) fn map_lnurl_withdraw_error(
-    error: breez_sdk_core::error::LnUrlWithdrawError,
+    error: breez_sdk_core::LnUrlWithdrawError,
 ) -> LnUrlWithdrawError {
-    use breez_sdk_core::error::LnUrlWithdrawError;
+    use breez_sdk_core::LnUrlWithdrawError;
     match error {
         LnUrlWithdrawError::Generic { err } => {
             runtime_error(LnUrlWithdrawErrorCode::UnexpectedError, err)

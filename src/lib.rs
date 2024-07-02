@@ -889,13 +889,15 @@ impl LightningNode {
             }))
             .map_err(map_lnurl_pay_error)?
         {
-            breez_sdk_core::LnUrlPayResult::EndpointSuccess { data } => Ok(data.payment.id),
-            breez_sdk_core::LnUrlPayResult::EndpointError { data } => runtime_error!(
+            breez_sdk_core::lnurl::pay::LnUrlPayResult::EndpointSuccess { data } => {
+                Ok(data.payment.id)
+            }
+            breez_sdk_core::lnurl::pay::LnUrlPayResult::EndpointError { data } => runtime_error!(
                 LnUrlPayErrorCode::LnUrlServerError,
                 "LNURL server returned error: {}",
                 data.reason
             ),
-            breez_sdk_core::LnUrlPayResult::PayError { data } => {
+            breez_sdk_core::lnurl::pay::LnUrlPayResult::PayError { data } => {
                 self.report_send_payment_issue(data.payment_hash);
                 runtime_error!(
                     LnUrlPayErrorCode::PaymentFailed,
@@ -1789,26 +1791,26 @@ impl LightningNode {
                 "Failed to withdraw offer due to: {}",
                 data.reason
             ),
-            Err(breez_sdk_core::error::LnUrlWithdrawError::Generic { err }) => runtime_error!(
+            Err(breez_sdk_core::LnUrlWithdrawError::Generic { err }) => runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
                 "Failed to withdraw offer due to: {err}"
             ),
-            Err(breez_sdk_core::error::LnUrlWithdrawError::InvalidAmount { err }) => {
+            Err(breez_sdk_core::LnUrlWithdrawError::InvalidAmount { err }) => {
                 permanent_failure!("Invalid amount in invoice for LNURL withdraw: {err}")
             }
-            Err(breez_sdk_core::error::LnUrlWithdrawError::InvalidInvoice { err }) => {
+            Err(breez_sdk_core::LnUrlWithdrawError::InvalidInvoice { err }) => {
                 permanent_failure!("Invalid invoice for LNURL withdraw: {err}")
             }
-            Err(breez_sdk_core::error::LnUrlWithdrawError::InvalidUri { err }) => {
+            Err(breez_sdk_core::LnUrlWithdrawError::InvalidUri { err }) => {
                 permanent_failure!("Invalid URL in LNURL withdraw: {err}")
             }
-            Err(breez_sdk_core::error::LnUrlWithdrawError::ServiceConnectivity { err }) => {
+            Err(breez_sdk_core::LnUrlWithdrawError::ServiceConnectivity { err }) => {
                 runtime_error!(
                     RuntimeErrorCode::OfferServiceUnavailable,
                     "Failed to withdraw offer due to: {err}"
                 )
             }
-            Err(breez_sdk_core::error::LnUrlWithdrawError::InvoiceNoRoutingHints { err }) => {
+            Err(breez_sdk_core::LnUrlWithdrawError::InvoiceNoRoutingHints { err }) => {
                 permanent_failure!(
                     "A locally created invoice doesn't have any routing hints: {err}"
                 )
@@ -2643,11 +2645,11 @@ pub(crate) async fn start_sdk(
     environment: &Environment,
     event_listener: Box<dyn EventListener>,
 ) -> Result<Arc<BreezServices>> {
-    let device_cert = env!("BREEZ_SDK_PARTNER_CERTIFICATE").as_bytes().to_vec();
-    let device_key = env!("BREEZ_SDK_PARTNER_KEY").as_bytes().to_vec();
+    let developer_cert = env!("BREEZ_SDK_PARTNER_CERTIFICATE").as_bytes().to_vec();
+    let developer_key = env!("BREEZ_SDK_PARTNER_KEY").as_bytes().to_vec();
     let partner_credentials = GreenlightCredentials {
-        device_cert,
-        device_key,
+        developer_cert,
+        developer_key,
     };
 
     let mut breez_config = BreezServices::default_config(
