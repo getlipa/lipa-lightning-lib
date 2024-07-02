@@ -43,15 +43,16 @@ const TX_ID_DUMMY: &str = "f4184fc596403b9d638783cf57adfe4c75c605f6356fbc9133853
 const LNURL_PAY_FEE_MSAT: u64 = 8_000;
 
 use breez_sdk_core::error::{
-    LnUrlPayError, LnUrlWithdrawError, ReceiveOnchainError, ReceivePaymentError, SdkError,
-    SdkResult, SendOnchainError, SendPaymentError,
+    ReceiveOnchainError, ReceivePaymentError, SdkError, SdkResult, SendOnchainError,
+    SendPaymentError,
 };
+use breez_sdk_core::lnurl::pay::{LnUrlPayResult, LnUrlPaySuccessData};
 use breez_sdk_core::InputType::Bolt11;
 pub use breez_sdk_core::{
     parse_invoice, BitcoinAddressData, BreezEvent, ClosedChannelPaymentDetails, ConnectRequest,
     EnvironmentType, EventListener, GreenlightCredentials, GreenlightNodeConfig, HealthCheckStatus,
-    InputType, InvoicePaidDetails, LNInvoice, ListPaymentsRequest, LnPaymentDetails,
-    LnUrlPayRequest, LnUrlPayRequestData, LnUrlPayResult, LnUrlWithdrawRequest,
+    InputType, InvoicePaidDetails, LNInvoice, ListPaymentsRequest, LnPaymentDetails, LnUrlPayError,
+    LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawError, LnUrlWithdrawRequest,
     LnUrlWithdrawRequestData, LnUrlWithdrawResult, MetadataItem, Network, NodeConfig,
     OnchainPaymentLimitsResponse, OpenChannelFeeRequest, OpeningFeeParams, OpeningFeeParamsMenu,
     PayOnchainRequest, Payment, PaymentDetails, PaymentFailedData, PaymentStatus, PaymentType,
@@ -75,6 +76,12 @@ use tokio::runtime::Handle;
 
 pub mod error {
     pub use breez_sdk_core::error::*;
+}
+
+pub mod lnurl {
+    pub mod pay {
+        pub use breez_sdk_core::lnurl::pay::*;
+    }
 }
 
 #[derive(Clone)]
@@ -370,7 +377,7 @@ impl BreezServices {
         });
 
         Ok(LnUrlPayResult::EndpointSuccess {
-            data: breez_sdk_core::LnUrlPaySuccessData {
+            data: LnUrlPaySuccessData {
                 payment,
                 success_action: None,
             },
