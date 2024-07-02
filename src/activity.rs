@@ -1,6 +1,8 @@
 use crate::payment::{IncomingPaymentInfo, OutgoingPaymentInfo, PaymentInfo};
 use crate::{Amount, OfferKind, SwapInfo, TzTime};
 
+use crate::reverse_swap::ReverseSwapInfo;
+use breez_sdk_core::ReverseSwapStatus;
 use std::time::SystemTime;
 
 /// Information about **all** pending and **only** requested completed activities.
@@ -31,6 +33,10 @@ pub enum Activity {
         incoming_payment_info: Option<IncomingPaymentInfo>,
         swap_info: SwapInfo,
     },
+    ReverseSwap {
+        outgoing_payment_info: OutgoingPaymentInfo,
+        reverse_swap_info: ReverseSwapInfo,
+    },
     ChannelClose {
         channel_close_info: ChannelCloseInfo,
     },
@@ -53,6 +59,10 @@ impl Activity {
                 incoming_payment_info,
                 ..
             } => incoming_payment_info.as_ref().map(|i| &i.payment_info),
+            Activity::ReverseSwap {
+                outgoing_payment_info,
+                ..
+            } => Some(&outgoing_payment_info.payment_info),
             Activity::ChannelClose { .. } => None,
         }
     }
@@ -80,6 +90,14 @@ impl Activity {
     }
 
     pub(crate) fn is_pending(&self) -> bool {
+        if let Activity::ReverseSwap {
+            reverse_swap_info, ..
+        } = self
+        {
+            return reverse_swap_info.status == ReverseSwapStatus::Initial
+                || reverse_swap_info.status == ReverseSwapStatus::InProgress
+                || reverse_swap_info.status == ReverseSwapStatus::CompletedSeen;
+        }
         if let Some(payment_info) = self.get_payment_info() {
             return payment_info.payment_state.is_pending();
         }

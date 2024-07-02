@@ -35,6 +35,7 @@ mod payment;
 mod phone_number;
 mod random;
 mod recovery;
+mod reverse_swap;
 mod sanitize_input;
 mod secret;
 mod swap;
@@ -82,6 +83,7 @@ pub use crate::payment::{
 pub use crate::phone_number::PhoneNumber;
 use crate::phone_number::PhoneNumberPrefixParser;
 pub use crate::recovery::recover_lightning_node;
+pub use crate::reverse_swap::ReverseSwapInfo;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
 pub use crate::swap::{
     FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo, SwapToLightningFees,
@@ -97,6 +99,7 @@ use pocketclient::PocketClient;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 use breez_sdk_core::error::{ReceiveOnchainError, SendPaymentError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
+pub use breez_sdk_core::ReverseSwapStatus;
 use breez_sdk_core::{
     parse, parse_invoice, BitcoinAddressData, BreezServices, ClosedChannelPaymentDetails,
     ConnectRequest, EventListener, GreenlightCredentials, GreenlightNodeConfig, InputType,
@@ -1137,6 +1140,7 @@ impl LightningNode {
                     incoming_payment_info: None,
                     ..
                 } => invalid_input!("Pending swap was found"),
+                Activity::ReverseSwap { .. } => invalid_input!("ReverseSwap was found"),
                 Activity::ChannelClose { .. } => invalid_input!("ChannelClose was found"),
             };
         }
@@ -1172,6 +1176,10 @@ impl LightningNode {
             } => Ok(outgoing_payment_info),
             Activity::OfferClaim { .. } => invalid_input!("OfferClaim was found"),
             Activity::Swap { .. } => invalid_input!("Swap was found"),
+            Activity::ReverseSwap {
+                outgoing_payment_info,
+                ..
+            } => Ok(outgoing_payment_info),
             Activity::ChannelClose { .. } => invalid_input!("ChannelClose was found"),
         }
     }
@@ -1296,6 +1304,23 @@ impl LightningNode {
             Ok(Activity::Swap {
                 incoming_payment_info: Some(incoming_payment_info),
                 swap_info,
+            })
+        } else if let Some(ref s) = payment_details.reverse_swap_info {
+            let reverse_swap_info = ReverseSwapInfo {
+                paid_onchain_amount: s.onchain_amount_sat.as_sats().to_amount_up(&exchange_rate),
+                claim_txid: s.claim_txid.clone(),
+                status: s.status,
+            };
+            let outgoing_payment_info = OutgoingPaymentInfo::new(
+                breez_payment,
+                &exchange_rate,
+                tz_config,
+                personal_note,
+                &self.environment.lipa_lightning_domain,
+            )?;
+            Ok(Activity::ReverseSwap {
+                outgoing_payment_info,
+                reverse_swap_info,
             })
         } else if breez_payment.payment_type == breez_sdk_core::PaymentType::Received {
             let incoming_payment_info = IncomingPaymentInfo::new(

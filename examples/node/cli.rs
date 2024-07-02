@@ -1238,6 +1238,14 @@ fn print_activity(activity: Activity) -> Result<()> {
             println!("      Swap:            {swap_info:?}");
             Ok(())
         }
+        Activity::ReverseSwap {
+            outgoing_payment_info,
+            reverse_swap_info,
+        } => {
+            print_outgoing_payment(outgoing_payment_info)?;
+            println!("      Reverse Swap:    {reverse_swap_info:?}");
+            Ok(())
+        }
         Activity::ChannelClose { channel_close_info } => print_channel_close(channel_close_info),
     }
 }
