@@ -58,15 +58,15 @@ pub use breez_sdk_core::{
     PaymentTypeFilter, PrepareOnchainPaymentRequest, PrepareOnchainPaymentResponse,
     PrepareRedeemOnchainFundsRequest, PrepareRefundRequest, ReceiveOnchainRequest,
     ReceivePaymentRequest, ReceivePaymentResponse, RedeemOnchainFundsRequest, RefundRequest,
-    ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendOnchainRequest,
-    SendPaymentRequest, SignMessageRequest, SwapAmountType, SwapStatus, UnspentTransactionOutput,
+    ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, ReverseSwapStatus,
+    SendOnchainRequest, SendPaymentRequest, SignMessageRequest, SwapAmountType, SwapStatus,
+    UnspentTransactionOutput,
 };
 use breez_sdk_core::{
     ChannelState, Config, LspInformation, NodeState, OpenChannelFeeResponse, PayOnchainResponse,
     PrepareRedeemOnchainFundsResponse, PrepareRefundResponse, RecommendedFees,
     RedeemOnchainFundsResponse, RefundResponse, ReverseSwapInfo, ReverseSwapPairInfo,
-    ReverseSwapStatus, SendPaymentResponse, ServiceHealthCheckResponse, SignMessageResponse,
-    SwapInfo,
+    SendPaymentResponse, ServiceHealthCheckResponse, SignMessageResponse, SwapInfo,
 };
 use chrono::Utc;
 use hex::FromHex;

@@ -12,7 +12,7 @@ pub async fn submit_lnurl_pay_invoice(
     _backend_url: &str,
     _auth: &Auth,
     _id: String,
-    _invoice: String,
+    _invoice: Option<String>,
 ) -> graphql::Result<()> {
     Ok(())
 }

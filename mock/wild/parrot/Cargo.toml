@@ -7,6 +7,6 @@ edition = "2021"
 name = "parrot"
 
 [dependencies]
-graphql = { git = "https://github.com/getlipa/wild", tag = "v1.23.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.24.0" }
 honeybadger-mock = { path = "../honeybadger" }
-parrot = { git = "https://github.com/getlipa/wild", tag = "v1.23.0" }
+parrot = { git = "https://github.com/getlipa/wild", tag = "v1.24.0" }

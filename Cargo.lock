@@ -571,52 +571,6 @@ dependencies = [
 [[package]]
 name = "breez-sdk-core"
 version = "0.4.1"
-source = "git+https://github.com/breez/breez-sdk?tag=0.4.1#4eb555cf822e52a40e04eb2eb7fc606d42db5c0d"
-dependencies = [
- "aes",
- "anyhow",
- "base64 0.13.1",
- "bip21",
- "cbc",
- "chrono",
- "const_format",
- "ecies",
- "env_logger 0.10.2",
- "flutter_rust_bridge",
- "futures",
- "gl-client",
- "hex",
- "lazy_static",
- "log",
- "miniz_oxide",
- "once_cell",
- "openssl",
- "prost",
- "querystring",
- "rand",
- "regex",
- "reqwest",
- "ripemd",
- "rusqlite",
- "rusqlite_migration",
- "serde",
- "serde_json",
- "serde_with",
- "strum",
- "strum_macros",
- "tempfile",
- "thiserror",
- "tiny-bip39",
- "tokio",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "zbase32",
-]
-
-[[package]]
-name = "breez-sdk-core"
-version = "0.4.1"
 source = "git+https://github.com/breez/breez-sdk?tag=0.4.2-rc1#76cd730e298d330ad4922fccc5296ab020201f36"
 dependencies = [
  "aes",
@@ -662,11 +616,11 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-mock"
-version = "0.4.1"
+version = "0.4.2-rc1"
 dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
- "breez-sdk-core 0.4.1 (git+https://github.com/breez/breez-sdk?tag=0.4.1)",
+ "breez-sdk-core",
  "chrono",
  "hex",
  "lazy_static",
@@ -793,7 +747,7 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
+source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -997,7 +951,7 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
+source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -1648,7 +1602,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
+source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1846,7 +1800,7 @@ dependencies = [
 [[package]]
 name = "honeybadger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
+source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
 dependencies = [
  "base64 0.22.0",
  "bdk",
@@ -2122,9 +2076,9 @@ dependencies = [
 
 [[package]]
 name = "lazy_static"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
@@ -2256,7 +2210,7 @@ dependencies = [
  "anyhow",
  "bip39",
  "bitcoin 0.30.2",
- "breez-sdk-core 0.4.1 (git+https://github.com/breez/breez-sdk?tag=0.4.2-rc1)",
+ "breez-sdk-core",
  "breez-sdk-mock",
  "camino",
  "chameleon",
@@ -2321,9 +2275,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.21"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
+checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
 
 [[package]]
 name = "lru-cache"
@@ -2704,7 +2658,7 @@ dependencies = [
 [[package]]
 name = "parrot"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
+source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -2806,7 +2760,7 @@ dependencies = [
 [[package]]
 name = "pigeon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
+source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -3610,9 +3564,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.117"
+version = "1.0.120"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "455182ea6142b14f93f4bc5320a2b31c1f266b66a4a5c858b013302a5d8cbfc3"
+checksum = "4e0d21c9a8cae1235ad58a00c11cb40d4b1e5c784f1ef2c537876ed6ffd8b7c5"
 dependencies = [
  "itoa",
  "ryu",
@@ -3826,7 +3780,7 @@ checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 [[package]]
 name = "squirrel"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.23.0#4543426e91ae5470893a6525fed7650b351d35da"
+source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
 dependencies = [
  "bdk",
  "graphql",
@@ -4553,9 +4507,9 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
 name = "uuid"
-version = "1.8.0"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a183cf7feeba97b4dd1c0d46788634f6221d87fa961b305bed08c851829efcc0"
+checksum = "5de17fd2f7da591098415cff336e12965a28061ddace43b59cb3c430179c9439"
 dependencies = [
  "serde",
  "sha1_smol",
