@@ -26,7 +26,7 @@ perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
 pigeon = { git = "https://github.com/getlipa/wild", tag = "v1.24.0" }
 squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.24.0" }
 
-breez-sdk-core = { git = "https://github.com/andrei-21/breez-sdk", rev = "d2454cfb" }
+breez-sdk-core = { git = "https://github.com/breez/breez-sdk", rev = "8c27e8bf" }
 
 aes-gcm = "0.10.3"
 bip39 = "2.0.0"

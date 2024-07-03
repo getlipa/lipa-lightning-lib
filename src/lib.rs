@@ -118,7 +118,7 @@ use email_address::EmailAddress;
 use honeybadger::Auth;
 pub use honeybadger::{TermsAndConditions, TermsAndConditionsStatus};
 use iban::Iban;
-use log::{debug, error, info, Level};
+use log::{debug, error, info, warn, Level};
 use logger::init_logger_once;
 use parrot::AnalyticsClient;
 pub use parrot::PaymentSource;
@@ -982,6 +982,10 @@ impl LightningNode {
             .map_err(map_lnurl_withdraw_error)?
         {
             breez_sdk_core::LnUrlWithdrawResult::Ok { data } => Ok(data.invoice.payment_hash),
+            breez_sdk_core::LnUrlWithdrawResult::Timeout { data } => {
+                warn!("Tolerating LNURL-w timeout");
+                Ok(data.invoice.payment_hash)
+            }
             breez_sdk_core::LnUrlWithdrawResult::ErrorStatus { data } => runtime_error!(
                 LnUrlWithdrawErrorCode::LnUrlServerError,
                 "LNURL server returned error: {}",
@@ -1786,6 +1790,10 @@ impl LightningNode {
                 description: None,
             })) {
             Ok(breez_sdk_core::LnUrlWithdrawResult::Ok { data }) => data.invoice.payment_hash,
+            Ok(breez_sdk_core::LnUrlWithdrawResult::Timeout { .. }) => runtime_error!(
+                RuntimeErrorCode::OfferServiceUnavailable,
+                "Failed to withdraw offer due to timeout",
+            ),
             Ok(breez_sdk_core::LnUrlWithdrawResult::ErrorStatus { data }) => runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
                 "Failed to withdraw offer due to: {}",

@@ -586,8 +586,8 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-core"
-version = "0.5.0"
-source = "git+https://github.com/andrei-21/breez-sdk?rev=d2454cfb#d2454cfb0541f16934c3bbd22de8b615911e581c"
+version = "0.4.2-rc3"
+source = "git+https://github.com/breez/breez-sdk?rev=8c27e8bf#8c27e8bf9bd438da411c7bfefd6a7fa10afa269e"
 dependencies = [
  "aes",
  "anyhow",
@@ -3413,8 +3413,8 @@ checksum = "b84345e4c9bd703274a082fb80caaa99b7612be48dfaa1dd9266577ec412309d"
 
 [[package]]
 name = "sdk-common"
-version = "0.5.0"
-source = "git+https://github.com/andrei-21/breez-sdk?rev=d2454cfb#d2454cfb0541f16934c3bbd22de8b615911e581c"
+version = "0.4.2-rc3"
+source = "git+https://github.com/breez/breez-sdk?rev=8c27e8bf#8c27e8bf9bd438da411c7bfefd6a7fa10afa269e"
 dependencies = [
  "aes",
  "anyhow",
