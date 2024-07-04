@@ -2563,8 +2563,9 @@ impl LightningNode {
     ///
     /// Requires network: **yes**
     pub fn request_phone_number_verification(&self, phone_number: String) -> Result<()> {
-        let phone_number =
-            PhoneNumber::parse(&phone_number).map_to_invalid_input("Invalid phone number")?;
+        let phone_number = self
+            .parse_phone_number(phone_number)
+            .map_to_invalid_input("Invalid phone number")?;
 
         self.rt
             .handle()
@@ -2587,8 +2588,9 @@ impl LightningNode {
     ///
     /// Requires network: **yes**
     pub fn verify_phone_number(&self, phone_number: String, otp: String) -> Result<()> {
-        let phone_number =
-            PhoneNumber::parse(&phone_number).map_to_invalid_input("Invalid phone number")?;
+        let phone_number = self
+            .parse_phone_number(phone_number)
+            .map_to_invalid_input("Invalid phone number")?;
 
         self.rt
             .handle()
