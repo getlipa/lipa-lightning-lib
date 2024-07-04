@@ -45,6 +45,8 @@ jobs:
           use-cross: false
           command: build
           args: --release --target ${{ matrix.target }}
+        env:
+          IPHONEOS_DEPLOYMENT_TARGET: 16.2
       - name: Upload library binaries
         uses: actions/upload-artifact@v4
         with:
