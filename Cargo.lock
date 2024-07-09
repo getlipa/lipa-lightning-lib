@@ -760,7 +760,7 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
+source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -976,7 +976,7 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
+source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -1213,9 +1213,9 @@ dependencies = [
 
 [[package]]
 name = "email_address"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2153bd83ebc09db15bcbdc3e2194d901804952e3dc96967e1cd3b0c5c32d112"
+checksum = "c1019fa28f600f5b581b7a603d515c3f1635da041ca211b5055804788673abfe"
 dependencies = [
  "serde",
 ]
@@ -1649,7 +1649,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
+source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1847,7 +1847,7 @@ dependencies = [
 [[package]]
 name = "honeybadger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
+source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
 dependencies = [
  "base64 0.22.1",
  "bdk",
@@ -2716,7 +2716,7 @@ dependencies = [
 [[package]]
 name = "parrot"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
+source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -2828,7 +2828,7 @@ dependencies = [
 [[package]]
 name = "pigeon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
+source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -3061,9 +3061,9 @@ dependencies = [
 
 [[package]]
 name = "qrcode"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23e719ca51966ff9f5a8436edb00d6115b3c606a0bb27c8f8ca74a38ff2b036d"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
 
 [[package]]
 name = "querystring"
@@ -3638,9 +3638,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.203"
+version = "1.0.204"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7253ab4de971e72fb7be983802300c30b5a7f0c2e56fab8abfc6a214307c0094"
+checksum = "bc76f558e0cbb2a839d37354c575f1dc3fdc6546b5be373ba43d95f231bf7c12"
 dependencies = [
  "serde_derive",
 ]
@@ -3659,9 +3659,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.203"
+version = "1.0.204"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "500cbc0ebeb6f46627f50f3f5811ccf6bf00643be300b4c3eabc0ef55dc5b5ba"
+checksum = "e0cd7e117be63d3c3678776753929474f3b04a43a080c744d6b0ae2a8c28e222"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3905,7 +3905,7 @@ dependencies = [
 [[package]]
 name = "squirrel"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.24.0#7fce8e6bb9cb4d672392ed6a2193b64a0d203777"
+source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
 dependencies = [
  "bdk",
  "graphql",
@@ -4650,9 +4650,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.9.1"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5de17fd2f7da591098415cff336e12965a28061ddace43b59cb3c430179c9439"
+checksum = "81dfa00651efa65069b0b6b651f4aaa31ba9e3c3ce0137aaad053604ee7e0314"
 dependencies = [
  "serde",
  "sha1_smol",

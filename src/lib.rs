@@ -88,7 +88,7 @@ pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Se
 pub use crate::swap::{
     FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo, SwapToLightningFees,
 };
-use crate::symmetric_encryption::deterministic_encrypt;
+use crate::symmetric_encryption::{decrypt, deterministic_encrypt, encrypt};
 use crate::task_manager::TaskManager;
 use crate::util::{
     replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
@@ -286,6 +286,7 @@ pub struct LightningNode {
     environment: Environment,
     allowed_countries_country_iso_3166_1_alpha_2: Vec<String>,
     phone_number_prefix_parser: PhoneNumberPrefixParser,
+    persistence_encryption_key: [u8; 32],
 }
 
 /// Contains the fee information for the options to resolve on-chain funds from channel closes.
@@ -429,13 +430,10 @@ impl LightningNode {
                 "Couldn't create a fiat topup client",
             )?;
 
+        let persistence_encryption_key = derive_persistence_encryption_key(&strong_typed_seed)?;
         let backup_client =
             RemoteBackupClient::new(environment.backend_url.clone(), Arc::clone(&async_auth));
-        let backup_manager = BackupManager::new(
-            backup_client,
-            db_path,
-            derive_persistence_encryption_key(&strong_typed_seed)?,
-        );
+        let backup_manager = BackupManager::new(backup_client, db_path, persistence_encryption_key);
 
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
             rt.handle(),
@@ -485,6 +483,7 @@ impl LightningNode {
             allowed_countries_country_iso_3166_1_alpha_2: config
                 .phone_number_allowed_countries_iso_3166_1_alpha_2,
             phone_number_prefix_parser,
+            persistence_encryption_key,
         })
     }
 
@@ -2558,7 +2557,8 @@ impl LightningNode {
     ///
     /// Requires network: **yes**
     pub fn query_verified_phone_number(&self) -> Result<Option<String>> {
-        self.rt
+        let encrypted_number = self
+            .rt
             .handle()
             .block_on(pigeon::query_verified_phone_number(
                 &self.environment.backend_url,
@@ -2567,7 +2567,17 @@ impl LightningNode {
             .map_to_runtime_error(
                 RuntimeErrorCode::AuthServiceUnavailable,
                 "Failed to query verified phone number",
-            )
+            )?;
+        if let Some(encrypted_number) = encrypted_number {
+            let encrypted_number = hex::decode(encrypted_number)
+                .map_to_permanent_failure("Failed to hex decode verified phone number")?;
+            let number = decrypt(&encrypted_number, &self.persistence_encryption_key)?;
+            let number = std::str::from_utf8(&number)
+                .map_to_permanent_failure("Failed to decrypt verified phone number")?
+                .to_string();
+            return Ok(Some(number));
+        }
+        Ok(None)
     }
 
     /// Start the verification process for a new phone number. This will trigger an SMS containing
@@ -2580,8 +2590,15 @@ impl LightningNode {
     ///
     /// Requires network: **yes**
     pub fn request_phone_number_verification(&self, phone_number: String) -> Result<()> {
-        let phone_number =
-            PhoneNumber::parse(&phone_number).map_to_invalid_input("Invalid phone number")?;
+        let phone_number = self
+            .parse_phone_number(phone_number)
+            .map_to_invalid_input("Invalid phone number")?;
+
+        let encrypted_number = encrypt(
+            phone_number.e164.as_bytes(),
+            &self.persistence_encryption_key,
+        )?;
+        let encrypted_number = hex::encode(encrypted_number);
 
         self.rt
             .handle()
@@ -2589,6 +2606,7 @@ impl LightningNode {
                 &self.environment.backend_url,
                 &self.async_auth,
                 phone_number.e164,
+                encrypted_number,
             ))
             .map_to_runtime_error(
                 RuntimeErrorCode::AuthServiceUnavailable,
@@ -2604,8 +2622,9 @@ impl LightningNode {
     ///
     /// Requires network: **yes**
     pub fn verify_phone_number(&self, phone_number: String, otp: String) -> Result<()> {
-        let phone_number =
-            PhoneNumber::parse(&phone_number).map_to_invalid_input("Invalid phone number")?;
+        let phone_number = self
+            .parse_phone_number(phone_number)
+            .map_to_invalid_input("Invalid phone number")?;
 
         self.rt
             .handle()

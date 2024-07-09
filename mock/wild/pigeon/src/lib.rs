@@ -21,18 +21,19 @@ pub async fn request_phone_number_verification(
     _backend_url: &str,
     _auth: &Auth,
     _number: String,
+    encrypted_number: String,
 ) -> graphql::Result<()> {
+    let mut phone_number = PHONE_NUMBER.lock().unwrap();
+    *phone_number = Some(encrypted_number);
     Ok(())
 }
 
 pub async fn verify_phone_number(
     _backend_url: &str,
     _auth: &Auth,
-    number: String,
+    _number: String,
     _otp: String,
 ) -> graphql::Result<()> {
-    let mut phone_number = PHONE_NUMBER.lock().unwrap();
-    *phone_number = Some(number);
     Ok(())
 }
 
