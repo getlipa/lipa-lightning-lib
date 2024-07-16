@@ -266,6 +266,24 @@ pub struct ClearWalletInfo {
     prepare_response: PrepareOnchainPaymentResponse,
 }
 
+pub enum ToggleableFeature {
+    LightningAddress,
+    PhoneNumber,
+}
+
+impl From<ToggleableFeature> for graphql::schema::report_feature_flag::ToggleableFeature {
+    fn from(value: ToggleableFeature) -> Self {
+        match value {
+            ToggleableFeature::LightningAddress => {
+                graphql::schema::report_feature_flag::ToggleableFeature::LIGHTNING_ADDRESS
+            }
+            ToggleableFeature::PhoneNumber => {
+                graphql::schema::report_feature_flag::ToggleableFeature::PHONE_NUMBER
+            }
+        }
+    }
+}
+
 const MAX_FEE_PERMYRIAD: Permyriad = Permyriad(150);
 const EXEMPT_FEE: Sats = Sats::new(21);
 
@@ -2620,6 +2638,32 @@ impl LightningNode {
             .map_to_runtime_error(
                 RuntimeErrorCode::AuthServiceUnavailable,
                 "Failed to submit phone number registration otp",
+            )
+    }
+
+    /// Report the toggle state of a feature.
+    ///
+    /// Parameters:
+    /// * `toggleable_feature`
+    /// * `enabled`
+    ///
+    /// Requires network: **yes**
+    pub fn report_feature_flag(
+        &self,
+        toggleable_feature: ToggleableFeature,
+        enabled: bool,
+    ) -> Result<()> {
+        self.rt
+            .handle()
+            .block_on(pigeon::report_feature_flag(
+                &self.environment.backend_url,
+                &self.async_auth,
+                toggleable_feature.into(),
+                enabled,
+            ))
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to report feature flag",
             )
     }
 

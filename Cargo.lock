@@ -743,7 +743,7 @@ dependencies = [
 [[package]]
 name = "chameleon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
+source = "git+https://github.com/getlipa/wild?branch=feature/report-feature-flag#e7c9585e94d271506caf95758194ed594df6d7c2"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -948,7 +948,7 @@ dependencies = [
 [[package]]
 name = "crow"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
+source = "git+https://github.com/getlipa/wild?branch=feature/report-feature-flag#e7c9585e94d271506caf95758194ed594df6d7c2"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -1609,7 +1609,7 @@ dependencies = [
 [[package]]
 name = "graphql"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
+source = "git+https://github.com/getlipa/wild?branch=feature/report-feature-flag#e7c9585e94d271506caf95758194ed594df6d7c2"
 dependencies = [
  "chrono",
  "graphql_client",
@@ -1801,7 +1801,7 @@ dependencies = [
 [[package]]
 name = "honeybadger"
 version = "1.0.1"
-source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
+source = "git+https://github.com/getlipa/wild?branch=feature/report-feature-flag#e7c9585e94d271506caf95758194ed594df6d7c2"
 dependencies = [
  "base64 0.22.1",
  "bdk",
@@ -2627,7 +2627,7 @@ dependencies = [
 [[package]]
 name = "parrot"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
+source = "git+https://github.com/getlipa/wild?branch=feature/report-feature-flag#e7c9585e94d271506caf95758194ed594df6d7c2"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -2730,7 +2730,7 @@ dependencies = [
 [[package]]
 name = "pigeon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
+source = "git+https://github.com/getlipa/wild?branch=feature/report-feature-flag#e7c9585e94d271506caf95758194ed594df6d7c2"
 dependencies = [
  "graphql",
  "honeybadger",
@@ -3790,7 +3790,7 @@ dependencies = [
 [[package]]
 name = "squirrel"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.25.0#06b231cd578addc00e1c49b4c02f3338b67e6c98"
+source = "git+https://github.com/getlipa/wild?branch=feature/report-feature-flag#e7c9585e94d271506caf95758194ed594df6d7c2"
 dependencies = [
  "bdk",
  "graphql",
