@@ -81,14 +81,14 @@ pub use crate::payment::{
     IncomingPaymentInfo, OutgoingPaymentInfo, PaymentInfo, PaymentState, Recipient,
 };
 pub use crate::phone_number::PhoneNumber;
-use crate::phone_number::PhoneNumberPrefixParser;
+use crate::phone_number::{lightning_address_to_phone_number, PhoneNumberPrefixParser};
 pub use crate::recovery::recover_lightning_node;
 pub use crate::reverse_swap::ReverseSwapInfo;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
 pub use crate::swap::{
     FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo, SwapToLightningFees,
 };
-use crate::symmetric_encryption::{decrypt, deterministic_encrypt, encrypt};
+use crate::symmetric_encryption::{deterministic_encrypt, encrypt};
 use crate::task_manager::TaskManager;
 use crate::util::{
     replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
@@ -2529,38 +2529,27 @@ impl LightningNode {
     ///
     /// Requires network: **no**
     pub fn query_lightning_address(&self) -> Result<Option<String>> {
-        let addresses = self
+        Ok(self
             .data_store
             .lock_unwrap()
-            .retrieve_lightning_addresses()?;
-        Ok(addresses.into_iter().next())
+            .retrieve_lightning_addresses()?
+            .into_iter()
+            .find(|a| !a.starts_with('-')))
     }
 
     /// Query for a previously verified phone number.
     ///
-    /// Requires network: **yes**
+    /// Requires network: **no**
     pub fn query_verified_phone_number(&self) -> Result<Option<String>> {
-        let encrypted_number = self
-            .rt
-            .handle()
-            .block_on(pigeon::query_verified_phone_number(
-                &self.environment.backend_url,
-                &self.async_auth,
-            ))
-            .map_to_runtime_error(
-                RuntimeErrorCode::AuthServiceUnavailable,
-                "Failed to query verified phone number",
-            )?;
-        if let Some(encrypted_number) = encrypted_number {
-            let encrypted_number = hex::decode(encrypted_number)
-                .map_to_permanent_failure("Failed to hex decode verified phone number")?;
-            let number = decrypt(&encrypted_number, &self.persistence_encryption_key)?;
-            let number = std::str::from_utf8(&number)
-                .map_to_permanent_failure("Failed to decrypt verified phone number")?
-                .to_string();
-            return Ok(Some(number));
-        }
-        Ok(None)
+        Ok(self
+            .data_store
+            .lock_unwrap()
+            .retrieve_lightning_addresses()?
+            .iter()
+            .find(|a| a.starts_with('-'))
+            .and_then(|a| {
+                lightning_address_to_phone_number(a, &self.environment.lipa_lightning_domain)
+            }))
     }
 
     /// Start the verification process for a new phone number. This will trigger an SMS containing
@@ -2614,13 +2603,17 @@ impl LightningNode {
             .block_on(pigeon::verify_phone_number(
                 &self.environment.backend_url,
                 &self.async_auth,
-                phone_number.e164,
+                phone_number.e164.clone(),
                 otp,
             ))
             .map_to_runtime_error(
                 RuntimeErrorCode::AuthServiceUnavailable,
                 "Failed to submit phone number registration otp",
-            )
+            )?;
+        let address = phone_number.to_lightning_address(&self.environment.lipa_lightning_domain);
+        self.data_store
+            .lock_unwrap()
+            .store_lightning_address(&address)
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {
