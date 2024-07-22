@@ -220,8 +220,7 @@ fn handle_payment_received_notification(
 
     runtime_error!(
         NotificationHandlingErrorCode::ExpectedPaymentNotReceived,
-        "Expected incoming payment with hash {} but it was not received",
-        payment_hash
+        "Expected incoming payment with hash {payment_hash} but it was not received"
     )
 }
 
@@ -285,8 +284,7 @@ fn handle_address_txs_confirmed_notification(
 
     runtime_error!(
         NotificationHandlingErrorCode::ExpectedPaymentNotReceived,
-        "Expected incoming payment with hash {} but it was not received",
-        payment_hash
+        "Expected incoming payment with hash {payment_hash} but it was not received"
     )
 }
 
