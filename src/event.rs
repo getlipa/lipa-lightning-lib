@@ -51,6 +51,7 @@ impl EventListener for LipaEventListener {
                         .swap_received(hex::encode(details.payment_hash));
                 }
             }
+            BreezEvent::ReverseSwapUpdated { .. } => {}
         }
     }
 }
@@ -79,5 +80,6 @@ pub(crate) fn report_event_for_analytics(
         BreezEvent::BackupSucceeded => {}
         BreezEvent::BackupFailed { .. } => {}
         BreezEvent::SwapUpdated { .. } => {}
+        BreezEvent::ReverseSwapUpdated { .. } => {}
     }
 }
