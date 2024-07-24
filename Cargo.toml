@@ -23,7 +23,7 @@ graphql = { git = "https://github.com/getlipa/wild", tag = "v1.25.0" }
 honeybadger = { git = "https://github.com/getlipa/wild", tag = "v1.25.0" }
 parrot = { git = "https://github.com/getlipa/wild", tag = "v1.25.0" }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
-pigeon = { git = "https://github.com/getlipa/wild", tag = "v1.25.0" }
+pigeon = { git = "https://github.com/getlipa/wild", tag = "v1.26.0" }
 squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.25.0" }
 
 breez-sdk-core = { git = "https://github.com/andrei-21/breez-sdk", rev = "d2454cfb" }
