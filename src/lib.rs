@@ -108,8 +108,8 @@ use breez_sdk_core::{
     PayOnchainRequest, PaymentDetails, PaymentStatus, PaymentTypeFilter,
     PrepareOnchainPaymentRequest, PrepareOnchainPaymentResponse, PrepareRedeemOnchainFundsRequest,
     PrepareRefundRequest, ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
-    ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, SendPaymentRequest,
-    SignMessageRequest, UnspentTransactionOutput,
+    ReportIssueRequest, ReportPaymentFailureDetails, SendPaymentRequest, SignMessageRequest,
+    UnspentTransactionOutput,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -2391,13 +2391,10 @@ impl LightningNode {
         let limits = self
             .rt
             .handle()
-            .block_on(
-                self.sdk
-                    .fetch_reverse_swap_fees(ReverseSwapFeesRequest::default()),
-            )
+            .block_on(self.sdk.onchain_payment_limits())
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
-                "Failed to fetch reverse swap fees",
+                "Failed to get on-chain payment limits",
             )?;
         let balance_sat = self
             .sdk
@@ -2413,15 +2410,17 @@ impl LightningNode {
         let exchange_rate = self.get_exchange_rate();
 
         // Accomodating lightning network routing fees.
-        let routing_fee = MAX_FEE_PERMYRIAD.of(&limits.min.as_sats()).sats_round_up();
-        let min = limits.min + routing_fee.sats;
+        let routing_fee = MAX_FEE_PERMYRIAD
+            .of(&limits.min_sat.as_sats())
+            .sats_round_up();
+        let min = limits.min_sat + routing_fee.sats;
         let range_hit = match balance_sat {
             balance_sat if balance_sat < min => RangeHit::Below {
                 min: min.as_sats().to_amount_up(&exchange_rate),
             },
-            balance_sat if balance_sat <= limits.max => RangeHit::In,
-            balance_sat if limits.max < balance_sat => RangeHit::Above {
-                max: limits.max.as_sats().to_amount_down(&exchange_rate),
+            balance_sat if balance_sat <= limits.max_sat => RangeHit::In,
+            balance_sat if limits.max_sat < balance_sat => RangeHit::Above {
+                max: limits.max_sat.as_sats().to_amount_down(&exchange_rate),
             },
             _ => permanent_failure!("Unreachable code in check_clear_wallet_feasibility()"),
         };
@@ -2452,7 +2451,7 @@ impl LightningNode {
             .block_on(
                 self.sdk
                     .prepare_onchain_payment(PrepareOnchainPaymentRequest {
-                        amount_sat: limits.max_sat,
+                        amount_sat: limits.max_payable_sat,
                         amount_type: breez_sdk_core::SwapAmountType::Send,
                         claim_tx_feerate,
                     }),
