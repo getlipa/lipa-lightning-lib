@@ -47,3 +47,19 @@ pub async fn query_verified_phone_number(
 ) -> graphql::Result<Option<String>> {
     Ok(PHONE_NUMBER.lock().unwrap().clone())
 }
+
+pub async fn disable_lightning_addresses(
+    _backend_url: &str,
+    _auth: &Auth,
+    _addresses: Vec<String>,
+) -> graphql::Result<()> {
+    Ok(())
+}
+
+pub async fn enable_lightning_addresses(
+    _backend_url: &str,
+    _auth: &Auth,
+    _addresses: Vec<String>,
+) -> graphql::Result<()> {
+    Ok(())
+}

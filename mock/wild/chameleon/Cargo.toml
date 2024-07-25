@@ -7,8 +7,8 @@ edition = "2021"
 name = "chameleon"
 
 [dependencies]
-chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.25.0" }
-graphql = { git = "https://github.com/getlipa/wild", tag = "v1.25.0" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.26.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.26.0" }
 honeybadger-mock = { path = "../honeybadger" }
 lazy_static = "1.4.0"
 rand = "0.8.5"

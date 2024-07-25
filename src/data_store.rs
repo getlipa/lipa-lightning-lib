@@ -1,7 +1,7 @@
 use crate::errors::Result;
 use crate::fund_migration::MigrationStatus;
 use crate::migrations::migrate;
-use crate::{ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
+use crate::{EnableStatus, ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
 use pocketclient::FiatTopupInfo;
 
 use crate::analytics::AnalyticsConfig;
@@ -408,23 +408,37 @@ impl DataStore {
     }
 
     pub fn store_lightning_address(&mut self, lightning_address: &str) -> Result<()> {
-        let changed_rows = self.conn
+        self
+            .conn
             .execute(
-                "INSERT INTO lightning_addresses (address) VALUES (?1) ON CONFLICT(address) DO NOTHING",
-                (lightning_address,),
+                "INSERT OR REPLACE INTO lightning_addresses (address, enable_status) VALUES (?1, ?2)",
+                (lightning_address, EnableStatus::Enabled as u8),
             )
             .map_to_permanent_failure("Failed to add lightning address to db")?;
-        if changed_rows > 0 {
-            self.backup_status = BackupStatus::WaitingForBackup;
-        }
+        self.backup_status = BackupStatus::WaitingForBackup;
         Ok(())
     }
 
-    pub fn retrieve_lightning_addresses(&self) -> Result<Vec<String>> {
+    pub fn update_lightning_address(
+        &mut self,
+        lightning_address: &str,
+        enable_status: EnableStatus,
+    ) -> Result<()> {
+        self.conn
+            .execute(
+                "UPDATE lightning_addresses SET enable_status = ?1 WHERE address = ?2",
+                (enable_status as u8, lightning_address),
+            )
+            .map_to_permanent_failure("Failed to update lightning address in db")?;
+        self.backup_status = BackupStatus::WaitingForBackup;
+        Ok(())
+    }
+
+    pub fn retrieve_lightning_addresses(&self) -> Result<Vec<(String, EnableStatus)>> {
         self.query_map(
-            "SELECT address FROM lightning_addresses ORDER BY registered_at",
+            "SELECT address, enable_status FROM lightning_addresses ORDER BY registered_at",
             [],
-            string_from_row,
+            lightning_address_from_row,
         )
         .map_to_permanent_failure("Failed to query lightning addresses")
     }
@@ -446,8 +460,13 @@ impl DataStore {
     }
 }
 
-fn string_from_row(row: &Row) -> rusqlite::Result<String> {
-    row.get(0)
+fn lightning_address_from_row(row: &Row) -> rusqlite::Result<(String, EnableStatus)> {
+    let address = row.get(0)?;
+    let enable_status: u8 = row.get(1)?;
+    let enable_status = EnableStatus::try_from(enable_status).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Integer, Box::new(e))
+    })?;
+    Ok((address, enable_status))
 }
 
 // Store all provided exchange rates.
@@ -645,7 +664,7 @@ mod tests {
     use crate::config::TzConfig;
     use crate::data_store::{CreatedInvoice, DataStore};
     use crate::fund_migration::MigrationStatus;
-    use crate::{ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
+    use crate::{EnableStatus, ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
 
     use crate::analytics::AnalyticsConfig;
     use crow::TopupError::TemporaryFailure;
@@ -1280,7 +1299,7 @@ mod tests {
     }
 
     #[test]
-    fn test_storing_lightnining_address() {
+    fn test_storing_lightning_address() {
         let db_name = String::from("lightning_addresses.db3");
         reset_db(&db_name);
         let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
@@ -1292,14 +1311,43 @@ mod tests {
             .store_lightning_address("satoshi@lipa.swiss")
             .unwrap();
         let addresses = data_store.retrieve_lightning_addresses().unwrap();
-        assert_eq!(addresses, vec!["satoshi@lipa.swiss".to_string()]);
+        assert_eq!(
+            addresses,
+            vec![("satoshi@lipa.swiss".to_string(), EnableStatus::Enabled)]
+        );
 
         // Storing the same address.
         data_store
             .store_lightning_address("satoshi@lipa.swiss")
             .unwrap();
         let addresses = data_store.retrieve_lightning_addresses().unwrap();
-        assert_eq!(addresses, vec!["satoshi@lipa.swiss".to_string()]);
+        assert_eq!(
+            addresses,
+            vec![("satoshi@lipa.swiss".to_string(), EnableStatus::Enabled)]
+        );
+
+        // Disabling the address.
+        data_store
+            .update_lightning_address("satoshi@lipa.swiss", EnableStatus::FeatureDisabled)
+            .unwrap();
+        let addresses = data_store.retrieve_lightning_addresses().unwrap();
+        assert_eq!(
+            addresses,
+            vec![(
+                "satoshi@lipa.swiss".to_string(),
+                EnableStatus::FeatureDisabled
+            )]
+        );
+
+        // Storing the same address enables it back.
+        data_store
+            .store_lightning_address("satoshi@lipa.swiss")
+            .unwrap();
+        let addresses = data_store.retrieve_lightning_addresses().unwrap();
+        assert_eq!(
+            addresses,
+            vec![("satoshi@lipa.swiss".to_string(), EnableStatus::Enabled)]
+        );
 
         // Storing another address.
         data_store
@@ -1309,8 +1357,8 @@ mod tests {
         assert_eq!(
             addresses,
             vec![
-                "satoshi@lipa.swiss".to_string(),
-                "finney@lipa.swiss".to_string()
+                ("satoshi@lipa.swiss".to_string(), EnableStatus::Enabled),
+                ("finney@lipa.swiss".to_string(), EnableStatus::Enabled),
             ]
         );
     }

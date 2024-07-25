@@ -134,6 +134,10 @@ const MIGRATION_14_LNURL_PAY_RECEIVE_DATA: &str = "
     ALTER TABLE payments ADD COLUMN received_lnurl_comment TEXT DEFAULT NULL;
 ";
 
+const MIGRATION_15_LIGHTNING_ADDRESSES_ENABLE_STATUS: &str = "
+    ALTER TABLE lightning_addresses ADD COLUMN enable_status INTEGER NOT NULL DEFAULT 0;
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -156,6 +160,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_12_LIGHTNING_ADDRESSES),
         M::up(MIGRATION_13_PAYMENT_PERSONAL_NOTE),
         M::up(MIGRATION_14_LNURL_PAY_RECEIVE_DATA),
+        M::up(MIGRATION_15_LIGHTNING_ADDRESSES_ENABLE_STATUS),
     ])
 }
 

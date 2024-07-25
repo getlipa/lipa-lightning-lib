@@ -838,7 +838,11 @@ impl BreezServices {
         } else {
             (0, 0)
         };
-        Ok(OnchainPaymentLimitsResponse { min_sat, max_sat })
+        Ok(OnchainPaymentLimitsResponse {
+            min_sat,
+            max_sat,
+            max_payable_sat: max_sat,
+        })
     }
 
     pub async fn prepare_onchain_payment(
