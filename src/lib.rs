@@ -2676,7 +2676,7 @@ impl LightningNode {
             true => "Enabling",
             false => "Disabling",
         };
-        info!("{doing} {:?} on the backend", addresses);
+        info!("{doing} {addresses:?} on the backend");
 
         self.rt
             .handle()

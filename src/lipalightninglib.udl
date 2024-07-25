@@ -177,7 +177,7 @@ interface LightningNode {
     void verify_phone_number(string phone_number, string otp);
 
     [Throws=LnError]
-    void set_feature_flag(FeatureFlag feature, boolean enabled);
+    void set_feature_flag(FeatureFlag feature, boolean flag_enabled);
 };
 
 dictionary Config {
