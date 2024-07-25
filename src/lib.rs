@@ -120,6 +120,7 @@ pub use honeybadger::{TermsAndConditions, TermsAndConditionsStatus};
 use iban::Iban;
 use log::{debug, error, info, warn, Level};
 use logger::init_logger_once;
+use num_enum::TryFromPrimitive;
 use parrot::AnalyticsClient;
 pub use parrot::PaymentSource;
 use perro::{
@@ -264,6 +265,18 @@ pub struct ClearWalletInfo {
     /// Estimate for the fee paid to the swap service.
     pub swap_fee: Amount,
     prepare_response: PrepareOnchainPaymentResponse,
+}
+
+#[derive(PartialEq, Eq, Debug, TryFromPrimitive, Clone, Copy)]
+#[repr(u8)]
+pub(crate) enum EnableStatus {
+    Enabled,
+    FeatureDisabled,
+}
+
+pub enum FeatureFlag {
+    LightningAddress,
+    PhoneNumber,
 }
 
 const MAX_FEE_PERMYRIAD: Permyriad = Permyriad(150);
@@ -1649,8 +1662,8 @@ impl LightningNode {
 
         let mut action_required_items: Vec<ActionRequiredItem> = uncompleted_offers
             .into_iter()
-            .map(|o| o.into())
-            .chain(failed_swaps.into_iter().map(|s| s.into()))
+            .map(Into::into)
+            .chain(failed_swaps.into_iter().map(Into::into))
             .collect();
 
         // CLN currently forces a min-emergency onchain balance of 546 (the dust limit)
@@ -2543,6 +2556,7 @@ impl LightningNode {
             .lock_unwrap()
             .retrieve_lightning_addresses()?
             .into_iter()
+            .filter_map(with_status(EnableStatus::Enabled))
             .find(|a| !a.starts_with('-')))
     }
 
@@ -2554,10 +2568,11 @@ impl LightningNode {
             .data_store
             .lock_unwrap()
             .retrieve_lightning_addresses()?
-            .iter()
+            .into_iter()
+            .filter_map(with_status(EnableStatus::Enabled))
             .find(|a| a.starts_with('-'))
             .and_then(|a| {
-                lightning_address_to_phone_number(a, &self.environment.lipa_lightning_domain)
+                lightning_address_to_phone_number(&a, &self.environment.lipa_lightning_domain)
             }))
     }
 
@@ -2623,6 +2638,73 @@ impl LightningNode {
         self.data_store
             .lock_unwrap()
             .store_lightning_address(&address)
+    }
+
+    /// Set value of a feature flag.
+    /// The method will report the change to the backend and update the local database.
+    ///
+    /// Parameters:
+    /// * `feature` - feature flag to be set.
+    /// * `enable` - enable or disable the feature.
+    ///
+    /// Requires network: **yes**
+    pub fn set_feature_flag(&self, feature: FeatureFlag, flag_enabled: bool) -> Result<()> {
+        let kind_of_address = match feature {
+            FeatureFlag::LightningAddress => |a: &String| !a.starts_with('-'),
+            FeatureFlag::PhoneNumber => |a: &String| a.starts_with('-'),
+        };
+        let (from_status, to_status) = match flag_enabled {
+            true => (EnableStatus::FeatureDisabled, EnableStatus::Enabled),
+            false => (EnableStatus::Enabled, EnableStatus::FeatureDisabled),
+        };
+
+        let addresses = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_lightning_addresses()?
+            .into_iter()
+            .filter_map(with_status(from_status))
+            .filter(kind_of_address)
+            .collect::<Vec<_>>();
+
+        if addresses.is_empty() {
+            info!("No lightning addresses to change the status");
+            return Ok(());
+        }
+
+        let doing = match flag_enabled {
+            true => "Enabling",
+            false => "Disabling",
+        };
+        info!("{doing} {addresses:?} on the backend");
+
+        self.rt
+            .handle()
+            .block_on(async {
+                if flag_enabled {
+                    pigeon::enable_lightning_addresses(
+                        &self.environment.backend_url,
+                        &self.async_auth,
+                        addresses.clone(),
+                    )
+                    .await
+                } else {
+                    pigeon::disable_lightning_addresses(
+                        &self.environment.backend_url,
+                        &self.async_auth,
+                        addresses.clone(),
+                    )
+                    .await
+                }
+            })
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to enable/disable a lightning address",
+            )?;
+        let mut data_store = self.data_store.lock_unwrap();
+        addresses
+            .into_iter()
+            .try_for_each(|a| data_store.update_lightning_address(&a, to_status))
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {
@@ -2894,6 +2976,10 @@ pub(crate) fn register_webhook_url(
         )?;
     debug!("Successfully registered notification webhook with Breez SDK. URL: {webhook_url}");
     Ok(())
+}
+
+fn with_status(status: EnableStatus) -> impl Fn((String, EnableStatus)) -> Option<String> {
+    move |(v, s)| if s == status { Some(v) } else { None }
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));

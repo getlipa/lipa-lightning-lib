@@ -19,10 +19,10 @@ use std::path::Path;
 use std::time::SystemTime;
 use uniffi_lipalightninglib::{
     ActionRequiredItem, Activity, Amount, ChannelCloseInfo, ChannelCloseState, DecodedData,
-    ExchangeRate, FailedSwapInfo, FiatValue, IncomingPaymentInfo, InvoiceCreationMetadata,
-    InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails, LnUrlWithdrawDetails,
-    MaxRoutingFeeMode, OfferInfo, OfferKind, OutgoingPaymentInfo, PaymentInfo, PaymentMetadata,
-    RangeHit, Recipient, TzConfig,
+    ExchangeRate, FailedSwapInfo, FeatureFlag, FiatValue, IncomingPaymentInfo,
+    InvoiceCreationMetadata, InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails,
+    LnUrlWithdrawDetails, MaxRoutingFeeMode, OfferInfo, OfferKind, OutgoingPaymentInfo,
+    PaymentInfo, PaymentMetadata, RangeHit, Recipient, TzConfig,
 };
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
@@ -296,9 +296,14 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     }
                 }
                 "queryverifiedphonenumber" => match node.query_verified_phone_number() {
-                    Ok(n) => println!("Verified phone number: {n:?}"),
+                    Ok(n) => println!("{n:?}"),
                     Err(message) => println!("{}", format!("{message:#}").red()),
                 },
+                "setfeatureflag" => {
+                    if let Err(message) = set_feature_flag(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "logdebug" => {
                     if let Err(message) = node.log_debug_info() {
                         println!("{}", format!("{message:#}").red());
@@ -452,6 +457,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "queryverifiedphonenumber",
     ));
     hints.insert(CommandHint::new(
+        "setfeatureflag <feature> <enabled>",
+        "setfeatureflag ",
+    ));
+    hints.insert(CommandHint::new(
         "paymentuuid <payment hash>",
         "paymentuuid ",
     ));
@@ -537,6 +546,7 @@ fn help() {
     println!("  clearwalletinfo");
     println!("  clearwallet <address>");
     println!();
+    println!("  setfeatureflag <feature> <enabled>");
     println!("  logdebug");
     println!("  health");
     println!();
@@ -1101,7 +1111,7 @@ fn print_offer(offer: &OfferInfo) {
     };
 
     let created_at: DateTime<Local> = offer.created_at.into();
-    let expires_at: Option<DateTime<Local>> = offer.expires_at.map(|e| e.into());
+    let expires_at: Option<DateTime<Local>> = offer.expires_at.map(Into::into);
 
     println!("{kind} offer created at {created_at}:");
     println!("      Expires at:         {expires_at:?}");
@@ -1526,4 +1536,20 @@ fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
     println!("Sweeping transaction: {txid}");
 
     Ok(())
+}
+
+fn set_feature_flag(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let feature = words.next().ok_or(anyhow!(
+        "<feature> is required; allowed: lightningaddress, la, phonenumber, pn"
+    ))?;
+    let feature = match feature {
+		"lightningaddress" | "la" => FeatureFlag::LightningAddress,
+		"phonenumber" | "pn" => FeatureFlag::PhoneNumber,
+		feature => bail!("Invalid feature flag name: `{feature}`; allowed: lightningaddress, la, phonenumber, pn"),
+	};
+    let enabled: bool = words
+        .next()
+        .ok_or(anyhow!("<enabled> is required"))?
+        .parse()?;
+    node.set_feature_flag(feature, enabled).map_err(Into::into)
 }
