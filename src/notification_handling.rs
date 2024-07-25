@@ -10,8 +10,8 @@ use crate::exchange_rate_provider::{ExchangeRateProvider, ExchangeRateProviderIm
 use crate::logger::init_logger_once;
 use crate::util::LogIgnoreError;
 use crate::{
-    enable_backtrace, register_webhook_url, sanitize_input, start_sdk, Config, RuntimeErrorCode,
-    UserPreferences, DB_FILENAME, LOGS_DIR,
+    enable_backtrace, register_webhook_url, sanitize_input, start_sdk, Config, EnableStatus,
+    RuntimeErrorCode, UserPreferences, DB_FILENAME, LOGS_DIR,
 };
 use breez_sdk_core::{
     BreezEvent, BreezServices, EventListener, InvoicePaidDetails, OpenChannelFeeRequest, Payment,
@@ -306,6 +306,29 @@ fn handle_lnurl_pay_request_notification(
             "Failed to query open channel fees",
         )?;
 
+    // Prevent payments sent to disabled address from being received
+    let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
+    let mut data_store = DataStore::new(&db_path)
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
+    match data_store
+        .retrieve_lightning_addresses()
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?
+        .iter()
+        .find(|(a, _)| data.recipient == *a)
+    {
+        None => {
+            permanent_failure!(
+                "Received LNURL Pay request notification for unrecognized address/phone number"
+            )
+        }
+        Some((_, EnableStatus::FeatureDisabled)) => {
+            permanent_failure!(
+                "Received LNURL Pay request notification for disabled address/phone number feature"
+            )
+        }
+        Some((_, EnableStatus::Enabled)) => {}
+    }
+
     let strong_typed_seed = get_strong_typed_seed(&config)?;
     let environment = get_environment(&config)?;
 
@@ -370,9 +393,6 @@ fn handle_lnurl_pay_request_notification(
             "Failed to get exchange rates",
         )?;
 
-    let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
-    let mut data_store = DataStore::new(&db_path)
-        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
     data_store
         .store_payment_info(
             &receive_payment_result.ln_invoice.payment_hash,
