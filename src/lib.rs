@@ -2658,16 +2658,53 @@ impl LightningNode {
             false => (EnableStatus::Enabled, EnableStatus::FeatureDisabled),
         };
 
-        let mut addresses = self
+        let addresses = self
             .data_store
             .lock_unwrap()
             .retrieve_lightning_addresses()?
             .into_iter()
             .filter_map(with_status(from_status))
-            .filter(kind_of_address);
-        // TODO: Ask the backend to disable the addresses.
+            .filter(kind_of_address)
+            .collect::<Vec<_>>();
+
+        if addresses.is_empty() {
+            info!("No lightning addresses to change the status");
+            return Ok(());
+        }
+
+        let doing = match flag_enabled {
+            true => "Enabling",
+            false => "Disabling",
+        };
+        info!("{doing} {:?} on the backend", addresses);
+
+        self.rt
+            .handle()
+            .block_on(async {
+                if flag_enabled {
+                    pigeon::enable_lightning_addresses(
+                        &self.environment.backend_url,
+                        &self.async_auth,
+                        addresses.clone(),
+                    )
+                    .await
+                } else {
+                    pigeon::disable_lightning_addresses(
+                        &self.environment.backend_url,
+                        &self.async_auth,
+                        addresses.clone(),
+                    )
+                    .await
+                }
+            })
+            .map_to_runtime_error(
+                RuntimeErrorCode::AuthServiceUnavailable,
+                "Failed to enable/disable a lightning address",
+            )?;
         let mut data_store = self.data_store.lock_unwrap();
-        addresses.try_for_each(|a| data_store.update_lightning_address(&a, to_status))
+        addresses
+            .into_iter()
+            .try_for_each(|a| data_store.update_lightning_address(&a, to_status))
     }
 
     fn report_send_payment_issue(&self, payment_hash: String) {
