@@ -38,7 +38,7 @@ pub trait EventsCallback: Send + Sync {
     ///
     /// Parameters:
     /// * `payment_hash` - can be used to find the [´Activity´](crate::Activity) corresponding to
-    /// this swap.
+    ///   this swap.
     fn swap_received(&self, payment_hash: String);
 
     /// This callback will be called when a change to the Breez services health is noticed
