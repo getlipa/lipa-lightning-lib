@@ -202,8 +202,15 @@ jobs:
           sed -i "s/to_replace_release_version/${{ env.RELEASE_VERSION }}/g" Package.swift
           sed -i "s/to_replace_zip_checksum/$(cat checksum)/g" Package.swift
           
+          cp Info.plist.framework_template Info.plist
+          sed -i "s/to_replace_version/${{ env.RELEASE_VERSION }}/g" Info.plist
+          cp Info.plist lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/Info.plist
+          mv Info.plist lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/Info.plist
+          
           git add Package.swift
           git add Sources/LipaLightningLib/LipaLightningLib.swift
+          git add lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/Info.plist
+          git add lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/Info.plist
           git commit -m "This commit was created automatically by the lipa bot"
           git restore .
           git pull --rebase
