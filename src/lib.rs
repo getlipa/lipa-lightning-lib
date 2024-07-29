@@ -340,7 +340,7 @@ impl LightningNode {
     /// Parameters:
     /// * `config` - configuration parameters
     /// * `events_callback` - a callbacks interface for the consumer of this library to be notified
-    /// of certain events.
+    ///   of certain events.
     ///
     /// Requires network: **yes**
     pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
@@ -601,13 +601,13 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `amount_sat` - the smallest amount of sats required for the node to accept the incoming
-    /// payment (sender will have to pay fees on top of that amount)
+    ///   payment (sender will have to pay fees on top of that amount)
     /// * `lsp_fee_params` - the params that will be used to determine the lsp fee.
-    /// Can be obtained from [`LightningNode::calculate_lsp_fee`] to guarantee predicted fees
-    /// are the ones charged.
+    ///    Can be obtained from [`LightningNode::calculate_lsp_fee`] to guarantee predicted fees
+    ///    are the ones charged.
     /// * `description` - a description to be embedded into the created invoice
     /// * `metadata` - additional data about the invoice creation used for analytics purposes,
-    /// used to improve the user experience
+    ///    used to improve the user experience
     ///
     /// Requires network: **yes**
     pub fn create_invoice(
@@ -881,7 +881,7 @@ impl LightningNode {
     /// * `lnurl_pay_request_data` - LNURL-pay request data as obtained from [`LightningNode::decode_data`]
     /// * `amount_sat` - amount to be paid
     /// * `comment` - optional comment to be sent to payee (`max_comment_length` in
-    /// [`LnUrlPayDetails`] must be respected)
+    ///   [`LnUrlPayDetails`] must be respected)
     ///
     /// Returns the payment hash of the payment.
     ///
@@ -1585,8 +1585,8 @@ impl LightningNode {
     /// * `email` - this email will be used to send status information about different topups
     /// * `user_iban` - the user will send fiat from this iban
     /// * `user_currency` - the fiat currency (ISO 4217 currency code) that will be sent for
-    /// exchange. Not all are supported. A consumer of this library should find out about available
-    /// ones using other sources.
+    ///    exchange. Not all are supported. A consumer of this library should find out about available
+    ///    ones using other sources.
     ///
     /// Requires network: **yes**
     pub fn register_fiat_topup(
@@ -1788,7 +1788,7 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `offer` - An offer that is still valid for collection. Must have its `lnurlw` field
-    /// filled in.
+    ///   filled in.
     ///
     /// Requires network: **yes**
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
@@ -1937,7 +1937,7 @@ impl LightningNode {
     /// Parameters:
     /// * `address` - the funds will be sweeped to this address
     /// * `onchain_fee_rate` - the fee rate that should be applied for the transaction.
-    /// The recommended on-chain fee rate can be queried using [`LightningNode::query_onchain_fee_rate`]
+    ///   The recommended on-chain fee rate can be queried using [`LightningNode::query_onchain_fee_rate`]
     ///
     /// Returns information on the prepared sweep, including the exact fee that results from
     /// using the provided fee rate. The method [`LightningNode::sweep`] can be used to broadcast
@@ -2030,7 +2030,7 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `lsp_fee_params` - the lsp fee parameters to be used if a new channel needs to
-    /// be opened. Can be obtained using [`LightningNode::calculate_lsp_fee`].
+    ///   be opened. Can be obtained using [`LightningNode::calculate_lsp_fee`].
     ///
     /// Requires network: **yes**
     pub fn generate_swap_address(
@@ -2089,7 +2089,7 @@ impl LightningNode {
     /// * `failed_swap_info` - the failed swap that will be prepared
     /// * `to_address` - the destination address to which funds will be sent
     /// * `onchain_fee_rate` - the fee rate that will be applied. The recommended one can be fetched
-    /// using [`LightningNode::query_onchain_fee_rate`]
+    ///   using [`LightningNode::query_onchain_fee_rate`]
     ///
     /// Requires network: **yes**
     pub fn prepare_resolve_failed_swap(
@@ -2132,7 +2132,7 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `resolve_failed_swap_info` - Information needed to resolve the failed swap. Can be obtained
-    /// using [`LightningNode::prepare_resolve_failed_swap`].
+    ///   using [`LightningNode::prepare_resolve_failed_swap`].
     ///
     /// Returns the txid of the resolving transaction.
     ///
@@ -2247,9 +2247,9 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `sat_per_vbyte` - the fee rate to use for the on-chain transaction.
-    /// Can be obtained with [`LightningNode::get_channel_close_resolving_fees`].
+    ///   Can be obtained with [`LightningNode::get_channel_close_resolving_fees`].
     /// * `lsp_fee_params` - the lsp fee params for opening a new channel if necessary.
-    /// Can be obtained with [`LightningNode::get_channel_close_resolving_fees`].
+    ///   Can be obtained with [`LightningNode::get_channel_close_resolving_fees`].
     ///
     /// Returns the txid of the sweeping tx.
     ///
@@ -2499,9 +2499,9 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `clear_wallet_info` - An instance of [`ClearWalletInfo`] obtained using
-    /// [`LightningNode::prepare_clear_wallet`].
+    ///   [`LightningNode::prepare_clear_wallet`].
     /// * `destination_onchain_address_data` - An on-chain address data instance. Can be obtained
-    /// using [`LightningNode::decode_data`].
+    ///   using [`LightningNode::decode_data`].
     ///
     /// Requires network: **yes**
     pub fn clear_wallet(
@@ -2598,7 +2598,7 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `phone_number` - the phone number to be registered. Needs to be checked for validity using
-    /// [LightningNode::parse_phone_number_to_lightning_address].
+    ///   [LightningNode::parse_phone_number_to_lightning_address].
     ///
     /// Requires network: **yes**
     pub fn request_phone_number_verification(&self, phone_number: String) -> Result<()> {
