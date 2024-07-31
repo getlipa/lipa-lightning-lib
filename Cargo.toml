@@ -38,7 +38,7 @@ file-rotate = "0.7.6"
 hex = "0.4.3"
 iban_validate = "4.0.1"
 log = "0.4.22"
-num_enum = "0.7.2"
+num_enum = "0.7.3"
 phonenumber = "0.3.6"
 rand = "0.8.5"
 regex = { version = "1.10.5" }
