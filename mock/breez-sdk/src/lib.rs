@@ -638,9 +638,16 @@ impl BreezServices {
         &self,
         req: PrepareRedeemOnchainFundsRequest,
     ) -> SdkResult<PrepareRedeemOnchainFundsResponse> {
+        let tx_fee_sat = SWAP_TX_WEIGHT / 4 * (req.sat_per_vbyte as u64);
+        if get_onchain_balance_msat() <= tx_fee_sat * 1_000 {
+            // TODO: Switch to specific error when https://github.com/breez/breez-sdk/issues/1059 is addressed
+            return Err(SdkError::Generic {
+                err: "Insufficient funds to pay fees".to_string(),
+            });
+        }
         Ok(PrepareRedeemOnchainFundsResponse {
             tx_weight: SWAP_TX_WEIGHT,
-            tx_fee_sat: SWAP_TX_WEIGHT / 4 * (req.sat_per_vbyte as u64),
+            tx_fee_sat,
         })
     }
 
