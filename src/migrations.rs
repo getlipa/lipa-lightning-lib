@@ -138,6 +138,14 @@ const MIGRATION_15_LIGHTNING_ADDRESSES_ENABLE_STATUS: &str = "
     ALTER TABLE lightning_addresses ADD COLUMN enable_status INTEGER NOT NULL DEFAULT 0;
 ";
 
+const MIGRATION_16_HIDDEN_CHANNEL_CLOSE_AMOUNT: &str = "
+    CREATE TABLE hidden_channel_close_amount (
+        id INTEGER NOT NULL PRIMARY KEY,
+        amount_sat INTEGER NOT NULL,
+        inserted_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -161,6 +169,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_13_PAYMENT_PERSONAL_NOTE),
         M::up(MIGRATION_14_LNURL_PAY_RECEIVE_DATA),
         M::up(MIGRATION_15_LIGHTNING_ADDRESSES_ENABLE_STATUS),
+        M::up(MIGRATION_16_HIDDEN_CHANNEL_CLOSE_AMOUNT),
     ])
 }
 

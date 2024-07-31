@@ -81,7 +81,7 @@ jobs:
       - name: rust-toolchain
         uses: actions-rs/toolchain@v1.0.6
         with:
-          toolchain: nightly-2023-12-28
+          toolchain: nightly-2024-07-31
           override: true
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
@@ -98,4 +98,4 @@ jobs:
         env:
           CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
       - name: Run unused dependency checker
-        run: cargo +nightly-2023-12-28 udeps
+        run: cargo +nightly-2024-07-31 udeps

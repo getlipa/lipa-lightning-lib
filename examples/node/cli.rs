@@ -191,6 +191,13 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red())
                     }
                 }
+                "hidechannelcloseitem" => {
+                    if let Err(message) =
+                        node.hide_channel_closes_funds_available_action_required_item()
+                    {
+                        println!("{}", format!("{message:#}").red())
+                    }
+                }
                 "l" | "listactivities" => {
                     if let Err(message) = list_activities(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
@@ -421,6 +428,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "listactionableitems",
         "listactionableitems",
     ));
+    hints.insert(CommandHint::new(
+        "hidechannelcloseitem",
+        "hidechannelcloseitem",
+    ));
 
     hints.insert(CommandHint::new(
         "o [number of activities = 10] [fun mode = false]",
@@ -528,6 +539,7 @@ fn help() {
     println!("  calculatelightningpayoutfee <offer id>");
     println!();
     println!("  listactionableitems");
+    println!("  hidechannelcloseitem");
     println!();
     println!("  o | overview [number of activities = 10] [fun mode = false]");
     println!("  l | listactivities [number of activities = 2]");
@@ -1496,6 +1508,14 @@ fn calculate_lightning_payout_fee(
 fn get_channel_close_resolving_fees(node: &LightningNode) -> Result<()> {
     let resolving_fees = node.get_channel_close_resolving_fees()?;
 
+    let resolving_fees = match resolving_fees {
+        None => {
+            println!("Channel close funds cannot be resolved because they are too little.");
+            return Ok(());
+        }
+        Some(f) => f,
+    };
+
     println!(
         "Sweep on-chain fees: {}",
         amount_to_string(&resolving_fees.sweep_onchain_fee_estimate)
@@ -1524,7 +1544,9 @@ fn get_channel_close_resolving_fees(node: &LightningNode) -> Result<()> {
 }
 
 fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
-    let resolving_fees = node.get_channel_close_resolving_fees()?;
+    let resolving_fees = node.get_channel_close_resolving_fees()?.ok_or(anyhow!(
+        "Channel funds cannot be resolved as they are too little"
+    ))?;
 
     let swap_fees = resolving_fees
         .swap_fees
