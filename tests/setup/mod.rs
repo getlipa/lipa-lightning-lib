@@ -1,5 +1,4 @@
 use crate::print_events_handler::PrintEventsHandler;
-use crate::wait_for;
 
 use uniffi_lipalightninglib::{mnemonic_to_secret, Config, TzConfig};
 use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
@@ -88,9 +87,6 @@ fn start_node(node_name: &str) -> Result<LightningNode> {
 
     let events_handler = PrintEventsHandler {};
     let node = LightningNode::new(config, Box::new(events_handler))?;
-
-    // Wait for the P2P background task to connect to the LSP
-    wait_for!(!node.get_node_info().unwrap().peers.is_empty());
 
     Ok(node)
 }

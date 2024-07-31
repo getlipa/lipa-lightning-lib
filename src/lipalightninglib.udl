@@ -90,6 +90,9 @@ interface LightningNode {
     sequence<ActionRequiredItem> list_action_required_items();
 
     [Throws=LnError]
+    void hide_channel_closes_funds_available_action_required_item();
+
+    [Throws=LnError]
     sequence<OfferInfo> query_uncompleted_offers();
 
     [Throws=LnError]
@@ -129,7 +132,7 @@ interface LightningNode {
     string resolve_failed_swap(ResolveFailedSwapInfo resolve_failed_swap_info);
 
     [Throws=LnError]
-    ChannelCloseResolvingFees get_channel_close_resolving_fees();
+    ChannelCloseResolvingFees? get_channel_close_resolving_fees();
 
     [Throws=SwapError]
     string swap_onchain_to_lightning(u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_params);

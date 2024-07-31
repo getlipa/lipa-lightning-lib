@@ -1682,15 +1682,42 @@ impl LightningNode {
                 available_channel_closes_funds.sats - CLN_DUST_LIMIT_SAT
             };
 
-            action_required_items.push(ActionRequiredItem::ChannelClosesFundsAvailable {
-                available_funds: available_funds_sats
-                    .as_sats()
-                    .to_amount_down(&self.get_exchange_rate()),
-            })
+            let optional_hidden_amount_sat = self
+                .data_store
+                .lock_unwrap()
+                .retrieve_hidden_channel_close_onchain_funds_amount_sat()?;
+
+            let include_item_in_list = match optional_hidden_amount_sat {
+                Some(amount) if amount == available_channel_closes_funds.sats => {
+                    self.get_channel_close_resolving_fees()?.is_some()
+                }
+                _ => true,
+            };
+
+            if include_item_in_list {
+                action_required_items.push(ActionRequiredItem::ChannelClosesFundsAvailable {
+                    available_funds: available_funds_sats
+                        .as_sats()
+                        .to_amount_down(&self.get_exchange_rate()),
+                });
+            }
         }
 
         // TODO: improve ordering of items in the returned vec
         Ok(action_required_items)
+    }
+
+    /// Hides the channel close action required item in case the amount cannot be recovered due
+    /// to it being too small. The item will reappear once the amount of funds changes or
+    /// onchain-fees go down enough to make the amount recoverable.
+    ///
+    /// Requires network: **no**
+    pub fn hide_channel_closes_funds_available_action_required_item(&self) -> Result<()> {
+        let onchain_balance_sat = self.get_node_info()?.onchain_balance.sats;
+        self.data_store
+            .lock_unwrap()
+            .store_hidden_channel_close_onchain_funds_amount_sat(onchain_balance_sat)?;
+        Ok(())
     }
 
     /// Get a list of unclaimed fund offers
@@ -2141,14 +2168,14 @@ impl LightningNode {
             .refund_tx_id)
     }
 
-    /// Returns the fees for resolving channel closes.
+    /// Returns the fees for resolving channel closes if there are enough funds to pay for fees.
     ///
     /// Throws an [`RuntimeErrorCode::NoOnChainFundsToResolve`] error if no on-chain funds are available to resolve.
     ///
     /// Returns the fee information for the available resolving options.
     ///
     /// Requires network: **yes**
-    pub fn get_channel_close_resolving_fees(&self) -> Result<ChannelCloseResolvingFees> {
+    pub fn get_channel_close_resolving_fees(&self) -> Result<Option<ChannelCloseResolvingFees>> {
         let rate = self.get_exchange_rate();
         let onchain_balance = self
             .sdk
@@ -2180,23 +2207,34 @@ impl LightningNode {
 
         let sat_per_vbyte = self.query_onchain_fee_rate()?;
 
-        let prepared_sweep = self.prepare_sweep(
+        let prepared_sweep = match self.prepare_sweep(
             swap_info
                 .clone()
                 .map(|s| s.bitcoin_address)
                 .unwrap_or("1BitcoinEaterAddressDontSendf59kuE".to_string()),
             sat_per_vbyte,
-        )?;
+        ) {
+            Ok(s) => s,
+            // TODO: Stop parsing error string when https://github.com/breez/breez-sdk/issues/1059 is addressed
+            Err(e) if e.to_string().contains("Insufficient funds to pay fees") => return Ok(None),
+            Err(e) => return Err(e),
+        };
+
+        // Require onchain fees to be less than half of the onchain balance to leave some leeway
+        //  (for now, the onchain fee is just an estimation because the destination address is unknown)
+        if prepared_sweep.onchain_fee_amount.sats * 2 > onchain_balance.sats_round_down().sats {
+            return Ok(None);
+        }
 
         if swap_info.is_none()
             || prepared_sweep.amount.sats < (swap_info.clone().unwrap().min_allowed_deposit as u64)
             || prepared_sweep.amount.sats > (swap_info.clone().unwrap().max_allowed_deposit as u64)
         {
-            return Ok(ChannelCloseResolvingFees {
+            return Ok(Some(ChannelCloseResolvingFees {
                 swap_fees: None,
                 sweep_onchain_fee_estimate: prepared_sweep.onchain_fee_amount,
                 sat_per_vbyte,
-            });
+            }));
         }
 
         let lsp_fees = self.calculate_lsp_fee(prepared_sweep.amount.sats)?;
@@ -2214,11 +2252,11 @@ impl LightningNode {
             lsp_fee_params: lsp_fees.lsp_fee_params,
         };
 
-        Ok(ChannelCloseResolvingFees {
+        Ok(Some(ChannelCloseResolvingFees {
             swap_fees: Some(swap_to_lightning_fees),
             sweep_onchain_fee_estimate: prepared_sweep.onchain_fee_amount,
             sat_per_vbyte,
-        })
+        }))
     }
 
     /// Automatically swaps on-chain funds back to lightning.

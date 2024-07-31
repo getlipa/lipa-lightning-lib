@@ -8,7 +8,7 @@ use crate::analytics::AnalyticsConfig;
 use chrono::{DateTime, Utc};
 use crow::{PermanentFailureCode, TemporaryFailureCode};
 use perro::MapToError;
-use rusqlite::{backup, params, Connection, Params, Row};
+use rusqlite::{backup, params, Connection, OptionalExtension, Params, Row};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub(crate) const BACKUP_DB_FILENAME_SUFFIX: &str = ".backup";
@@ -457,6 +457,33 @@ impl DataStore {
             .prepare(statement)?
             .query_map(params, from_row)?
             .collect()
+    }
+
+    pub fn store_hidden_channel_close_onchain_funds_amount_sat(
+        &mut self,
+        amount_sat: u64,
+    ) -> Result<()> {
+        self.backup_status = BackupStatus::WaitingForBackup;
+        self.conn
+            .execute(
+                "INSERT INTO hidden_channel_close_amount (amount_sat) VALUES (?1)",
+                params![amount_sat],
+            )
+            .map_to_permanent_failure("Failed to store hidden channel close amount in db")?;
+        Ok(())
+    }
+
+    pub fn retrieve_hidden_channel_close_onchain_funds_amount_sat(
+        &mut self,
+    ) -> Result<Option<u64>> {
+        self.conn
+            .query_row(
+                "SELECT amount_sat FROM hidden_channel_close_amount ORDER BY id DESC LIMIT 1",
+                (),
+                |r| r.get(0),
+            )
+            .optional()
+            .map_to_permanent_failure("Failed to query last hidden channel close amount")
     }
 }
 
@@ -1360,6 +1387,40 @@ mod tests {
                 ("satoshi@lipa.swiss".to_string(), EnableStatus::Enabled),
                 ("finney@lipa.swiss".to_string(), EnableStatus::Enabled),
             ]
+        );
+    }
+
+    #[test]
+    fn test_storing_channel_close_hidden_amount() {
+        let db_name = String::from("hidden_channel_closes.db3");
+        reset_db(&db_name);
+        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+
+        assert_eq!(
+            data_store
+                .retrieve_hidden_channel_close_onchain_funds_amount_sat()
+                .unwrap(),
+            None
+        );
+
+        data_store
+            .store_hidden_channel_close_onchain_funds_amount_sat(50)
+            .unwrap();
+        assert_eq!(
+            data_store
+                .retrieve_hidden_channel_close_onchain_funds_amount_sat()
+                .unwrap(),
+            Some(50)
+        );
+
+        data_store
+            .store_hidden_channel_close_onchain_funds_amount_sat(2000)
+            .unwrap();
+        assert_eq!(
+            data_store
+                .retrieve_hidden_channel_close_onchain_funds_amount_sat()
+                .unwrap(),
+            Some(2000)
         );
     }
 
