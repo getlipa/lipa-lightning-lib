@@ -2243,9 +2243,12 @@ impl LightningNode {
             return Ok(None);
         }
 
+        let lsp_fees = self.calculate_lsp_fee(prepared_sweep.amount.sats)?;
+
         if swap_info.is_none()
             || prepared_sweep.amount.sats < (swap_info.clone().unwrap().min_allowed_deposit as u64)
             || prepared_sweep.amount.sats > (swap_info.clone().unwrap().max_allowed_deposit as u64)
+            || prepared_sweep.amount.sats <= lsp_fees.lsp_fee.sats
         {
             return Ok(Some(ChannelCloseResolvingFees {
                 swap_fees: None,
@@ -2253,8 +2256,6 @@ impl LightningNode {
                 sat_per_vbyte,
             }));
         }
-
-        let lsp_fees = self.calculate_lsp_fee(prepared_sweep.amount.sats)?;
 
         let swap_fee = 0_u64.as_sats();
         let swap_to_lightning_fees = SwapToLightningFees {
@@ -2299,24 +2300,54 @@ impl LightningNode {
     ) -> std::result::Result<String, ReceiveOnchainError> {
         let onchain_balance = self.sdk.node_info()?.onchain_balance_msat.as_msats();
 
-        let swap_address_info = self.generate_swap_address(lsp_fee_params)?;
+        let swap_address_info = self.generate_swap_address(lsp_fee_params.clone())?;
 
-        if swap_address_info.min_deposit.sats.as_sats().msats > onchain_balance.msats {
+        let prepare_response =
+            self.rt
+                .handle()
+                .block_on(self.sdk.prepare_redeem_onchain_funds(
+                    PrepareRedeemOnchainFundsRequest {
+                        to_address: swap_address_info.address.clone(),
+                        sat_per_vbyte,
+                    },
+                ))?;
+        // TODO: remove CLN_DUST_LIMIT_SAT component if/when
+        //      https://github.com/ElementsProject/lightning/issues/7131 is addressed
+        let send_amount_sats = onchain_balance.sats_round_down().sats
+            - CLN_DUST_LIMIT_SAT
+            - prepare_response.tx_fee_sat;
+
+        if swap_address_info.min_deposit.sats > send_amount_sats {
             return Err(ReceiveOnchainError::Generic {
                 err: format!(
-                    "Not enough funds ({} msats) available for swap ({} msats)",
-                    onchain_balance.msats,
-                    swap_address_info.min_deposit.sats.as_sats().msats,
+                    "Not enough funds ({} sats after onchain fees) available for min swap amount({} sats)",
+                    send_amount_sats,
+                    swap_address_info.min_deposit.sats,
                 ),
             });
         }
 
-        if swap_address_info.max_deposit.sats.as_sats().msats < onchain_balance.msats {
+        if swap_address_info.max_deposit.sats < send_amount_sats {
             return Err(ReceiveOnchainError::Generic {
                 err: format!(
-                    "Available funds ({} msats) exceed limit for swap ({} msats)",
-                    onchain_balance.msats,
-                    swap_address_info.max_deposit.sats.as_sats().msats,
+                    "Available funds ({} sats after onchain fees) exceed limit for swap ({} sats)",
+                    send_amount_sats, swap_address_info.max_deposit.sats,
+                ),
+            });
+        }
+
+        let lsp_fees = self
+            .calculate_lsp_fee(send_amount_sats)
+            .map_err(|_| ReceiveOnchainError::ServiceConnectivity {
+                err: "Could not get lsp fees".to_string(),
+            })?
+            .lsp_fee
+            .sats;
+        if lsp_fees >= send_amount_sats {
+            return Err(ReceiveOnchainError::Generic {
+                err: format!(
+                    "Available funds ({} sats after onchain fees) are not enough for lsp fees ({} sats)",
+                    send_amount_sats, lsp_fees,
                 ),
             });
         }
