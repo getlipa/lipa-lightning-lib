@@ -43,8 +43,8 @@ const TX_ID_DUMMY: &str = "f4184fc596403b9d638783cf57adfe4c75c605f6356fbc9133853
 const LNURL_PAY_FEE_MSAT: u64 = 8_000;
 
 use breez_sdk_core::error::{
-    ReceiveOnchainError, ReceivePaymentError, SdkError, SdkResult, SendOnchainError,
-    SendPaymentError,
+    ReceiveOnchainError, ReceivePaymentError, RedeemOnchainError, SdkError, SdkResult,
+    SendOnchainError, SendPaymentError,
 };
 use breez_sdk_core::lnurl::pay::{LnUrlPayResult, LnUrlPaySuccessData};
 use breez_sdk_core::InputType::Bolt11;
@@ -637,11 +637,10 @@ impl BreezServices {
     pub async fn prepare_redeem_onchain_funds(
         &self,
         req: PrepareRedeemOnchainFundsRequest,
-    ) -> SdkResult<PrepareRedeemOnchainFundsResponse> {
+    ) -> Result<PrepareRedeemOnchainFundsResponse, RedeemOnchainError> {
         let tx_fee_sat = SWAP_TX_WEIGHT / 4 * (req.sat_per_vbyte as u64);
         if get_onchain_balance_msat() <= tx_fee_sat * 1_000 {
-            // TODO: Switch to specific error when https://github.com/breez/breez-sdk/issues/1059 is addressed
-            return Err(SdkError::Generic {
+            return Err(RedeemOnchainError::InsufficientFunds {
                 err: "Insufficient funds to pay fees".to_string(),
             });
         }
