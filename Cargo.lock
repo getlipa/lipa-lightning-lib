@@ -586,8 +586,8 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-core"
-version = "0.5.1-rc6"
-source = "git+https://github.com/breez/breez-sdk?tag=0.5.1-rc6#bafe6e0832d902db90eae5f864c8794efc96e389"
+version = "0.5.2"
+source = "git+https://github.com/breez/breez-sdk?tag=0.5.2#10a4cd62fc39c1e0c56ab2bac3a26210f5515204"
 dependencies = [
  "aes",
  "anyhow",
@@ -629,7 +629,7 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-mock"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
@@ -950,15 +950,15 @@ checksum = "22ec99545bb0ed0ea7bb9b8e1e9122ea386ff8a48c0922e43f36d45ab09e0e80"
 
 [[package]]
 name = "crossterm"
-version = "0.27.0"
+version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f476fe445d41c9e991fd07515a6f463074b782242ccf4a5b7b1d1012e70824df"
+checksum = "829d955a0bb380ef178a640b91779e3987da38c9aea133b20614cfed8cdea9c6"
 dependencies = [
  "bitflags 2.6.0",
  "crossterm_winapi",
- "libc",
- "mio 0.8.11",
+ "mio",
  "parking_lot 0.12.3",
+ "rustix",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -1213,9 +1213,9 @@ dependencies = [
 
 [[package]]
 name = "email_address"
-version = "0.2.7"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46b7a0ac6570e31bfe2c6cf575a576a55af9893d1a6b30b4444e6e90b216bb84"
+checksum = "e079f19b08ca6239f47f8ba8509c11cf3ea30095831f7fed61441475edd8c449"
 dependencies = [
  "serde",
 ]
@@ -1584,7 +1584,7 @@ checksum = "40ecd4077b5ae9fd2e9e169b102c6c330d0605168eb0e8bf79952b256dbefffd"
 [[package]]
 name = "gl-client"
 version = "0.2.0"
-source = "git+https://github.com/Blockstream/greenlight.git?rev=16fa13d40f4fc271cf99febf3f40246b6b23716a#16fa13d40f4fc271cf99febf3f40246b6b23716a"
+source = "git+https://github.com/Blockstream/greenlight.git?rev=b9d1ecb9ea7325b041d08ddc171486fdad646a63#b9d1ecb9ea7325b041d08ddc171486fdad646a63"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2400,24 +2400,13 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.8.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4a650543ca06a924e8b371db273b2756685faae30f8487da1b56505a8f78b0c"
-dependencies = [
- "libc",
- "log",
- "wasi",
- "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "mio"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4569e456d394deccd22ce1c1913e6ea0e54519f577285001215d33557431afe4"
 dependencies = [
  "hermit-abi 0.3.9",
  "libc",
+ "log",
  "wasi",
  "windows-sys 0.52.0",
 ]
@@ -3177,9 +3166,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.10.5"
+version = "1.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b91213439dad192326a0d7c6ee3955910425f441d7038e0d6933b0aec5c4517f"
+checksum = "4219d74c6b67a3654a9fbebc4b419e22126d13d2f3c4a07ee0cb61ff79a79619"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -3543,8 +3532,8 @@ checksum = "177258b64c0faaa9ffd3c65cd3262c2bc7e2588dbbd9c1641d0346145c1bbda8"
 
 [[package]]
 name = "sdk-common"
-version = "0.5.1-rc6"
-source = "git+https://github.com/breez/breez-sdk?tag=0.5.1-rc6#bafe6e0832d902db90eae5f864c8794efc96e389"
+version = "0.5.2"
+source = "git+https://github.com/breez/breez-sdk?tag=0.5.2#10a4cd62fc39c1e0c56ab2bac3a26210f5515204"
 dependencies = [
  "aes",
  "anyhow",
@@ -3566,6 +3555,7 @@ dependencies = [
  "thiserror",
  "tonic",
  "tonic-build",
+ "url",
 ]
 
 [[package]]
@@ -3685,9 +3675,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.121"
+version = "1.0.122"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ab380d7d9f22ef3f21ad3e6c1ebe8e4fc7a2000ccba2e4d71fc96f15b2cb609"
+checksum = "784b6203951c57ff748476b126ccb5e8e2959a5c19e5c617ab1956be3dbc68da"
 dependencies = [
  "itoa",
  "memchr",
@@ -3810,7 +3800,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34db1a06d485c9142248b7a054f034b349b212551f3dfd19c94d45a754a217cd"
 dependencies = [
  "libc",
- "mio 0.8.11",
+ "mio",
  "signal-hook",
 ]
 
@@ -4193,7 +4183,7 @@ dependencies = [
  "backtrace",
  "bytes",
  "libc",
- "mio 1.0.1",
+ "mio",
  "parking_lot 0.12.3",
  "pin-project-lite",
  "signal-hook-registry",
