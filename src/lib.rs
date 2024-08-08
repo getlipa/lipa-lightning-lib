@@ -97,7 +97,8 @@ pub use pocketclient::FiatTopupInfo;
 use pocketclient::PocketClient;
 
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
-use breez_sdk_core::error::{ReceiveOnchainError, SendPaymentError};
+pub use breez_sdk_core::error::RedeemOnchainError as SweepError;
+use breez_sdk_core::error::{ReceiveOnchainError, RedeemOnchainError, SendPaymentError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
 pub use breez_sdk_core::ReverseSwapStatus;
 use breez_sdk_core::{
@@ -1954,29 +1955,27 @@ impl LightningNode {
     /// the sweep transaction.
     ///
     /// Requires network: **yes**
-    pub fn prepare_sweep(&self, address: String, onchain_fee_rate: u32) -> Result<SweepInfo> {
-        let res = self
-            .rt
-            .handle()
-            .block_on(
-                self.sdk
-                    .prepare_redeem_onchain_funds(PrepareRedeemOnchainFundsRequest {
+    pub fn prepare_sweep(
+        &self,
+        address: String,
+        onchain_fee_rate: u32,
+    ) -> std::result::Result<SweepInfo, RedeemOnchainError> {
+        let res =
+            self.rt
+                .handle()
+                .block_on(self.sdk.prepare_redeem_onchain_funds(
+                    PrepareRedeemOnchainFundsRequest {
                         to_address: address.clone(),
                         sat_per_vbyte: onchain_fee_rate,
-                    }),
-            )
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to prepare sweep transaction",
-            )?;
+                    },
+                ))?;
 
         let onchain_balance_sat = self
             .sdk
             .node_info()
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to fetch on-chain balance",
-            )?
+            .map_err(|e| RedeemOnchainError::ServiceConnectivity {
+                err: format!("Failed to fetch on-chain balance: {e}"),
+            })?
             .onchain_balance_msat
             .as_msats()
             .to_amount_down(&None)
@@ -1987,7 +1986,9 @@ impl LightningNode {
         // Add the amount that won't be possible to be swept due to CLN's min-emergency limit (546 sats)
         // TODO: remove CLN_DUST_LIMIT_SAT addition if/when
         //      https://github.com/ElementsProject/lightning/issues/7131 is addressed
-        let utxos = self.get_node_utxos()?;
+        let utxos = self
+            .get_node_utxos()
+            .map_err(|e| RedeemOnchainError::Generic { err: e.to_string() })?;
         let onchain_fee_sat = if utxos
             .iter()
             .any(|u| u.amount_millisatoshi == CLN_DUST_LIMIT_SAT * 1_000)
@@ -2215,9 +2216,11 @@ impl LightningNode {
             sat_per_vbyte,
         ) {
             Ok(s) => s,
-            // TODO: Stop parsing error string when https://github.com/breez/breez-sdk/issues/1059 is addressed
-            Err(e) if e.to_string().contains("Insufficient funds to pay fees") => return Ok(None),
-            Err(e) => return Err(e),
+            Err(RedeemOnchainError::InsufficientFunds { .. }) => return Ok(None),
+            Err(e) => runtime_error!(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to prepare sweep: {e}"
+            ),
         };
 
         // Require onchain fees to be less than half of the onchain balance to leave some leeway
@@ -2280,10 +2283,14 @@ impl LightningNode {
         &self,
         sat_per_vbyte: u32,
         lsp_fee_params: Option<OpeningFeeParams>,
-    ) -> std::result::Result<String, ReceiveOnchainError> {
+    ) -> std::result::Result<String, RedeemOnchainError> {
         let onchain_balance = self.sdk.node_info()?.onchain_balance_msat.as_msats();
 
-        let swap_address_info = self.generate_swap_address(lsp_fee_params.clone())?;
+        let swap_address_info =
+            self.generate_swap_address(lsp_fee_params.clone())
+                .map_err(|e| RedeemOnchainError::Generic {
+                    err: format!("Couldn't generate swap address: {}", e),
+                })?;
 
         let prepare_response =
             self.rt
@@ -2301,7 +2308,7 @@ impl LightningNode {
             - prepare_response.tx_fee_sat;
 
         if swap_address_info.min_deposit.sats > send_amount_sats {
-            return Err(ReceiveOnchainError::Generic {
+            return Err(RedeemOnchainError::InsufficientFunds {
                 err: format!(
                     "Not enough funds ({} sats after onchain fees) available for min swap amount({} sats)",
                     send_amount_sats,
@@ -2311,7 +2318,7 @@ impl LightningNode {
         }
 
         if swap_address_info.max_deposit.sats < send_amount_sats {
-            return Err(ReceiveOnchainError::Generic {
+            return Err(RedeemOnchainError::Generic {
                 err: format!(
                     "Available funds ({} sats after onchain fees) exceed limit for swap ({} sats)",
                     send_amount_sats, swap_address_info.max_deposit.sats,
@@ -2321,13 +2328,13 @@ impl LightningNode {
 
         let lsp_fees = self
             .calculate_lsp_fee(send_amount_sats)
-            .map_err(|_| ReceiveOnchainError::ServiceConnectivity {
+            .map_err(|_| RedeemOnchainError::ServiceConnectivity {
                 err: "Could not get lsp fees".to_string(),
             })?
             .lsp_fee
             .sats;
         if lsp_fees >= send_amount_sats {
-            return Err(ReceiveOnchainError::Generic {
+            return Err(RedeemOnchainError::InsufficientFunds {
                 err: format!(
                     "Available funds ({} sats after onchain fees) are not enough for lsp fees ({} sats)",
                     send_amount_sats, lsp_fees,

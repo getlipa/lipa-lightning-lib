@@ -113,7 +113,7 @@ interface LightningNode {
     [Throws=LnError]
     u32 query_onchain_fee_rate();
 
-    [Throws=LnError]
+    [Throws=SweepError]
     SweepInfo prepare_sweep(string address, u32 onchain_fee_rate);
 
     [Throws=LnError]
@@ -134,7 +134,7 @@ interface LightningNode {
     [Throws=LnError]
     ChannelCloseResolvingFees? get_channel_close_resolving_fees();
 
-    [Throws=SwapError]
+    [Throws=SweepError]
     string swap_onchain_to_lightning(u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_params);
 
     [Throws=LnError]
@@ -836,6 +836,13 @@ interface SwapError {
     Generic(string err);
     ServiceConnectivity(string err);
     SwapInProgress(string err);
+};
+
+[Error]
+interface SweepError {
+    Generic(string err);
+    ServiceConnectivity(string err);
+    InsufficientFunds(string err);
 };
 
 [Error]
