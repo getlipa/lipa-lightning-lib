@@ -586,8 +586,8 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-core"
-version = "0.5.1-rc6"
-source = "git+https://github.com/breez/breez-sdk?tag=0.5.1-rc6#bafe6e0832d902db90eae5f864c8794efc96e389"
+version = "0.5.2"
+source = "git+https://github.com/breez/breez-sdk?tag=0.5.2#10a4cd62fc39c1e0c56ab2bac3a26210f5515204"
 dependencies = [
  "aes",
  "anyhow",
@@ -1544,7 +1544,7 @@ checksum = "40ecd4077b5ae9fd2e9e169b102c6c330d0605168eb0e8bf79952b256dbefffd"
 [[package]]
 name = "gl-client"
 version = "0.2.0"
-source = "git+https://github.com/Blockstream/greenlight.git?rev=16fa13d40f4fc271cf99febf3f40246b6b23716a#16fa13d40f4fc271cf99febf3f40246b6b23716a"
+source = "git+https://github.com/Blockstream/greenlight.git?rev=b9d1ecb9ea7325b041d08ddc171486fdad646a63#b9d1ecb9ea7325b041d08ddc171486fdad646a63"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3417,8 +3417,8 @@ checksum = "177258b64c0faaa9ffd3c65cd3262c2bc7e2588dbbd9c1641d0346145c1bbda8"
 
 [[package]]
 name = "sdk-common"
-version = "0.5.1-rc6"
-source = "git+https://github.com/breez/breez-sdk?tag=0.5.1-rc6#bafe6e0832d902db90eae5f864c8794efc96e389"
+version = "0.5.2"
+source = "git+https://github.com/breez/breez-sdk?tag=0.5.2#10a4cd62fc39c1e0c56ab2bac3a26210f5515204"
 dependencies = [
  "aes",
  "anyhow",
@@ -3440,6 +3440,7 @@ dependencies = [
  "thiserror",
  "tonic",
  "tonic-build",
+ "url",
 ]
 
 [[package]]
