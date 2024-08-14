@@ -3,7 +3,6 @@ use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
 use crate::async_runtime::AsyncRuntime;
 use crate::auth::{build_async_auth, build_auth};
 use crate::data_store::DataStore;
-use crate::environment::Environment;
 use crate::errors::{NotificationHandlingErrorCode, NotificationHandlingResult};
 use crate::event::report_event_for_analytics;
 use crate::exchange_rate_provider::{ExchangeRateProvider, ExchangeRateProviderImpl};
@@ -133,11 +132,9 @@ pub fn handle_notification(
         tx,
         analytics_interceptor,
     ));
-    let environment = Environment::load(config.environment)
-        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
     let sdk = rt
         .handle()
-        .block_on(start_sdk(&config, &environment, event_listener))
+        .block_on(start_sdk(&config, event_listener))
         .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
 
     match payload {
@@ -162,15 +159,17 @@ fn build_analytics_interceptor(
         timezone_config: config.timezone_config.clone(),
     }));
 
-    let environment = get_environment(config)?;
     let strong_typed_seed = get_strong_typed_seed(config)?;
     let async_auth = Arc::new(
-        build_async_auth(&strong_typed_seed, &environment.backend_url)
-            .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?,
+        build_async_auth(
+            &strong_typed_seed,
+            &config.remote_services_config.backend_url,
+        )
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?,
     );
 
     let analytics_client = AnalyticsClient::new(
-        environment.backend_url.clone(),
+        config.remote_services_config.backend_url.clone(),
         derive_analytics_keys(&strong_typed_seed)
             .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?,
         Arc::clone(&async_auth),
@@ -330,11 +329,15 @@ fn handle_lnurl_pay_request_notification(
     }
 
     let strong_typed_seed = get_strong_typed_seed(&config)?;
-    let environment = get_environment(&config)?;
 
     if let Some(fee_msat) = open_channel_fee_response.fee_msat {
         if fee_msat > 0 {
-            report_insuficcient_inbound_liquidity(rt, &environment, &strong_typed_seed, &data.id)?;
+            report_insuficcient_inbound_liquidity(
+                rt,
+                &config.remote_services_config.backend_url,
+                &strong_typed_seed,
+                &data.id,
+            )?;
             runtime_error!(
                 NotificationHandlingErrorCode::InsufficientInboundLiquidity,
                 "Rejecting an inbound LNURL-pay payment because of insufficient inbound liquidity"
@@ -342,14 +345,18 @@ fn handle_lnurl_pay_request_notification(
         }
     }
 
-    let auth = build_auth(&strong_typed_seed, &environment.backend_url).map_to_runtime_error(
+    let auth = build_auth(
+        &strong_typed_seed,
+        &config.remote_services_config.backend_url,
+    )
+    .map_to_runtime_error(
         NotificationHandlingErrorCode::LipaServiceUnavailable,
         "Failed to authenticate against backend",
     )?;
 
     // Register webhook in case user hasn't started the wallet for a long time
     //  (Breez expires webhook registrations)
-    register_webhook_url(&rt, &sdk, &auth, &environment)
+    register_webhook_url(&rt, &sdk, &auth, &config)
         .map_runtime_error_to(NotificationHandlingErrorCode::NodeUnavailable)?;
 
     // Create invoice
@@ -369,7 +376,12 @@ fn handle_lnurl_pay_request_notification(
             "Failed to create invoice",
         )?;
     if receive_payment_result.opening_fee_msat.is_some() {
-        report_insuficcient_inbound_liquidity(rt, &environment, &strong_typed_seed, &data.id)?;
+        report_insuficcient_inbound_liquidity(
+            rt,
+            &config.remote_services_config.backend_url,
+            &strong_typed_seed,
+            &data.id,
+        )?;
         runtime_error!(
             NotificationHandlingErrorCode::InsufficientInboundLiquidity,
             "Rejecting an inbound LNURL-pay payment because of insufficient inbound liquidity"
@@ -384,8 +396,10 @@ fn handle_lnurl_pay_request_notification(
         fiat_currency: config.fiat_currency.clone(),
         timezone_config: config.timezone_config.clone(),
     };
-    let exchange_rate_provider =
-        ExchangeRateProviderImpl::new(environment.backend_url.clone(), Arc::new(auth));
+    let exchange_rate_provider = ExchangeRateProviderImpl::new(
+        config.remote_services_config.backend_url.clone(),
+        Arc::new(auth),
+    );
     let exchange_rates = exchange_rate_provider
         .query_all_exchange_rates()
         .map_to_runtime_error(
@@ -405,14 +419,17 @@ fn handle_lnurl_pay_request_notification(
         .log_ignore_error(Level::Error, "Failed to persist payment info");
 
     // Submit created invoice to backend
-    let async_auth = build_async_auth(&strong_typed_seed, &environment.backend_url)
-        .map_to_runtime_error(
-            NotificationHandlingErrorCode::LipaServiceUnavailable,
-            "Failed to authenticate against backend",
-        )?;
+    let async_auth = build_async_auth(
+        &strong_typed_seed,
+        &config.remote_services_config.backend_url,
+    )
+    .map_to_runtime_error(
+        NotificationHandlingErrorCode::LipaServiceUnavailable,
+        "Failed to authenticate against backend",
+    )?;
     rt.handle()
         .block_on(submit_lnurl_pay_invoice(
-            &environment.backend_url,
+            &config.remote_services_config.backend_url,
             &async_auth,
             data.id,
             Some(receive_payment_result.ln_invoice.bolt11),
@@ -426,18 +443,17 @@ fn handle_lnurl_pay_request_notification(
 
 fn report_insuficcient_inbound_liquidity(
     rt: AsyncRuntime,
-    environment: &Environment,
+    backend_url: &str,
     strong_typed_seed: &[u8; 64],
     id: &str,
 ) -> NotificationHandlingResult<()> {
-    let async_auth = build_async_auth(strong_typed_seed, &environment.backend_url)
-        .map_to_runtime_error(
-            NotificationHandlingErrorCode::LipaServiceUnavailable,
-            "Failed to authenticate against backend",
-        )?;
+    let async_auth = build_async_auth(strong_typed_seed, backend_url).map_to_runtime_error(
+        NotificationHandlingErrorCode::LipaServiceUnavailable,
+        "Failed to authenticate against backend",
+    )?;
     rt.handle()
         .block_on(submit_lnurl_pay_invoice(
-            &environment.backend_url,
+            backend_url,
             &async_auth,
             id.to_string(),
             None,
@@ -502,11 +518,6 @@ fn wait_for_synced_event(event_receiver: &Receiver<BreezEvent>) -> NotificationH
 
 fn get_strong_typed_seed(config: &Config) -> NotificationHandlingResult<[u8; 64]> {
     sanitize_input::strong_type_seed(&config.seed)
-        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)
-}
-
-fn get_environment(config: &Config) -> NotificationHandlingResult<Environment> {
-    Environment::load(config.environment)
         .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)
 }
 

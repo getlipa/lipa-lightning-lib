@@ -1,6 +1,9 @@
 use crate::print_events_handler::PrintEventsHandler;
 
-use uniffi_lipalightninglib::{mnemonic_to_secret, Config, TzConfig};
+use uniffi_lipalightninglib::{
+    mnemonic_to_secret, BreezSdkConfig, Config, MaxRoutingFeeConfig, ReceiveLimitsConfig,
+    RemoteServicesConfig, TzConfig,
+};
 use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
 
 use log::Level;
@@ -69,7 +72,6 @@ fn start_node(node_name: &str) -> Result<LightningNode> {
     let seed = mnemonic_to_secret(mnemonic, "".to_string()).unwrap().seed;
 
     let config = Config {
-        environment: uniffi_lipalightninglib::EnvironmentCode::Dev,
         seed,
         fiat_currency: "EUR".to_string(),
         local_persistence_path,
@@ -83,6 +85,26 @@ fn start_node(node_name: &str) -> Result<LightningNode> {
             "CH".to_string(),
             "DE".to_string(),
         ],
+        remote_services_config: RemoteServicesConfig {
+            backend_url: env!("BACKEND_COMPLETE_URL_DEV").to_string(),
+            pocket_url: env!("POCKET_URL_DEV").to_string(),
+            notification_webhook_base_url: env!("NOTIFICATION_WEBHOOK_URL_DEV").to_string(),
+            notification_webhook_secret_hex: env!("NOTIFICATION_WEBHOOK_SECRET_DEV").to_string(),
+            lipa_lightning_domain: env!("LIPA_LIGHTNING_DOMAIN_DEV").to_string(),
+        },
+        breez_sdk_config: BreezSdkConfig {
+            breez_sdk_api_key: env!("BREEZ_SDK_API_KEY").to_string(),
+            breez_sdk_partner_certificate: env!("BREEZ_SDK_PARTNER_CERTIFICATE").to_string(),
+            breez_sdk_partner_key: env!("BREEZ_SDK_PARTNER_KEY").to_string(),
+        },
+        max_routing_fee_config: MaxRoutingFeeConfig {
+            max_routing_fee_permyriad: 150,
+            max_routing_fee_exempt_fee_sats: 21,
+        },
+        receive_limits_config: ReceiveLimitsConfig {
+            max_receive_amount_sat: 1_000_000,
+            min_receive_channel_open_fee_multiplier: 2.0,
+        },
     };
 
     let events_handler = PrintEventsHandler {};

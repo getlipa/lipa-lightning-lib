@@ -31,6 +31,7 @@ pub(crate) struct TaskManager {
     backup_manager: Arc<BackupManager>,
     events_callback: Arc<Box<dyn EventsCallback>>,
     breez_health_status: Arc<Mutex<Option<BreezHealthCheckStatus>>>,
+    breez_sdk_api_key: String,
 
     task_handles: Vec<RepeatingTaskHandle>,
 }
@@ -58,6 +59,7 @@ impl TaskManager {
         sdk: Arc<BreezServices>,
         backup_manager: BackupManager,
         events_callback: Arc<Box<dyn EventsCallback>>,
+        breez_sdk_api_key: String,
     ) -> Result<Self> {
         let exchange_rates = data_store.lock_unwrap().get_all_exchange_rates()?;
 
@@ -72,6 +74,7 @@ impl TaskManager {
             events_callback,
             breez_health_status: Arc::new(Mutex::new(None)),
             task_handles: Vec::new(),
+            breez_sdk_api_key,
         })
     }
 
@@ -244,15 +247,14 @@ impl TaskManager {
     fn start_health_status_check(&self, period: Duration) -> RepeatingTaskHandle {
         let status = Arc::clone(&self.breez_health_status);
         let events_callback = Arc::clone(&self.events_callback);
+        let breez_sdk_api_key = self.breez_sdk_api_key.clone();
         self.runtime_handle.spawn_repeating_task(period, move || {
             let status = Arc::clone(&status);
             let events_callback = Arc::clone(&events_callback);
+            let breez_sdk_api_key = breez_sdk_api_key.clone();
             async move {
                 debug!("Starting health status check task");
-                let new_status = match BreezServices::service_health_check(
-                    env!("BREEZ_SDK_API_KEY").to_string(),
-                )
-                .await
+                let new_status = match BreezServices::service_health_check(breez_sdk_api_key).await
                 {
                     Ok(status) => {
                         debug!("Breez Health Status: {status:?}");

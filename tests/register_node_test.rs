@@ -3,8 +3,10 @@ mod setup;
 
 use crate::print_events_handler::PrintEventsHandler;
 
-use uniffi_lipalightninglib::LightningNode;
-use uniffi_lipalightninglib::{generate_secret, Config, TzConfig};
+use uniffi_lipalightninglib::{generate_secret, Config, ReceiveLimitsConfig, TzConfig};
+use uniffi_lipalightninglib::{
+    BreezSdkConfig, LightningNode, MaxRoutingFeeConfig, RemoteServicesConfig,
+};
 
 use log::Level;
 use serial_test::file_serial;
@@ -26,7 +28,6 @@ fn test_register_node() {
     println!("Mnemonic: {mnemonic}");
 
     let config = Config {
-        environment: uniffi_lipalightninglib::EnvironmentCode::Local,
         seed: secret.seed,
         fiat_currency: "EUR".to_string(),
         local_persistence_path: LOCAL_PERSISTENCE_PATH.to_string(),
@@ -40,6 +41,26 @@ fn test_register_node() {
             "CH".to_string(),
             "DE".to_string(),
         ],
+        remote_services_config: RemoteServicesConfig {
+            backend_url: env!("BACKEND_URL_LOCAL").to_string(),
+            pocket_url: env!("POCKET_URL_LOCAL").to_string(),
+            notification_webhook_base_url: env!("NOTIFICATION_WEBHOOK_URL_LOCAL").to_string(),
+            notification_webhook_secret_hex: env!("NOTIFICATION_WEBHOOK_SECRET_LOCAL").to_string(),
+            lipa_lightning_domain: env!("LIPA_LIGHTNING_DOMAIN_LOCAL").to_string(),
+        },
+        breez_sdk_config: BreezSdkConfig {
+            breez_sdk_api_key: env!("BREEZ_SDK_API_KEY").to_string(),
+            breez_sdk_partner_certificate: env!("BREEZ_SDK_PARTNER_CERTIFICATE").to_string(),
+            breez_sdk_partner_key: env!("BREEZ_SDK_PARTNER_KEY").to_string(),
+        },
+        max_routing_fee_config: MaxRoutingFeeConfig {
+            max_routing_fee_permyriad: 150,
+            max_routing_fee_exempt_fee_sats: 21,
+        },
+        receive_limits_config: ReceiveLimitsConfig {
+            max_receive_amount_sat: 1_000_000,
+            min_receive_channel_open_fee_multiplier: 2.0,
+        },
     };
 
     let events_handler = PrintEventsHandler {};

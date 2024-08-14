@@ -1,12 +1,9 @@
 use crate::async_runtime::AsyncRuntime;
 use crate::backup::BackupManager;
-use crate::environment::Environment;
 use crate::errors::Result;
 use crate::key_derivation::derive_persistence_encryption_key;
 use crate::logger::init_logger_once;
-use crate::{
-    build_async_auth, permanent_failure, sanitize_input, EnvironmentCode, DB_FILENAME, LOGS_DIR,
-};
+use crate::{build_async_auth, permanent_failure, sanitize_input, DB_FILENAME, LOGS_DIR};
 use squirrel::RemoteBackupClient;
 use std::path::Path;
 use std::sync::Arc;
@@ -15,7 +12,7 @@ use std::sync::Arc;
 /// It should and can only be called on a fresh install of the app, if the user wants to recover a previously created wallet.
 /// If no existing wallet backup is found, returns an error.
 pub fn recover_lightning_node(
-    environment: EnvironmentCode,
+    backend_url: String,
     seed: Vec<u8>,
     local_persistence_path: String,
     file_logging_level: Option<log::Level>,
@@ -31,15 +28,10 @@ pub fn recover_lightning_node(
         )
     }
 
-    let environment = Environment::load(environment)?;
-
     let strong_typed_seed = sanitize_input::strong_type_seed(&seed)?;
-    let auth = Arc::new(build_async_auth(
-        &strong_typed_seed,
-        &environment.backend_url,
-    )?);
+    let auth = Arc::new(build_async_auth(&strong_typed_seed, &backend_url)?);
 
-    let backup_client = RemoteBackupClient::new(environment.backend_url, auth);
+    let backup_client = RemoteBackupClient::new(backend_url, auth);
     let backup_manager = BackupManager::new(
         backup_client,
         db_path,
