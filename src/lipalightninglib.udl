@@ -75,7 +75,7 @@ interface LightningNode {
     void change_timezone_config(TzConfig timezone_config);
 
     [Throws=LnError]
-    void accept_pocket_terms_and_conditions(i64 version);
+    void accept_pocket_terms_and_conditions(i64 version, string fingerprint);
 
     [Throws=LnError]
     TermsAndConditionsStatus get_terms_and_conditions_status(TermsAndConditions terms_and_conditions);
@@ -693,7 +693,7 @@ namespace lipalightninglib {
     sequence<string> words_by_prefix(string prefix);
 
     [Throws=LnError]
-    void accept_terms_and_conditions(string backend_url, bytes seed, i64 version);
+    void accept_terms_and_conditions(string backend_url, bytes seed, i64 version, string fingerprint);
 
     [Throws=LnError]
     TermsAndConditionsStatus get_terms_and_conditions_status(string backend_url, bytes seed, TermsAndConditions terms_and_conditions);
