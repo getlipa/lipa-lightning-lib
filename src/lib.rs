@@ -1562,11 +1562,16 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `version` - the version number being accepted.
+    /// * `fingerprint` - the fingerprint of the version being accepted.
     ///
     /// Requires network: **yes**
-    pub fn accept_pocket_terms_and_conditions(&self, version: i64) -> Result<()> {
+    pub fn accept_pocket_terms_and_conditions(
+        &self,
+        version: i64,
+        fingerprint: String,
+    ) -> Result<()> {
         self.auth
-            .accept_terms_and_conditions(TermsAndConditions::Pocket, version)
+            .accept_terms_and_conditions(TermsAndConditions::Pocket, version, fingerprint)
             .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
     }
 
@@ -2897,13 +2902,19 @@ pub(crate) async fn start_sdk(
 /// * `backend_url`
 /// * `seed` - the seed from the wallet for which the T&C will be accepted.
 /// * `version` - the version number being accepted.
+/// * `fingerprint` - the fingerprint of the version being accepted.
 ///
 /// Requires network: **yes**
-pub fn accept_terms_and_conditions(backend_url: String, seed: Vec<u8>, version: i64) -> Result<()> {
+pub fn accept_terms_and_conditions(
+    backend_url: String,
+    seed: Vec<u8>,
+    version: i64,
+    fingerprint: String,
+) -> Result<()> {
     enable_backtrace();
     let seed = sanitize_input::strong_type_seed(&seed)?;
     let auth = build_auth(&seed, &backend_url)?;
-    auth.accept_terms_and_conditions(TermsAndConditions::Lipa, version)
+    auth.accept_terms_and_conditions(TermsAndConditions::Lipa, version, fingerprint)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
 
