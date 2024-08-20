@@ -1,8 +1,6 @@
-use crate::amount::{AsSats, Sats, ToAmount};
+use crate::amount::{AsSats, ToAmount};
+use crate::config::ReceiveLimitsConfig;
 use crate::{Amount, ExchangeRate};
-
-const MAX_RECEIVE_AMOUNT_BETA: Sats = Sats::new(1_000_000);
-const MIN_RECEIVE_MULTIPLIER: u64 = 2; // Minimum receive = mutliple of setup fees
 
 /// Information on the limits imposed on the next receiving payment
 pub struct PaymentAmountLimits {
@@ -26,14 +24,17 @@ impl PaymentAmountLimits {
         inbound_capacity_sat: u64,
         lsp_min_fee_sat: u64,
         exchange_rate: &Option<ExchangeRate>,
+        receive_limits_config: &ReceiveLimitsConfig,
     ) -> Self {
-        let min_receive_sat = lsp_min_fee_sat * MIN_RECEIVE_MULTIPLIER;
+        let min_receive_sat = (lsp_min_fee_sat as f64
+            * receive_limits_config.min_receive_channel_open_fee_multiplier)
+            as u64;
 
         let liquidity_limit = if inbound_capacity_sat < min_receive_sat {
             LiquidityLimit::MinReceive {
                 amount: min_receive_sat.as_sats().to_amount_up(exchange_rate),
             }
-        } else if inbound_capacity_sat < MAX_RECEIVE_AMOUNT_BETA.sats {
+        } else if inbound_capacity_sat < receive_limits_config.max_receive_amount_sat {
             LiquidityLimit::MaxFreeReceive {
                 amount: inbound_capacity_sat.as_sats().to_amount_down(exchange_rate),
             }
@@ -42,7 +43,10 @@ impl PaymentAmountLimits {
         };
 
         PaymentAmountLimits {
-            max_receive: MAX_RECEIVE_AMOUNT_BETA.to_amount_down(exchange_rate),
+            max_receive: receive_limits_config
+                .max_receive_amount_sat
+                .as_sats()
+                .to_amount_down(exchange_rate),
             liquidity_limit,
         }
     }

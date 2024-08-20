@@ -1,5 +1,7 @@
+mod environment;
 mod hinter;
 
+use crate::environment::{Environment, EnvironmentCode};
 use crate::hinter::{CommandHint, CommandHinter};
 use anyhow::{anyhow, Result};
 use colored::Colorize;
@@ -13,7 +15,8 @@ use std::collections::HashSet;
 use std::env;
 use std::time::Duration;
 use uniffi_lipalightninglib::{
-    handle_notification, mnemonic_to_secret, Config, EnvironmentCode, NotificationToggles, TzConfig,
+    handle_notification, mnemonic_to_secret, BreezSdkConfig, Config, MaxRoutingFeeConfig,
+    NotificationToggles, ReceiveLimitsConfig, RemoteServicesConfig, TzConfig,
 };
 
 static BASE_DIR: &str = ".3l_node";
@@ -112,12 +115,12 @@ fn map_environment_code(code: &str) -> EnvironmentCode {
 fn get_config() -> Config {
     let base_dir = format!("{BASE_DIR}_{}", ENVIRONMENT.as_str());
 
-    let environment = map_environment_code(ENVIRONMENT.as_str());
+    let environment_code = map_environment_code(ENVIRONMENT.as_str());
+    let environment = Environment::load(environment_code);
 
     let seed = read_seed_from_env();
 
     Config {
-        environment,
         seed,
         fiat_currency: "EUR".to_string(),
         local_persistence_path: base_dir.clone(),
@@ -131,6 +134,26 @@ fn get_config() -> Config {
             "CH".to_string(),
             "DE".to_string(),
         ],
+        remote_services_config: RemoteServicesConfig {
+            backend_url: environment.backend_url.clone(),
+            pocket_url: environment.pocket_url.clone(),
+            notification_webhook_base_url: environment.notification_webhook_base_url.clone(),
+            notification_webhook_secret_hex: environment.notification_webhook_secret_hex.clone(),
+            lipa_lightning_domain: environment.lipa_lightning_domain,
+        },
+        breez_sdk_config: BreezSdkConfig {
+            breez_sdk_api_key: env!("BREEZ_SDK_API_KEY").to_string(),
+            breez_sdk_partner_certificate: env!("BREEZ_SDK_PARTNER_CERTIFICATE").to_string(),
+            breez_sdk_partner_key: env!("BREEZ_SDK_PARTNER_KEY").to_string(),
+        },
+        max_routing_fee_config: MaxRoutingFeeConfig {
+            max_routing_fee_permyriad: 150,
+            max_routing_fee_exempt_fee_sats: 21,
+        },
+        receive_limits_config: ReceiveLimitsConfig {
+            max_receive_amount_sat: 1_000_000,
+            min_receive_channel_open_fee_multiplier: 2.0,
+        },
     }
 }
 

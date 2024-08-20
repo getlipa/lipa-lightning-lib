@@ -36,6 +36,7 @@ impl Auth {
         &self,
         _terms: TermsAndConditions,
         _version: i64,
+        _fingerprint: String,
     ) -> Result<()> {
         Ok(())
     }
