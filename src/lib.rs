@@ -17,7 +17,6 @@ mod backup;
 mod callbacks;
 mod config;
 mod data_store;
-mod environment;
 mod errors;
 mod event;
 mod exchange_rate_provider;
@@ -45,7 +44,7 @@ mod util;
 
 pub use crate::activity::{Activity, ChannelCloseInfo, ChannelCloseState, ListActivitiesResponse};
 pub use crate::amount::{Amount, FiatValue};
-use crate::amount::{AsSats, Msats, Permyriad, Sats, ToAmount};
+use crate::amount::{AsSats, Msats, Permyriad, ToAmount};
 use crate::analytics::{derive_analytics_keys, AnalyticsConfig, AnalyticsInterceptor};
 pub use crate::analytics::{InvoiceCreationMetadata, PaymentMetadata};
 use crate::async_runtime::AsyncRuntime;
@@ -53,10 +52,11 @@ use crate::auth::{build_async_auth, build_auth};
 use crate::backup::BackupManager;
 pub use crate::callbacks::EventsCallback;
 use crate::config::WithTimezone;
-pub use crate::config::{Config, TzConfig, TzTime};
+pub use crate::config::{
+    BreezSdkConfig, Config, MaxRoutingFeeConfig, ReceiveLimitsConfig, RemoteServicesConfig,
+    TzConfig, TzTime,
+};
 use crate::data_store::CreatedInvoice;
-use crate::environment::Environment;
-pub use crate::environment::EnvironmentCode;
 use crate::errors::{
     map_lnurl_pay_error, map_lnurl_withdraw_error, map_send_payment_error, LnUrlWithdrawError,
     LnUrlWithdrawErrorCode, LnUrlWithdrawResult,
@@ -103,8 +103,8 @@ pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
 pub use breez_sdk_core::ReverseSwapStatus;
 use breez_sdk_core::{
     parse, parse_invoice, BitcoinAddressData, BreezServices, ClosedChannelPaymentDetails,
-    ConnectRequest, EventListener, GreenlightCredentials, GreenlightNodeConfig, InputType,
-    ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
+    ConnectRequest, EnvironmentType, EventListener, GreenlightCredentials, GreenlightNodeConfig,
+    InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
     LnUrlWithdrawRequestData, Network, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
     PayOnchainRequest, PaymentDetails, PaymentStatus, PaymentTypeFilter,
     PrepareOnchainPaymentRequest, PrepareOnchainPaymentResponse, PrepareRedeemOnchainFundsRequest,
@@ -116,6 +116,7 @@ use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 use data_store::DataStore;
 use email_address::EmailAddress;
+use hex::FromHex;
 use honeybadger::Auth;
 pub use honeybadger::{TermsAndConditions, TermsAndConditionsStatus};
 use iban::Iban;
@@ -280,9 +281,6 @@ pub enum FeatureFlag {
     PhoneNumber,
 }
 
-const MAX_FEE_PERMYRIAD: Permyriad = Permyriad(150);
-const EXEMPT_FEE: Sats = Sats::new(21);
-
 /// The main class/struct of this library. Constructing an instance will initiate the Lightning node and
 /// run it in the background. As long as an instance of `LightningNode` is held, the node will continue to run
 /// in the background. Dropping the instance will start a deinit process.  
@@ -297,10 +295,10 @@ pub struct LightningNode {
     data_store: Arc<Mutex<DataStore>>,
     task_manager: Arc<Mutex<TaskManager>>,
     analytics_interceptor: Arc<AnalyticsInterceptor>,
-    environment: Environment,
     allowed_countries_country_iso_3166_1_alpha_2: Vec<String>,
     phone_number_prefix_parser: PhoneNumberPrefixParser,
     persistence_encryption_key: [u8; 32],
+    config: Config,
 }
 
 /// Contains the fee information for the options to resolve on-chain funds from channel closes.
@@ -360,13 +358,14 @@ impl LightningNode {
 
         let rt = AsyncRuntime::new()?;
 
-        let environment = Environment::load(config.environment)?;
-
         let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)?;
-        let auth = Arc::new(build_auth(&strong_typed_seed, &environment.backend_url)?);
+        let auth = Arc::new(build_auth(
+            &strong_typed_seed,
+            &config.remote_services_config.backend_url,
+        )?);
         let async_auth = Arc::new(build_async_auth(
             &strong_typed_seed,
-            &environment.backend_url,
+            &config.remote_services_config.backend_url,
         )?);
 
         let user_preferences = Arc::new(Mutex::new(UserPreferences {
@@ -375,7 +374,7 @@ impl LightningNode {
         }));
 
         let analytics_client = AnalyticsClient::new(
-            environment.backend_url.clone(),
+            config.remote_services_config.backend_url.clone(),
             derive_analytics_keys(&strong_typed_seed)?,
             Arc::clone(&async_auth),
         );
@@ -398,7 +397,7 @@ impl LightningNode {
         ));
 
         let sdk = rt.handle().block_on(async {
-            let sdk = start_sdk(&config, &environment, event_listener).await?;
+            let sdk = start_sdk(&config, event_listener).await?;
             if sdk
                 .lsp_id()
                 .await
@@ -425,21 +424,26 @@ impl LightningNode {
         })?;
 
         let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
-            environment.backend_url.clone(),
+            config.remote_services_config.backend_url.clone(),
             Arc::clone(&auth),
         ));
 
-        let offer_manager = OfferManager::new(environment.backend_url.clone(), Arc::clone(&auth));
+        let offer_manager = OfferManager::new(
+            config.remote_services_config.backend_url.clone(),
+            Arc::clone(&auth),
+        );
 
-        let fiat_topup_client = PocketClient::new(environment.pocket_url.clone())
+        let fiat_topup_client = PocketClient::new(config.remote_services_config.pocket_url.clone())
             .map_to_runtime_error(
                 RuntimeErrorCode::OfferServiceUnavailable,
                 "Couldn't create a fiat topup client",
             )?;
 
         let persistence_encryption_key = derive_persistence_encryption_key(&strong_typed_seed)?;
-        let backup_client =
-            RemoteBackupClient::new(environment.backend_url.clone(), Arc::clone(&async_auth));
+        let backup_client = RemoteBackupClient::new(
+            config.remote_services_config.backend_url.clone(),
+            Arc::clone(&async_auth),
+        );
         let backup_manager = BackupManager::new(backup_client, db_path, persistence_encryption_key);
 
         let task_manager = Arc::new(Mutex::new(TaskManager::new(
@@ -449,6 +453,7 @@ impl LightningNode {
             Arc::clone(&sdk),
             backup_manager,
             events_callback,
+            config.breez_sdk_config.breez_sdk_api_key.clone(),
         )?));
         task_manager.lock_unwrap().foreground();
 
@@ -461,13 +466,13 @@ impl LightningNode {
             data_store_clone,
             &sdk,
             auth_clone,
-            &environment.backend_url,
+            &config.remote_services_config.backend_url,
         )
         .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
 
         fund_migration::log_fund_migration_data(&strong_typed_seed)?;
 
-        register_webhook_url(&rt, &sdk, &auth, &environment)?;
+        register_webhook_url(&rt, &sdk, &auth, &config)?;
 
         let phone_number_prefix_parser =
             PhoneNumberPrefixParser::new(&config.phone_number_allowed_countries_iso_3166_1_alpha_2);
@@ -483,11 +488,12 @@ impl LightningNode {
             data_store,
             task_manager,
             analytics_interceptor,
-            environment,
             allowed_countries_country_iso_3166_1_alpha_2: config
-                .phone_number_allowed_countries_iso_3166_1_alpha_2,
+                .phone_number_allowed_countries_iso_3166_1_alpha_2
+                .clone(),
             phone_number_prefix_parser,
             persistence_encryption_key,
+            config,
         })
     }
 
@@ -585,6 +591,7 @@ impl LightningNode {
             max_inbound_amount.sats,
             lsp_min_fee_amount.sats,
             &self.get_exchange_rate(),
+            &self.config.receive_limits_config,
         ))
     }
 
@@ -674,7 +681,8 @@ impl LightningNode {
         phone_number: String,
     ) -> std::result::Result<String, ParsePhoneNumberError> {
         let phone_number = self.parse_phone_number(phone_number)?;
-        Ok(phone_number.to_lightning_address(&self.environment.lipa_lightning_domain))
+        Ok(phone_number
+            .to_lightning_address(&self.config.remote_services_config.lipa_lightning_domain))
     }
 
     fn parse_phone_number(
@@ -697,7 +705,7 @@ impl LightningNode {
         match self.rt.handle().block_on(parse(&data)) {
             Ok(InputType::Bolt11 { invoice }) => {
                 ensure!(
-                    invoice.network == self.environment.network,
+                    invoice.network == Network::Bitcoin,
                     DecodeDataError::Unsupported {
                         typ: UnsupportedDataType::Network {
                             network: invoice.network.to_string(),
@@ -747,7 +755,11 @@ impl LightningNode {
     ///
     /// Requires network: **no**
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
-        get_payment_max_routing_fee_mode(amount_sat, &self.get_exchange_rate())
+        get_payment_max_routing_fee_mode(
+            &self.config.max_routing_fee_config,
+            amount_sat,
+            &self.get_exchange_rate(),
+        )
     }
 
     /// Checks if the given amount could be spent on an invoice.
@@ -961,7 +973,10 @@ impl LightningNode {
         let recipients = lightning_addresses
             .into_iter()
             .map(|p| {
-                Recipient::from_lightning_address(&p.0, &self.environment.lipa_lightning_domain)
+                Recipient::from_lightning_address(
+                    &p.0,
+                    &self.config.remote_services_config.lipa_lightning_domain,
+                )
             })
             .collect();
         Ok(recipients)
@@ -1293,7 +1308,7 @@ impl LightningNode {
                 personal_note,
                 received_on,
                 received_lnurl_comment,
-                &self.environment.lipa_lightning_domain,
+                &self.config.remote_services_config.lipa_lightning_domain,
             )?;
             let offer_kind = fill_payout_fee(
                 offer,
@@ -1319,7 +1334,7 @@ impl LightningNode {
                 personal_note,
                 received_on,
                 received_lnurl_comment,
-                &self.environment.lipa_lightning_domain,
+                &self.config.remote_services_config.lipa_lightning_domain,
             )?;
             Ok(Activity::Swap {
                 incoming_payment_info: Some(incoming_payment_info),
@@ -1336,7 +1351,7 @@ impl LightningNode {
                 &exchange_rate,
                 tz_config,
                 personal_note,
-                &self.environment.lipa_lightning_domain,
+                &self.config.remote_services_config.lipa_lightning_domain,
             )?;
             Ok(Activity::ReverseSwap {
                 outgoing_payment_info,
@@ -1350,7 +1365,7 @@ impl LightningNode {
                 personal_note,
                 received_on,
                 received_lnurl_comment,
-                &self.environment.lipa_lightning_domain,
+                &self.config.remote_services_config.lipa_lightning_domain,
             )?;
             Ok(Activity::IncomingPayment {
                 incoming_payment_info,
@@ -1361,7 +1376,7 @@ impl LightningNode {
                 &exchange_rate,
                 tz_config,
                 personal_note,
-                &self.environment.lipa_lightning_domain,
+                &self.config.remote_services_config.lipa_lightning_domain,
             )?;
             Ok(Activity::OutgoingPayment {
                 outgoing_payment_info,
@@ -2449,7 +2464,7 @@ impl LightningNode {
             .rt
             .handle()
             .block_on(BreezServices::service_health_check(
-                env!("BREEZ_SDK_API_KEY").to_string(),
+                self.config.breez_sdk_config.breez_sdk_api_key.clone(),
             ))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
@@ -2486,7 +2501,7 @@ impl LightningNode {
         let exchange_rate = self.get_exchange_rate();
 
         // Accomodating lightning network routing fees.
-        let routing_fee = MAX_FEE_PERMYRIAD
+        let routing_fee = Permyriad(self.config.max_routing_fee_config.max_routing_fee_permyriad)
             .of(&limits.min_sat.as_sats())
             .sats_round_up();
         let min = limits.min_sat + routing_fee.sats;
@@ -2609,7 +2624,7 @@ impl LightningNode {
             .rt
             .handle()
             .block_on(pigeon::assign_lightning_address(
-                &self.environment.backend_url,
+                &self.config.remote_services_config.backend_url,
                 &self.async_auth,
             ))
             .map_to_runtime_error(
@@ -2647,7 +2662,10 @@ impl LightningNode {
             .filter_map(with_status(EnableStatus::Enabled))
             .find(|a| a.starts_with('-'))
             .and_then(|a| {
-                lightning_address_to_phone_number(&a, &self.environment.lipa_lightning_domain)
+                lightning_address_to_phone_number(
+                    &a,
+                    &self.config.remote_services_config.lipa_lightning_domain,
+                )
             }))
     }
 
@@ -2674,7 +2692,7 @@ impl LightningNode {
         self.rt
             .handle()
             .block_on(pigeon::request_phone_number_verification(
-                &self.environment.backend_url,
+                &self.config.remote_services_config.backend_url,
                 &self.async_auth,
                 phone_number.e164,
                 encrypted_number,
@@ -2700,7 +2718,7 @@ impl LightningNode {
         self.rt
             .handle()
             .block_on(pigeon::verify_phone_number(
-                &self.environment.backend_url,
+                &self.config.remote_services_config.backend_url,
                 &self.async_auth,
                 phone_number.e164.clone(),
                 otp,
@@ -2709,7 +2727,8 @@ impl LightningNode {
                 RuntimeErrorCode::AuthServiceUnavailable,
                 "Failed to submit phone number registration otp",
             )?;
-        let address = phone_number.to_lightning_address(&self.environment.lipa_lightning_domain);
+        let address = phone_number
+            .to_lightning_address(&self.config.remote_services_config.lipa_lightning_domain);
         self.data_store
             .lock_unwrap()
             .store_lightning_address(&address)
@@ -2758,14 +2777,14 @@ impl LightningNode {
             .block_on(async {
                 if flag_enabled {
                     pigeon::enable_lightning_addresses(
-                        &self.environment.backend_url,
+                        &self.config.remote_services_config.backend_url,
                         &self.async_auth,
                         addresses.clone(),
                     )
                     .await
                 } else {
                     pigeon::disable_lightning_addresses(
-                        &self.environment.backend_url,
+                        &self.config.remote_services_config.backend_url,
                         &self.async_auth,
                         addresses.clone(),
                     )
@@ -2820,19 +2839,26 @@ impl LightningNode {
 
 pub(crate) async fn start_sdk(
     config: &Config,
-    environment: &Environment,
     event_listener: Box<dyn EventListener>,
 ) -> Result<Arc<BreezServices>> {
-    let developer_cert = env!("BREEZ_SDK_PARTNER_CERTIFICATE").as_bytes().to_vec();
-    let developer_key = env!("BREEZ_SDK_PARTNER_KEY").as_bytes().to_vec();
+    let developer_cert = config
+        .breez_sdk_config
+        .breez_sdk_partner_certificate
+        .as_bytes()
+        .to_vec();
+    let developer_key = config
+        .breez_sdk_config
+        .breez_sdk_partner_key
+        .as_bytes()
+        .to_vec();
     let partner_credentials = GreenlightCredentials {
         developer_cert,
         developer_key,
     };
 
     let mut breez_config = BreezServices::default_config(
-        environment.environment_type.clone(),
-        env!("BREEZ_SDK_API_KEY").to_string(),
+        EnvironmentType::Production,
+        config.breez_sdk_config.breez_sdk_api_key.clone(),
         NodeConfig::Greenlight {
             config: GreenlightNodeConfig {
                 partner_credentials: Some(partner_credentials),
@@ -2844,8 +2870,13 @@ pub(crate) async fn start_sdk(
     breez_config
         .working_dir
         .clone_from(&config.local_persistence_path);
-    breez_config.exemptfee_msat = EXEMPT_FEE.msats;
-    breez_config.maxfee_percent = MAX_FEE_PERMYRIAD.to_percentage();
+    breez_config.exemptfee_msat = config
+        .max_routing_fee_config
+        .max_routing_fee_exempt_fee_sats
+        .as_sats()
+        .msats;
+    breez_config.maxfee_percent =
+        Permyriad(config.max_routing_fee_config.max_routing_fee_permyriad).to_percentage();
     let connect_request = ConnectRequest {
         config: breez_config,
         seed: config.seed.clone(),
@@ -2863,20 +2894,15 @@ pub(crate) async fn start_sdk(
 /// for the first time.
 ///
 /// Parameters:
-/// * `environment` - the [`EnvironmentCode`] of the intended environment.
+/// * `backend_url`
 /// * `seed` - the seed from the wallet for which the T&C will be accepted.
 /// * `version` - the version number being accepted.
 ///
 /// Requires network: **yes**
-pub fn accept_terms_and_conditions(
-    environment: EnvironmentCode,
-    seed: Vec<u8>,
-    version: i64,
-) -> Result<()> {
+pub fn accept_terms_and_conditions(backend_url: String, seed: Vec<u8>, version: i64) -> Result<()> {
     enable_backtrace();
-    let environment = Environment::load(environment)?;
     let seed = sanitize_input::strong_type_seed(&seed)?;
-    let auth = build_auth(&seed, &environment.backend_url)?;
+    let auth = build_auth(&seed, &backend_url)?;
     auth.accept_terms_and_conditions(TermsAndConditions::Lipa, version)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
@@ -2900,14 +2926,13 @@ pub fn parse_lightning_address(address: &str) -> std::result::Result<(), ParseEr
 ///
 /// Requires network: **yes**
 pub fn get_terms_and_conditions_status(
-    environment: EnvironmentCode,
+    backend_url: String,
     seed: Vec<u8>,
     terms_and_conditions: TermsAndConditions,
 ) -> Result<TermsAndConditionsStatus> {
     enable_backtrace();
-    let environment = Environment::load(environment)?;
     let seed = sanitize_input::strong_type_seed(&seed)?;
-    let auth = build_auth(&seed, &environment.backend_url)?;
+    let auth = build_auth(&seed, &backend_url)?;
     auth.get_terms_and_conditions_status(terms_and_conditions)
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
@@ -2925,17 +2950,22 @@ pub(crate) fn enable_backtrace() {
 }
 
 fn get_payment_max_routing_fee_mode(
+    config: &MaxRoutingFeeConfig,
     amount_sat: u64,
     exchange_rate: &Option<ExchangeRate>,
 ) -> MaxRoutingFeeMode {
-    let relative_fee = MAX_FEE_PERMYRIAD.of(&amount_sat.as_sats());
-    if relative_fee.msats < EXEMPT_FEE.msats {
+    let max_fee_permyriad = Permyriad(config.max_routing_fee_permyriad);
+    let relative_fee = max_fee_permyriad.of(&amount_sat.as_sats());
+    if relative_fee.msats < config.max_routing_fee_exempt_fee_sats.as_sats().msats {
         MaxRoutingFeeMode::Absolute {
-            max_fee_amount: EXEMPT_FEE.to_amount_up(exchange_rate),
+            max_fee_amount: config
+                .max_routing_fee_exempt_fee_sats
+                .as_sats()
+                .to_amount_up(exchange_rate),
         }
     } else {
         MaxRoutingFeeMode::Relative {
-            max_fee_permyriad: MAX_FEE_PERMYRIAD.0,
+            max_fee_permyriad: max_fee_permyriad.0,
         }
     }
 }
@@ -3030,17 +3060,25 @@ pub(crate) fn register_webhook_url(
     rt: &AsyncRuntime,
     sdk: &BreezServices,
     auth: &Auth,
-    environment: &Environment,
+    config: &Config,
 ) -> Result<()> {
     let id = auth.get_wallet_pubkey_id().map_to_runtime_error(
         RuntimeErrorCode::AuthServiceUnavailable,
         "Failed to authenticate in order to get wallet pubkey id",
     )?;
-    let encrypted_id =
-        deterministic_encrypt(id.as_bytes(), &environment.notification_webhook_secret)
-            .map_to_permanent_failure("Failed to encrypt wallet pubkey id")?;
+    let encrypted_id = deterministic_encrypt(
+        id.as_bytes(),
+        &<[u8; 32]>::from_hex(
+            &config
+                .remote_services_config
+                .notification_webhook_secret_hex,
+        )
+        .map_to_invalid_input("Invalid notification_webhook_secret_hex")?,
+    )
+    .map_to_permanent_failure("Failed to encrypt wallet pubkey id")?;
     let encrypted_id = hex::encode(encrypted_id);
-    let webhook_url = environment
+    let webhook_url = config
+        .remote_services_config
         .notification_webhook_base_url
         .replacen("{id}", &encrypted_id, 1);
     rt.handle()
@@ -3062,6 +3100,7 @@ include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::amount::Sats;
     use crow::TopupStatus;
     use perro::Error;
 
@@ -3090,9 +3129,16 @@ mod tests {
         );
     }
 
+    const MAX_FEE_PERMYRIAD: Permyriad = Permyriad(150);
+    const EXEMPT_FEE: Sats = Sats::new(21);
+
     #[test]
     fn test_get_payment_max_routing_fee_mode_absolute() {
         let max_routing_mode = get_payment_max_routing_fee_mode(
+            &MaxRoutingFeeConfig {
+                max_routing_fee_permyriad: MAX_FEE_PERMYRIAD.0,
+                max_routing_fee_exempt_fee_sats: EXEMPT_FEE.sats,
+            },
             EXEMPT_FEE.msats / ((MAX_FEE_PERMYRIAD.0 as u64) / 10) - 1,
             &None,
         );
@@ -3110,6 +3156,10 @@ mod tests {
     #[test]
     fn test_get_payment_max_routing_fee_mode_relative() {
         let max_routing_mode = get_payment_max_routing_fee_mode(
+            &MaxRoutingFeeConfig {
+                max_routing_fee_permyriad: MAX_FEE_PERMYRIAD.0,
+                max_routing_fee_exempt_fee_sats: EXEMPT_FEE.sats,
+            },
             EXEMPT_FEE.msats / ((MAX_FEE_PERMYRIAD.0 as u64) / 10),
             &None,
         );

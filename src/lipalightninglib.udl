@@ -184,20 +184,40 @@ interface LightningNode {
 };
 
 dictionary Config {
-    EnvironmentCode environment;
     bytes seed;
     string fiat_currency;
     string local_persistence_path;
     TzConfig timezone_config;
     Level? file_logging_level;
     sequence<string> phone_number_allowed_countries_iso_3166_1_alpha_2;
+    RemoteServicesConfig remote_services_config;
+    BreezSdkConfig breez_sdk_config;
+    MaxRoutingFeeConfig max_routing_fee_config;
+    ReceiveLimitsConfig receive_limits_config;
 };
 
-enum EnvironmentCode {
-    "Local",
-    "Dev",
-    "Stage",
-    "Prod",
+dictionary RemoteServicesConfig {
+    string backend_url;
+    string pocket_url;
+    string notification_webhook_base_url;
+    string notification_webhook_secret_hex;
+    string lipa_lightning_domain;
+};
+
+dictionary BreezSdkConfig {
+    string breez_sdk_api_key;
+    string breez_sdk_partner_certificate;
+    string breez_sdk_partner_key;
+};
+
+dictionary MaxRoutingFeeConfig {
+    u16 max_routing_fee_permyriad;
+    u64 max_routing_fee_exempt_fee_sats;
+};
+
+dictionary ReceiveLimitsConfig {
+    u64 max_receive_amount_sat;
+    f64 min_receive_channel_open_fee_multiplier;
 };
 
 dictionary TzConfig {
@@ -673,13 +693,13 @@ namespace lipalightninglib {
     sequence<string> words_by_prefix(string prefix);
 
     [Throws=LnError]
-    void accept_terms_and_conditions(EnvironmentCode environment, bytes seed, i64 version);
+    void accept_terms_and_conditions(string backend_url, bytes seed, i64 version);
 
     [Throws=LnError]
-    TermsAndConditionsStatus get_terms_and_conditions_status(EnvironmentCode environment, bytes seed, TermsAndConditions terms_and_conditions);
+    TermsAndConditionsStatus get_terms_and_conditions_status(string backend_url, bytes seed, TermsAndConditions terms_and_conditions);
 
     [Throws=LnError]
-    void recover_lightning_node(EnvironmentCode environment, bytes seed, string local_persistence_path, Level? file_logging_level);
+    void recover_lightning_node(string backend_url, bytes seed, string local_persistence_path, Level? file_logging_level);
 
     [Throws=ParseError]
     void parse_lightning_address([ByRef] string address);
