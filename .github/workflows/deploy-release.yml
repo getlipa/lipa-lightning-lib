@@ -184,7 +184,7 @@ jobs:
           
           cd lipa-lightning-lib-swift
           cp Info.plist.framework_template Info.plist
-          sed -i "s/to_replace_version/$(echo "${{env.RELEASE_VERSION}}" | cut -c 2-)/g" Info.plist
+          sed -i "s/to_replace_version/$(echo "${{env.RELEASE_VERSION}}" | tr -cd '0-9.')/g" Info.plist
           cp Info.plist lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/Info.plist
           mv Info.plist lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/Info.plist
           cd ..
