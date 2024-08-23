@@ -181,6 +181,14 @@ jobs:
       - name: Create xcframework
         run: |
           git clone git@github.com:getlipa/lipa-lightning-lib-swift.git
+          
+          cd lipa-lightning-lib-swift
+          cp Info.plist.framework_template Info.plist
+          sed -i "s/to_replace_version/$(echo "${{env.RELEASE_VERSION}}" | cut -c 2-)/g" Info.plist
+          cp Info.plist lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/Info.plist
+          mv Info.plist lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/Info.plist
+          cd ..
+          
           cp bindings/swift/lipalightninglibFFI.h lipa-lightning-lib-swift/lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/Headers/lipalightninglibFFI.h
           cp bindings/swift/lipalightninglibFFI.h lipa-lightning-lib-swift/lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/Headers/lipalightninglibFFI.h
           cp target/aarch64-apple-ios/release/libuniffi_lipalightninglib.a lipa-lightning-lib-swift/lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/lipalightninglibFFI
@@ -201,11 +209,6 @@ jobs:
           shasum -a 256 lipalightninglibFFI.xcframework.zip | sed 's/ .*//' > checksum
           sed -i "s/to_replace_release_version/${{ env.RELEASE_VERSION }}/g" Package.swift
           sed -i "s/to_replace_zip_checksum/$(cat checksum)/g" Package.swift
-          
-          cp Info.plist.framework_template Info.plist
-          sed -i "s/to_replace_version/$(echo "${{env.RELEASE_VERSION}}" | cut -c 2-)/g" Info.plist
-          cp Info.plist lipalightninglibFFI.xcframework/ios-arm64/lipalightninglibFFI.framework/Info.plist
-          mv Info.plist lipalightninglibFFI.xcframework/ios-arm64_x86_64-simulator/lipalightninglibFFI.framework/Info.plist
           
           git add Package.swift
           git add Sources/LipaLightningLib/LipaLightningLib.swift
