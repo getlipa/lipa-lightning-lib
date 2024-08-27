@@ -764,7 +764,6 @@ enum RuntimeErrorCode {
     "LspServiceUnavailable",
     "BackupServiceUnavailable",
     "BackupNotFound",
-    "NoOnChainFundsToResolve",
     "NodeUnavailable",
     "FailedFundMigration",
 };
