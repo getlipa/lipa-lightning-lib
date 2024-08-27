@@ -2191,7 +2191,7 @@ impl LightningNode {
 
     /// Returns the fees for resolving channel closes if there are enough funds to pay for fees.
     ///
-    /// Should only be called when there are onchain funds to resolve.
+    /// Must only be called when there are onchain funds to resolve.
     ///
     /// Returns the fee information for the available resolving options.
     ///
