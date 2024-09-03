@@ -324,23 +324,18 @@ fn handle_lnurl_pay_request_notification(
         &persistence_encryption_key,
     ) {
         Ok(decrypted) => decrypted,
-        Err(e) => {
-            if matches!(
-                e,
-                perro::Error::RuntimeError {
-                    code: PhoneNumberAddressDecryptErrorCode::HexDecodingError,
-                    ..
-                } | perro::Error::RuntimeError {
-                    code: PhoneNumberAddressDecryptErrorCode::DecryptionError,
-                    ..
-                }
-            ) {
-                debug!("Recipient in LNURL pay request is likely a regular lightning address (not an encrypted phone number): {}", data.recipient);
-                data.recipient.clone()
-            } else {
-                debug!("Recipient in LNURL pay request is likely not a lightning address, but a basic LNURL-pay request: {}", data.recipient);
-                data.recipient.clone()
-            }
+        Err(perro::Error::RuntimeError {
+            code:
+                PhoneNumberAddressDecryptErrorCode::HexDecodingError
+                | PhoneNumberAddressDecryptErrorCode::DecryptionError,
+            ..
+        }) => {
+            debug!("Recipient in LNURL pay request is likely a regular lightning address (not an encrypted phone number): {}", data.recipient);
+            data.recipient.clone()
+        }
+        Err(_) => {
+            debug!("Recipient in LNURL pay request is likely not a lightning address, but a basic LNURL-pay request: {}", data.recipient);
+            data.recipient.clone()
         }
     };
 
