@@ -707,4 +707,44 @@ mod tests {
             } if data.amount_msat == 12345 && data.recipient == "recipient" && data.payer_comment.is_none() && data.id == "id"
         ));
     }
+
+    #[test]
+    fn test_ln_address_decryption() {
+        use super::*;
+        use crate::symmetric_encryption::encrypt;
+
+        const PHONE_NUMBER: &str = "+41791234567";
+        const DOMAIN: &str = "wallet.lipa.swiss";
+        const PHONE_NUMBER_ADDRESS: &str = "-41791234567@wallet.lipa.swiss";
+        const REGULAR_LN_ADDRESS: &str = "wavy.ice@wallet.lipa.swiss";
+        const FOREIGN_LN_ADDRESS: &str = "07052a903a080fc75e3b0a80184f085dac422ea0910335810c6a8d6e275455b68a69c1fc90de8e4d@wallet.lipa.swiss";
+        const ENCRYPTION_KEY: [u8; 32] = [0; 32];
+
+        let encrypted_phone_nr = encrypt(PHONE_NUMBER.as_bytes(), &ENCRYPTION_KEY).unwrap();
+        let encrypted_ln_address = format!("{}@{}", &hex::encode(encrypted_phone_nr), DOMAIN);
+
+        let decrypted_phone_number_address =
+            decrypt_phone_number_ln_address(&encrypted_ln_address, &ENCRYPTION_KEY).unwrap();
+        assert_eq!(decrypted_phone_number_address, PHONE_NUMBER_ADDRESS);
+
+        let decryption_error =
+            decrypt_phone_number_ln_address(REGULAR_LN_ADDRESS, &ENCRYPTION_KEY).unwrap_err();
+        assert!(matches!(
+            decryption_error,
+            perro::Error::RuntimeError {
+                code: PhoneNumberAddressDecryptErrorCode::HexDecodingError,
+                ..
+            }
+        ));
+
+        let decryption_error =
+            decrypt_phone_number_ln_address(FOREIGN_LN_ADDRESS, &ENCRYPTION_KEY).unwrap_err();
+        assert!(matches!(
+            decryption_error,
+            perro::Error::RuntimeError {
+                code: PhoneNumberAddressDecryptErrorCode::DecryptionError,
+                ..
+            }
+        ));
+    }
 }
