@@ -2201,7 +2201,7 @@ impl LightningNode {
 
     /// Returns the fees for resolving channel closes if there are enough funds to pay for fees.
     ///
-    /// Throws an [`RuntimeErrorCode::NoOnChainFundsToResolve`] error if no on-chain funds are available to resolve.
+    /// Must only be called when there are onchain funds to resolve.
     ///
     /// Returns the fee information for the available resolving options.
     ///
@@ -2217,13 +2217,10 @@ impl LightningNode {
             )?
             .onchain_balance_msat
             .as_msats();
-
-        if onchain_balance.msats == 0 {
-            runtime_error!(
-                RuntimeErrorCode::NoOnChainFundsToResolve,
-                "No on-chain funds to resolve"
-            )
-        }
+        ensure!(
+            onchain_balance.msats != 0,
+            invalid_input("No on-chain funds to resolve")
+        );
 
         let lsp_fees =
             self.calculate_lsp_fee(onchain_balance.msats.as_msats().to_amount_up(&None).sats)?;

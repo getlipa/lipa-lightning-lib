@@ -3,10 +3,14 @@ use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
 use crate::async_runtime::AsyncRuntime;
 use crate::auth::{build_async_auth, build_auth};
 use crate::data_store::DataStore;
-use crate::errors::{NotificationHandlingErrorCode, NotificationHandlingResult};
+use crate::errors::{
+    NotificationHandlingErrorCode, NotificationHandlingResult, PhoneNumberAddressDecryptErrorCode,
+    PhoneNumberAddressDecryptResult,
+};
 use crate::event::report_event_for_analytics;
 use crate::exchange_rate_provider::{ExchangeRateProvider, ExchangeRateProviderImpl};
 use crate::logger::init_logger_once;
+use crate::symmetric_encryption::decrypt;
 use crate::util::LogIgnoreError;
 use crate::{
     enable_backtrace, register_webhook_url, sanitize_input, start_sdk, Config, EnableStatus,
@@ -309,11 +313,37 @@ fn handle_lnurl_pay_request_notification(
     let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
     let mut data_store = DataStore::new(&db_path)
         .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
+
+    let persistence_encryption_key = crate::key_derivation::derive_persistence_encryption_key(
+        &get_strong_typed_seed(&config).map_to_permanent_failure("Failed to derive keys")?,
+    )
+    .map_to_permanent_failure("Failed to derive keys")?;
+
+    let received_recipient = match decrypt_phone_number_ln_address(
+        &data.recipient,
+        &persistence_encryption_key,
+    ) {
+        Ok(decrypted) => decrypted,
+        Err(perro::Error::RuntimeError {
+            code:
+                PhoneNumberAddressDecryptErrorCode::HexDecodingError
+                | PhoneNumberAddressDecryptErrorCode::DecryptionError,
+            ..
+        }) => {
+            debug!("Recipient in LNURL pay request is likely a regular lightning address (not an encrypted phone number): {}", data.recipient);
+            data.recipient.clone()
+        }
+        Err(_) => {
+            debug!("Recipient in LNURL pay request is likely not a lightning address, but a basic LNURL-pay request: {}", data.recipient);
+            data.recipient.clone()
+        }
+    };
+
     match data_store
         .retrieve_lightning_addresses()
         .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?
         .iter()
-        .find(|(a, _)| data.recipient == *a)
+        .find(|(stored_address, _)| received_recipient == *stored_address)
     {
         None => {
             permanent_failure!(
@@ -439,6 +469,36 @@ fn handle_lnurl_pay_request_notification(
     Ok(Notification::LnurlInvoiceCreated {
         amount_sat: data.amount_msat.as_msats().sats_round_down().sats,
     })
+}
+
+fn decrypt_phone_number_ln_address(
+    encrypted_ln_address: &str,
+    persistence_encryption_key: &[u8; 32],
+) -> PhoneNumberAddressDecryptResult<String> {
+    let (first_part, domain) = encrypted_ln_address.split_once('@').ok_or_runtime_error(
+        PhoneNumberAddressDecryptErrorCode::InvalidLnAddress,
+        "Failed to split lightning address at @",
+    )?;
+
+    let encrypted_phone_number = hex::decode(first_part).map_to_runtime_error(
+        PhoneNumberAddressDecryptErrorCode::HexDecodingError,
+        "First part of lightning address is not a hex string",
+    )?;
+
+    let decrypted_number = decrypt(&encrypted_phone_number, persistence_encryption_key)
+        .map_to_runtime_error(
+            PhoneNumberAddressDecryptErrorCode::DecryptionError,
+            "First part of lightning address wasn't encrypted with local persistence key",
+        )?;
+
+    let phone_number = std::str::from_utf8(&decrypted_number).map_to_runtime_error(
+        PhoneNumberAddressDecryptErrorCode::Utf8ConversionError,
+        "Failed to convert decrypted bytes to utf8",
+    )?;
+
+    let phone_number = phone_number.replacen('+', "-", 1);
+
+    Ok(format!("{phone_number}@{domain}"))
 }
 
 fn report_insuficcient_inbound_liquidity(
@@ -640,6 +700,46 @@ mod tests {
             Payload::LnurlPayRequest {
                 data
             } if data.amount_msat == 12345 && data.recipient == "recipient" && data.payer_comment.is_none() && data.id == "id"
+        ));
+    }
+
+    #[test]
+    fn test_ln_address_decryption() {
+        use super::*;
+        use crate::symmetric_encryption::encrypt;
+
+        const PHONE_NUMBER: &str = "+41791234567";
+        const DOMAIN: &str = "wallet.lipa.swiss";
+        const PHONE_NUMBER_ADDRESS: &str = "-41791234567@wallet.lipa.swiss";
+        const REGULAR_LN_ADDRESS: &str = "wavy.ice@wallet.lipa.swiss";
+        const FOREIGN_LN_ADDRESS: &str = "07052a903a080fc75e3b0a80184f085dac422ea0910335810c6a8d6e275455b68a69c1fc90de8e4d@wallet.lipa.swiss";
+        const ENCRYPTION_KEY: [u8; 32] = [0; 32];
+
+        let encrypted_phone_nr = encrypt(PHONE_NUMBER.as_bytes(), &ENCRYPTION_KEY).unwrap();
+        let encrypted_ln_address = format!("{}@{}", &hex::encode(encrypted_phone_nr), DOMAIN);
+
+        let decrypted_phone_number_address =
+            decrypt_phone_number_ln_address(&encrypted_ln_address, &ENCRYPTION_KEY).unwrap();
+        assert_eq!(decrypted_phone_number_address, PHONE_NUMBER_ADDRESS);
+
+        let decryption_error =
+            decrypt_phone_number_ln_address(REGULAR_LN_ADDRESS, &ENCRYPTION_KEY).unwrap_err();
+        assert!(matches!(
+            decryption_error,
+            perro::Error::RuntimeError {
+                code: PhoneNumberAddressDecryptErrorCode::HexDecodingError,
+                ..
+            }
+        ));
+
+        let decryption_error =
+            decrypt_phone_number_ln_address(FOREIGN_LN_ADDRESS, &ENCRYPTION_KEY).unwrap_err();
+        assert!(matches!(
+            decryption_error,
+            perro::Error::RuntimeError {
+                code: PhoneNumberAddressDecryptErrorCode::DecryptionError,
+                ..
+            }
         ));
     }
 }

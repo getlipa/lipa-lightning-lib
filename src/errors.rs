@@ -16,8 +16,6 @@ pub enum RuntimeErrorCode {
     BackupServiceUnavailable,
     /// No backup was found for the provided mnemonic.
     BackupNotFound,
-    /// No on-chain funds are available to resolve.
-    NoOnChainFundsToResolve,
 
     // Breez runtime errors
     /// Information about the remote node isn't cached and couldn't be accessed. Could be a network error.
@@ -333,6 +331,24 @@ impl NotificationHandlingErrorCode {
         Self::NodeUnavailable
     }
 }
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum PhoneNumberAddressDecryptErrorCode {
+    InvalidLnAddress,
+    HexDecodingError,
+    DecryptionError,
+    Utf8ConversionError,
+}
+
+impl Display for PhoneNumberAddressDecryptErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+pub type PhoneNumberAddressDecryptError = perro::Error<PhoneNumberAddressDecryptErrorCode>;
+pub type PhoneNumberAddressDecryptResult<T> =
+    std::result::Result<T, PhoneNumberAddressDecryptError>;
 
 /// Enum representing possible errors why parsing could fail.
 #[derive(Debug, thiserror::Error)]
