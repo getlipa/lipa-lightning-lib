@@ -42,7 +42,7 @@ fn test_register_node() {
             "DE".to_string(),
         ],
         remote_services_config: RemoteServicesConfig {
-            backend_url: env!("BACKEND_URL_LOCAL").to_string(),
+            backend_url: env!("BACKEND_COMPLETE_URL_DEV").to_string(),
             pocket_url: env!("POCKET_URL_LOCAL").to_string(),
             notification_webhook_base_url: env!("NOTIFICATION_WEBHOOK_URL_LOCAL").to_string(),
             notification_webhook_secret_hex: env!("NOTIFICATION_WEBHOOK_SECRET_LOCAL").to_string(),
