@@ -3,10 +3,14 @@ use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
 use crate::async_runtime::AsyncRuntime;
 use crate::auth::{build_async_auth, build_auth};
 use crate::data_store::DataStore;
-use crate::errors::{NotificationHandlingErrorCode, NotificationHandlingResult};
+use crate::errors::{
+    NotificationHandlingErrorCode, NotificationHandlingResult, PhoneNumberAddressDecryptErrorCode,
+    PhoneNumberAddressDecryptResult,
+};
 use crate::event::report_event_for_analytics;
 use crate::exchange_rate_provider::{ExchangeRateProvider, ExchangeRateProviderImpl};
 use crate::logger::init_logger_once;
+use crate::symmetric_encryption::decrypt;
 use crate::util::LogIgnoreError;
 use crate::{
     enable_backtrace, register_webhook_url, sanitize_input, start_sdk, Config, EnableStatus,
@@ -309,11 +313,42 @@ fn handle_lnurl_pay_request_notification(
     let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
     let mut data_store = DataStore::new(&db_path)
         .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
+
+    let persistence_encryption_key = crate::key_derivation::derive_persistence_encryption_key(
+        &get_strong_typed_seed(&config).map_to_permanent_failure("Failed to derive keys")?,
+    )
+    .map_to_permanent_failure("Failed to derive keys")?;
+
+    let received_recipient = match decrypt_phone_number_ln_address(
+        &data.recipient,
+        &persistence_encryption_key,
+    ) {
+        Ok(decrypted) => decrypted,
+        Err(e) => {
+            if matches!(
+                e,
+                perro::Error::RuntimeError {
+                    code: PhoneNumberAddressDecryptErrorCode::HexDecodingError,
+                    ..
+                } | perro::Error::RuntimeError {
+                    code: PhoneNumberAddressDecryptErrorCode::DecryptionError,
+                    ..
+                }
+            ) {
+                debug!("Recipient in LNURL pay request is likely a regular lightning address (not an encrypted phone number): {}", data.recipient);
+                data.recipient.clone()
+            } else {
+                debug!("Recipient in LNURL pay request is likely not a lightning address, but a basic LNURL-pay request: {}", data.recipient);
+                data.recipient.clone()
+            }
+        }
+    };
+
     match data_store
         .retrieve_lightning_addresses()
         .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?
         .iter()
-        .find(|(a, _)| data.recipient == *a)
+        .find(|(stored_address, _)| received_recipient == *stored_address)
     {
         None => {
             permanent_failure!(
@@ -439,6 +474,36 @@ fn handle_lnurl_pay_request_notification(
     Ok(Notification::LnurlInvoiceCreated {
         amount_sat: data.amount_msat.as_msats().sats_round_down().sats,
     })
+}
+
+fn decrypt_phone_number_ln_address(
+    encrypted_ln_address: &str,
+    persistence_encryption_key: &[u8; 32],
+) -> PhoneNumberAddressDecryptResult<String> {
+    let (first_part, domain) = encrypted_ln_address.split_once('@').ok_or_runtime_error(
+        PhoneNumberAddressDecryptErrorCode::InvalidLnAddress,
+        "Failed to split lightning address at @",
+    )?;
+
+    let encrypted_phone_number = hex::decode(first_part).map_to_runtime_error(
+        PhoneNumberAddressDecryptErrorCode::HexDecodingError,
+        "First part of lightning address is not a hex string",
+    )?;
+
+    let decrypted_number = decrypt(&encrypted_phone_number, persistence_encryption_key)
+        .map_to_runtime_error(
+            PhoneNumberAddressDecryptErrorCode::DecryptionError,
+            "First part of lightning address wasn't encrypted with local persistence key",
+        )?;
+
+    let phone_number = std::str::from_utf8(&decrypted_number).map_to_runtime_error(
+        PhoneNumberAddressDecryptErrorCode::Utf8ConversionError,
+        "Failed to convert decrypted bytes to utf8",
+    )?;
+
+    let phone_number = phone_number.replacen('+', "-", 1);
+
+    Ok(format!("{phone_number}@{domain}"))
 }
 
 fn report_insuficcient_inbound_liquidity(
