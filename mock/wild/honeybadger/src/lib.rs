@@ -3,11 +3,28 @@ pub mod secrets;
 
 use crate::secrets::KeyPair;
 pub use graphql::errors::{GraphQlRuntimeErrorCode, Result};
-pub use honeybadger::{AuthLevel, TermsAndConditions};
+pub use honeybadger::AuthLevel;
+use lazy_static::lazy_static;
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::SystemTime;
+
+lazy_static! {
+    static ref TAC_STORE: Mutex<HashMap<TermsAndConditions, TermsAndConditionsStatus>> =
+        Mutex::new(HashMap::new());
+}
+
 pub struct Auth {}
 
-#[derive(Debug, PartialEq)]
+// Redefining instead of importing because we need Eq and Hash for the Hashmap (automatically deduplicate)
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+pub enum TermsAndConditions {
+    Lipa,
+    Pocket,
+}
+
+// Redefining instead of importing because we need Clone
+#[derive(Debug, PartialEq, Clone)]
 pub struct TermsAndConditionsStatus {
     pub accepted_at: Option<SystemTime>,
     pub terms_and_conditions: TermsAndConditions,
@@ -34,10 +51,19 @@ impl Auth {
 
     pub fn accept_terms_and_conditions(
         &self,
-        _terms: TermsAndConditions,
-        _version: i64,
+        terms: TermsAndConditions,
+        version: i64,
         _fingerprint: String,
     ) -> Result<()> {
+        TAC_STORE.lock().unwrap().insert(
+            terms.clone(),
+            TermsAndConditionsStatus {
+                accepted_at: Some(SystemTime::now()),
+                terms_and_conditions: terms,
+                version,
+            },
+        );
+
         Ok(())
     }
 
@@ -45,10 +71,13 @@ impl Auth {
         &self,
         terms: TermsAndConditions,
     ) -> Result<TermsAndConditionsStatus> {
-        Ok(TermsAndConditionsStatus {
-            accepted_at: Some(SystemTime::now()),
-            terms_and_conditions: terms,
-            version: 1,
-        })
+        match TAC_STORE.lock().unwrap().get(&terms) {
+            Some(status) => Ok(status.clone()),
+            None => Ok(TermsAndConditionsStatus {
+                accepted_at: None,
+                terms_and_conditions: terms.clone(),
+                version: 0,
+            }),
+        }
     }
 }
