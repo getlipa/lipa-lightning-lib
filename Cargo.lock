@@ -1875,6 +1875,7 @@ version = "0.1.0"
 dependencies = [
  "graphql",
  "honeybadger",
+ "lazy_static",
  "log",
  "rand",
  "secp256k1 0.27.0",
