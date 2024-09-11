@@ -49,13 +49,18 @@ macro_rules! wait_for {
 }
 
 #[allow(dead_code)]
-pub fn start_alice() -> Result<LightningNode> {
-    start_node("ALICE")
+pub fn start_empty_node() -> Result<LightningNode> {
+    start_node("EMPTY")
 }
 
 #[allow(dead_code)]
-pub fn start_bob() -> Result<LightningNode> {
-    start_node("BOB")
+pub fn start_sending_node() -> Result<LightningNode> {
+    start_node("FUNDED_SENDER")
+}
+
+#[allow(dead_code)]
+pub fn start_receiving_node() -> Result<LightningNode> {
+    start_node("FUNDED_RECEIVER")
 }
 
 fn start_node(node_name: &str) -> Result<LightningNode> {
