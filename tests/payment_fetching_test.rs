@@ -1,7 +1,7 @@
 mod print_events_handler;
 mod setup;
 
-use crate::setup::start_empty_node;
+use crate::setup::start_node;
 
 use serial_test::file_serial;
 use uniffi_lipalightninglib::{Activity, InvoiceCreationMetadata};
@@ -9,7 +9,7 @@ use uniffi_lipalightninglib::{Activity, InvoiceCreationMetadata};
 #[test]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn test_payment_fetching() {
-    let node = start_empty_node().unwrap();
+    let node = start_node().unwrap();
 
     let invoice = node
         .create_invoice(

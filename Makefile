@@ -33,6 +33,10 @@ integrationtests:
 testregisternode:
 	cargo test --test register_node_test -- --ignored --nocapture
 
+.PHONY: testsatflows
+testsatflows:
+	cargo test --test sat_flows -- --ignored --nocapture
+
 .PHONY: testall
 testall: test integrationtests
 

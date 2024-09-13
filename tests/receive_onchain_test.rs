@@ -1,14 +1,14 @@
 mod print_events_handler;
 mod setup;
 
-use crate::setup::start_empty_node;
+use crate::setup::start_node;
 
 use serial_test::file_serial;
 
 #[test]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn test_receive_onchain() {
-    let node = start_empty_node().unwrap();
+    let node = start_node().unwrap();
 
     let swap_info = node.generate_swap_address(None).unwrap();
     assert!(swap_info.address.starts_with("bc1"));
