@@ -252,6 +252,9 @@ fn setup_node(node_type: Option<NodeType>) -> TransactingNode {
             .separate_with_commas()
     );
 
+    // Additional check: Have LSP fees been fetched successfully
+    assert!(node.query_lsp_fee().is_ok());
+
     TransactingNode {
         node,
         received_payments,
