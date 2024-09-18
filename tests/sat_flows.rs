@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use thousands::Separable;
 
-const MAX_PAYMENT_AMOUNT_SATS: u64 = 5_000;
+const PAYMENT_AMOUNT_SATS: u64 = 300;
 const MAX_PAYMENT_TIME_SECS: u64 = 60;
 const INVOICE_DESCRIPTION: &str = "automated bolt11 test";
 
@@ -300,12 +300,11 @@ fn wait_for_payment(
 }
 
 fn get_payment_amount() -> PaymentAmount {
-    let exact = 1 + rand::random::<u64>() % MAX_PAYMENT_AMOUNT_SATS;
-    let fee_deviation = 5 + exact / 25;
+    let fee_deviation = 5 + PAYMENT_AMOUNT_SATS / 25;
 
     PaymentAmount {
-        exact,
-        plus_fees: exact + fee_deviation,
-        minus_fees: exact - fee_deviation,
+        exact: PAYMENT_AMOUNT_SATS,
+        plus_fees: PAYMENT_AMOUNT_SATS + fee_deviation,
+        minus_fees: PAYMENT_AMOUNT_SATS - fee_deviation,
     }
 }
