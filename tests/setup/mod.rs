@@ -1,10 +1,9 @@
 use crate::print_events_handler::PrintEventsHandler;
 
 use uniffi_lipalightninglib::{
-    mnemonic_to_secret, BreezSdkConfig, Config, MaxRoutingFeeConfig, ReceiveLimitsConfig,
-    RemoteServicesConfig, TzConfig,
+    mnemonic_to_secret, AnalyticsConfig, BreezSdkConfig, Config, LightningNode,
+    MaxRoutingFeeConfig, ReceiveLimitsConfig, RemoteServicesConfig, RuntimeErrorCode, TzConfig,
 };
-use uniffi_lipalightninglib::{LightningNode, RuntimeErrorCode};
 
 use log::Level;
 use std::fs;
@@ -109,6 +108,7 @@ fn start_node(node_name: &str) -> Result<LightningNode> {
 
     let events_handler = PrintEventsHandler {};
     let node = LightningNode::new(config, Box::new(events_handler))?;
+    node.set_analytics_config(AnalyticsConfig::Disabled)?; // tests produce misleading noise
 
     Ok(node)
 }
