@@ -1,7 +1,7 @@
 mod print_events_handler;
 mod setup;
 
-use crate::setup::start_alice;
+use crate::setup::start_node;
 use perro::Error::InvalidInput;
 use std::time::Duration;
 
@@ -11,7 +11,7 @@ use uniffi_lipalightninglib::{OfferInfo, OfferKind, OfferStatus};
 #[test]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn test_topup() {
-    let node = start_alice().unwrap();
+    let node = start_node().unwrap();
 
     node.register_fiat_topup(None, "CH8689144834469929874".to_string(), "CHF".to_string())
         .expect("Couldn't register topup without email");

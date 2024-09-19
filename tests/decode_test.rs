@@ -1,7 +1,7 @@
 mod print_events_handler;
 mod setup;
 
-use crate::setup::start_alice;
+use crate::setup::start_node;
 
 use breez_sdk_core::Network;
 use serial_test::file_serial;
@@ -11,7 +11,7 @@ use uniffi_lipalightninglib::{DecodeDataError, DecodedData, InvoiceDetails, Unsu
 #[test]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn test_decoding() {
-    let node = start_alice().unwrap();
+    let node = start_node().unwrap();
 
     let invalid_invoice = "invalid".to_string();
     let result = node.decode_data(invalid_invoice);

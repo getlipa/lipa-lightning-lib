@@ -1,7 +1,7 @@
 use crate::print_events_handler::PrintEventsHandler;
 
 use uniffi_lipalightninglib::{
-    mnemonic_to_secret, AnalyticsConfig, BreezSdkConfig, Config, LightningNode,
+    mnemonic_to_secret, AnalyticsConfig, BreezSdkConfig, Config, EventsCallback, LightningNode,
     MaxRoutingFeeConfig, ReceiveLimitsConfig, RemoteServicesConfig, RuntimeErrorCode, TzConfig,
 };
 
@@ -12,6 +12,13 @@ use std::string::ToString;
 type Result<T> = std::result::Result<T, perro::Error<RuntimeErrorCode>>;
 
 const LOCAL_PERSISTENCE_PATH: &str = ".3l_local_test";
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum NodeType {
+    Sender,
+    Receiver,
+}
 
 #[macro_export]
 macro_rules! wait_for_condition {
@@ -49,17 +56,22 @@ macro_rules! wait_for {
 }
 
 #[allow(dead_code)]
-pub fn start_alice() -> Result<LightningNode> {
-    start_node("ALICE")
+pub fn start_node() -> Result<LightningNode> {
+    start_specific_node(None, Box::new(PrintEventsHandler {}))
 }
 
 #[allow(dead_code)]
-pub fn start_bob() -> Result<LightningNode> {
-    start_node("BOB")
-}
-
-fn start_node(node_name: &str) -> Result<LightningNode> {
+pub fn start_specific_node(
+    node_type: Option<NodeType>,
+    events_callback: Box<dyn EventsCallback>,
+) -> Result<LightningNode> {
     std::env::set_var("TESTING_TASK_PERIODS", "5");
+
+    let node_name = match node_type {
+        Some(NodeType::Sender) => "FUNDED_SENDER",
+        Some(NodeType::Receiver) => "FUNDED_RECEIVER",
+        None => "EMPTY",
+    };
 
     let local_persistence_path = format!("{LOCAL_PERSISTENCE_PATH}/{node_name}");
     let _ = fs::remove_dir_all(local_persistence_path.clone());
@@ -106,8 +118,7 @@ fn start_node(node_name: &str) -> Result<LightningNode> {
         },
     };
 
-    let events_handler = PrintEventsHandler {};
-    let node = LightningNode::new(config, Box::new(events_handler))?;
+    let node = LightningNode::new(config, events_callback)?;
     node.set_analytics_config(AnalyticsConfig::Disabled)?; // tests produce misleading noise
 
     Ok(node)

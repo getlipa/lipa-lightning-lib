@@ -165,6 +165,7 @@ impl TaskManager {
                     Ok(Ok(rates)) => {
                         persist_exchange_rates(&data_store, &rates);
                         *exchange_rates.lock_unwrap() = rates;
+                        debug!("Updated exchange rates successfully");
                     }
                     Ok(Err(e)) => {
                         error!("Failed to update exchange rates: {e}");
