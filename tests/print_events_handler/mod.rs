@@ -27,5 +27,7 @@ impl EventsCallback for PrintEventsHandler {
         println!("The Breez SDK health status changed to {status:?}");
     }
 
-    fn synced(&self) {}
+    fn synced(&self) {
+        println!("A sync has just been successfully performed");
+    }
 }
