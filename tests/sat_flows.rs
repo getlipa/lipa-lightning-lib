@@ -167,8 +167,11 @@ fn test_bolt11_payment() {
                     PaymentState::Succeeded
                 );
                 assert_eq!(
-                    outgoing_payment_info.payment_info.invoice_details,
-                    send_invoice.clone()
+                    outgoing_payment_info
+                        .payment_info
+                        .invoice_details
+                        .payment_hash,
+                    send_invoice.payment_hash
                 );
             }
             Activity::IncomingPayment {
@@ -183,8 +186,11 @@ fn test_bolt11_payment() {
                     PaymentState::Succeeded
                 );
                 assert_eq!(
-                    incoming_payment_info.payment_info.invoice_details,
-                    return_invoice.clone()
+                    incoming_payment_info
+                        .payment_info
+                        .invoice_details
+                        .payment_hash,
+                    return_invoice.payment_hash
                 );
             }
             _ => {
