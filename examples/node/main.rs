@@ -27,6 +27,9 @@ fn main() {
     let environment = env::args().nth(1).unwrap_or("local".to_string());
     let base_dir = format!("{BASE_DIR}_{environment}");
 
+    // Delete mock dir (helpful in case we are running mocked, harmless in other cases)
+    let _ = fs::remove_dir_all(format!("{base_dir}_mocked"));
+
     let environment_code = map_environment_code(&environment);
     let environment = Environment::load(environment_code);
 

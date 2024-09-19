@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "mock/breez-sdk",
     "parser",
     "pocketclient"
 ]
@@ -15,18 +16,26 @@ name = "uniffi_lipalightninglib"
 
 [dependencies]
 parser = { path = "parser" }
-pocketclient = { path = "pocketclient" }
+pocketclient = { path = "pocketclient", optional = true }
+pocketclient-mock = { path = "mock/pocketclient", optional = true }
 
-chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.27.0" }
-crow = { git = "https://github.com/getlipa/wild", tag = "v1.27.0" }
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.27.0", optional = true }
+chameleon-mock = { path = "mock/wild/chameleon", optional = true }
+crow = { git = "https://github.com/getlipa/wild", tag = "v1.27.0", optional = true }
+crow-mock = { path = "mock/wild/crow", optional = true }
 graphql = { git = "https://github.com/getlipa/wild", tag = "v1.27.0" }
-honeybadger = { git = "https://github.com/getlipa/wild", tag = "v1.27.0" }
-parrot = { git = "https://github.com/getlipa/wild", tag = "v1.27.0" }
+honeybadger = { git = "https://github.com/getlipa/wild", tag = "v1.27.0", optional = true }
+honeybadger-mock = { path = "mock/wild/honeybadger", optional = true }
+parrot = { git = "https://github.com/getlipa/wild", tag = "v1.27.0", optional = true }
+parrot-mock = { path = "mock/wild/parrot", optional = true }
 perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
-pigeon = { git = "https://github.com/getlipa/wild", tag = "v1.27.0" }
-squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.27.0" }
+pigeon = { git = "https://github.com/getlipa/wild", tag = "v1.27.0", optional = true }
+pigeon-mock = { path = "mock/wild/pigeon", optional = true }
+squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.27.0", optional = true }
+squirrel-mock = { path = "mock/wild/squirrel", optional = true }
 
-breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.5.2" }
+breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.5.2", optional = true }
+breez-sdk-mock = { path = "mock/breez-sdk", optional = true }
 
 aes-gcm = "0.10.3"
 bip39 = "2.0.0"
@@ -52,6 +61,10 @@ thiserror = "1.0.63"
 tokio = { version = "1.40.0", features = ["rt-multi-thread", "time", "sync"] }
 uniffi = "0.28.0"
 uuid = { version = "1.10.0", features = ["v5"] }
+
+[features]
+default = ["dep:breez-sdk-core", "dep:chameleon", "dep:crow", "dep:honeybadger", "dep:parrot", "dep:pigeon", "dep:squirrel", "dep:pocketclient"]
+mock-deps = ["dep:breez-sdk-mock", "dep:chameleon-mock", "dep:crow-mock", "dep:honeybadger-mock", "dep:parrot-mock", "dep:pigeon-mock", "dep:squirrel-mock", "dep:pocketclient-mock"]
 
 # Bundle sqlite for all targets except iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]

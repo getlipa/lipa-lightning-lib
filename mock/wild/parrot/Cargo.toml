@@ -1,0 +1,12 @@
+[package]
+name = "parrot-mock"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "parrot"
+
+[dependencies]
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.27.0" }
+honeybadger-mock = { path = "../honeybadger" }
+parrot = { git = "https://github.com/getlipa/wild", tag = "v1.27.0" }

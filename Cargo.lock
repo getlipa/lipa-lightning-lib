@@ -628,6 +628,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "breez-sdk-mock"
+version = "0.5.2"
+dependencies = [
+ "anyhow",
+ "bitcoin 0.30.2",
+ "breez-sdk-core",
+ "chrono",
+ "hex",
+ "lazy_static",
+ "lightning 0.0.120",
+ "lightning-invoice 0.28.0",
+ "rand",
+ "secp256k1 0.27.0",
+ "tokio",
+]
+
+[[package]]
 name = "build-target"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -750,6 +767,17 @@ source = "git+https://github.com/getlipa/wild?tag=v1.27.0#163d61d0be9ca73644389e
 dependencies = [
  "graphql",
  "honeybadger",
+]
+
+[[package]]
+name = "chameleon-mock"
+version = "0.1.0"
+dependencies = [
+ "chameleon",
+ "graphql",
+ "honeybadger-mock",
+ "lazy_static",
+ "rand",
 ]
 
 [[package]]
@@ -957,6 +985,18 @@ dependencies = [
  "honeybadger",
  "isocountry",
  "isolanguage-1",
+]
+
+[[package]]
+name = "crow-mock"
+version = "0.1.0"
+dependencies = [
+ "crow",
+ "graphql",
+ "honeybadger-mock",
+ "isocountry",
+ "isolanguage-1",
+ "lazy_static",
 ]
 
 [[package]]
@@ -1775,6 +1815,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "hex-conservative"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "212ab92002354b4819390025006c897e8140934349e8635c9b077f47b4dcbd20"
+
+[[package]]
 name = "hex_lit"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1820,6 +1866,19 @@ dependencies = [
  "rand",
  "secp256k1 0.27.0",
  "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "honeybadger-mock"
+version = "0.1.0"
+dependencies = [
+ "graphql",
+ "honeybadger",
+ "lazy_static",
+ "log",
+ "rand",
+ "secp256k1 0.27.0",
  "tokio",
 ]
 
@@ -2161,6 +2220,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightning"
+version = "0.0.120"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73a759c353ef7c9e3375362bcf9844fcb5ace0e8c034c4a4252d8b1e571fa3ca"
+dependencies = [
+ "bitcoin 0.30.2",
+ "hex-conservative",
+]
+
+[[package]]
 name = "lightning-invoice"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2169,9 +2238,22 @@ dependencies = [
  "bech32",
  "bitcoin 0.29.2",
  "bitcoin_hashes 0.11.0",
- "lightning",
+ "lightning 0.0.116",
  "num-traits",
  "secp256k1 0.24.3",
+]
+
+[[package]]
+name = "lightning-invoice"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48634cf0441331ea1fefb09736aa9a02c11be18281db9e067dd7567805bf3d33"
+dependencies = [
+ "bech32",
+ "bitcoin 0.30.2",
+ "lightning 0.0.120",
+ "num-traits",
+ "secp256k1 0.27.0",
 ]
 
 [[package]]
@@ -2195,28 +2277,35 @@ dependencies = [
  "bip39",
  "bitcoin 0.30.2",
  "breez-sdk-core",
+ "breez-sdk-mock",
  "camino",
  "chameleon",
+ "chameleon-mock",
  "chrono",
  "cipher",
  "colored",
  "crow",
+ "crow-mock",
  "ctor",
  "email_address",
  "file-rotate",
  "graphql",
  "hex",
  "honeybadger",
+ "honeybadger-mock",
  "iban_validate",
  "lazy_static",
  "log",
  "num_enum",
  "parrot",
+ "parrot-mock",
  "parser",
  "perro",
  "phonenumber",
  "pigeon",
+ "pigeon-mock",
  "pocketclient",
+ "pocketclient-mock",
  "qrcode",
  "rand",
  "regex",
@@ -2230,6 +2319,7 @@ dependencies = [
  "sha2",
  "simplelog",
  "squirrel",
+ "squirrel-mock",
  "strip-ansi-escapes",
  "thiserror",
  "thousands",
@@ -2644,6 +2734,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "parrot-mock"
+version = "0.1.0"
+dependencies = [
+ "graphql",
+ "honeybadger-mock",
+ "parrot",
+]
+
+[[package]]
 name = "parser"
 version = "0.1.0"
 dependencies = [
@@ -2747,6 +2846,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pigeon-mock"
+version = "0.1.0"
+dependencies = [
+ "graphql",
+ "honeybadger-mock",
+ "lazy_static",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2799,6 +2907,14 @@ dependencies = [
  "perro",
  "reqwest",
  "serde",
+]
+
+[[package]]
+name = "pocketclient-mock"
+version = "0.1.0"
+dependencies = [
+ "perro",
+ "pocketclient",
 ]
 
 [[package]]
@@ -3436,8 +3552,8 @@ dependencies = [
  "bitcoin 0.29.2",
  "cbc",
  "hex",
- "lightning",
- "lightning-invoice",
+ "lightning 0.0.116",
+ "lightning-invoice 0.24.0",
  "log",
  "prost",
  "querystring",
@@ -3817,6 +3933,15 @@ dependencies = [
  "graphql",
  "hex",
  "honeybadger",
+]
+
+[[package]]
+name = "squirrel-mock"
+version = "0.1.0"
+dependencies = [
+ "graphql",
+ "honeybadger-mock",
+ "squirrel",
 ]
 
 [[package]]
@@ -4584,8 +4709,8 @@ dependencies = [
  "hashbrown 0.8.2",
  "hex",
  "itertools 0.10.5",
- "lightning",
- "lightning-invoice",
+ "lightning 0.0.116",
+ "lightning-invoice 0.24.0",
  "log",
  "scopeguard",
  "serde",

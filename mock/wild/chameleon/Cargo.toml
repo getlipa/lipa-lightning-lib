@@ -1,0 +1,14 @@
+[package]
+name = "chameleon-mock"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "chameleon"
+
+[dependencies]
+chameleon = { git = "https://github.com/getlipa/wild", tag = "v1.27.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.27.0" }
+honeybadger-mock = { path = "../honeybadger" }
+lazy_static = "1.4.0"
+rand = "0.8.5"
