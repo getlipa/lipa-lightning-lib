@@ -153,7 +153,6 @@ fn test_bolt11_payment() {
     )
     .unwrap();
 
-    // list payments
     let payments = sender.node.get_latest_activities(2).unwrap();
     assert_eq!(payments.completed_activities.len(), 2);
 
