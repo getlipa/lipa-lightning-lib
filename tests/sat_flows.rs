@@ -9,7 +9,8 @@ use uniffi_lipalightninglib::{
 
 use parrot::PaymentSource;
 use serial_test::file_serial;
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
+use std::sync::mpsc::{channel, Receiver};
 use std::time::Instant;
 use thousands::Separable;
 
@@ -19,13 +20,13 @@ const INVOICE_DESCRIPTION: &str = "automated bolt11 test";
 
 struct TransactingNode {
     node: LightningNode,
-    received_payments: Arc<Mutex<Vec<String>>>,
-    sent_payments: Arc<Mutex<Vec<String>>>,
+    sent_payment_learn: mpsc::Receiver<String>,
+    received_payment_learn: mpsc::Receiver<String>,
 }
 
 struct ReturnFundsEventsHandler {
-    pub received_payments: Arc<Mutex<Vec<String>>>,
-    pub sent_payments: Arc<Mutex<Vec<String>>>,
+    pub received_payment_inform: mpsc::Sender<String>,
+    pub sent_payment_inform: mpsc::Sender<String>,
 }
 
 struct PaymentAmount {
@@ -36,7 +37,7 @@ struct PaymentAmount {
 
 impl EventsCallback for ReturnFundsEventsHandler {
     fn payment_received(&self, payment_hash: String) {
-        self.received_payments.lock().unwrap().push(payment_hash);
+        self.received_payment_inform.send(payment_hash).unwrap();
     }
 
     fn channel_closed(&self, channel_id: String, reason: String) {
@@ -44,7 +45,7 @@ impl EventsCallback for ReturnFundsEventsHandler {
     }
 
     fn payment_sent(&self, payment_hash: String, _: String) {
-        self.sent_payments.lock().unwrap().push(payment_hash);
+        self.sent_payment_inform.send(payment_hash).unwrap();
     }
 
     fn payment_failed(&self, payment_hash: String) {
@@ -108,8 +109,8 @@ fn test_bolt11_payment() {
 
     wait_for_payment(
         &payment_hash,
-        &sender.sent_payments,
-        &receiver.received_payments,
+        &sender.sent_payment_learn,
+        &receiver.received_payment_learn,
     )
     .unwrap();
     println!(
@@ -148,8 +149,8 @@ fn test_bolt11_payment() {
 
     wait_for_payment(
         &payment_hash,
-        &receiver.sent_payments,
-        &sender.received_payments,
+        &receiver.sent_payment_learn,
+        &sender.received_payment_learn,
     )
     .unwrap();
 
@@ -236,15 +237,15 @@ fn setup_receiver_node(max_payment_amount: u64) -> TransactingNode {
 }
 
 fn setup_node(node_type: Option<NodeType>) -> TransactingNode {
-    let received_payments = Arc::new(Mutex::new(Vec::<String>::new()));
-    let sent_payments = Arc::new(Mutex::new(Vec::<String>::new()));
+    let (sent_payment_inform, sent_payment_learn) = channel();
+    let (received_payment_inform, received_payment_learn) = channel();
 
     let before_node_started = Instant::now();
     let node = start_specific_node(
         node_type.clone(),
         Box::new(ReturnFundsEventsHandler {
-            received_payments: received_payments.clone(),
-            sent_payments: sent_payments.clone(),
+            sent_payment_inform,
+            received_payment_inform,
         }),
     )
     .unwrap();
@@ -262,15 +263,15 @@ fn setup_node(node_type: Option<NodeType>) -> TransactingNode {
 
     TransactingNode {
         node,
-        received_payments,
-        sent_payments,
+        sent_payment_learn,
+        received_payment_learn,
     }
 }
 
 fn wait_for_payment(
     payment_hash: &str,
-    sender: &Arc<Mutex<Vec<String>>>,
-    receiver: &Arc<Mutex<Vec<String>>>,
+    sender: &Receiver<String>,
+    receiver: &Receiver<String>,
 ) -> Result<(), &'static str> {
     let start_time = Instant::now();
     let mut sender_sent_payment = false;
@@ -280,16 +281,16 @@ fn wait_for_payment(
             return Err("Payment did not go through within {MAX_PAYMENT_TIME_SECS} seconds!");
         }
 
-        if let Some(last_payment_hash) = sender.lock().unwrap().last() {
-            if last_payment_hash == payment_hash {
+        if let Ok(received_payment_hash) = sender.try_recv() {
+            if received_payment_hash == payment_hash {
                 sender_sent_payment = true;
             } else {
                 return Err("Unexpected payment sent: {last_payment_hash} (expected payment: {payment_hash})");
             }
         }
 
-        if let Some(last_payment_hash) = receiver.lock().unwrap().last() {
-            if last_payment_hash == payment_hash {
+        if let Ok(received_payment_hash) = receiver.try_recv() {
+            if received_payment_hash == payment_hash {
                 receiver_received_payment = true;
             } else {
                 return Err("Unexpected payment received: {last_payment_hash} (expected payment: {payment_hash})");
