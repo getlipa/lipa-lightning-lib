@@ -2,31 +2,34 @@ mod print_events_handler;
 mod setup;
 
 use crate::setup::{start_specific_node, NodeType};
+use std::fs::OpenOptions;
 use uniffi_lipalightninglib::{
     Activity, BreezHealthCheckStatus, EventsCallback, InvoiceCreationMetadata, LightningNode,
     PaymentMetadata, PaymentState,
 };
 
+use anyhow::Result;
 use parrot::PaymentSource;
 use serial_test::file_serial;
-use std::sync::mpsc;
-use std::sync::mpsc::{channel, Receiver};
-use std::time::Instant;
-use thousands::Separable;
+use std::io::Write;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::time::{Duration, Instant};
 
 const PAYMENT_AMOUNT_SATS: u64 = 300;
 const MAX_PAYMENT_TIME_SECS: u64 = 60;
 const INVOICE_DESCRIPTION: &str = "automated bolt11 test";
 
+const TIME_RESULTS_FILE_NAME: &str = "test_times.json";
+
 struct TransactingNode {
     node: LightningNode,
-    sent_payment_learn: mpsc::Receiver<String>,
-    received_payment_learn: mpsc::Receiver<String>,
+    sent_payment_receiver: Receiver<String>,
+    received_payment_receiver: Receiver<String>,
 }
 
 struct ReturnFundsEventsHandler {
-    pub received_payment_inform: mpsc::Sender<String>,
-    pub sent_payment_inform: mpsc::Sender<String>,
+    pub received_payment_sender: Sender<String>,
+    pub sent_payment_sender: Sender<String>,
 }
 
 struct PaymentAmount {
@@ -37,7 +40,7 @@ struct PaymentAmount {
 
 impl EventsCallback for ReturnFundsEventsHandler {
     fn payment_received(&self, payment_hash: String) {
-        self.received_payment_inform.send(payment_hash).unwrap();
+        self.received_payment_sender.send(payment_hash).unwrap();
     }
 
     fn channel_closed(&self, channel_id: String, reason: String) {
@@ -45,7 +48,7 @@ impl EventsCallback for ReturnFundsEventsHandler {
     }
 
     fn payment_sent(&self, payment_hash: String, _: String) {
-        self.sent_payment_inform.send(payment_hash).unwrap();
+        self.sent_payment_sender.send(payment_hash).unwrap();
     }
 
     fn payment_failed(&self, payment_hash: String) {
@@ -53,7 +56,7 @@ impl EventsCallback for ReturnFundsEventsHandler {
     }
 
     fn swap_received(&self, _payment_hash: String) {
-        todo!()
+        // do nothing
     }
 
     fn breez_health_status_changed_to(&self, _status: BreezHealthCheckStatus) {
@@ -65,16 +68,103 @@ impl EventsCallback for ReturnFundsEventsHandler {
     }
 }
 
+fn append_to_file(file_path: &str, content: &str) -> Result<()> {
+    let mut file = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(file_path)?;
+
+    writeln!(file, "{}", content)?;
+
+    Ok(())
+}
+
+#[test]
+#[ignore]
+#[file_serial(key, path => "/tmp/3l-int-tests-lock")]
+fn node_can_start() {
+    let start = Instant::now();
+    setup_node(NodeType::Sender).unwrap();
+    let elapsed = start.elapsed();
+    append_to_file(
+        TIME_RESULTS_FILE_NAME,
+        &format!(
+            "{{ \"test\": \"start_node\", \"time_seconds\": \"{}\" }}",
+            elapsed.as_secs_f64()
+        ),
+    )
+    .unwrap()
+}
+
+#[test]
+#[ignore]
+#[file_serial(key, path => "/tmp/3l-int-tests-lock")]
+fn lsp_fee_can_be_fetched() {
+    let sender = setup_node(NodeType::Sender).unwrap();
+    sender.node.query_lsp_fee().unwrap();
+}
+
+#[test]
+#[ignore]
+#[file_serial(key, path => "/tmp/3l-int-tests-lock")]
+fn exchange_rate_can_be_fetched_and_is_recent() {
+    let sender = setup_node(NodeType::Sender).unwrap();
+    let rate = sender.node.get_exchange_rate().unwrap();
+    // Check exchange rate is recent
+    let backend_exchange_rate_update_interval_secs: u64 = 5 * 60;
+    assert!(
+        rate.updated_at.elapsed().unwrap().as_secs() <= backend_exchange_rate_update_interval_secs
+    );
+}
+
+#[test]
+#[ignore]
+#[file_serial(key, path => "/tmp/3l-int-tests-lock")]
+fn invoice_can_be_created() {
+    let sender = setup_node(NodeType::Sender).unwrap();
+    let start = Instant::now();
+    sender
+        .node
+        .create_invoice(
+            10000,
+            None,
+            INVOICE_DESCRIPTION.to_string(),
+            InvoiceCreationMetadata {
+                request_currency: "EUR".to_string(),
+            },
+        )
+        .unwrap();
+    let elapsed = start.elapsed();
+    append_to_file(
+        TIME_RESULTS_FILE_NAME,
+        &format!(
+            "{{ \"test\": \"create_invoice\", \"time_seconds\": \"{}\" }}",
+            elapsed.as_secs_f64()
+        ),
+    )
+    .unwrap()
+}
+
+#[test]
+#[ignore]
+#[file_serial(key, path => "/tmp/3l-int-tests-lock")]
+fn payments_can_be_listed() {
+    let sender = setup_node(NodeType::Sender).unwrap();
+    sender.node.get_latest_activities(2).unwrap();
+}
+
 #[test]
 #[ignore = "This test costs real sats!"]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
-fn test_bolt11_payment() {
+fn payments_can_be_performed() {
     let amount = get_payment_amount();
 
-    let sender = setup_sender_node(amount.plus_fees);
-    let receiver = setup_receiver_node(amount.plus_fees);
+    let sender = setup_node(NodeType::Sender).unwrap();
+    assert!(node_has_enough_outbound(&sender, amount.plus_fees).unwrap());
 
-    let before_invoice_creation = Instant::now();
+    let receiver = setup_node(NodeType::Receiver).unwrap();
+    assert!(node_has_enough_inbound(&sender, amount.plus_fees).unwrap());
+
     let send_invoice = receiver
         .node
         .create_invoice(
@@ -86,16 +176,10 @@ fn test_bolt11_payment() {
             },
         )
         .unwrap();
-    println!(
-        "Created invoice in {} milliseconds",
-        before_invoice_creation
-            .elapsed()
-            .as_millis()
-            .separate_with_commas()
-    );
+
     let payment_hash = send_invoice.payment_hash.clone();
 
-    let before_paying_invoice = Instant::now();
+    let start = Instant::now();
     sender
         .node
         .pay_invoice(
@@ -109,18 +193,19 @@ fn test_bolt11_payment() {
 
     wait_for_payment(
         &payment_hash,
-        &sender.sent_payment_learn,
-        &receiver.received_payment_learn,
+        &sender.sent_payment_receiver,
+        &receiver.received_payment_receiver,
     )
     .unwrap();
-    println!(
-        "Payment [{} sat] successful after {} milliseconds",
-        amount.exact,
-        before_paying_invoice
-            .elapsed()
-            .as_millis()
-            .separate_with_commas()
-    );
+    let elapsed = start.elapsed();
+    append_to_file(
+        TIME_RESULTS_FILE_NAME,
+        &format!(
+            "{{ \"test\": \"send_payment\", \"time_seconds\": \"{}\" }}",
+            elapsed.as_secs_f64()
+        ),
+    )
+    .unwrap();
 
     // return funds to keep sender well funded
     let return_invoice = sender
@@ -149,8 +234,8 @@ fn test_bolt11_payment() {
 
     wait_for_payment(
         &payment_hash,
-        &receiver.sent_payment_learn,
-        &sender.received_payment_learn,
+        &receiver.sent_payment_receiver,
+        &sender.received_payment_receiver,
     )
     .unwrap();
 
@@ -198,74 +283,44 @@ fn test_bolt11_payment() {
             }
         }
     }
-
-    // Check whether exchange rate has updated during test run
-    let backend_exchange_rate_update_interval_secs: u64 = 5 * 60; // exchange_rate.updated_at measures the elpased time since the server updated, NOT since 3L last fetched that data.
-    let exchange_rate = sender.node.get_exchange_rate().unwrap();
-    assert!(
-        exchange_rate.updated_at.elapsed().unwrap().as_secs()
-            <= backend_exchange_rate_update_interval_secs
-    );
 }
 
-fn setup_sender_node(payment_amount_plus_fees: u64) -> TransactingNode {
-    let tn = setup_node(Some(NodeType::Sender));
-
-    let node_info = tn.node.get_node_info().unwrap();
+fn node_has_enough_outbound(
+    transacting_node: &TransactingNode,
+    min_outbound_sats: u64,
+) -> Result<bool> {
+    let node_info = transacting_node.node.get_node_info()?;
     let outbound_capacity = node_info.channels_info.outbound_capacity.sats;
-    assert!(
-        outbound_capacity > payment_amount_plus_fees,
-        "Sending node ({}) is insufficiently funded [Outbound capacity: {outbound_capacity}, required: {payment_amount_plus_fees}]",
-        node_info.node_pubkey
-    );
-
-    tn
+    Ok(outbound_capacity > min_outbound_sats)
 }
 
-fn setup_receiver_node(max_payment_amount: u64) -> TransactingNode {
-    let tn = setup_node(Some(NodeType::Receiver));
-
-    let node_info = tn.node.get_node_info().unwrap();
+fn node_has_enough_inbound(
+    transacting_node: &TransactingNode,
+    min_inbound_sats: u64,
+) -> Result<bool> {
+    let node_info = transacting_node.node.get_node_info()?;
     let inbound_capacity = node_info.channels_info.inbound_capacity.sats;
-    assert!(
-        inbound_capacity > max_payment_amount,
-        "Sending node ({}) has insufficient inbound capacity: {inbound_capacity} (required: {max_payment_amount})",
-        node_info.node_pubkey
-    );
-
-    tn
+    Ok(inbound_capacity > min_inbound_sats)
 }
 
-fn setup_node(node_type: Option<NodeType>) -> TransactingNode {
+fn setup_node(node_type: NodeType) -> Result<TransactingNode> {
     let (sent_payment_inform, sent_payment_learn) = channel();
     let (received_payment_inform, received_payment_learn) = channel();
 
-    let before_node_started = Instant::now();
     let node = start_specific_node(
-        node_type.clone(),
+        Some(node_type.clone()),
         Box::new(ReturnFundsEventsHandler {
-            sent_payment_inform,
-            received_payment_inform,
+            sent_payment_sender: sent_payment_inform,
+            received_payment_sender: received_payment_inform,
         }),
-    )
-    .unwrap();
-    println!(
-        "{:?} node started in {} milliseconds",
-        node_type.unwrap(),
-        before_node_started
-            .elapsed()
-            .as_millis()
-            .separate_with_commas()
-    );
+        false,
+    )?;
 
-    // Additional check: Have LSP fees been fetched successfully
-    assert!(node.query_lsp_fee().is_ok());
-
-    TransactingNode {
+    Ok(TransactingNode {
         node,
-        sent_payment_learn,
-        received_payment_learn,
-    }
+        sent_payment_receiver: sent_payment_learn,
+        received_payment_receiver: received_payment_learn,
+    })
 }
 
 fn wait_for_payment(
@@ -281,27 +336,25 @@ fn wait_for_payment(
             return Err("Payment did not go through within {MAX_PAYMENT_TIME_SECS} seconds!");
         }
 
-        if let Ok(received_payment_hash) = sender.try_recv() {
+        if let Ok(received_payment_hash) = sender.recv_timeout(Duration::from_secs(1)) {
             if received_payment_hash == payment_hash {
                 sender_sent_payment = true;
             } else {
-                return Err("Unexpected payment sent: {last_payment_hash} (expected payment: {payment_hash})");
+                return Err("Received unexpected payment");
             }
         }
 
-        if let Ok(received_payment_hash) = receiver.try_recv() {
+        if let Ok(received_payment_hash) = receiver.recv_timeout(Duration::from_secs(1)) {
             if received_payment_hash == payment_hash {
                 receiver_received_payment = true;
             } else {
-                return Err("Unexpected payment received: {last_payment_hash} (expected payment: {payment_hash})");
+                return Err("Received unexpected payment");
             }
         }
 
         if sender_sent_payment && receiver_received_payment {
             return Ok(());
         }
-
-        std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
 

@@ -1,0 +1,57 @@
+name: Monitoring Tests
+
+on:
+  schedule:
+    - cron: '21 2 * * *' # every day at 5:21 AM UTC
+  workflow_dispatch: # allow manually triggering a run
+  pull_request:
+
+
+env:
+  GITHUB_REF: ${{ github.ref }}
+
+jobs:
+  integration:
+    name: Monitoring Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: rust-toolchain
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+          toolchain: nightly
+          override: true
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Config cargo
+        run: echo -e "$CARGO_CONFIG_TOML_BREEZ" > .cargo/config.toml
+        env:
+          CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.7.0
+      - name: Restore .3l_local_test cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .3l_local_test
+          key: monitor-local-test-cache
+      - name: Run monitoring tests
+        run: make monitortest
+        continue-on-error: true
+      - name: Save .3l_local_test cache
+        uses: actions/cache/save@v4
+        with:
+          path: .3l_local_test
+          key: monitor-local-test-cache
+      - name: Process and publish results
+        run: |
+          ./generate_report.sh
+          
+          curl -X POST \
+          -H "Content-type: application/json" \
+          --data "$(cat slack_message.json)" \
+          ${{ secrets.LIPA_SLACK_3L_MONITORING_BOT_WEBHOOK_URL }}

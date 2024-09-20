@@ -33,9 +33,9 @@ integrationtests:
 testregisternode:
 	cargo test --test register_node_test -- --ignored --nocapture
 
-.PHONY: testsatflows
-testsatflows:
-	cargo test --test sat_flows -- --ignored --nocapture
+.PHONY: monitortest
+monitortest:
+	cargo +nightly test --test monitoring_test -- --test-threads=1 --ignored -Z unstable-options --report-time --format json > test.json
 
 .PHONY: testall
 testall: test integrationtests
