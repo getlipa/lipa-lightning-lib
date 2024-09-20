@@ -2,9 +2,8 @@ name: Monitoring Tests
 
 on:
   schedule:
-    - cron: '21 2 * * *' # every day at 5:21 AM UTC
+    - cron: '21 2 * * *' # every day at 2:21 AM UTC
   workflow_dispatch: # allow manually triggering a run
-  pull_request:
 
 
 env:
@@ -40,6 +39,7 @@ jobs:
           path: .3l_local_test
           key: monitor-local-test-cache
       - name: Run monitoring tests
+        id: monitortest
         run: make monitortest
         continue-on-error: true
       - name: Save .3l_local_test cache
@@ -47,11 +47,28 @@ jobs:
         with:
           path: .3l_local_test
           key: monitor-local-test-cache
+      - name: Check test result
+        run: |
+          if [ ${{ steps.monitortest.outcome }} == "failure" ]; then
+            echo "Tests failed"
+            echo "failure" > test_status.txt
+          else
+            echo "Tests passed"
+            echo "success" > test_status.txt
+          fi
       - name: Process and publish results
         run: |
           ./generate_report.sh
           
-          curl -X POST \
-          -H "Content-type: application/json" \
-          --data "$(cat slack_message.json)" \
-          ${{ secrets.LIPA_SLACK_3L_MONITORING_BOT_WEBHOOK_URL }}
+          TEST_STATUS=$(cat test_status.txt)
+          if [ "$TEST_STATUS" = "failure" ]; then
+            curl -X POST \
+            -H "Content-type: application/json" \
+            --data "$(cat slack_message.json)" \
+            ${{ secrets.LIPA_SLACK_3L_MONITORING_FAILURE_BOT_WEBHOOK_URL }}
+          else
+            curl -X POST \
+            -H "Content-type: application/json" \
+            --data "$(cat slack_message.json)" \
+            ${{ secrets.LIPA_SLACK_3L_MONITORING_BOT_WEBHOOK_URL }}
+          fi
