@@ -57,13 +57,14 @@ macro_rules! wait_for {
 
 #[allow(dead_code)]
 pub fn start_node() -> Result<LightningNode> {
-    start_specific_node(None, Box::new(PrintEventsHandler {}))
+    start_specific_node(None, Box::new(PrintEventsHandler {}), true)
 }
 
 #[allow(dead_code)]
 pub fn start_specific_node(
     node_type: Option<NodeType>,
     events_callback: Box<dyn EventsCallback>,
+    reset_state: bool,
 ) -> Result<LightningNode> {
     std::env::set_var("TESTING_TASK_PERIODS", "5");
 
@@ -74,8 +75,10 @@ pub fn start_specific_node(
     };
 
     let local_persistence_path = format!("{LOCAL_PERSISTENCE_PATH}/{node_name}");
-    let _ = fs::remove_dir_all(local_persistence_path.clone());
-    fs::create_dir_all(local_persistence_path.clone()).unwrap();
+    if reset_state {
+        let _ = fs::remove_dir_all(local_persistence_path.clone());
+        fs::create_dir_all(local_persistence_path.clone()).unwrap();
+    }
 
     let mnemonic_key = format!("BREEZ_SDK_MNEMONIC_{node_name}");
     let mnemonic = std::env::var(mnemonic_key).unwrap();

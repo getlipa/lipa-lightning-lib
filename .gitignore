@@ -8,6 +8,9 @@
 .eel_node
 .eel_remote
 .idea
+test.json
+test_times.json
+slack_message.json
 
 bindings
 
