@@ -57,7 +57,18 @@ macro_rules! wait_for {
 
 #[allow(dead_code)]
 pub fn start_node() -> Result<LightningNode> {
-    start_specific_node(None, Box::new(PrintEventsHandler {}), true)
+    start_specific_node(
+        None,
+        Box::new(PrintEventsHandler {}),
+        true,
+        Environment::Dev,
+    )
+}
+
+#[allow(dead_code)] // Why is this needed?
+pub enum Environment {
+    Dev,
+    Stage,
 }
 
 #[allow(dead_code)]
@@ -65,6 +76,7 @@ pub fn start_specific_node(
     node_type: Option<NodeType>,
     events_callback: Box<dyn EventsCallback>,
     reset_state: bool,
+    environment: Environment,
 ) -> Result<LightningNode> {
     std::env::set_var("TESTING_TASK_PERIODS", "5");
 
@@ -99,12 +111,23 @@ pub fn start_specific_node(
             "CH".to_string(),
             "DE".to_string(),
         ],
-        remote_services_config: RemoteServicesConfig {
-            backend_url: env!("BACKEND_COMPLETE_URL_STAGE").to_string(),
-            pocket_url: env!("POCKET_URL_DEV").to_string(),
-            notification_webhook_base_url: env!("NOTIFICATION_WEBHOOK_URL_STAGE").to_string(),
-            notification_webhook_secret_hex: env!("NOTIFICATION_WEBHOOK_SECRET_STAGE").to_string(),
-            lipa_lightning_domain: env!("LIPA_LIGHTNING_DOMAIN_STAGE").to_string(),
+        remote_services_config: match environment {
+            Environment::Dev => RemoteServicesConfig {
+                backend_url: env!("BACKEND_COMPLETE_URL_DEV").to_string(),
+                pocket_url: env!("POCKET_URL_DEV").to_string(),
+                notification_webhook_base_url: env!("NOTIFICATION_WEBHOOK_URL_DEV").to_string(),
+                notification_webhook_secret_hex: env!("NOTIFICATION_WEBHOOK_SECRET_DEV")
+                    .to_string(),
+                lipa_lightning_domain: env!("LIPA_LIGHTNING_DOMAIN_DEV").to_string(),
+            },
+            Environment::Stage => RemoteServicesConfig {
+                backend_url: env!("BACKEND_COMPLETE_URL_STAGE").to_string(),
+                pocket_url: env!("POCKET_URL_STAGE").to_string(),
+                notification_webhook_base_url: env!("NOTIFICATION_WEBHOOK_URL_STAGE").to_string(),
+                notification_webhook_secret_hex: env!("NOTIFICATION_WEBHOOK_SECRET_STAGE")
+                    .to_string(),
+                lipa_lightning_domain: env!("LIPA_LIGHTNING_DOMAIN_STAGE").to_string(),
+            },
         },
         breez_sdk_config: BreezSdkConfig {
             breez_sdk_api_key: env!("BREEZ_SDK_API_KEY").to_string(),
