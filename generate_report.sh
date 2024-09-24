@@ -4,12 +4,18 @@
 INPUT_FILE="test.json"
 TIMES_FILE="test_times.json"
 OUTPUT_FILE="slack_message.json"
+WORKFLOW_URL=""
 
 # Initialize variables
 PASSED_TESTS=()
 FAILED_TESTS=()
 TEST_NAMES=()
 TEST_TIMES=()
+
+# Check if a URL parameter is passed
+if [ "$#" -eq 1 ]; then
+    WORKFLOW_URL="$1"
+fi
 
 # Clear the output file if it already exists
 > "$OUTPUT_FILE"
@@ -132,8 +138,25 @@ create_test_times_block() {
     fi
 }
 
+# Function to create the workflow URL block
+create_workflow_url_block() {
+    if [ -n "$WORKFLOW_URL" ]; then
+        cat <<EOF >> "$OUTPUT_FILE"
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Workflow URL:*\n<$WORKFLOW_URL>"
+            }
+        },
+EOF
+    fi
+}
+
 # Function to end the JSON message block
 end_json_block() {
+    create_workflow_url_block
+
     echo "    ]" >> "$OUTPUT_FILE"
     echo "}" >> "$OUTPUT_FILE"
 }

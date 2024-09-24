@@ -58,7 +58,7 @@ jobs:
           fi
       - name: Process and publish results
         run: |
-          ./generate_report.sh
+          ./generate_report.sh "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           
           TEST_STATUS=$(cat test_status.txt)
           if [ "$TEST_STATUS" = "failure" ]; then

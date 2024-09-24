@@ -100,11 +100,11 @@ pub fn start_specific_node(
             "DE".to_string(),
         ],
         remote_services_config: RemoteServicesConfig {
-            backend_url: env!("BACKEND_COMPLETE_URL_DEV").to_string(),
+            backend_url: env!("BACKEND_COMPLETE_URL_STAGE").to_string(),
             pocket_url: env!("POCKET_URL_DEV").to_string(),
-            notification_webhook_base_url: env!("NOTIFICATION_WEBHOOK_URL_DEV").to_string(),
-            notification_webhook_secret_hex: env!("NOTIFICATION_WEBHOOK_SECRET_DEV").to_string(),
-            lipa_lightning_domain: env!("LIPA_LIGHTNING_DOMAIN_DEV").to_string(),
+            notification_webhook_base_url: env!("NOTIFICATION_WEBHOOK_URL_STAGE").to_string(),
+            notification_webhook_secret_hex: env!("NOTIFICATION_WEBHOOK_SECRET_STAGE").to_string(),
+            lipa_lightning_domain: env!("LIPA_LIGHTNING_DOMAIN_STAGE").to_string(),
         },
         breez_sdk_config: BreezSdkConfig {
             breez_sdk_api_key: env!("BREEZ_SDK_API_KEY").to_string(),
