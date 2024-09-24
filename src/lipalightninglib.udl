@@ -259,7 +259,8 @@ dictionary NodeInfo {
 
 dictionary ChannelsInfo {
     Amount local_balance;
-    Amount inbound_capacity;
+    Amount max_receivable_single_payment;
+    Amount total_inbound_capacity;
     Amount outbound_capacity;
 };
 

@@ -299,7 +299,7 @@ fn node_has_enough_inbound(
     min_inbound_sats: u64,
 ) -> Result<bool> {
     let node_info = transacting_node.node.get_node_info()?;
-    let inbound_capacity = node_info.channels_info.inbound_capacity.sats;
+    let inbound_capacity = node_info.channels_info.total_inbound_capacity.sats;
     Ok(inbound_capacity > min_inbound_sats)
 }
 

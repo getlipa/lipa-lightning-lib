@@ -187,9 +187,12 @@ pub struct NodeInfo {
 pub struct ChannelsInfo {
     /// The balance of the local node
     pub local_balance: Amount,
+    /// The max amount that can be received in a single payment.
+    /// Can be lower than `total_inbound_capacity` because MPP isn't allowed.
+    pub max_receivable_single_payment: Amount,
     /// Capacity the node can actually receive.
     /// It excludes non usable channels, pending HTLCs, channels reserves, etc.
-    pub inbound_capacity: Amount,
+    pub total_inbound_capacity: Amount,
     /// Capacity the node can actually send.
     /// It excludes non usable channels, pending HTLCs, channels reserves, etc.
     pub outbound_capacity: Amount,
@@ -522,8 +525,12 @@ impl LightningNode {
                     .channels_balance_msat
                     .as_msats()
                     .to_amount_down(&rate),
-                inbound_capacity: node_state
-                    .inbound_liquidity_msats
+                max_receivable_single_payment: node_state
+                    .max_receivable_single_payment_amount_msat
+                    .as_msats()
+                    .to_amount_down(&rate),
+                total_inbound_capacity: node_state
+                    .total_inbound_liquidity_msats
                     .as_msats()
                     .to_amount_down(&rate),
                 outbound_capacity: node_state.max_payable_msat.as_msats().to_amount_down(&rate),
@@ -589,7 +596,7 @@ impl LightningNode {
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
         // TODO: try to move this logic inside the SDK
         let lsp_min_fee_amount = self.query_lsp_fee()?.channel_minimum_fee;
-        let max_inbound_amount = self.get_node_info()?.channels_info.inbound_capacity;
+        let max_inbound_amount = self.get_node_info()?.channels_info.total_inbound_capacity;
         Ok(PaymentAmountLimits::calculate(
             max_inbound_amount.sats,
             lsp_min_fee_amount.sats,
@@ -861,6 +868,7 @@ impl LightningNode {
             .handle()
             .block_on(self.sdk.send_payment(SendPaymentRequest {
                 bolt11: invoice_details.invoice,
+                use_trampoline: true,
                 amount_msat,
                 label: None,
             }));
@@ -912,6 +920,7 @@ impl LightningNode {
             .block_on(self.sdk.lnurl_pay(LnUrlPayRequest {
                 data: lnurl_pay_request_data,
                 amount_msat: amount_sat.as_sats().msats,
+                use_trampoline: true,
                 comment,
                 payment_label: None,
                 validate_success_action_url: Some(false),

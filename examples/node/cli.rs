@@ -643,8 +643,12 @@ fn node_info(node: &LightningNode) {
         amount_to_string(&node_info.channels_info.local_balance)
     );
     println!(
-        "         Inbound capacity: {}",
-        amount_to_string(&node_info.channels_info.inbound_capacity)
+        "         Max receivable in a single payment: {}",
+        amount_to_string(&node_info.channels_info.max_receivable_single_payment)
+    );
+    println!(
+        "         Total inbound capacity: {}",
+        amount_to_string(&node_info.channels_info.total_inbound_capacity)
     );
     println!(
         "        Outbound capacity: {}",
