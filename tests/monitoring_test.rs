@@ -1,7 +1,7 @@
 mod print_events_handler;
 mod setup;
 
-use crate::setup::{start_specific_node, NodeType};
+use crate::setup::{start_specific_node, Environment, NodeType};
 use std::fs::OpenOptions;
 use uniffi_lipalightninglib::{
     Activity, BreezHealthCheckStatus, EventsCallback, InvoiceCreationMetadata, LightningNode,
@@ -314,6 +314,7 @@ fn setup_node(node_type: NodeType) -> Result<TransactingNode> {
             received_payment_sender: received_payment_inform,
         }),
         false,
+        Environment::Stage,
     )?;
 
     Ok(TransactingNode {
