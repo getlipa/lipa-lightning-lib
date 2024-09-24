@@ -568,7 +568,8 @@ impl BreezServices {
             max_single_payment_amount_msat: balance,
             max_chan_reserve_msats: 0,
             connected_peers: vec![LSP_ID.to_string()],
-            inbound_liquidity_msats: get_inbound_liquidity_msat(),
+            max_receivable_single_payment_amount_msat: get_inbound_liquidity_msat(), // TODO: max receivable in single channel
+            total_inbound_liquidity_msats: get_inbound_liquidity_msat(),
         })
     }
 
