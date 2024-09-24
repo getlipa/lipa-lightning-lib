@@ -10,7 +10,7 @@ name = "breez_sdk_core"
 tokio = { version = "1.37.0", features = ["rt-multi-thread", "time", "sync"] }
 anyhow = { version = "1.0.81", features = [] }
 bitcoin = { version = "0.30.2", default-features = false }
-breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.5.2" }
+breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.6.1" }
 chrono = { version = "0.4", features = [] }
 hex = "0.4.3"
 rand = { version = "0.8.5", features = [] }
