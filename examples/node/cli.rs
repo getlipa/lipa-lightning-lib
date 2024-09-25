@@ -635,23 +635,23 @@ fn node_info(node: &LightningNode) {
     println!("Node PubKey: {}", node_info.node_pubkey);
     println!("Connected peer(s): {}", peers_list.join(", "));
     println!(
-        "         On-chain balance: {}",
+        "                      On-chain balance: {}",
         amount_to_string(&node_info.onchain_balance)
     );
     println!(
-        "            Local balance: {}",
+        "                         Local balance: {}",
         amount_to_string(&node_info.channels_info.local_balance)
     );
     println!(
-        "         Max receivable in a single payment: {}",
+        "    Max receivable in a single payment: {}",
         amount_to_string(&node_info.channels_info.max_receivable_single_payment)
     );
     println!(
-        "         Total inbound capacity: {}",
+        "                Total inbound capacity: {}",
         amount_to_string(&node_info.channels_info.total_inbound_capacity)
     );
     println!(
-        "        Outbound capacity: {}",
+        "                     Outbound capacity: {}",
         amount_to_string(&node_info.channels_info.outbound_capacity)
     );
 }
