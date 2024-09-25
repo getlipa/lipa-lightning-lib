@@ -1355,6 +1355,10 @@ impl LightningNode {
         } else if let Some(ref s) = payment_details.reverse_swap_info {
             let reverse_swap_info = ReverseSwapInfo {
                 paid_onchain_amount: s.onchain_amount_sat.as_sats().to_amount_up(&exchange_rate),
+                onchain_fees_amount: (breez_payment.amount_msat
+                    - s.onchain_amount_sat.as_sats().msats)
+                    .as_msats()
+                    .to_amount_up(&exchange_rate),
                 claim_txid: s.claim_txid.clone(),
                 status: s.status,
             };
