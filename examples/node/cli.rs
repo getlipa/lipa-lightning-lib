@@ -669,7 +669,7 @@ fn get_exchange_rate(node: &LightningNode) {
         Some(r) => {
             let dt: DateTime<Utc> = r.updated_at.into();
             println!(
-                "{}: {} SAT - updated at {} UTC",
+                "{}: ₿ {} - updated at {} UTC",
                 r.currency_code,
                 r.rate,
                 dt.format("%d/%m/%Y %T")
@@ -1473,7 +1473,7 @@ fn amount_to_string(amount: &Amount) -> String {
         Some(fiat) => fiat_value_to_string(fiat),
         None => "exchange rate unknown".to_string(),
     };
-    format!("{} SAT ({fiat})", amount.sats)
+    format!("₿ {} ({fiat})", amount.sats)
 }
 
 fn get_registered_topup(node: &LightningNode) -> Result<()> {
