@@ -37,8 +37,7 @@ testregisternode:
 
 .PHONY: monitortest
 monitortest:
-	set -o pipefail
-	cargo +nightly test --test monitoring_test -- --test-threads=1 --ignored -Z unstable-options --report-time --format json | tee test.json
+	cargo +nightly test --test monitoring_test -- --test-threads=1 --ignored -Z unstable-options --report-time --format json > test.json
 
 .PHONY: testall
 testall: test integrationtests

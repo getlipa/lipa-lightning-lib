@@ -47,6 +47,8 @@ jobs:
         with:
           path: .3l_local_test
           key: monitor-local-test-cache
+      - name: Cat test results
+        run: cat test.json
       - name: Check test result
         run: |
           if [ ${{ steps.monitortest.outcome }} == "failure" ]; then
