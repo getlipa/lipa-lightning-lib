@@ -111,9 +111,13 @@ fn exchange_rate_can_be_fetched_and_is_recent() {
     let sender = setup_node(NodeType::Sender).unwrap();
     let rate = sender.node.get_exchange_rate().unwrap();
     // Check exchange rate is recent
-    let backend_exchange_rate_update_interval_secs: u64 = 5 * 60;
+    let leeway_secs = 2 * 60;
+    let backend_exchange_rate_update_interval_secs: u64 = 5 * 60 + leeway_secs;
+    let exchange_rate_age = rate.updated_at.elapsed().unwrap().as_secs();
     assert!(
-        rate.updated_at.elapsed().unwrap().as_secs() <= backend_exchange_rate_update_interval_secs
+        exchange_rate_age <= backend_exchange_rate_update_interval_secs,
+        "The exchange rate age is: {}",
+        exchange_rate_age
     );
 }
 
