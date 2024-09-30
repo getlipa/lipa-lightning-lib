@@ -29,14 +29,14 @@ struct TransactingNode {
 
 impl TransactingNode {
     pub fn new(node_type: NodeType) -> Result<Self> {
-        let (sent_payment_inform, sent_payment_learn) = channel();
-        let (received_payment_inform, received_payment_learn) = channel();
+        let (sent_payment_sender, sent_payment_receiver) = channel();
+        let (received_payment_sender, received_payment_receiver) = channel();
 
         let node = start_specific_node(
             Some(node_type),
             Box::new(ReturnFundsEventsHandler {
-                sent_payment_sender: sent_payment_inform,
-                received_payment_sender: received_payment_inform,
+                sent_payment_sender,
+                received_payment_sender,
             }),
             false,
             Environment::Stage,
@@ -44,8 +44,8 @@ impl TransactingNode {
 
         Ok(TransactingNode {
             node,
-            sent_payment_receiver: sent_payment_learn,
-            received_payment_receiver: received_payment_learn,
+            sent_payment_receiver,
+            received_payment_receiver,
         })
     }
 
