@@ -37,7 +37,7 @@ pub(crate) struct TaskManager {
 }
 
 const FOREGROUND_PERIODS: TaskPeriods = TaskPeriods {
-    update_exchange_rates: Some(Duration::from_secs(10 * 60)),
+    update_exchange_rates: Some(Duration::from_secs(60)),
     sync_breez: Some(Duration::from_secs(10 * 60)),
     update_lsp_fee: Some(Duration::from_secs(10 * 60)),
     backup: Some(Duration::from_secs(30)),
