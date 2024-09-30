@@ -308,7 +308,7 @@ fn setup_node(node_type: NodeType) -> Result<TransactingNode> {
     let (received_payment_inform, received_payment_learn) = channel();
 
     let node = start_specific_node(
-        Some(node_type.clone()),
+        Some(node_type),
         Box::new(ReturnFundsEventsHandler {
             sent_payment_sender: sent_payment_inform,
             received_payment_sender: received_payment_inform,
