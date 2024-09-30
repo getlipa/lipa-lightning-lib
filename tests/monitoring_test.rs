@@ -163,7 +163,7 @@ fn payments_can_be_performed() {
     assert!(node_has_enough_outbound(&sender, amount.plus_fees).unwrap());
 
     let receiver = setup_node(NodeType::Receiver).unwrap();
-    assert!(node_has_enough_inbound(&sender, amount.plus_fees).unwrap());
+    assert!(node_has_enough_inbound(&receiver, amount.plus_fees).unwrap());
 
     let send_invoice = receiver
         .node
