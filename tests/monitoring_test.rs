@@ -27,6 +27,41 @@ struct TransactingNode {
     received_payment_receiver: Receiver<String>,
 }
 
+impl TransactingNode {
+    pub fn new(node_type: NodeType) -> Result<Self> {
+        let (sent_payment_inform, sent_payment_learn) = channel();
+        let (received_payment_inform, received_payment_learn) = channel();
+
+        let node = start_specific_node(
+            Some(node_type),
+            Box::new(ReturnFundsEventsHandler {
+                sent_payment_sender: sent_payment_inform,
+                received_payment_sender: received_payment_inform,
+            }),
+            false,
+            Environment::Stage,
+        )?;
+
+        Ok(TransactingNode {
+            node,
+            sent_payment_receiver: sent_payment_learn,
+            received_payment_receiver: received_payment_learn,
+        })
+    }
+
+    pub fn has_enough_outbound(&self, min_outbound_sats: u64) -> Result<bool> {
+        let node_info = self.node.get_node_info()?;
+        let outbound_capacity = node_info.channels_info.outbound_capacity.sats;
+        Ok(outbound_capacity > min_outbound_sats)
+    }
+
+    pub fn has_enough_inbound(&self, min_inbound_sats: u64) -> Result<bool> {
+        let node_info = self.node.get_node_info()?;
+        let inbound_capacity = node_info.channels_info.total_inbound_capacity.sats;
+        Ok(inbound_capacity > min_inbound_sats)
+    }
+}
+
 struct ReturnFundsEventsHandler {
     pub received_payment_sender: Sender<String>,
     pub sent_payment_sender: Sender<String>,
@@ -84,7 +119,7 @@ fn append_to_file(file_path: &str, content: &str) -> Result<()> {
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn node_can_start() {
     let start = Instant::now();
-    setup_node(NodeType::Sender).unwrap();
+    TransactingNode::new(NodeType::Sender).unwrap();
     let elapsed = start.elapsed();
     append_to_file(
         TIME_RESULTS_FILE_NAME,
@@ -100,7 +135,7 @@ fn node_can_start() {
 #[ignore]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn lsp_fee_can_be_fetched() {
-    let sender = setup_node(NodeType::Sender).unwrap();
+    let sender = TransactingNode::new(NodeType::Sender).unwrap();
     sender.node.query_lsp_fee().unwrap();
 }
 
@@ -108,7 +143,7 @@ fn lsp_fee_can_be_fetched() {
 #[ignore]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn exchange_rate_can_be_fetched_and_is_recent() {
-    let sender = setup_node(NodeType::Sender).unwrap();
+    let sender = TransactingNode::new(NodeType::Sender).unwrap();
     let rate = sender.node.get_exchange_rate().unwrap();
     // Check exchange rate is recent
     let backend_exchange_rate_update_interval_secs: u64 = 5 * 60;
@@ -121,7 +156,7 @@ fn exchange_rate_can_be_fetched_and_is_recent() {
 #[ignore]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn invoice_can_be_created() {
-    let sender = setup_node(NodeType::Sender).unwrap();
+    let sender = TransactingNode::new(NodeType::Sender).unwrap();
     let start = Instant::now();
     sender
         .node
@@ -149,7 +184,7 @@ fn invoice_can_be_created() {
 #[ignore]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn payments_can_be_listed() {
-    let sender = setup_node(NodeType::Sender).unwrap();
+    let sender = TransactingNode::new(NodeType::Sender).unwrap();
     sender.node.get_latest_activities(2).unwrap();
 }
 
@@ -159,11 +194,11 @@ fn payments_can_be_listed() {
 fn payments_can_be_performed() {
     let amount = get_payment_amount();
 
-    let sender = setup_node(NodeType::Sender).unwrap();
-    assert!(node_has_enough_outbound(&sender, amount.plus_fees).unwrap());
+    let sender = TransactingNode::new(NodeType::Sender).unwrap();
+    assert!(sender.has_enough_outbound(amount.plus_fees).unwrap());
 
-    let receiver = setup_node(NodeType::Receiver).unwrap();
-    assert!(node_has_enough_inbound(&receiver, amount.plus_fees).unwrap());
+    let receiver = TransactingNode::new(NodeType::Receiver).unwrap();
+    assert!(receiver.has_enough_inbound(amount.plus_fees).unwrap());
 
     let send_invoice = receiver
         .node
@@ -283,45 +318,6 @@ fn payments_can_be_performed() {
             }
         }
     }
-}
-
-fn node_has_enough_outbound(
-    transacting_node: &TransactingNode,
-    min_outbound_sats: u64,
-) -> Result<bool> {
-    let node_info = transacting_node.node.get_node_info()?;
-    let outbound_capacity = node_info.channels_info.outbound_capacity.sats;
-    Ok(outbound_capacity > min_outbound_sats)
-}
-
-fn node_has_enough_inbound(
-    transacting_node: &TransactingNode,
-    min_inbound_sats: u64,
-) -> Result<bool> {
-    let node_info = transacting_node.node.get_node_info()?;
-    let inbound_capacity = node_info.channels_info.total_inbound_capacity.sats;
-    Ok(inbound_capacity > min_inbound_sats)
-}
-
-fn setup_node(node_type: NodeType) -> Result<TransactingNode> {
-    let (sent_payment_inform, sent_payment_learn) = channel();
-    let (received_payment_inform, received_payment_learn) = channel();
-
-    let node = start_specific_node(
-        Some(node_type),
-        Box::new(ReturnFundsEventsHandler {
-            sent_payment_sender: sent_payment_inform,
-            received_payment_sender: received_payment_inform,
-        }),
-        false,
-        Environment::Stage,
-    )?;
-
-    Ok(TransactingNode {
-        node,
-        sent_payment_receiver: sent_payment_learn,
-        received_payment_receiver: received_payment_learn,
-    })
 }
 
 fn wait_for_payment(
