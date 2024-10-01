@@ -20,7 +20,6 @@ mod data_store;
 mod errors;
 mod event;
 mod exchange_rate_provider;
-mod fund_migration;
 mod invoice_details;
 mod key_derivation;
 mod limits;
@@ -459,24 +458,6 @@ impl LightningNode {
             config.breez_sdk_config.breez_sdk_api_key.clone(),
         )?));
         task_manager.lock_unwrap().foreground();
-
-        #[cfg(not(feature = "mock-deps"))]
-        {
-            let data_store_clone = Arc::clone(&data_store);
-            let auth_clone = Arc::clone(&auth);
-
-            fund_migration::migrate_funds(
-                rt.handle(),
-                &strong_typed_seed,
-                data_store_clone,
-                &sdk,
-                auth_clone,
-                &config.remote_services_config.backend_url,
-            )
-            .map_runtime_error_to(RuntimeErrorCode::FailedFundMigration)?;
-        }
-
-        fund_migration::log_fund_migration_data(&strong_typed_seed)?;
 
         register_webhook_url(&rt, &sdk, &auth, &config)?;
 
