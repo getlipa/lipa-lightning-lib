@@ -767,7 +767,6 @@ enum RuntimeErrorCode {
     "BackupServiceUnavailable",
     "BackupNotFound",
     "NodeUnavailable",
-    "FailedFundMigration",
 };
 
 [Error]

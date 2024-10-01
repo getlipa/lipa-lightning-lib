@@ -1,13 +1,12 @@
+use crate::analytics::AnalyticsConfig;
 use crate::errors::Result;
-use crate::fund_migration::MigrationStatus;
 use crate::migrations::migrate;
 use crate::{EnableStatus, ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
-use pocketclient::FiatTopupInfo;
 
-use crate::analytics::AnalyticsConfig;
 use chrono::{DateTime, Utc};
 use crow::{PermanentFailureCode, TemporaryFailureCode};
 use perro::MapToError;
+use pocketclient::FiatTopupInfo;
 use rusqlite::{backup, params, Connection, OptionalExtension, Params, Row};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -298,37 +297,6 @@ impl DataStore {
             .map_to_permanent_failure("Failed to bind parameter to prepared SQL query")?
             .map(|r| r.map_to_permanent_failure("Corrupted db"))
             .collect()
-    }
-
-    pub fn append_funds_migration_status(&mut self, status: MigrationStatus) -> Result<()> {
-        self.backup_status = BackupStatus::WaitingForBackup;
-        self.conn
-            .execute(
-                "INSERT INTO funds_migration_status (status) VALUES (?1)",
-                (status as u8,),
-            )
-            .map_to_permanent_failure("Failed to add funds migration ststus to db")?;
-        Ok(())
-    }
-
-    pub fn retrieve_funds_migration_status(&self) -> Result<MigrationStatus> {
-        let status_from_row = |row: &Row| {
-            let status: u8 = row.get(0)?;
-            MigrationStatus::try_from(status).map_err(|e| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    1,
-                    rusqlite::types::Type::Integer,
-                    Box::new(e),
-                )
-            })
-        };
-        self.conn
-            .query_row(
-                "SELECT status, updated_at FROM funds_migration_status ORDER BY id DESC LIMIT 1",
-                (),
-                status_from_row,
-            )
-            .map_to_permanent_failure("Failed to query funds migration status")
     }
 
     pub fn store_fiat_topup_info(&self, fiat_topup_info: FiatTopupInfo) -> Result<()> {
@@ -690,7 +658,6 @@ fn fiat_topup_info_from_row(row: &Row) -> rusqlite::Result<Option<FiatTopupInfo>
 mod tests {
     use crate::config::TzConfig;
     use crate::data_store::{CreatedInvoice, DataStore};
-    use crate::fund_migration::MigrationStatus;
     use crate::{EnableStatus, ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
 
     use crate::analytics::AnalyticsConfig;
@@ -1139,34 +1106,6 @@ mod tests {
         assert_eq!(
             eur_rate.updated_at,
             SystemTime::UNIX_EPOCH + Duration::from_secs(20)
-        );
-    }
-
-    #[test]
-    fn test_persisting_funds_migration_status() {
-        let db_name = String::from("funds_migration.db3");
-        reset_db(&db_name);
-        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
-
-        assert_eq!(
-            data_store.retrieve_funds_migration_status().unwrap(),
-            MigrationStatus::Unknown
-        );
-
-        data_store
-            .append_funds_migration_status(MigrationStatus::Pending)
-            .unwrap();
-        assert_eq!(
-            data_store.retrieve_funds_migration_status().unwrap(),
-            MigrationStatus::Pending
-        );
-
-        data_store
-            .append_funds_migration_status(MigrationStatus::Completed)
-            .unwrap();
-        assert_eq!(
-            data_store.retrieve_funds_migration_status().unwrap(),
-            MigrationStatus::Completed
         );
     }
 

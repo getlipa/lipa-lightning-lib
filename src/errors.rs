@@ -20,9 +20,6 @@ pub enum RuntimeErrorCode {
     // Breez runtime errors
     /// Information about the remote node isn't cached and couldn't be accessed. Could be a network error.
     NodeUnavailable,
-    // Temporary migration error
-    /// Migration of funds from legacy LDK wallet failed. Retry is recommended.
-    FailedFundMigration,
 }
 
 impl Display for RuntimeErrorCode {
