@@ -128,7 +128,7 @@ use perro::{
     ensure, invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
 use squirrel::RemoteBackupClient;
-use std::cmp::Reverse;
+use std::cmp::{min, Reverse};
 use std::collections::HashSet;
 use std::path::Path;
 use std::str::FromStr;
@@ -1028,7 +1028,7 @@ impl LightningNode {
         &self,
         number_of_completed_activities: u32,
     ) -> Result<ListActivitiesResponse> {
-        const LEEWAY_FOR_PENDING_PAYMENTS: u32 = 10;
+        const LEEWAY_FOR_PENDING_PAYMENTS: u32 = 30;
         let list_payments_request = ListPaymentsRequest {
             filters: Some(vec![
                 PaymentTypeFilter::Sent,
@@ -1066,7 +1066,7 @@ impl LightningNode {
         // first `look_for_pending` latest activities.
         // Yes, we risk to omit old pending ones.
         let look_for_pending = LEEWAY_FOR_PENDING_PAYMENTS as usize + number_of_created_invoices;
-        let mut tail_activities = activities.split_off(look_for_pending);
+        let mut tail_activities = activities.split_off(min(look_for_pending, activities.len()));
         let head_activities = activities;
         let (mut pending_activities, mut completed_activities): (Vec<_>, Vec<_>) =
             head_activities.into_iter().partition(Activity::is_pending);
