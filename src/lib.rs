@@ -1058,18 +1058,21 @@ impl LightningNode {
             .lock_unwrap()
             .retrieve_created_invoices(number_of_completed_activities)?;
 
-        let activities = self.multiplex_activities(breez_activities, created_invoices);
+        let number_of_created_invoices = created_invoices.len();
+        let mut activities = self.multiplex_activities(breez_activities, created_invoices);
+        activities.sort_by_cached_key(|m| Reverse(m.get_time()));
 
-        // Split by state.
-        let mut pending_activities = Vec::new();
-        let mut completed_activities = Vec::new();
-        activities.into_iter().for_each(|m| {
-            if m.is_pending() {
-                pending_activities.push(m)
-            } else {
-                completed_activities.push(m)
-            }
-        });
+        // To produce stable output we look for pending activities only in the
+        // first `look_for_pending` latest activities.
+        // Yes, we risk to omit old pending ones.
+        let look_for_pending = LEEWAY_FOR_PENDING_PAYMENTS as usize + number_of_created_invoices;
+        let mut tail_activities = activities.split_off(look_for_pending);
+        let head_activities = activities;
+        let (mut pending_activities, mut completed_activities): (Vec<_>, Vec<_>) =
+            head_activities.into_iter().partition(Activity::is_pending);
+        tail_activities.retain(|m| !m.is_pending());
+        completed_activities.append(&mut tail_activities);
+        completed_activities.truncate(number_of_completed_activities as usize);
 
         if let Some(in_progress_swap) = self
             .rt
@@ -1099,10 +1102,8 @@ impl LightningNode {
                 },
             })
         }
+        pending_activities.sort_by_cached_key(|m| Reverse(m.get_time()));
 
-        pending_activities.sort_by_key(|m| Reverse(m.get_time()));
-        completed_activities.sort_by_key(|m| Reverse(m.get_time()));
-        completed_activities.truncate(number_of_completed_activities as usize);
         Ok(ListActivitiesResponse {
             pending_activities,
             completed_activities,
