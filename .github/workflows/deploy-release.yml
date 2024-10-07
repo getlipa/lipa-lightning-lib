@@ -30,7 +30,7 @@ jobs:
         env:
           CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
       - name: Install rust
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@v1.0.6
         with:
           toolchain: 1.77.1
           profile: minimal
@@ -77,7 +77,7 @@ jobs:
         env:
           CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
       - name: Install rust
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@v1.0.6
         with:
           toolchain: 1.77.1
           profile: minimal
@@ -407,7 +407,7 @@ jobs:
         env:
           CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
       - name: Install rust
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@v1.0.6
         with:
           toolchain: 1.77.1
           profile: minimal
