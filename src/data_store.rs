@@ -3,10 +3,10 @@ use crate::errors::Result;
 use crate::migrations::migrate;
 use crate::{EnableStatus, ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
 
+use crate::pocketclient::FiatTopupInfo;
 use chrono::{DateTime, Utc};
 use crow::{PermanentFailureCode, TemporaryFailureCode};
 use perro::MapToError;
-use pocketclient::FiatTopupInfo;
 use rusqlite::{backup, params, Connection, OptionalExtension, Params, Row};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -661,9 +661,9 @@ mod tests {
     use crate::{EnableStatus, ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
 
     use crate::analytics::AnalyticsConfig;
+    use crate::pocketclient::FiatTopupInfo;
     use crow::TopupError::TemporaryFailure;
     use crow::{PermanentFailureCode, TemporaryFailureCode};
-    use pocketclient::FiatTopupInfo;
     use std::fs;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};

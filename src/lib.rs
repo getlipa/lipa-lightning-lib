@@ -92,8 +92,15 @@ use crate::task_manager::TaskManager;
 use crate::util::{
     replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
 };
-pub use pocketclient::FiatTopupInfo;
-use pocketclient::PocketClient;
+
+#[cfg(not(feature = "mock-deps"))]
+#[allow(clippy::single_component_path_imports)]
+use pocketclient;
+#[cfg(feature = "mock-deps")]
+use pocketclient_mock as pocketclient;
+
+pub use crate::pocketclient::FiatTopupInfo;
+use crate::pocketclient::PocketClient;
 
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 pub use breez_sdk_core::error::RedeemOnchainError as SweepError;
