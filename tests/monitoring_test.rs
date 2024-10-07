@@ -13,6 +13,7 @@ use parrot::PaymentSource;
 use serial_test::file_serial;
 use std::io::Write;
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 const PAYMENT_AMOUNT_SATS: u64 = 300;
@@ -144,6 +145,7 @@ fn lsp_fee_can_be_fetched() {
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn exchange_rate_can_be_fetched_and_is_recent() {
     let sender = TransactingNode::new(NodeType::Sender).unwrap();
+    sleep(Duration::from_secs(5)); // Wait a bit, otherwise we can end up using persisted rate
     let rate = sender.node.get_exchange_rate().unwrap();
     // Check exchange rate is recent
     let leeway_secs = 2 * 60;
