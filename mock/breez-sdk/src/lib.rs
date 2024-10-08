@@ -36,7 +36,7 @@ const SWAPPER_ROUTING_FEE_SAT: u64 = 150;
 const SWAP_TX_WEIGHT: u64 = 800;
 const SAT_PER_VBYTE: u64 = 12;
 const SWAP_FEE_PERCENTAGE: f64 = 0.5;
-const SWAP_ADDRESS_DUMMY: &str = "1BitcoinEaterAddressDontSendf59kuE";
+const SWAP_ADDRESS_DUMMY: &str = "bc1qftnnghhyhyegmzmh0t7uczysr05e3vx75t96y2";
 const SWAP_RECEIVED_SATS_ON_CHAIN: u64 = 100_000;
 const TX_ID_DUMMY: &str = "f4184fc596403b9d638783cf57adfe4c75c605f6356fbc91338530e9831e9e16";
 
