@@ -1150,7 +1150,7 @@ impl BreezServices {
 }
 
 pub async fn parse(input: &str) -> Result<InputType> {
-    let input = input.trim();
+    let input = input.strip_prefix("lightning:").unwrap_or(input).trim();
 
     if let Ok(invoice) = parse_invoice(input) {
         return Ok(Bolt11 { invoice });
@@ -1164,24 +1164,6 @@ pub async fn parse(input: &str) -> Result<InputType> {
                 amount_sat: None,
                 label: None,
                 message: None,
-            },
-        });
-    }
-
-    // Without requesting the server, it is not possible to know whether an LNURL string is a pay or withdraw request
-    // So instead we interpret the string 'lnurlp' as if it was an LNUrL-pay string
-    if input == "lnurlp" {
-        return Ok(InputType::LnUrlPay {
-            data: LnUrlPayRequestData {
-                callback: "https://lnurl.dummy.com/lnurl-pay/callback/e9a0f330f34ac16d297094f568060d267bac6319a7f0d06eaf89d7fc1512f39a".to_string(),
-                min_sendable: 1,
-                max_sendable: 1_000_000_000,
-                metadata_str: "[[\"text/plain\",\"dummy\"],[\"text/long-desc\",\"dummy description\"]]".to_string(),
-                comment_allowed: 100,
-                domain: "lnurl.dummy.com".to_string(),
-                allows_nostr: false,
-                nostr_pubkey: None,
-                ln_address: None,
             },
         });
     }
@@ -1203,15 +1185,51 @@ pub async fn parse(input: &str) -> Result<InputType> {
         });
     }
 
-    Ok(InputType::LnUrlWithdraw {
-        data: LnUrlWithdrawRequestData {
-            callback: "https://lnurl.dummy.com/lnurl-withdraw/callback/e9a0f330f34ac16d297094f568060d267bac6319a7f0d06eaf89d7fc1512f39a".to_string(),
-            k1: "".to_string(),
-            default_description: "dummy default description".to_string(),
-            min_withdrawable: 0,
-            max_withdrawable: 30_000_000,
-        },
-    })
+    if input.starts_with("02") || input.starts_with("03") {
+        return Ok(InputType::NodeId {
+            node_id: input.to_string(),
+        });
+    }
+
+    if input.starts_with("http") {
+        return Ok(InputType::Url {
+            url: input.to_string(),
+        });
+    }
+
+    if input.to_lowercase().starts_with("lnurl") {
+        let (_hrp, data) = bech32::decode(input).unwrap();
+
+        let decoded_url = std::str::from_utf8(&data).unwrap();
+
+        if decoded_url.contains("lnurl-pay") {
+            return Ok(InputType::LnUrlPay {
+                data: LnUrlPayRequestData {
+                    callback: "https://lnurl.dummy.com/lnurl-pay/callback/e9a0f330f34ac16d297094f568060d267bac6319a7f0d06eaf89d7fc1512f39a".to_string(),
+                    min_sendable: 1,
+                    max_sendable: 1_000_000_000,
+                    metadata_str: "[[\"text/plain\",\"dummy\"],[\"text/long-desc\",\"dummy description\"]]".to_string(),
+                    comment_allowed: 100,
+                    domain: "lnurl.dummy.com".to_string(),
+                    allows_nostr: false,
+                    nostr_pubkey: None,
+                    ln_address: None,
+                },
+            });
+        } else {
+            return Ok(InputType::LnUrlWithdraw {
+                data: LnUrlWithdrawRequestData {
+                    callback: "https://lnurl.dummy.com/lnurl-withdraw/callback/e9a0f330f34ac16d297094f568060d267bac6319a7f0d06eaf89d7fc1512f39a".to_string(),
+                    k1: "".to_string(),
+                    default_description: "dummy default description".to_string(),
+                    min_withdrawable: 0,
+                    max_withdrawable: 30_000_000,
+                },
+            });
+        }
+    }
+
+    anyhow::bail!("Invalid input");
 }
 
 /// Returns channel opening fees in msats.
