@@ -532,7 +532,7 @@ impl BreezServices {
                 description_hash: None,
                 amount_msat: Some(req.amount_msat),
                 timestamp: Utc::now().timestamp() as u64,
-                expiry: 0,
+                expiry: 3600,
                 routing_hints: vec![],
                 payment_secret: Vec::from(SAMPLE_PAYMENT_SECRET.as_bytes()),
                 min_final_cltv_expiry_delta: 144,
