@@ -2441,14 +2441,17 @@ impl LightningNode {
 
         let prepare_onchain_tx =
             move |to_address: String, sat_per_vbyte: u32| -> Result<(Sats, Sats)> {
-                let x = self
+                let sweep_info = self
                     .prepare_sweep_funds_from_channel_closes(to_address, sat_per_vbyte)
                     .map_to_runtime_error(
                         RuntimeErrorCode::NodeUnavailable,
                         "Failed to prepare sweep funds from channel closes",
                     )?;
 
-                Ok((x.amount.sats.as_sats(), x.onchain_fee_amount.sats.as_sats()))
+                Ok((
+                    sweep_info.amount.sats.as_sats(),
+                    sweep_info.onchain_fee_amount.sats.as_sats(),
+                ))
             };
 
         self.get_onchain_resolving_fees(onchain_balance, prepare_onchain_tx)
