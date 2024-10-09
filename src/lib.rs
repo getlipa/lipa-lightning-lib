@@ -1106,6 +1106,12 @@ impl LightningNode {
                         + in_progress_swap.confirmed_sats)
                         .as_sats()
                         .to_amount_down(&self.get_exchange_rate()),
+                    txid: in_progress_swap
+                        .unconfirmed_tx_ids
+                        .first()
+                        .or(in_progress_swap.confirmed_tx_ids.first())
+                        .ok_or(permanent_failure("In-progress swap doesn't have any txids"))?
+                        .clone(),
                 },
             })
         }
@@ -1327,6 +1333,11 @@ impl LightningNode {
                 created_at: unix_timestamp_to_system_time(s.created_at as u64)
                     .with_timezone(tz_config.clone()),
                 paid_amount: s.paid_msat.as_msats().to_amount_down(&exchange_rate),
+                txid: s
+                    .confirmed_tx_ids
+                    .first()
+                    .ok_or(permanent_failure("Confirmed swap has no confirmed txid"))?
+                    .clone(),
             };
             let incoming_payment_info = IncomingPaymentInfo::new(
                 breez_payment,

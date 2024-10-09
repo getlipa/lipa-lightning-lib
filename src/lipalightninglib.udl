@@ -575,6 +575,7 @@ dictionary SwapInfo {
     string bitcoin_address;
     TzTime created_at;
     Amount paid_amount;
+    string txid;
 };
 
 dictionary ReverseSwapInfo {
