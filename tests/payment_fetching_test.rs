@@ -15,7 +15,7 @@ fn test_payment_fetching() {
         .create_invoice(
             100_000,
             None,
-            "description".into(),
+            "pay.err.generic".into(),
             InvoiceCreationMetadata {
                 request_currency: "EUR".into(),
             },
