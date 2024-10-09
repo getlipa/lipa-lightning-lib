@@ -324,7 +324,9 @@ pub struct OnchainResolvingFees {
     /// The exact fees will be known when calling [`LightningNode::prepare_sweep_funds_from_channel_closes`]
     /// or [`LightningNode::prepare_resolve_failed_swap`].
     pub sweep_onchain_fee_estimate: Amount,
-    /// Used internally to sweep with the given on-chain fees.
+    /// The fee rate used to compute `swaps_fees` and `sweep_onchain_fee_estimate`.
+    /// It should be provided when swapping funds back to lightning or when sweeping funds
+    /// to on-chain to ensure the same fee rate is used.
     pub sat_per_vbyte: u32,
 }
 
