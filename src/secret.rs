@@ -26,7 +26,7 @@ pub struct Secret {
 impl Secret {
     fn from_mnemonic(mnemonic: Mnemonic, passphrase: String) -> Secret {
         let seed = mnemonic.to_seed(&passphrase);
-        let mnemonic_string: Vec<String> = mnemonic.word_iter().map(String::from).collect();
+        let mnemonic_string: Vec<_> = mnemonic.words().map(String::from).collect();
 
         Secret {
             mnemonic: mnemonic_string,
