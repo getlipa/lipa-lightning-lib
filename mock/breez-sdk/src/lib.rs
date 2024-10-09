@@ -103,9 +103,6 @@ lazy_static! {
     static ref PAYMENTS: Mutex<Vec<Payment>> = Mutex::new(Vec::new());
     static ref SWAPS: Mutex<Vec<SwapInfo>> = Mutex::new(Vec::new());
     static ref REDEEM_SWAPS: Mutex<bool> = Mutex::new(true);
-    static ref NODE_PRIVKEY: SecretKey =
-        SecretKey::from_slice(&generate_32_random_bytes()).unwrap();
-    static ref NODE_PUBKEY: String = NODE_PRIVKEY.public_key(&Secp256k1::new()).to_string();
     static ref CHANNELS: Mutex<Vec<Channel>> = Mutex::new(Vec::new());
     static ref CHANNELS_PENDING_CLOSE: Mutex<Vec<Channel>> = Mutex::new(Vec::new());
     static ref CHANNELS_CLOSED: Mutex<Vec<Channel>> = Mutex::new(Vec::new());
@@ -132,6 +129,8 @@ enum PaymentDelay {
 }
 
 pub struct BreezServices {
+    priv_key: SecretKey,
+    pub_key: String,
     event_listener: Box<dyn EventListener>,
 }
 
@@ -140,7 +139,14 @@ impl BreezServices {
         _req: ConnectRequest,
         event_listener: Box<dyn EventListener>,
     ) -> SdkResult<Arc<BreezServices>> {
-        let sdk = Arc::new(BreezServices { event_listener });
+        let priv_key = SecretKey::from_slice(&generate_32_random_bytes()).unwrap();
+        let pub_key = priv_key.public_key(&Secp256k1::new()).to_string();
+
+        let sdk = Arc::new(BreezServices {
+            priv_key,
+            pub_key,
+            event_listener,
+        });
         let sdk_task = Arc::clone(&sdk);
         Handle::current().spawn(async move {
             loop {
@@ -227,7 +233,7 @@ impl BreezServices {
                 self.event_listener.on_event(BreezEvent::PaymentFailed {
                     details: PaymentFailedData {
                         error: "Already paid".to_string(),
-                        node_id: NODE_PUBKEY.to_string(),
+                        node_id: self.pub_key.clone(),
                         invoice: None,
                         label: None,
                     },
@@ -238,7 +244,7 @@ impl BreezServices {
                 self.event_listener.on_event(BreezEvent::PaymentFailed {
                     details: PaymentFailedData {
                         error: "Generic error".to_string(),
-                        node_id: NODE_PUBKEY.to_string(),
+                        node_id: self.pub_key.clone(),
                         invoice: None,
                         label: None,
                     },
@@ -251,7 +257,7 @@ impl BreezServices {
                 self.event_listener.on_event(BreezEvent::PaymentFailed {
                     details: PaymentFailedData {
                         error: "Invalid network".to_string(),
-                        node_id: NODE_PUBKEY.to_string(),
+                        node_id: self.pub_key.clone(),
                         invoice: None,
                         label: None,
                     },
@@ -264,7 +270,7 @@ impl BreezServices {
                 self.event_listener.on_event(BreezEvent::PaymentFailed {
                     details: PaymentFailedData {
                         error: "Invoice expired".to_string(),
-                        node_id: NODE_PUBKEY.to_string(),
+                        node_id: self.pub_key.clone(),
                         invoice: None,
                         label: None,
                     },
@@ -277,7 +283,7 @@ impl BreezServices {
                 self.event_listener.on_event(BreezEvent::PaymentFailed {
                     details: PaymentFailedData {
                         error: "Payment failed".to_string(),
-                        node_id: NODE_PUBKEY.to_string(),
+                        node_id: self.pub_key.clone(),
                         invoice: None,
                         label: None,
                     },
@@ -290,7 +296,7 @@ impl BreezServices {
                 self.event_listener.on_event(BreezEvent::PaymentFailed {
                     details: PaymentFailedData {
                         error: "Payment timed out".to_string(),
-                        node_id: NODE_PUBKEY.to_string(),
+                        node_id: self.pub_key.clone(),
                         invoice: None,
                         label: None,
                     },
@@ -303,7 +309,7 @@ impl BreezServices {
                 self.event_listener.on_event(BreezEvent::PaymentFailed {
                     details: PaymentFailedData {
                         error: "Route not found".to_string(),
-                        node_id: NODE_PUBKEY.to_string(),
+                        node_id: self.pub_key.clone(),
                         invoice: None,
                         label: None,
                     },
@@ -316,7 +322,7 @@ impl BreezServices {
                 self.event_listener.on_event(BreezEvent::PaymentFailed {
                     details: PaymentFailedData {
                         error: "Route too expensive".to_string(),
-                        node_id: NODE_PUBKEY.to_string(),
+                        node_id: self.pub_key.clone(),
                         invoice: None,
                         label: None,
                     },
@@ -329,7 +335,7 @@ impl BreezServices {
                 self.event_listener.on_event(BreezEvent::PaymentFailed {
                     details: PaymentFailedData {
                         error: "Service connectivity error".to_string(),
-                        node_id: NODE_PUBKEY.to_string(),
+                        node_id: self.pub_key.clone(),
                         invoice: None,
                         label: None,
                     },
@@ -342,7 +348,7 @@ impl BreezServices {
     }
 
     pub async fn lnurl_pay(&self, req: LnUrlPayRequest) -> Result<LnUrlPayResult, LnUrlPayError> {
-        let (invoice, preimage, payment_hash) = create_invoice(req.amount_msat, "");
+        let (invoice, preimage, payment_hash) = self.create_invoice(req.amount_msat, "");
 
         if get_balance_msat() < req.amount_msat {
             return Err(LnUrlPayError::RouteNotFound {
@@ -392,7 +398,7 @@ impl BreezServices {
             .map_err(|e| LnUrlWithdrawError::InvalidAmount { err: e.to_string() })?;
 
         let (invoice, preimage, payment_hash) =
-            create_invoice(req.amount_msat, &req.description.unwrap_or_default());
+            self.create_invoice(req.amount_msat, &req.description.unwrap_or_default());
 
         let payment = create_payment(MockPayment {
             payment_type: PaymentType::Received,
@@ -401,7 +407,7 @@ impl BreezServices {
             description: None,
             payment_hash: payment_hash.clone(),
             payment_preimage: preimage,
-            destination_pubkey: NODE_PUBKEY.clone(),
+            destination_pubkey: self.pub_key.clone(),
             bolt11: invoice.clone(),
             lnurl_pay_domain: None,
             lnurl_pay_comment: None,
@@ -427,7 +433,7 @@ impl BreezServices {
                 invoice: LNInvoice {
                     bolt11: invoice,
                     network: Network::Bitcoin,
-                    payee_pubkey: NODE_PUBKEY.clone(),
+                    payee_pubkey: self.pub_key.clone(),
                     payment_hash,
                     description: None,
                     description_hash: None,
@@ -480,7 +486,8 @@ impl BreezServices {
             _ => {}
         }
 
-        let (invoice, preimage, payment_hash) = create_invoice(req.amount_msat, &req.description);
+        let (invoice, preimage, payment_hash) =
+            self.create_invoice(req.amount_msat, &req.description);
 
         let description = Option::from(req.description);
 
@@ -501,7 +508,7 @@ impl BreezServices {
                 description: description.clone(),
                 payment_hash: payment_hash.clone(),
                 payment_preimage: preimage,
-                destination_pubkey: NODE_PUBKEY.to_string(),
+                destination_pubkey: self.pub_key.clone(),
                 bolt11: invoice.to_string(),
                 lnurl_pay_domain: None,
                 lnurl_pay_comment: None,
@@ -526,7 +533,7 @@ impl BreezServices {
             ln_invoice: LNInvoice {
                 bolt11: invoice.to_string(),
                 network: Network::Bitcoin,
-                payee_pubkey: NODE_PUBKEY.to_string(),
+                payee_pubkey: self.pub_key.clone(),
                 payment_hash,
                 description,
                 description_hash: None,
@@ -557,7 +564,7 @@ impl BreezServices {
         let balance = get_balance_msat();
 
         Ok(NodeState {
-            id: NODE_PUBKEY.to_string(),
+            id: self.pub_key.clone(),
             block_height: 1234567,
             channels_balance_msat: balance,
             onchain_balance_msat: get_onchain_balance_msat(),
@@ -679,7 +686,7 @@ impl BreezServices {
                     .map_err(|e| SdkError::Generic { err: e.to_string() })?;
 
                 let (invoice, payment_preimage, payment_hash) =
-                    create_invoice(swap.confirmed_sats, "Swap invoice");
+                    self.create_invoice(swap.confirmed_sats, "Swap invoice");
                 let payment = create_payment(MockPayment {
                     payment_type: PaymentType::Received,
                     amount_msat: swap.confirmed_sats - lsp_fee_msat,
@@ -687,7 +694,7 @@ impl BreezServices {
                     description: Some("swapped in".to_string()),
                     payment_hash,
                     payment_preimage,
-                    destination_pubkey: NODE_PUBKEY.to_string(),
+                    destination_pubkey: self.pub_key.clone(),
                     bolt11: invoice,
                     lnurl_pay_domain: None,
                     lnurl_pay_comment: None,
@@ -899,7 +906,7 @@ impl BreezServices {
             status: ReverseSwapStatus::Initial,
         };
 
-        let (invoice, preimage, payment_hash) = create_invoice(amount_msat, "");
+        let (invoice, preimage, payment_hash) = self.create_invoice(amount_msat, "");
         let payment = create_payment(MockPayment {
             payment_type: PaymentType::Sent,
             amount_msat,
@@ -1048,7 +1055,7 @@ impl BreezServices {
                 swap.status = SwapStatus::Redeemable;
                 if *REDEEM_SWAPS.lock().unwrap() {
                     let (invoice, payment_preimage, payment_hash) =
-                        create_invoice(swap.confirmed_sats, "Swap invoice");
+                        self.create_invoice(swap.confirmed_sats, "Swap invoice");
                     let lsp_fee_msat = receive_payment_mock_channels(swap.confirmed_sats * 1_000)?;
                     let payment = create_payment(MockPayment {
                         payment_type: PaymentType::Received,
@@ -1104,7 +1111,7 @@ impl BreezServices {
     ) {
         for _ in 0..number_of_payments {
             let amount_msat = rand::thread_rng().gen_range(1000..1_000_000_000);
-            let (invoice, preimage, payment_hash) = create_invoice(amount_msat, "");
+            let (invoice, preimage, payment_hash) = self.create_invoice(amount_msat, "");
 
             let ln_address = if ln_address {
                 let mut rng = rand::thread_rng();
@@ -1146,6 +1153,24 @@ impl BreezServices {
     pub async fn close_lsp_channels(&self) -> SdkResult<Vec<String>> {
         // No need to implement this in the mock
         Ok(Vec::new())
+    }
+
+    fn create_invoice(&self, amount_msat: u64, description: &str) -> (String, String, String) {
+        let (preimage, payment_hash) = generate_2_hashes_raw();
+        let preimage = format!("{:x}", preimage);
+        let payment_secret = PaymentSecret([42u8; 32]);
+
+        let invoice = InvoiceBuilder::new(Currency::Bitcoin)
+            .amount_milli_satoshis(amount_msat)
+            .description(description.to_string())
+            .payment_hash(payment_hash)
+            .payment_secret(payment_secret)
+            .current_timestamp()
+            .min_final_cltv_expiry_delta(144)
+            .build_signed(|hash| Secp256k1::new().sign_ecdsa_recoverable(hash, &self.priv_key))
+            .unwrap();
+
+        (invoice.to_string(), preimage, payment_hash.to_string())
     }
 }
 
@@ -1372,24 +1397,6 @@ fn confirm_pending_channel_closes() {
                 data.state = ChannelState::Closed
             }
         });
-}
-
-fn create_invoice(amount_msat: u64, description: &str) -> (String, String, String) {
-    let (preimage, payment_hash) = generate_2_hashes_raw();
-    let preimage = format!("{:x}", preimage);
-    let payment_secret = PaymentSecret([42u8; 32]);
-
-    let invoice = InvoiceBuilder::new(Currency::Bitcoin)
-        .amount_milli_satoshis(amount_msat)
-        .description(description.to_string())
-        .payment_hash(payment_hash)
-        .payment_secret(payment_secret)
-        .current_timestamp()
-        .min_final_cltv_expiry_delta(144)
-        .build_signed(|hash| Secp256k1::new().sign_ecdsa_recoverable(hash, &NODE_PRIVKEY))
-        .unwrap();
-
-    (invoice.to_string(), preimage, payment_hash.to_string())
 }
 
 fn generate_2_hashes() -> (String, String) {
