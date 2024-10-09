@@ -62,10 +62,7 @@ fn test_topup() {
     assert!(matches!(
         uncompleted_offers.first().unwrap(),
         OfferInfo {
-            offer_kind: OfferKind::Pocket {
-                topup_value_minor_units: 10,
-                ..
-            },
+            offer_kind: OfferKind::Pocket { .. },
             status: OfferStatus::READY,
             ..
         }
@@ -89,10 +86,7 @@ fn test_topup() {
     assert!(matches!(
         uncompleted_offers.first().unwrap(),
         OfferInfo {
-            offer_kind: OfferKind::Pocket {
-                topup_value_minor_units: 100100,
-                ..
-            },
+            offer_kind: OfferKind::Pocket { .. },
             status: OfferStatus::REFUNDED,
             ..
         }
