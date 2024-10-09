@@ -1771,9 +1771,9 @@ impl LightningNode {
         Ok(())
     }
 
-    /// Hides the channel close action required item in case the amount cannot be recovered due
-    /// to it being too small. The item will reappear once the onchain-fees go down enough to
-    /// make the amount recoverable.
+    /// Hides the unresolved failed swap action required item in case the amount cannot be
+    /// recovered due to it being too small. The item will reappear once the onchain-fees go
+    /// down enough to make the amount recoverable.
     ///
     /// Requires network: **no**
     pub fn hide_unresolved_failed_swap_action_required_item(
