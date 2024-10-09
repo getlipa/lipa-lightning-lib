@@ -1,6 +1,7 @@
 use crate::ExchangeRate;
 use std::time::SystemTime;
 
+#[derive(Clone, Copy)]
 pub(crate) struct Sats {
     pub sats: u64,
     pub msats: u64,

@@ -91,6 +91,9 @@ interface LightningNode {
 
     [Throws=LnError]
     void hide_channel_closes_funds_available_action_required_item();
+    
+    [Throws=LnError]
+    void hide_unresolved_failed_swap_action_required_item(FailedSwapInfo failed_swap_info);
 
     [Throws=LnError]
     sequence<OfferInfo> query_uncompleted_offers();
@@ -114,16 +117,19 @@ interface LightningNode {
     u32 query_onchain_fee_rate();
 
     [Throws=SweepError]
-    SweepInfo prepare_sweep(string address, u32 onchain_fee_rate);
+    SweepInfo prepare_sweep_funds_from_channel_closes(string address, u32 onchain_fee_rate);
 
     [Throws=LnError]
-    string sweep(SweepInfo sweep_info);
+    string sweep_funds_from_channel_closes(SweepInfo sweep_info);
 
     [Throws=SwapError]
     SwapAddressInfo generate_swap_address(OpeningFeeParams? lsp_fee_params);
 
     [Throws=LnError]
     sequence<FailedSwapInfo> get_unresolved_failed_swaps();
+    
+    [Throws=LnError]
+    OnchainResolvingFees? get_failed_swap_resolving_fees(FailedSwapInfo failed_swap_info);
 
     [Throws=LnError]
     ResolveFailedSwapInfo prepare_resolve_failed_swap(FailedSwapInfo failed_swap_info, string to_address, u32 onchain_fee_rate);
@@ -132,10 +138,10 @@ interface LightningNode {
     string resolve_failed_swap(ResolveFailedSwapInfo resolve_failed_swap_info);
 
     [Throws=LnError]
-    ChannelCloseResolvingFees? get_channel_close_resolving_fees();
+    OnchainResolvingFees? get_channel_close_resolving_fees();
 
     [Throws=SweepError]
-    string swap_onchain_to_lightning(u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_params);
+    string swap_channel_close_funds_to_lightning(u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_params);
 
     [Throws=LnError]
     void hide_topup(string id);
@@ -649,7 +655,7 @@ dictionary ClearWalletInfo {
     PrepareOnchainPaymentResponse prepare_response;
 };
 
-dictionary ChannelCloseResolvingFees {
+dictionary OnchainResolvingFees {
     SwapToLightningFees? swap_fees;
     Amount sweep_onchain_fee_estimate;
     u32 sat_per_vbyte;
