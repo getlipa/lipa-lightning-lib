@@ -1,5 +1,6 @@
 pub use pocketclient::{FiatTopupInfo, Result};
 use std::future::Future;
+use uuid::Uuid;
 
 pub struct PocketClient {}
 
@@ -20,7 +21,7 @@ impl PocketClient {
         Fut: Future<Output = Option<String>>,
     {
         Ok(FiatTopupInfo {
-            order_id: "Mock order_id".to_string(),
+            order_id: Uuid::new_v4().to_string(),
             debitor_iban: "Mock debitor_iban".to_string(),
             creditor_reference: "Mock creditor_reference".to_string(),
             creditor_iban: "Mock creditor_iban".to_string(),
