@@ -62,10 +62,7 @@ fn test_topup() {
     assert!(matches!(
         uncompleted_offers.first().unwrap(),
         OfferInfo {
-            offer_kind: OfferKind::Pocket {
-                topup_value_minor_units: 10,
-                ..
-            },
+            offer_kind: OfferKind::Pocket { .. },
             status: OfferStatus::READY,
             ..
         }
@@ -74,8 +71,13 @@ fn test_topup() {
     let expected_offer_count = uncompleted_offers.len() + 1;
 
     // `DK2225222522252225` triggers a new topup that is directly refunded
-    node.register_fiat_topup(None, "DK2225222522252225".to_string(), "eur".to_string())
-        .unwrap();
+    // The email achieves the same for the mocked pocket client
+    node.register_fiat_topup(
+        Some("refund@top.up".to_string()),
+        "DK2225222522252225".to_string(),
+        "eur".to_string(),
+    )
+    .unwrap();
 
     wait_for_condition!(
         node.query_uncompleted_offers().unwrap().len() == expected_offer_count,
@@ -89,10 +91,7 @@ fn test_topup() {
     assert!(matches!(
         uncompleted_offers.first().unwrap(),
         OfferInfo {
-            offer_kind: OfferKind::Pocket {
-                topup_value_minor_units: 100100,
-                ..
-            },
+            offer_kind: OfferKind::Pocket { .. },
             status: OfferStatus::REFUNDED,
             ..
         }

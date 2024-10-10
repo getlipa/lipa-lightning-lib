@@ -17,7 +17,7 @@ fn test_decoding() {
     let result = node.decode_data(invalid_invoice);
     assert!(matches!(result, Err(DecodeDataError::Unrecognized { .. })));
 
-    let bitcoin_address = "1DTHjgRiPnCYhgy7PcKxEEWAyFi4VoJpqi".to_string();
+    let bitcoin_address = "bc1qftnnghhyhyegmzmh0t7uczysr05e3vx75t96y2".to_string();
     let data = node.decode_data(bitcoin_address.clone()).unwrap();
     assert!(matches!(data, DecodedData::OnchainAddress { .. }));
     if let DecodedData::OnchainAddress {
