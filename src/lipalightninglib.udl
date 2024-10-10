@@ -135,6 +135,9 @@ interface LightningNode {
     ResolveFailedSwapInfo prepare_resolve_failed_swap(FailedSwapInfo failed_swap_info, string to_address, u32 onchain_fee_rate);
 
     [Throws=LnError]
+    string swap_failed_swap_funds_to_lightning(FailedSwapInfo failed_swap_info, u32 sat_per_vbyte, OpeningFeeParams? lsp_fee_param);
+
+    [Throws=LnError]
     string resolve_failed_swap(ResolveFailedSwapInfo resolve_failed_swap_info);
 
     [Throws=LnError]
