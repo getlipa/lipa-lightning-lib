@@ -2379,30 +2379,30 @@ impl LightningNode {
 
         let send_amount_sats = failed_swap_info.amount.sats - prepare_response.refund_tx_fee_sat;
 
-        if swap_address_info.min_deposit.sats > send_amount_sats {
-            // TODO: switch to failed swap specific error once the SDK exposes an appropriate error
-            runtime_error!(
+        ensure!(
+            swap_address_info.min_deposit.sats <= send_amount_sats,
+            runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed swap amount isn't enough for creating new swap"
-            );
-        }
+            )
+        );
 
-        if swap_address_info.max_deposit.sats < send_amount_sats {
-            // TODO: switch to failed swap specific error once the SDK exposes an appropriate error
-            runtime_error!(
+        ensure!(
+            swap_address_info.max_deposit.sats >= send_amount_sats,
+            runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed swap amount is too big for creating new swap"
-            );
-        }
+            )
+        );
 
         let lsp_fees = self.calculate_lsp_fee(send_amount_sats)?.lsp_fee.sats;
-        if lsp_fees >= send_amount_sats {
-            // TODO: switch to failed swap specific error once the SDK exposes an appropriate error
-            runtime_error!(
+        ensure!(
+            lsp_fees < send_amount_sats,
+            runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "A new channel is needed and the failed swap amount is not enough to pay for fees"
-            );
-        }
+            )
+        );
 
         let refund_response = self
             .rt
