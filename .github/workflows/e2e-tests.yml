@@ -1,0 +1,31 @@
+name: E2E Tests
+
+on:
+  schedule:
+    - cron: '21 3 * * *' # every day at 3:21 AM UTC
+  workflow_dispatch: # allow manually triggering a run
+
+env:
+  GITHUB_REF: ${{ github.ref }}
+
+jobs:
+  integration:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Config cargo
+        run: echo -e "$CARGO_CONFIG_TOML_BREEZ" > .cargo/config.toml
+        env:
+          CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.7.0
+      - name: Run e2e tests
+        run: make e2etests
