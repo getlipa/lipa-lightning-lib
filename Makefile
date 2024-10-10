@@ -29,6 +29,12 @@ test:
 integrationtests: FILE = *
 integrationtests: TEST = ''
 integrationtests:
+	cargo test --no-default-features --features mock-deps --workspace --test '$(FILE)' -- --ignored $(TEST)
+
+.PHONY: e2etests
+e2etests: FILE = *
+e2etests: TEST = ''
+e2etests:
 	cargo test --workspace --test '$(FILE)' -- $(TEST)
 
 .PHONY: testregisternode
