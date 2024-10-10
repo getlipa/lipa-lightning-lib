@@ -453,6 +453,28 @@ impl DataStore {
             .optional()
             .map_to_permanent_failure("Failed to query last hidden channel close amount")
     }
+
+    pub fn store_hidden_unresolved_failed_swap(&mut self, swap_address: &str) -> Result<()> {
+        self.backup_status = BackupStatus::WaitingForBackup;
+        self.conn
+            .execute(
+                "INSERT INTO hidden_failed_swaps (swap_address) VALUES (?1)",
+                params![swap_address],
+            )
+            .map_to_permanent_failure("Failed to store hidden failed swap in db")?;
+        Ok(())
+    }
+
+    pub fn retrieve_hidden_unresolved_failed_swaps(&mut self) -> Result<Vec<String>> {
+        Ok(self
+            .conn
+            .prepare("SELECT swap_address FROM hidden_failed_swaps")
+            .map_to_permanent_failure("Failed to prepare query for hidden failed swaps")?
+            .query_map([], |row| row.get(0))
+            .map_to_permanent_failure("Failed to query for hidden failed swaps")?
+            .filter_map(|r| r.ok())
+            .collect::<Vec<_>>())
+    }
 }
 
 fn lightning_address_from_row(row: &Row) -> rusqlite::Result<(String, EnableStatus)> {
@@ -1360,6 +1382,38 @@ mod tests {
                 .retrieve_hidden_channel_close_onchain_funds_amount_sat()
                 .unwrap(),
             Some(2000)
+        );
+    }
+
+    #[test]
+    fn test_storing_hidden_failed_swap() {
+        let db_name = String::from("hidden_failed_swaps.db3");
+        reset_db(&db_name);
+        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+
+        assert!(data_store
+            .retrieve_hidden_unresolved_failed_swaps()
+            .unwrap()
+            .is_empty());
+
+        data_store
+            .store_hidden_unresolved_failed_swap("address1")
+            .unwrap();
+        assert_eq!(
+            data_store
+                .retrieve_hidden_unresolved_failed_swaps()
+                .unwrap(),
+            vec!["address1".to_string()]
+        );
+
+        data_store
+            .store_hidden_unresolved_failed_swap("address2")
+            .unwrap();
+        assert_eq!(
+            data_store
+                .retrieve_hidden_unresolved_failed_swaps()
+                .unwrap(),
+            vec!["address1".to_string(), "address2".to_string()]
         );
     }
 

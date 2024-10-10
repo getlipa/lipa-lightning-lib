@@ -25,6 +25,7 @@ pub struct SwapAddressInfo {
 }
 
 /// Information about a failed swap
+#[derive(Clone)]
 pub struct FailedSwapInfo {
     pub address: String,
     /// The amount that is available to be recovered. The recovery will involve paying some

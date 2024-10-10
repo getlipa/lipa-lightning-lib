@@ -35,4 +35,6 @@ fn main() {
         false,
     )
     .unwrap();
+
+    println!("cargo:rerun-if-changed=.cargo/config.toml");
 }

@@ -141,6 +141,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "getfailedswapresolvingfees" => {
+                    if let Err(message) = get_failed_swap_resolving_fees(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "refundfailedswap" => {
                     if let Err(message) = refund_failed_swap(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
@@ -195,6 +200,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     if let Err(message) =
                         node.hide_channel_closes_funds_available_action_required_item()
                     {
+                        println!("{}", format!("{message:#}").red())
+                    }
+                }
+                "hidefailedswapitem" => {
+                    if let Err(message) = hide_failed_swap(node, &mut words) {
                         println!("{}", format!("{message:#}").red())
                     }
                 }
@@ -407,6 +417,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("getswapaddress", "getswapaddress"));
     hints.insert(CommandHint::new("listfailedswaps", "listfailedswaps"));
     hints.insert(CommandHint::new(
+        "getfailedswapresolvingfees <swap address>",
+        "getfailedswapresolvingfees ",
+    ));
+    hints.insert(CommandHint::new(
         "refundfailedswap <swap address> <to address>",
         "refundfailedswap ",
     ));
@@ -431,6 +445,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new(
         "hidechannelcloseitem",
         "hidechannelcloseitem",
+    ));
+    hints.insert(CommandHint::new(
+        "hidefailedswapitem <swap address>",
+        "hidefailedswapitem ",
     ));
 
     hints.insert(CommandHint::new(
@@ -529,6 +547,7 @@ fn help() {
     println!();
     println!("  getswapaddress");
     println!("  listfailedswaps");
+    println!("  getfailedswapresolvingfees <swap address>");
     println!("  refundfailedswap <swap address> <to address>");
     println!();
     println!("  registertopup <IBAN> <currency> [email]");
@@ -540,6 +559,7 @@ fn help() {
     println!();
     println!("  listactionableitems");
     println!("  hidechannelcloseitem");
+    println!("  hidefailedswapitem <swap address>");
     println!();
     println!("  o | overview [number of activities = 10] [fun mode = false]");
     println!("  l | listactivities [number of activities = 2]");
@@ -1375,8 +1395,8 @@ fn set_personal_note(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
 
 fn sweep(node: &LightningNode, address: String) -> Result<String> {
     let fee_rate = node.query_onchain_fee_rate()?;
-    let sweep_info = node.prepare_sweep(address, fee_rate)?;
-    Ok(node.sweep(sweep_info)?)
+    let sweep_info = node.prepare_sweep_funds_from_channel_closes(address, fee_rate)?;
+    Ok(node.sweep_funds_from_channel_closes(sweep_info)?)
 }
 
 fn clear_wallet_info(node: &LightningNode) -> Result<()> {
@@ -1509,6 +1529,59 @@ fn calculate_lightning_payout_fee(
     Ok(())
 }
 
+fn get_failed_swap_resolving_fees(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<()> {
+    let swap_address = words.next().ok_or(anyhow!("Swap address is required"))?;
+
+    let failed_swaps = node
+        .get_unresolved_failed_swaps()
+        .map_err(|e| anyhow!("Failed to fetch currently unresolved failed swaps: {e}"))?;
+    let failed_swap = failed_swaps
+        .into_iter()
+        .find(|s| s.address.eq(swap_address))
+        .ok_or(anyhow!(
+            "No unresolved failed swap with provided swap address was found"
+        ))?;
+
+    let resolving_fees = node.get_failed_swap_resolving_fees(failed_swap)?;
+
+    let resolving_fees = match resolving_fees {
+        None => {
+            println!("Failed swap funds cannot be resolved because they are too little.");
+            return Ok(());
+        }
+        Some(f) => f,
+    };
+
+    println!(
+        "Sweep on-chain fees: {}",
+        amount_to_string(&resolving_fees.sweep_onchain_fee_estimate)
+    );
+
+    match resolving_fees.swap_fees {
+        Some(f) => {
+            println!("Retry swap fees: {}", amount_to_string(&f.total_fees));
+            println!(
+                "    Swap fee:              {}",
+                amount_to_string(&f.swap_fee)
+            );
+            println!(
+                "    On-chain fee:          {}",
+                amount_to_string(&f.onchain_fee)
+            );
+            println!(
+                "    Channel opening fee:   {}",
+                amount_to_string(&f.channel_opening_fee)
+            );
+        }
+        None => println!("Retry swap fees: Unavailable"),
+    }
+
+    Ok(())
+}
+
 fn get_channel_close_resolving_fees(node: &LightningNode) -> Result<()> {
     let resolving_fees = node.get_channel_close_resolving_fees()?;
 
@@ -1556,8 +1629,10 @@ fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
         .swap_fees
         .ok_or(anyhow!("Swap isn't available, not enough on-chain funds"))?;
 
-    let txid =
-        node.swap_onchain_to_lightning(resolving_fees.sat_per_vbyte, swap_fees.lsp_fee_params)?;
+    let txid = node.swap_channel_close_funds_to_lightning(
+        resolving_fees.sat_per_vbyte,
+        swap_fees.lsp_fee_params,
+    )?;
 
     println!("Sweeping transaction: {txid}");
 
@@ -1578,4 +1653,21 @@ fn set_feature_flag(node: &LightningNode, words: &mut dyn Iterator<Item = &str>)
         .ok_or(anyhow!("<enabled> is required"))?
         .parse()?;
     node.set_feature_flag(feature, enabled).map_err(Into::into)
+}
+
+fn hide_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let swap_address = words.next().ok_or(anyhow!("Swap address is required"))?;
+
+    let failed_swaps = node
+        .get_unresolved_failed_swaps()
+        .map_err(|e| anyhow!("Failed to fetch currently unresolved failed swaps: {e}"))?;
+    let failed_swap = failed_swaps
+        .into_iter()
+        .find(|s| s.address.eq(swap_address))
+        .ok_or(anyhow!(
+            "No unresolved failed swap with provided swap address was found"
+        ))?;
+
+    node.hide_unresolved_failed_swap_action_required_item(failed_swap)
+        .map_err(Into::into)
 }
