@@ -25,10 +25,10 @@ test: TEST = ''
 test:
 	cargo test --workspace --lib --verbose -- $(TEST)
 
-.PHONY: integrationtests
-integrationtests: FILE = *
-integrationtests: TEST = ''
-integrationtests:
+.PHONY: e2etests
+e2etests: FILE = *
+e2etests: TEST = ''
+e2etests:
 	cargo test --workspace --test '$(FILE)' -- $(TEST)
 
 .PHONY: testregisternode
