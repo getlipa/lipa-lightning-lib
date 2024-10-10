@@ -4,12 +4,13 @@ use crate::config::TzTime;
 use breez_sdk_core::OpeningFeeParams;
 use std::time::SystemTime;
 
-/// Information about a successful swap.
+/// Information about a pending or successful swap.
 #[derive(PartialEq, Debug)]
 pub struct SwapInfo {
     pub bitcoin_address: String,
     pub created_at: TzTime,
     pub paid_amount: Amount,
+    pub txid: String,
 }
 
 /// Information about a generated swap address
