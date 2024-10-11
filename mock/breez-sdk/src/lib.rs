@@ -37,7 +37,6 @@ const SWAP_TX_WEIGHT: u64 = 800;
 const SAT_PER_VBYTE: u64 = 12;
 const SWAP_FEE_PERCENTAGE: f64 = 0.5;
 const SWAP_ADDRESS_DUMMY: &str = "bc1qftnnghhyhyegmzmh0t7uczysr05e3vx75t96y2";
-const SWAP_RECEIVED_SATS_ON_CHAIN: u64 = 100_000;
 const TX_ID_DUMMY: &str = "f4184fc596403b9d638783cf57adfe4c75c605f6356fbc91338530e9831e9e16";
 
 const LNURL_PAY_FEE_MSAT: u64 = 8_000;
@@ -106,6 +105,7 @@ lazy_static! {
     static ref CHANNELS: Mutex<Vec<Channel>> = Mutex::new(Vec::new());
     static ref CHANNELS_PENDING_CLOSE: Mutex<Vec<Channel>> = Mutex::new(Vec::new());
     static ref CHANNELS_CLOSED: Mutex<Vec<Channel>> = Mutex::new(Vec::new());
+    static ref SWAP_RECEIVED_SATS_ON_CHAIN: Mutex<u64> = Mutex::new(100_000);
 }
 
 #[derive(Debug)]
@@ -453,6 +453,7 @@ impl BreezServices {
         req: ReceivePaymentRequest,
     ) -> Result<ReceivePaymentResponse, ReceivePaymentError> {
         // Has nothing to do with receiving a payment, but is a mechanism to control the mock
+        *SWAP_RECEIVED_SATS_ON_CHAIN.lock().unwrap() = req.amount_msat / 1_000;
         match req.description.trim().to_lowercase().as_str() {
             "health.operational" => *HEALTH_STATUS.lock().unwrap() = HealthCheckStatus::Operational,
             "health.maintenance" => *HEALTH_STATUS.lock().unwrap() = HealthCheckStatus::Maintenance,
@@ -1042,7 +1043,7 @@ impl BreezServices {
         let _: Result<()> = swaps.iter_mut().try_for_each(|swap| {
             if now - swap.created_at > secs_until_tx_in_mempool {
                 swap.total_incoming_txs = 1;
-                swap.unconfirmed_sats = SWAP_RECEIVED_SATS_ON_CHAIN;
+                swap.unconfirmed_sats = *SWAP_RECEIVED_SATS_ON_CHAIN.lock().unwrap();
                 swap.status = SwapStatus::WaitingConfirmation;
                 self.event_listener.on_event(BreezEvent::SwapUpdated {
                     details: swap.clone(),
