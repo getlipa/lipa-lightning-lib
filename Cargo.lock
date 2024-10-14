@@ -649,8 +649,8 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-core"
-version = "0.6.1"
-source = "git+https://github.com/breez/breez-sdk?tag=0.6.1#55f9e81c295fe074ef349a1d7969a34a6eb0ff36"
+version = "0.6.2"
+source = "git+https://github.com/breez/breez-sdk?tag=0.6.2#df86eec7b0745edb1736e6fcbb39c12fff15e920"
 dependencies = [
  "aes 0.8.4",
  "anyhow",
@@ -675,6 +675,7 @@ dependencies = [
  "ripemd",
  "rusqlite",
  "rusqlite_migration",
+ "ryu",
  "sdk-common",
  "serde",
  "serde_json",
@@ -692,7 +693,7 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-mock"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -1678,8 +1679,8 @@ checksum = "32085ea23f3234fc7846555e85283ba4de91e21016dc0455a16286d87a292d64"
 
 [[package]]
 name = "gl-client"
-version = "0.2.0"
-source = "git+https://github.com/Blockstream/greenlight.git?rev=7540980dd8f1630b1b148a9eb8b44e2b05ca7e6d#7540980dd8f1630b1b148a9eb8b44e2b05ca7e6d"
+version = "0.3.0"
+source = "git+https://github.com/Blockstream/greenlight.git?rev=c09c1be59994b35aadfe4747b78bcdc8fffbe45a#c09c1be59994b35aadfe4747b78bcdc8fffbe45a"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -3845,8 +3846,8 @@ checksum = "60a7b59a5d9b0099720b417b6325d91a52cbf5b3dcb5041d864be53eefa58abc"
 
 [[package]]
 name = "sdk-common"
-version = "0.6.1"
-source = "git+https://github.com/breez/breez-sdk?tag=0.6.1#55f9e81c295fe074ef349a1d7969a34a6eb0ff36"
+version = "0.6.2"
+source = "git+https://github.com/breez/breez-sdk?tag=0.6.2#df86eec7b0745edb1736e6fcbb39c12fff15e920"
 dependencies = [
  "aes 0.8.4",
  "anyhow",
