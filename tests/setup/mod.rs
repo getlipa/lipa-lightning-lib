@@ -93,7 +93,8 @@ pub fn start_specific_node(
     }
 
     let mnemonic_key = format!("BREEZ_SDK_MNEMONIC_{node_name}");
-    let mnemonic = std::env::var(mnemonic_key).unwrap();
+    let mnemonic = std::env::var(&mnemonic_key)
+        .unwrap_or_else(|_| panic!("Failed to load env var {mnemonic_key}"));
     let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
     let seed = mnemonic_to_secret(mnemonic, "".to_string()).unwrap().seed;
 
