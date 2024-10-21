@@ -2210,7 +2210,10 @@ impl LightningNode {
 
                 Ok((sent_amount, onchain_fee))
             };
-        self.get_onchain_resolving_fees(failed_swap_info.amount.sats.as_msats(), prepare_onchain_tx)
+        self.get_onchain_resolving_fees(
+            failed_swap_info.amount.sats.as_sats().msats(),
+            prepare_onchain_tx,
+        )
     }
 
     fn get_onchain_resolving_fees<F>(
