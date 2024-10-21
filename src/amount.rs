@@ -14,6 +14,10 @@ impl Sats {
             msats: sats * 1000,
         }
     }
+
+    pub(crate) fn msats(&self) -> Msats {
+        Msats { msats: self.msats }
+    }
 }
 
 pub(crate) struct Msats {

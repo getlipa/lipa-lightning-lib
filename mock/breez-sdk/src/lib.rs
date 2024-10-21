@@ -1,11 +1,11 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use bitcoin::hashes::{sha256, Hash};
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, InvoiceBuilder};
 use rand::{Rng, RngCore};
 use secp256k1::{Secp256k1, SecretKey};
 use std::cmp::{max, min};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -34,7 +34,6 @@ const SWAP_MIN_AMOUNT_SAT: u64 = 1_000;
 const SWAP_MAX_AMOUNT_SAT: u64 = 1_000_000;
 const SWAPPER_ROUTING_FEE_SAT: u64 = 150;
 const SWAP_TX_WEIGHT: u64 = 800;
-const SAT_PER_VBYTE: u64 = 12;
 const SWAP_FEE_PERCENTAGE: f64 = 0.5;
 const SWAP_ADDRESS_DUMMY: &str = "bc1qftnnghhyhyegmzmh0t7uczysr05e3vx75t96y2";
 const TX_ID_DUMMY: &str = "f4184fc596403b9d638783cf57adfe4c75c605f6356fbc91338530e9831e9e16";
@@ -72,6 +71,7 @@ use chrono::Utc;
 use hex::FromHex;
 use lazy_static::lazy_static;
 use tokio::runtime::Handle;
+use tokio::sync::Mutex;
 
 pub mod error {
     pub use breez_sdk_core::error::*;
@@ -99,13 +99,12 @@ lazy_static! {
     static ref HEALTH_STATUS: Mutex<HealthCheckStatus> = Mutex::new(HealthCheckStatus::Operational);
     static ref PAYMENT_DELAY: Mutex<PaymentDelay> = Mutex::new(PaymentDelay::Immediate);
     static ref PAYMENT_OUTCOME: Mutex<PaymentOutcome> = Mutex::new(PaymentOutcome::Success);
-    static ref PAYMENTS: Mutex<Vec<Payment>> = Mutex::new(Vec::new());
+    static ref PAYMENTS: std::sync::Mutex<Vec<Payment>> = std::sync::Mutex::new(Vec::new());
     static ref SWAPS: Mutex<Vec<SwapInfo>> = Mutex::new(Vec::new());
-    static ref REDEEM_SWAPS: Mutex<bool> = Mutex::new(true);
-    static ref CHANNELS: Mutex<Vec<Channel>> = Mutex::new(Vec::new());
-    static ref CHANNELS_PENDING_CLOSE: Mutex<Vec<Channel>> = Mutex::new(Vec::new());
-    static ref CHANNELS_CLOSED: Mutex<Vec<Channel>> = Mutex::new(Vec::new());
-    static ref SWAP_RECEIVED_SATS_ON_CHAIN: Mutex<u64> = Mutex::new(100_000);
+    static ref CHANNELS: std::sync::Mutex<Vec<Channel>> = std::sync::Mutex::new(Vec::new());
+    static ref CHANNELS_PENDING_CLOSE: std::sync::Mutex<Vec<Channel>> =
+        std::sync::Mutex::new(Vec::new());
+    static ref CHANNELS_CLOSED: std::sync::Mutex<Vec<Channel>> = std::sync::Mutex::new(Vec::new());
 }
 
 #[derive(Debug)]
@@ -160,7 +159,7 @@ impl BreezServices {
         &self,
         req: SendPaymentRequest,
     ) -> Result<SendPaymentResponse, SendPaymentError> {
-        match &*PAYMENT_DELAY.lock().unwrap() {
+        match &*PAYMENT_DELAY.lock().await {
             PaymentDelay::Immediate => {}
             PaymentDelay::Short => {
                 thread::sleep(Duration::from_secs(3));
@@ -172,7 +171,7 @@ impl BreezServices {
 
         let (_, payment_preimage) = generate_2_hashes();
 
-        match &*PAYMENT_OUTCOME.lock().unwrap() {
+        match &*PAYMENT_OUTCOME.lock().await {
             PaymentOutcome::Success => {
                 let parsed_invoice = parse_invoice(req.bolt11.as_str())?;
                 let invoice_amount_msat = parsed_invoice.amount_msat.unwrap_or_default();
@@ -200,7 +199,7 @@ impl BreezServices {
                         err: "Ran out of routes".into(),
                     });
                 } else {
-                    send_payment_mock_channels(amount_msat + routing_fee_msat);
+                    send_payment_mock_channels(amount_msat + routing_fee_msat).await;
                 }
 
                 let payment = create_payment(MockPayment {
@@ -355,7 +354,7 @@ impl BreezServices {
                 err: "Ran out of routes".into(),
             });
         } else {
-            send_payment_mock_channels(req.amount_msat + LNURL_PAY_FEE_MSAT);
+            send_payment_mock_channels(req.amount_msat + LNURL_PAY_FEE_MSAT).await;
         }
 
         let payment = create_payment(MockPayment {
@@ -395,6 +394,7 @@ impl BreezServices {
         req: LnUrlWithdrawRequest,
     ) -> Result<LnUrlWithdrawResult, LnUrlWithdrawError> {
         let lsp_fee_msat = receive_payment_mock_channels(req.amount_msat)
+            .await
             .map_err(|e| LnUrlWithdrawError::InvalidAmount { err: e.to_string() })?;
 
         let (invoice, preimage, payment_hash) =
@@ -453,37 +453,43 @@ impl BreezServices {
         req: ReceivePaymentRequest,
     ) -> Result<ReceivePaymentResponse, ReceivePaymentError> {
         // Has nothing to do with receiving a payment, but is a mechanism to control the mock
-        *SWAP_RECEIVED_SATS_ON_CHAIN.lock().unwrap() = req.amount_msat / 1_000;
         match req.description.trim().to_lowercase().as_str() {
-            "health.operational" => *HEALTH_STATUS.lock().unwrap() = HealthCheckStatus::Operational,
-            "health.maintenance" => *HEALTH_STATUS.lock().unwrap() = HealthCheckStatus::Maintenance,
+            "health.operational" => *HEALTH_STATUS.lock().await = HealthCheckStatus::Operational,
+            "health.maintenance" => *HEALTH_STATUS.lock().await = HealthCheckStatus::Maintenance,
             "health.disruption" => {
-                *HEALTH_STATUS.lock().unwrap() = HealthCheckStatus::ServiceDisruption
+                *HEALTH_STATUS.lock().await = HealthCheckStatus::ServiceDisruption
             }
-            "pay.delay.immediate" => *PAYMENT_DELAY.lock().unwrap() = PaymentDelay::Immediate,
-            "pay.delay.short" => *PAYMENT_DELAY.lock().unwrap() = PaymentDelay::Short,
-            "pay.delay.long" => *PAYMENT_DELAY.lock().unwrap() = PaymentDelay::Long,
-            "pay.success" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::Success,
-            "pay.err.already_paid" => {
-                *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::AlreadyPaid
-            }
-            "pay.err.generic" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::GenericError,
-            "pay.err.network" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::InvalidNetwork,
-            "pay.err.expired" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::InvoiceExpired,
-            "pay.err.failed" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::Failed,
-            "pay.err.timeout" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::Timeout,
-            "pay.err.route" => *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::RouteNotFound,
+            "pay.delay.immediate" => *PAYMENT_DELAY.lock().await = PaymentDelay::Immediate,
+            "pay.delay.short" => *PAYMENT_DELAY.lock().await = PaymentDelay::Short,
+            "pay.delay.long" => *PAYMENT_DELAY.lock().await = PaymentDelay::Long,
+            "pay.success" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::Success,
+            "pay.err.already_paid" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::AlreadyPaid,
+            "pay.err.generic" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::GenericError,
+            "pay.err.network" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::InvalidNetwork,
+            "pay.err.expired" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::InvoiceExpired,
+            "pay.err.failed" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::Failed,
+            "pay.err.timeout" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::Timeout,
+            "pay.err.route" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::RouteNotFound,
             "pay.err.route_too_expensive" => {
-                *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::RouteTooExpensive
+                *PAYMENT_OUTCOME.lock().await = PaymentOutcome::RouteTooExpensive
             }
             "pay.err.connectivity" => {
-                *PAYMENT_OUTCOME.lock().unwrap() = PaymentOutcome::ServiceConnectivity
+                *PAYMENT_OUTCOME.lock().await = PaymentOutcome::ServiceConnectivity
             }
-            "swaps.redeem" => *REDEEM_SWAPS.lock().unwrap() = true,
-            "swaps.miss" => *REDEEM_SWAPS.lock().unwrap() = false,
-            "mimic.pay2addr" => self.simulate_payments(PaymentType::Sent, 10, true),
-            "channels.close_largest" => close_channel_with_largest_balance(),
-            "channels.confirm_pending_closes" => confirm_pending_channel_closes(),
+            "mimic.pay2addr" => self.simulate_payments(PaymentType::Sent, 10, true).await,
+            "channels.close_largest" => close_channel_with_largest_balance().await,
+            "channels.confirm_pending_closes" => confirm_pending_channel_closes().await,
+            "swaps.start" => self.start_swap(req.amount_msat / 1_000).await?,
+            "swaps.confirm_onchain" => self.confirm_swap_onchain().await?,
+            "swaps.redeem" => {
+                let swaps = SWAPS.lock().await.clone();
+                if let Some(swap) = swaps.iter().find(|s| s.status == SwapStatus::Redeemable) {
+                    self.redeem_swap(swap.bitcoin_address.clone()).await?;
+                }
+            }
+            "swaps.expire" => {
+                self.expire_swap().await?;
+            }
             _ => {}
         }
 
@@ -494,8 +500,9 @@ impl BreezServices {
 
         let mut lsp_fee_msat_optional = None;
 
-        if let PaymentOutcome::Success = &*PAYMENT_OUTCOME.lock().unwrap() {
+        if let PaymentOutcome::Success = &*PAYMENT_OUTCOME.lock().await {
             let lsp_fee_msat = receive_payment_mock_channels(req.amount_msat)
+                .await
                 .map_err(|e| ReceivePaymentError::InvalidAmount { err: e.to_string() })?;
 
             if lsp_fee_msat > 0 {
@@ -552,7 +559,7 @@ impl BreezServices {
 
     pub async fn service_health_check(_api_key: String) -> SdkResult<ServiceHealthCheckResponse> {
         Ok(ServiceHealthCheckResponse {
-            status: HEALTH_STATUS.lock().unwrap().clone(),
+            status: HEALTH_STATUS.lock().await.clone(),
         })
     }
 
@@ -670,50 +677,65 @@ impl BreezServices {
         })
     }
 
-    pub async fn redeem_swap(&self, swap_address: String) -> SdkResult<()> {
-        let swaps = SWAPS.lock().unwrap();
-        let swap = swaps
-            .iter()
-            .find(|swap| swap.bitcoin_address == swap_address);
+    pub async fn redeem_swap(&self, _swap_address: String) -> SdkResult<()> {
+        let swap = {
+            let swaps = SWAPS.lock().await.clone();
+            swaps
+                .into_iter()
+                .find(|s| s.status == SwapStatus::Redeemable)
+        };
 
-        if let Some(swap) = swap {
-            if swap.status == SwapStatus::Redeemable {
-                SWAPS
-                    .lock()
-                    .unwrap()
-                    .retain(|s| s.bitcoin_address != swap_address);
+        if let Some(mut swap) = swap {
+            SWAPS
+                .lock()
+                .await
+                .retain(|s| s.status != SwapStatus::Redeemable);
 
-                let lsp_fee_msat = receive_payment_mock_channels(swap.confirmed_sats)
-                    .map_err(|e| SdkError::Generic { err: e.to_string() })?;
+            swap.paid_msat = swap.confirmed_sats * 1_000;
+            swap.status = SwapStatus::Completed;
 
-                let (invoice, payment_preimage, payment_hash) =
-                    self.create_invoice(swap.confirmed_sats, "Swap invoice");
-                let payment = create_payment(MockPayment {
-                    payment_type: PaymentType::Received,
-                    amount_msat: swap.confirmed_sats - lsp_fee_msat,
-                    fee_msat: lsp_fee_msat,
-                    description: Some("swapped in".to_string()),
-                    payment_hash,
-                    payment_preimage,
-                    destination_pubkey: self.pub_key.clone(),
+            let lsp_fee_msat = receive_payment_mock_channels(swap.confirmed_sats)
+                .await
+                .map_err(|e| SdkError::Generic { err: e.to_string() })?;
+
+            let (invoice, payment_preimage, payment_hash) =
+                self.create_invoice(swap.confirmed_sats, "Swap invoice");
+            let payment = create_payment(MockPayment {
+                payment_type: PaymentType::Received,
+                amount_msat: swap.confirmed_sats * 1_000 - lsp_fee_msat,
+                fee_msat: lsp_fee_msat,
+                description: Some("swapped in".to_string()),
+                payment_hash,
+                payment_preimage,
+                destination_pubkey: self.pub_key.clone(),
+                bolt11: invoice.clone(),
+                lnurl_pay_domain: None,
+                lnurl_pay_comment: None,
+                ln_address: None,
+                lnurl_metadata: None,
+                lnurl_withdraw_endpoint: None,
+                swap_info: Some(swap.clone()),
+                reverse_swap_info: None,
+            });
+            PAYMENTS.lock().unwrap().push(payment.clone());
+
+            self.event_listener.on_event(BreezEvent::InvoicePaid {
+                details: InvoicePaidDetails {
+                    payment_hash: "".to_string(),
                     bolt11: invoice,
-                    lnurl_pay_domain: None,
-                    lnurl_pay_comment: None,
-                    ln_address: None,
-                    lnurl_metadata: None,
-                    lnurl_withdraw_endpoint: None,
-                    swap_info: Some(swap.clone()),
-                    reverse_swap_info: None,
-                });
-                PAYMENTS.lock().unwrap().push(payment);
-
-                return Ok(());
-            }
+                    payment: Some(payment),
+                },
+            });
+            self.event_listener.on_event(BreezEvent::SwapUpdated {
+                details: swap.clone(),
+            });
+        } else {
+            return Err(SdkError::Generic {
+                err: "Swap not found or not redeemable".into(),
+            });
         }
 
-        Err(SdkError::Generic {
-            err: "Swap not found or not redeemable".into(),
-        })
+        Ok(())
     }
 
     /// List available LSPs that can be selected by the user
@@ -803,14 +825,12 @@ impl BreezServices {
             unconfirmed_tx_ids: vec![],
             confirmed_tx_ids: vec![],
             min_allowed_deposit: 1_000,
-            max_allowed_deposit: 1_000_000,
+            max_allowed_deposit: 100_000_000,
             max_swapper_payable: 100_000_000,
             last_redeem_error: None,
             channel_opening_fees: None,
             confirmed_at: None,
         };
-
-        SWAPS.lock().unwrap().push(swap.clone());
 
         Ok(swap)
     }
@@ -818,9 +838,13 @@ impl BreezServices {
     pub async fn in_progress_swap(&self) -> SdkResult<Option<SwapInfo>> {
         Ok(SWAPS
             .lock()
-            .unwrap()
+            .await
             .iter()
-            .find(|swap| swap.status != SwapStatus::Initial && swap.status != SwapStatus::Completed)
+            .find(|swap| {
+                swap.status != SwapStatus::Initial
+                    && swap.status != SwapStatus::Completed
+                    && swap.status != SwapStatus::Refundable
+            })
             .cloned())
     }
 
@@ -896,7 +920,7 @@ impl BreezServices {
         let amount_msat = req.prepare_res.sender_amount_sat * 1_000;
 
         let routing_fee_msat = SWAPPER_ROUTING_FEE_SAT * 1000;
-        send_payment_mock_channels(amount_msat + routing_fee_msat);
+        send_payment_mock_channels(amount_msat + routing_fee_msat).await;
 
         let reverse_swap_info = ReverseSwapInfo {
             id: now.to_string(),
@@ -934,7 +958,7 @@ impl BreezServices {
     }
 
     pub async fn list_refundables(&self) -> SdkResult<Vec<SwapInfo>> {
-        let swaps = SWAPS.lock().unwrap().clone();
+        let swaps = SWAPS.lock().await.clone();
         Ok(swaps
             .into_iter()
             .filter(|swap| swap.status == SwapStatus::Refundable)
@@ -942,19 +966,46 @@ impl BreezServices {
     }
     pub async fn prepare_refund(
         &self,
-        _req: PrepareRefundRequest,
+        req: PrepareRefundRequest,
     ) -> SdkResult<PrepareRefundResponse> {
         Ok(PrepareRefundResponse {
-            refund_tx_weight: (SWAP_TX_WEIGHT / 4 * SAT_PER_VBYTE) as u32,
-            refund_tx_fee_sat: SWAP_TX_WEIGHT,
+            refund_tx_weight: SWAP_TX_WEIGHT as u32,
+            refund_tx_fee_sat: SWAP_TX_WEIGHT / 4 * req.sat_per_vbyte as u64,
         })
     }
 
-    pub async fn refund(&self, _req: RefundRequest) -> SdkResult<RefundResponse> {
-        // Keep it simple for now, remove ALL refundable swaps
+    pub async fn refund(&self, req: RefundRequest) -> SdkResult<RefundResponse> {
+        let refundable_swap = {
+            let swaps = SWAPS.lock().await;
+            swaps
+                .clone()
+                .into_iter()
+                .find(|s| s.status == SwapStatus::Refundable)
+        };
+
+        if let Some(refundable_swap) = refundable_swap {
+            let onchain_fees = self
+                .prepare_refund(PrepareRefundRequest {
+                    swap_address: refundable_swap.bitcoin_address,
+                    to_address: SWAP_ADDRESS_DUMMY.to_string(),
+                    sat_per_vbyte: req.sat_per_vbyte,
+                })
+                .await?
+                .refund_tx_fee_sat;
+
+            if req.to_address == SWAP_ADDRESS_DUMMY {
+                self.start_swap(refundable_swap.confirmed_sats - onchain_fees)
+                    .await?;
+            }
+        } else {
+            return Err(SdkError::Generic {
+                err: "Refundable swap not found".to_string(),
+            });
+        }
+
         SWAPS
             .lock()
-            .unwrap()
+            .await
             .retain(|swap| swap.status != SwapStatus::Refundable);
 
         Ok(RefundResponse {
@@ -971,8 +1022,6 @@ impl BreezServices {
     }
 
     pub async fn sync(&self) -> SdkResult<()> {
-        self.simulate_swaps()?;
-
         self.event_listener.on_event(BreezEvent::Synced);
         Ok(())
     }
@@ -1027,84 +1076,90 @@ impl BreezServices {
         Ok(())
     }
 
-    // After 20 seconds, the swap TX is published > after that you cannot create a new swap
-    // After 40 seconds, the swap TX is confirmed on-chain > it can now be redeemed
-    //                    the payment will be automatically redeemed if REDEEM_SWAPS is true as soon as sync is called (can be triggered by calling listactivities)
-    //                    you can create new swaps again
-    // if REDEEM_SWAPS is off, use refundfailedswap to clear up list
-    fn simulate_swaps(&self) -> Result<()> {
-        let now = Utc::now();
-        let now = now.timestamp();
-        let secs_until_tx_in_mempool = 20;
-        let secs_until_onchain_conf = 40;
+    async fn start_swap(&self, amount_sat: u64) -> Result<()> {
+        if self.in_progress_swap().await?.is_some() {
+            bail!("A swap is already in progress");
+        }
 
-        let mut swaps = SWAPS.lock().unwrap();
+        let mut swaps = SWAPS.lock().await;
 
-        let _: Result<()> = swaps.iter_mut().try_for_each(|swap| {
-            if now - swap.created_at > secs_until_tx_in_mempool {
-                swap.total_incoming_txs = 1;
-                swap.unconfirmed_sats = *SWAP_RECEIVED_SATS_ON_CHAIN.lock().unwrap();
-                swap.status = SwapStatus::WaitingConfirmation;
-                self.event_listener.on_event(BreezEvent::SwapUpdated {
-                    details: swap.clone(),
-                })
-            }
-            if now - swap.created_at > secs_until_onchain_conf {
-                swap.confirmed_at = Some(830_000);
-                swap.confirmed_sats = swap.unconfirmed_sats;
-                swap.unconfirmed_sats = 0;
-                swap.status = SwapStatus::Redeemable;
-                if *REDEEM_SWAPS.lock().unwrap() {
-                    let (invoice, payment_preimage, payment_hash) =
-                        self.create_invoice(swap.confirmed_sats, "Swap invoice");
-                    let lsp_fee_msat = receive_payment_mock_channels(swap.confirmed_sats * 1_000)?;
-                    let payment = create_payment(MockPayment {
-                        payment_type: PaymentType::Received,
-                        amount_msat: swap.confirmed_sats * 1_000 - lsp_fee_msat,
-                        fee_msat: lsp_fee_msat,
-                        description: None,
-                        payment_hash,
-                        payment_preimage,
-                        destination_pubkey: PAYEE_PUBKEY_DUMMY.to_string(),
-                        bolt11: invoice.clone(),
-                        lnurl_pay_domain: None,
-                        lnurl_pay_comment: None,
-                        ln_address: None,
-                        lnurl_metadata: None,
-                        lnurl_withdraw_endpoint: None,
-                        swap_info: Some(swap.clone()),
-                        reverse_swap_info: None,
-                    });
-                    PAYMENTS.lock().unwrap().push(payment.clone());
-                    swap.status = SwapStatus::Completed;
-                    self.event_listener.on_event(BreezEvent::InvoicePaid {
-                        details: InvoicePaidDetails {
-                            payment_hash: "".to_string(),
-                            bolt11: invoice,
-                            payment: Some(payment),
-                        },
-                    });
-                    self.event_listener.on_event(BreezEvent::SwapUpdated {
-                        details: swap.clone(),
-                    })
-                } else {
-                    swap.status = SwapStatus::Refundable;
-                    self.event_listener.on_event(BreezEvent::SwapUpdated {
-                        details: swap.clone(),
-                    })
-                }
-            };
-            Ok(())
-        });
+        let swap = SwapInfo {
+            bitcoin_address: SWAP_ADDRESS_DUMMY.to_string(),
+            created_at: Utc::now().timestamp(),
+            lock_height: 10,
+            payment_hash: vec![],
+            preimage: vec![],
+            private_key: vec![],
+            public_key: vec![],
+            swapper_public_key: vec![],
+            script: vec![],
+            bolt11: None,
+            paid_msat: 0,
+            total_incoming_txs: 1,
+            confirmed_sats: 0,
+            unconfirmed_sats: amount_sat,
+            status: SwapStatus::WaitingConfirmation,
+            refund_tx_ids: vec![],
+            unconfirmed_tx_ids: vec![TX_ID_DUMMY.to_string()],
+            confirmed_tx_ids: vec![],
+            min_allowed_deposit: 1_000,
+            max_allowed_deposit: 100_000_000,
+            max_swapper_payable: 100_000_000,
+            last_redeem_error: None,
+            channel_opening_fees: None,
+            confirmed_at: None,
+        };
 
-        // remove settled swaps
-        swaps.retain(|swap| {
-            now - swap.created_at < secs_until_onchain_conf || swap.status != SwapStatus::Completed
-        });
+        swaps.push(swap.clone());
+
+        self.event_listener
+            .on_event(BreezEvent::SwapUpdated { details: swap });
+
         Ok(())
     }
 
-    fn simulate_payments(
+    async fn confirm_swap_onchain(&self) -> Result<()> {
+        let mut swaps = SWAPS.lock().await;
+
+        if let Some(in_progress_swap) = swaps
+            .iter_mut()
+            .find(|s| s.status == SwapStatus::WaitingConfirmation)
+        {
+            in_progress_swap.confirmed_at = Some(830_000);
+            in_progress_swap.confirmed_sats = in_progress_swap.unconfirmed_sats;
+            in_progress_swap.unconfirmed_sats = 0;
+            in_progress_swap.confirmed_tx_ids = in_progress_swap.unconfirmed_tx_ids.clone();
+            in_progress_swap.unconfirmed_tx_ids = vec![];
+            in_progress_swap.status = SwapStatus::Redeemable;
+            self.event_listener.on_event(BreezEvent::SwapUpdated {
+                details: in_progress_swap.clone(),
+            });
+        } else {
+            bail!("No swap is waiting confirmation")
+        }
+
+        Ok(())
+    }
+
+    async fn expire_swap(&self) -> Result<()> {
+        let mut swaps = SWAPS.lock().await;
+
+        if let Some(redeemaable_swap) = swaps
+            .iter_mut()
+            .find(|s| s.status == SwapStatus::Redeemable)
+        {
+            redeemaable_swap.status = SwapStatus::Refundable;
+            self.event_listener.on_event(BreezEvent::SwapUpdated {
+                details: redeemaable_swap.clone(),
+            });
+        } else {
+            bail!("No swap is redeemable")
+        }
+
+        Ok(())
+    }
+
+    async fn simulate_payments(
         &self,
         payment_type: PaymentType,
         number_of_payments: u32,
@@ -1260,7 +1315,7 @@ pub async fn parse(input: &str) -> Result<InputType> {
 
 /// Returns channel opening fees in msats.
 /// Fails if a channel is needed and amount_msat is not enough to cover it.
-fn receive_payment_mock_channels(amount_msat: u64) -> Result<u64> {
+async fn receive_payment_mock_channels(amount_msat: u64) -> Result<u64> {
     if amount_msat <= get_inbound_liquidity_msat() {
         let mut amount_left = amount_msat;
         for c in CHANNELS.lock().unwrap().iter_mut() {
@@ -1293,7 +1348,7 @@ fn receive_payment_mock_channels(amount_msat: u64) -> Result<u64> {
     }
 }
 
-fn send_payment_mock_channels(amount_with_fees_msat: u64) {
+async fn send_payment_mock_channels(amount_with_fees_msat: u64) {
     if amount_with_fees_msat > get_balance_msat() {
         panic!("Not enough balance");
     }
@@ -1328,7 +1383,7 @@ fn get_inbound_liquidity_msat() -> u64 {
         .sum()
 }
 
-fn close_channel_with_largest_balance() {
+async fn close_channel_with_largest_balance() {
     let mut channels = CHANNELS.lock().unwrap();
     let max_index = channels
         .iter()
@@ -1362,7 +1417,6 @@ fn close_channel_with_largest_balance() {
         })
     }
 }
-
 fn get_onchain_balance_msat() -> u64 {
     CHANNELS_CLOSED
         .lock()
@@ -1381,7 +1435,7 @@ fn get_pending_onchain_balance_msat() -> u64 {
         .sum()
 }
 
-fn confirm_pending_channel_closes() {
+async fn confirm_pending_channel_closes() {
     CHANNELS_CLOSED
         .lock()
         .unwrap()
