@@ -137,7 +137,7 @@ fn node_can_start() {
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn lsp_fee_can_be_fetched() {
     let sender = TransactingNode::new(NodeType::Sender).unwrap();
-    sender.node.query_lsp_fee().unwrap();
+    wait_for!(sender.node.query_lsp_fee().is_ok());
 }
 
 #[test]
