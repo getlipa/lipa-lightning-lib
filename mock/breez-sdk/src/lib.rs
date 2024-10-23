@@ -454,40 +454,62 @@ impl BreezServices {
     ) -> Result<ReceivePaymentResponse, ReceivePaymentError> {
         // Has nothing to do with receiving a payment, but is a mechanism to control the mock
         match req.description.trim().to_lowercase().as_str() {
-            "health.operational" => *HEALTH_STATUS.lock().await = HealthCheckStatus::Operational,
-            "health.maintenance" => *HEALTH_STATUS.lock().await = HealthCheckStatus::Maintenance,
-            "health.disruption" => {
+            "health.operational" | "ho" => {
+                *HEALTH_STATUS.lock().await = HealthCheckStatus::Operational
+            }
+            "health.maintenance" | "hm" => {
+                *HEALTH_STATUS.lock().await = HealthCheckStatus::Maintenance
+            }
+            "health.disruption" | "hd" => {
                 *HEALTH_STATUS.lock().await = HealthCheckStatus::ServiceDisruption
             }
-            "pay.delay.immediate" => *PAYMENT_DELAY.lock().await = PaymentDelay::Immediate,
-            "pay.delay.short" => *PAYMENT_DELAY.lock().await = PaymentDelay::Short,
-            "pay.delay.long" => *PAYMENT_DELAY.lock().await = PaymentDelay::Long,
-            "pay.success" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::Success,
-            "pay.err.already_paid" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::AlreadyPaid,
-            "pay.err.generic" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::GenericError,
-            "pay.err.network" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::InvalidNetwork,
-            "pay.err.expired" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::InvoiceExpired,
-            "pay.err.failed" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::Failed,
-            "pay.err.timeout" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::Timeout,
-            "pay.err.route" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::RouteNotFound,
-            "pay.err.route_too_expensive" => {
+            "pay.delay.immediate" | "pd.immediate" => {
+                *PAYMENT_DELAY.lock().await = PaymentDelay::Immediate
+            }
+            "pay.delay.short" | "pd.short" => *PAYMENT_DELAY.lock().await = PaymentDelay::Short,
+            "pay.delay.long" | "pay.delay" | "pd" => {
+                *PAYMENT_DELAY.lock().await = PaymentDelay::Long
+            }
+            "pay.success" | "ps" => *PAYMENT_OUTCOME.lock().await = PaymentOutcome::Success,
+            "pay.err.already_paid" | "pe.already_paid" => {
+                *PAYMENT_OUTCOME.lock().await = PaymentOutcome::AlreadyPaid
+            }
+            "pay.err.generic" | "pay.err" | "pe" => {
+                *PAYMENT_OUTCOME.lock().await = PaymentOutcome::GenericError
+            }
+            "pay.err.network" | "pe.network" => {
+                *PAYMENT_OUTCOME.lock().await = PaymentOutcome::InvalidNetwork
+            }
+            "pay.err.expired" | "pe.expired" => {
+                *PAYMENT_OUTCOME.lock().await = PaymentOutcome::InvoiceExpired
+            }
+            "pay.err.failed" | "pe.failed" => {
+                *PAYMENT_OUTCOME.lock().await = PaymentOutcome::Failed
+            }
+            "pay.err.timeout" | "pe.timeout" => {
+                *PAYMENT_OUTCOME.lock().await = PaymentOutcome::Timeout
+            }
+            "pay.err.route" | "pe.route" => {
+                *PAYMENT_OUTCOME.lock().await = PaymentOutcome::RouteNotFound
+            }
+            "pay.err.route_too_expensive" | "pe.rte" => {
                 *PAYMENT_OUTCOME.lock().await = PaymentOutcome::RouteTooExpensive
             }
-            "pay.err.connectivity" => {
+            "pay.err.connectivity" | "pe.connectivity" => {
                 *PAYMENT_OUTCOME.lock().await = PaymentOutcome::ServiceConnectivity
             }
-            "mimic.pay2addr" => self.simulate_payments(PaymentType::Sent, 10, true).await,
-            "channels.close_largest" => close_channel_with_largest_balance().await,
-            "channels.confirm_pending_closes" => confirm_pending_channel_closes().await,
-            "swaps.start" => self.start_swap(req.amount_msat / 1_000).await?,
-            "swaps.confirm_onchain" => self.confirm_swap_onchain().await?,
-            "swaps.redeem" => {
+            "mimic.pay2addr" | "mp" => self.simulate_payments(PaymentType::Sent, 10, true).await,
+            "channels.close_largest" | "cclose" => close_channel_with_largest_balance().await,
+            "channels.confirm_pending_closes" | "cconf" => confirm_pending_channel_closes().await,
+            "swaps.start" | "ss" => self.start_swap(req.amount_msat / 1_000).await?,
+            "swaps.confirm_onchain" | "sc" => self.confirm_swap_onchain().await?,
+            "swaps.redeem" | "sr" => {
                 let swaps = SWAPS.lock().await.clone();
                 if let Some(swap) = swaps.iter().find(|s| s.status == SwapStatus::Redeemable) {
                     self.redeem_swap(swap.bitcoin_address.clone()).await?;
                 }
             }
-            "swaps.expire" => {
+            "swaps.expire" | "se" => {
                 self.expire_swap().await?;
             }
             _ => {}
