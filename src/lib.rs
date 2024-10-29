@@ -384,8 +384,21 @@ impl LightningNode {
             &config.remote_services_config.backend_url,
         )?);
 
+        let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
+        let mut data_store = DataStore::new(&db_path)?;
+
+        let fiat_currency = match data_store.retrieve_last_set_fiat_currency()? {
+            None => {
+                data_store.store_selected_fiat_currency(&config.default_fiat_currency)?;
+                config.default_fiat_currency.clone()
+            }
+            Some(c) => c,
+        };
+
+        let data_store = Arc::new(Mutex::new(data_store));
+
         let user_preferences = Arc::new(Mutex::new(UserPreferences {
-            fiat_currency: config.fiat_currency.clone(),
+            fiat_currency,
             timezone_config: config.timezone_config.clone(),
         }));
 
@@ -394,9 +407,6 @@ impl LightningNode {
             derive_analytics_keys(&strong_typed_seed)?,
             Arc::clone(&async_auth),
         );
-
-        let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
-        let data_store = Arc::new(Mutex::new(DataStore::new(&db_path)?));
 
         let analytics_config = data_store.lock_unwrap().retrieve_analytics_config()?;
         let analytics_interceptor = Arc::new(AnalyticsInterceptor::new(
@@ -1567,8 +1577,12 @@ impl LightningNode {
     /// The method [`LightningNode::list_currency_codes`] can used to list supported codes.
     ///
     /// Requires network: **no**
-    pub fn change_fiat_currency(&self, fiat_currency: String) {
+    pub fn change_fiat_currency(&self, fiat_currency: String) -> Result<()> {
+        self.data_store
+            .lock_unwrap()
+            .store_selected_fiat_currency(&fiat_currency)?;
         self.user_preferences.lock_unwrap().fiat_currency = fiat_currency;
+        Ok(())
     }
 
     /// Change the timezone config.

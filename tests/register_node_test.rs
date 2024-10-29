@@ -29,7 +29,7 @@ fn test_register_node() {
 
     let config = Config {
         seed: secret.seed,
-        fiat_currency: "EUR".to_string(),
+        default_fiat_currency: "EUR".to_string(),
         local_persistence_path: LOCAL_PERSISTENCE_PATH.to_string(),
         timezone_config: TzConfig {
             timezone_id: String::from("int_test_timezone_id"),

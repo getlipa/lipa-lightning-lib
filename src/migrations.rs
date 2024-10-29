@@ -154,6 +154,14 @@ const MIGRATION_17_HIDDEN_FAILED_SWAPS: &str = "
     );
 ";
 
+const MIGRATION_18_FIAT_CURRENCY: &str = "
+    CREATE TABLE fiat_currency (
+        id INTEGER NOT NULL PRIMARY KEY,
+        fiat_currency TEXT NOT NULL,
+        inserter_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -179,6 +187,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_15_LIGHTNING_ADDRESSES_ENABLE_STATUS),
         M::up(MIGRATION_16_HIDDEN_CHANNEL_CLOSE_AMOUNT),
         M::up(MIGRATION_17_HIDDEN_FAILED_SWAPS),
+        M::up(MIGRATION_18_FIAT_CURRENCY),
     ])
 }
 

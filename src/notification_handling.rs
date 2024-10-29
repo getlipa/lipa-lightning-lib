@@ -154,8 +154,18 @@ fn build_analytics_interceptor(
     config: &Config,
     rt: &AsyncRuntime,
 ) -> NotificationHandlingResult<AnalyticsInterceptor> {
+    let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
+    let data_store = DataStore::new(&db_path)
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
+
+    let fiat_currency = data_store
+        .retrieve_last_set_fiat_currency()
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?
+        .ok_or(permanent_failure(
+            "No fiat currency set. Node must be started before handling notifications",
+        ))?;
     let user_preferences = Arc::new(Mutex::new(UserPreferences {
-        fiat_currency: config.fiat_currency.clone(),
+        fiat_currency,
         timezone_config: config.timezone_config.clone(),
     }));
 
@@ -175,9 +185,6 @@ fn build_analytics_interceptor(
         Arc::clone(&async_auth),
     );
 
-    let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
-    let data_store = DataStore::new(&db_path)
-        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
     let analytics_config = data_store
         .retrieve_analytics_config()
         .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?;
@@ -391,9 +398,15 @@ fn handle_lnurl_pay_request_notification(
     // Invoice is not persisted in invoices table because we are not interested in unpaid invoices
     // resulting from incoming LNURL payments
 
+    let fiat_currency = data_store
+        .retrieve_last_set_fiat_currency()
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?
+        .ok_or(permanent_failure(
+            "No fiat currency set. Node must be started before handling notifications",
+        ))?;
     // Store payment info (exchange rates, user preferences, etc...)
     let user_preferences = UserPreferences {
-        fiat_currency: config.fiat_currency.clone(),
+        fiat_currency,
         timezone_config: config.timezone_config.clone(),
     };
     let exchange_rate_provider = ExchangeRateProviderImpl::new(

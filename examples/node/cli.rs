@@ -77,17 +77,9 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     list_currency_codes(node);
                 }
                 "changecurrency" => {
-                    match words
-                        .next()
-                        .ok_or_else(|| "Error: fiat currency code is required".to_string())
-                    {
-                        Ok(c) => {
-                            change_currency(node, c);
-                        }
-                        Err(e) => {
-                            println!("{}", e.red());
-                        }
-                    };
+                    if let Err(message) = change_currency(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
                 }
                 "changetimezone" => {
                     if let Err(message) = change_timezone(node, &mut words) {
@@ -706,8 +698,12 @@ fn list_currency_codes(node: &LightningNode) {
     println!("Supported currencies: {codes:?}");
 }
 
-fn change_currency(node: &LightningNode, fiat_currency: &str) {
-    node.change_fiat_currency(String::from(fiat_currency));
+fn change_currency(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let fiat_currency = words
+        .next()
+        .ok_or(anyhow!("Fiat currency code is required"))?;
+    node.change_fiat_currency(String::from(fiat_currency))?;
+    Ok(())
 }
 
 fn change_timezone(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {

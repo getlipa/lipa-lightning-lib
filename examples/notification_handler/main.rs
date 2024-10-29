@@ -122,7 +122,7 @@ fn get_config() -> Config {
 
     Config {
         seed,
-        fiat_currency: "EUR".to_string(),
+        default_fiat_currency: "EUR".to_string(),
         local_persistence_path: base_dir.clone(),
         timezone_config: TzConfig {
             timezone_id: String::from("Africa/Tunis"),

@@ -70,6 +70,7 @@ interface LightningNode {
 
     ExchangeRate? get_exchange_rate();
 
+    [Throws=LnError]
     void change_fiat_currency(string fiat_currency);
 
     void change_timezone_config(TzConfig timezone_config);
@@ -194,7 +195,7 @@ interface LightningNode {
 
 dictionary Config {
     bytes seed;
-    string fiat_currency;
+    string default_fiat_currency;
     string local_persistence_path;
     TzConfig timezone_config;
     Level? file_logging_level;

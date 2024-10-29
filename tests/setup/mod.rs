@@ -100,7 +100,7 @@ pub fn start_specific_node(
 
     let config = Config {
         seed,
-        fiat_currency: "EUR".to_string(),
+        default_fiat_currency: "EUR".to_string(),
         local_persistence_path,
         timezone_config: TzConfig {
             timezone_id: String::from("int_test_timezone_id"),
