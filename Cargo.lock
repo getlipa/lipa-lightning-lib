@@ -2108,9 +2108,9 @@ dependencies = [
 
 [[package]]
 name = "iban_validate"
-version = "4.0.1"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc1d358f7ae89819e8656f1b495c9d760a9ca315998b12d589dc516c9f81ed08"
+checksum = "068867e6604f60f62b2e3b12cc90501a45ff66bfc91239d72ec420528dfc388d"
 dependencies = [
  "arrayvec",
 ]
