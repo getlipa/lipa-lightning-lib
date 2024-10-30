@@ -2180,6 +2180,7 @@ impl LightningNode {
                 "Failed to list refundable failed swaps",
             )?
             .into_iter()
+            .filter(|s| s.refund_tx_ids.is_empty())
             .map(|s| FailedSwapInfo {
                 address: s.bitcoin_address,
                 amount: s
