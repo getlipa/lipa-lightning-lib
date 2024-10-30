@@ -8,7 +8,11 @@ pub struct Config {
     /// ISO 4217 currency code. The backend does not support all of them, but supports at least USD
     /// and EUR, so it is safe to default to one of them. Providing an invalid code will result in
     /// missing fiat values for payments.
-    pub fiat_currency: String,
+    ///
+    /// The provided value is used as a default. After the first time the node is started,
+    /// this config starts being ignored. Changing the fiat currency can be done using
+    /// [`crate::LightningNode::change_fiat_currency`].
+    pub default_fiat_currency: String,
     /// A path on the local filesystem where this library will directly persist data. Only the
     /// current instance of the app should have access to the provided directory. On app
     /// uninstall/deletion, the directory should be purged.

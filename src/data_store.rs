@@ -465,7 +465,7 @@ impl DataStore {
         Ok(())
     }
 
-    pub fn retrieve_hidden_unresolved_failed_swaps(&mut self) -> Result<Vec<String>> {
+    pub fn retrieve_hidden_unresolved_failed_swaps(&self) -> Result<Vec<String>> {
         Ok(self
             .conn
             .prepare("SELECT swap_address FROM hidden_failed_swaps")
@@ -474,6 +474,28 @@ impl DataStore {
             .map_to_permanent_failure("Failed to query for hidden failed swaps")?
             .filter_map(|r| r.ok())
             .collect::<Vec<_>>())
+    }
+
+    pub fn store_selected_fiat_currency(&mut self, fiat_currency: &str) -> Result<()> {
+        self.backup_status = BackupStatus::WaitingForBackup;
+        self.conn
+            .execute(
+                "INSERT INTO fiat_currency (fiat_currency) VALUES (?1)",
+                params![fiat_currency],
+            )
+            .map_to_permanent_failure("Failed to store fiat currency in db")?;
+        Ok(())
+    }
+
+    pub fn retrieve_last_set_fiat_currency(&self) -> Result<Option<String>> {
+        self.conn
+            .query_row(
+                "SELECT fiat_currency FROM fiat_currency ORDER BY id DESC LIMIT 1",
+                (),
+                |r| r.get(0),
+            )
+            .optional()
+            .map_to_permanent_failure("Failed to query last hidden channel close amount")
     }
 }
 
@@ -1414,6 +1436,36 @@ mod tests {
                 .retrieve_hidden_unresolved_failed_swaps()
                 .unwrap(),
             vec!["address1".to_string(), "address2".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_storing_fiat_currency() {
+        let db_name = String::from("fiat_currency.db3");
+        reset_db(&db_name);
+        let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
+
+        assert!(data_store
+            .retrieve_last_set_fiat_currency()
+            .unwrap()
+            .is_none());
+
+        data_store.store_selected_fiat_currency("EUR").unwrap();
+        assert_eq!(
+            data_store
+                .retrieve_last_set_fiat_currency()
+                .unwrap()
+                .unwrap(),
+            "EUR"
+        );
+
+        data_store.store_selected_fiat_currency("CHF").unwrap();
+        assert_eq!(
+            data_store
+                .retrieve_last_set_fiat_currency()
+                .unwrap()
+                .unwrap(),
+            "CHF"
         );
     }
 
