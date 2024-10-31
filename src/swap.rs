@@ -10,7 +10,6 @@ pub struct SwapInfo {
     pub bitcoin_address: String,
     pub created_at: TzTime,
     pub paid_amount: Amount,
-    pub txid: String,
 }
 
 /// Information about a generated swap address
