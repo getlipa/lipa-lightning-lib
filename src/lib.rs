@@ -8,6 +8,7 @@
 
 extern crate core;
 
+mod activities;
 mod activity;
 mod amount;
 mod analytics;
@@ -102,6 +103,7 @@ use pocketclient_mock as pocketclient;
 pub use crate::pocketclient::FiatTopupInfo;
 use crate::pocketclient::PocketClient;
 
+use crate::activities::Activities;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 pub use breez_sdk_core::error::RedeemOnchainError as SweepError;
 use breez_sdk_core::error::{ReceiveOnchainError, RedeemOnchainError, SendPaymentError};
@@ -309,6 +311,7 @@ pub struct LightningNode {
     phone_number_prefix_parser: PhoneNumberPrefixParser,
     persistence_encryption_key: [u8; 32],
     config: Config,
+    activities: Arc<Activities>,
 }
 
 /// Contains the fee information for the options to resolve funds that have moved on-chain.
@@ -488,6 +491,15 @@ impl LightningNode {
         let phone_number_prefix_parser =
             PhoneNumberPrefixParser::new(&config.phone_number_allowed_countries_iso_3166_1_alpha_2);
 
+        let activities = Arc::new(Activities::new(
+            rt.handle(),
+            Arc::clone(&sdk),
+            Arc::clone(&data_store),
+            Arc::clone(&user_preferences),
+            Arc::clone(&task_manager),
+            config.clone(),
+        ));
+
         Ok(LightningNode {
             user_preferences,
             sdk,
@@ -505,7 +517,12 @@ impl LightningNode {
             phone_number_prefix_parser,
             persistence_encryption_key,
             config,
+            activities,
         })
+    }
+
+    pub fn activities(&self) -> Arc<Activities> {
+        Arc::clone(&self.activities)
     }
 
     /// Request some basic info about the node

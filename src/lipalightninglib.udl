@@ -191,6 +191,13 @@ interface LightningNode {
 
     [Throws=LnError]
     void set_feature_flag(FeatureFlag feature, boolean flag_enabled);
+
+    Activities activities();
+};
+
+interface Activities {
+    [Throws=LnError]
+    ListActivitiesResponse list(u32 number_of_activities);
 };
 
 dictionary Config {
