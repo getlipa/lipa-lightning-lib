@@ -1068,8 +1068,6 @@ impl LightningNode {
     /// * `number_of_completed_activities` - the maximum number of completed activities that will be returned
     ///
     /// Requires network: **no**
-    ///
-    /// Warning: This method is **deprecated** - activities().list() should be used instead.
     #[deprecated = "activities().list() should be used instead"]
     pub fn get_latest_activities(
         &self,
@@ -1084,8 +1082,6 @@ impl LightningNode {
     /// * `hash` - hex representation of payment hash
     ///
     /// Requires network: **no**
-    ///
-    /// Warning: This method is **deprecated** - activities().get_incoming_payment() should be used instead.
     #[deprecated = "activities().get_incoming_payment() should be used instead"]
     pub fn get_incoming_payment(&self, hash: String) -> Result<IncomingPaymentInfo> {
         self.activities.get_incoming_payment(hash)
@@ -1097,8 +1093,6 @@ impl LightningNode {
     /// * `hash` - hex representation of payment hash
     ///
     /// Requires network: **no**
-    ///
-    /// Warning: This method is **deprecated** - activities().get_outgoing_payment() should be used instead.
     #[deprecated = "activities().get_outgoing_payment() should be used instead"]
     pub fn get_outgoing_payment(&self, hash: String) -> Result<OutgoingPaymentInfo> {
         self.activities.get_outgoing_payment(hash)
@@ -1110,8 +1104,6 @@ impl LightningNode {
     /// * `hash` - hex representation of payment hash
     ///
     /// Requires network: **no**
-    ///
-    /// Warning: This method is **deprecated** - activities().get() should be used instead.
     #[deprecated = "activities().get() should be used instead"]
     pub fn get_activity(&self, hash: String) -> Result<Activity> {
         self.activities.get(hash)
@@ -1124,8 +1116,6 @@ impl LightningNode {
     /// * `note` - The personal note.
     ///
     /// Requires network: **no**
-    ///
-    /// Warning: This method is **deprecated** - activities().set_personal_note() should be used instead.
     #[deprecated = "activities().set_personal_note() should be used instead"]
     pub fn set_payment_personal_note(&self, payment_hash: String, note: String) -> Result<()> {
         self.activities.set_personal_note(payment_hash, note)
