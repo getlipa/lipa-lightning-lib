@@ -14,7 +14,7 @@ pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
         .unwrap_or("10")
         .parse()
         .context("Number of activities should be a positive integer number")?;
-    let activities = node.get_latest_activities(number_of_activities)?;
+    let activities = node.activities().list(number_of_activities)?;
 
     let fun: bool = words
         .next()

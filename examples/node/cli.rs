@@ -1226,7 +1226,7 @@ fn list_activities(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
         .unwrap_or("2")
         .parse()
         .context("Number of activities should be a positive integer number")?;
-    let activities = node.get_latest_activities(number_of_activities)?;
+    let activities = node.activities().list(number_of_activities)?;
     let pending_activities = activities.pending_activities;
     let completed_activities = activities.completed_activities;
 
@@ -1384,7 +1384,8 @@ fn set_personal_note(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
     let payment_hash = words.next().ok_or(anyhow!("Payment Hash is required"))?;
     let note = words.collect::<Vec<_>>().join(" ");
 
-    node.set_payment_personal_note(payment_hash.to_string(), note.to_string())?;
+    node.activities()
+        .set_personal_note(payment_hash.to_string(), note.to_string())?;
 
     Ok(())
 }

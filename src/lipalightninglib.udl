@@ -54,6 +54,9 @@ interface LightningNode {
     OutgoingPaymentInfo get_outgoing_payment(string hash);
 
     [Throws=LnError]
+    Activity get_activity(string hash);
+
+    [Throws=LnError]
     void set_payment_personal_note(string payment_hash, string note);
 
     [Throws=LnError]
@@ -191,6 +194,25 @@ interface LightningNode {
 
     [Throws=LnError]
     void set_feature_flag(FeatureFlag feature, boolean flag_enabled);
+
+    Activities activities();
+};
+
+interface Activities {
+    [Throws=LnError]
+    ListActivitiesResponse list(u32 number_of_activities);
+
+    [Throws=LnError]
+    Activity get(string hash);
+    
+    [Throws=LnError]
+    IncomingPaymentInfo get_incoming_payment(string hash);
+
+    [Throws=LnError]
+    OutgoingPaymentInfo get_outgoing_payment(string hash);
+    
+    [Throws=LnError]
+    void set_personal_note(string payment_hash, string note);
 };
 
 dictionary Config {
