@@ -162,6 +162,41 @@ impl Activities {
         }
     }
 
+    /// Get a reverse swap activity by reverse swap id.
+    ///
+    /// Parameters:
+    /// * `reverse_swap_id` - the id of a reverse swap.
+    ///
+    /// Requires network: **no**
+    pub fn get_by_reverse_swap(&self, reverse_swap_id: String) -> Result<Option<Activity>> {
+        const LEEWAY_FOR_REVERSE_SWAPS: u32 = 30;
+        let list_payments_request = ListPaymentsRequest {
+            filters: Some(vec![PaymentTypeFilter::Sent]),
+            metadata_filters: None,
+            from_timestamp: None,
+            to_timestamp: None,
+            include_failures: Some(false),
+            limit: Some(LEEWAY_FOR_REVERSE_SWAPS),
+            offset: None,
+        };
+
+        let is_swap_with_id = |p: &breez_sdk_core::Payment| {
+            if let breez_sdk_core::PaymentDetails::Ln { ref data } = p.details {
+                if let Some(ref swap_info) = data.reverse_swap_info {
+                    return swap_info.id == reverse_swap_id;
+                }
+            }
+            false
+        };
+        self.rt_handle
+            .block_on(self.sdk.list_payments(list_payments_request))
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
+            .into_iter()
+            .find(is_swap_with_id)
+            .map(|p| self.activity_from_breez_payment(p))
+            .transpose()
+    }
+
     /// Get an incoming payment by its payment hash.
     ///
     /// Parameters:

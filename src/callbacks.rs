@@ -37,9 +37,16 @@ pub trait EventsCallback: Send + Sync {
     /// This callback will be called when an incoming swap has completed.
     ///
     /// Parameters:
-    /// * `payment_hash` - can be used to find the [´Activity´](crate::Activity) corresponding to
+    /// * `payment_hash` - can be used to find the [`Activity`](crate::Activity) corresponding to
     ///   this swap.
     fn swap_received(&self, payment_hash: String);
+
+    /// This callback will be called when a reverse swap has completed.
+    ///
+    /// Parameters:
+    /// * `reverse_swap_id` - can be used to find the [`Activity`](crate::Activity) corresponding to
+    ///   this swap using [`get_by_reverse_swap`](crate::Activities::get_by_reverse_swap).
+    fn reverse_swap_sent(&self, reverse_swap_id: String);
 
     /// This callback will be called when a change to the Breez services health is noticed
     ///

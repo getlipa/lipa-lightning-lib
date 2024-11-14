@@ -23,6 +23,10 @@ impl EventsCallback for PrintEventsHandler {
         println!("A swap has been received! Its hash is {payment_hash}");
     }
 
+    fn reverse_swap_sent(&self, reverse_swap_id: String) {
+        println!("A reverse swap has been sent! Its id is {reverse_swap_id}");
+    }
+
     fn breez_health_status_changed_to(&self, status: BreezHealthCheckStatus) {
         println!("The Breez SDK health status changed to {status:?}");
     }

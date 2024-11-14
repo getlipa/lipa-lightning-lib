@@ -1,6 +1,6 @@
 use crate::{analytics::AnalyticsInterceptor, EventsCallback};
 
-use breez_sdk_core::{BreezEvent, EventListener, PaymentDetails, SwapStatus};
+use breez_sdk_core::{BreezEvent, EventListener, PaymentDetails, ReverseSwapStatus, SwapStatus};
 use std::sync::Arc;
 
 pub(crate) struct LipaEventListener {
@@ -32,13 +32,13 @@ impl EventListener for LipaEventListener {
                 self.events_callback.synced();
             }
             BreezEvent::PaymentSucceed { details } => {
-                if let PaymentDetails::Ln { data } = details.details.clone() {
+                if let PaymentDetails::Ln { data } = details.details {
                     self.events_callback
                         .payment_sent(data.payment_hash, data.payment_preimage)
                 }
             }
             BreezEvent::PaymentFailed { details } => {
-                if let Some(invoice) = details.invoice.clone() {
+                if let Some(invoice) = details.invoice {
                     self.events_callback.payment_failed(invoice.payment_hash)
                 }
             }
@@ -51,7 +51,11 @@ impl EventListener for LipaEventListener {
                         .swap_received(hex::encode(details.payment_hash));
                 }
             }
-            BreezEvent::ReverseSwapUpdated { .. } => {}
+            BreezEvent::ReverseSwapUpdated { details } => {
+                if details.status == ReverseSwapStatus::CompletedConfirmed {
+                    self.events_callback.reverse_swap_sent(details.id);
+                }
+            }
         }
     }
 }
