@@ -4,13 +4,13 @@ use crate::config::WithTimezone;
 use crate::data_store::{CreatedInvoice, DataStore};
 use crate::errors::Result;
 use crate::locker::Locker;
-use crate::task_manager::TaskManager;
+use crate::support::Support;
 use crate::util::unix_timestamp_to_system_time;
 use crate::{
     fill_payout_fee, filter_out_and_log_corrupted_activities,
     filter_out_and_log_corrupted_payments, Activity, ChannelCloseInfo, ChannelCloseState, Config,
-    ExchangeRate, IncomingPaymentInfo, InvoiceDetails, ListActivitiesResponse, OutgoingPaymentInfo,
-    PaymentInfo, PaymentState, ReverseSwapInfo, RuntimeErrorCode, SwapInfo, UserPreferences,
+    IncomingPaymentInfo, InvoiceDetails, ListActivitiesResponse, OutgoingPaymentInfo, PaymentInfo,
+    PaymentState, ReverseSwapInfo, RuntimeErrorCode, SwapInfo, UserPreferences,
 };
 use breez_sdk_core::{
     parse_invoice, BreezServices, ClosedChannelPaymentDetails, ListPaymentsRequest, PaymentDetails,
@@ -27,8 +27,8 @@ pub struct Activities {
     sdk: Arc<BreezServices>,
     data_store: Arc<Mutex<DataStore>>,
     user_preferences: Arc<Mutex<UserPreferences>>,
-    task_manager: Arc<Mutex<TaskManager>>,
     config: Config,
+    support: Arc<Support>,
 }
 
 impl Activities {
@@ -37,16 +37,16 @@ impl Activities {
         sdk: Arc<BreezServices>,
         data_store: Arc<Mutex<DataStore>>,
         user_preferences: Arc<Mutex<UserPreferences>>,
-        task_manager: Arc<Mutex<TaskManager>>,
         config: Config,
+        support: Arc<Support>,
     ) -> Self {
         Self {
             rt_handle,
             sdk,
             data_store,
             user_preferences,
-            task_manager,
             config,
+            support,
         }
     }
 
@@ -119,7 +119,7 @@ impl Activities {
                     paid_amount: (in_progress_swap.unconfirmed_sats
                         + in_progress_swap.confirmed_sats)
                         .as_sats()
-                        .to_amount_down(&self.get_exchange_rate()),
+                        .to_amount_down(&self.support.get_exchange_rate()),
                 },
             })
         }
@@ -131,7 +131,102 @@ impl Activities {
         })
     }
 
-    fn activity_from_breez_payment(
+    /// Get an activity by its payment hash.
+    ///
+    /// Parameters:
+    /// * `hash` - hex representation of payment hash
+    ///
+    /// Requires network: **no**
+    pub fn get(&self, hash: String) -> Result<Activity> {
+        if let Some(activity) = self
+            .rt_handle
+            .block_on(self.sdk.payment_by_hash(hash.clone()))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to get payment by hash",
+            )?
+            .map(|p| self.activity_from_breez_payment(p))
+        {
+            Ok(activity?)
+        } else if let Some(incoming_payment_info) = self
+            .data_store
+            .lock_unwrap()
+            .retrieve_created_invoice_by_hash(&hash)?
+            .map(|i| self.payment_from_created_invoice(&i))
+        {
+            Ok(Activity::IncomingPayment {
+                incoming_payment_info: incoming_payment_info?,
+            })
+        } else {
+            invalid_input!("No activity with provided hash was found")
+        }
+    }
+
+    /// Get an incoming payment by its payment hash.
+    ///
+    /// Parameters:
+    /// * `hash` - hex representation of payment hash
+    ///
+    /// Requires network: **no**
+    pub fn get_incoming_payment(&self, hash: String) -> Result<IncomingPaymentInfo> {
+        match self.get(hash)? {
+            Activity::IncomingPayment {
+                incoming_payment_info,
+            } => Ok(incoming_payment_info),
+            Activity::OfferClaim {
+                incoming_payment_info,
+                ..
+            } => Ok(incoming_payment_info),
+            Activity::Swap {
+                incoming_payment_info,
+                ..
+            } => incoming_payment_info
+                .ok_or(invalid_input("Swap activity without incoming payment info")),
+            Activity::ReverseSwap { .. }
+            | Activity::OutgoingPayment { .. }
+            | Activity::ChannelClose { .. } => invalid_input!("Activity not incoming payment"),
+        }
+    }
+
+    /// Get an outgoing payment by its payment hash.
+    ///
+    /// Parameters:
+    /// * `hash` - hex representation of payment hash
+    ///
+    /// Requires network: **no**
+    pub fn get_outgoing_payment(&self, hash: String) -> Result<OutgoingPaymentInfo> {
+        match self.get(hash)? {
+            Activity::OutgoingPayment {
+                outgoing_payment_info,
+            } => Ok(outgoing_payment_info),
+            Activity::ReverseSwap {
+                outgoing_payment_info,
+                ..
+            } => Ok(outgoing_payment_info),
+            Activity::OfferClaim { .. }
+            | Activity::IncomingPayment { .. }
+            | Activity::ChannelClose { .. }
+            | Activity::Swap { .. } => invalid_input!("Activity not incoming payment"),
+        }
+    }
+
+    /// Set a personal note on a specific activity. Can only be used for activities that can be
+    /// identified by a payment hash (e.g. channel closes are excluded).
+    ///
+    /// Parameters:
+    /// * `payment_hash` - The hash of the activity for which a personal note will be set.
+    /// * `note` - The personal note.
+    ///
+    /// Requires network: **no**
+    pub fn set_personal_note(&self, payment_hash: String, note: String) -> Result<()> {
+        let note = Some(note.trim().to_string()).filter(|s| !s.is_empty());
+
+        self.data_store
+            .lock_unwrap()
+            .update_personal_note(&payment_hash, note.as_deref())
+    }
+
+    pub(crate) fn activity_from_breez_payment(
         &self,
         breez_payment: breez_sdk_core::Payment,
     ) -> Result<Activity> {
@@ -169,27 +264,7 @@ impl Activities {
         activities
     }
 
-    /// Get exchange rate on the BTC/default currency pair
-    /// Please keep in mind that this method doesn't make any network calls. It simply retrieves
-    /// previously fetched values that are frequently updated by a background task.
-    ///
-    /// The fetched exchange rates will be persisted across restarts to alleviate the consequences of a
-    /// slow or unresponsive exchange rate service.
-    ///
-    /// The return value is an optional to deal with the possibility
-    /// of no exchange rate values being known.
-    ///
-    /// Requires network: **no**
-    pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
-        let rates = self.task_manager.lock_unwrap().get_exchange_rates();
-        let currency_code = self.user_preferences.lock_unwrap().fiat_currency.clone();
-        rates
-            .iter()
-            .find(|r| r.currency_code == currency_code)
-            .cloned()
-    }
-
-    fn activity_from_breez_ln_payment(
+    pub(crate) fn activity_from_breez_ln_payment(
         &self,
         breez_payment: breez_sdk_core::Payment,
     ) -> Result<Activity> {
@@ -214,7 +289,7 @@ impl Activities {
                     data.received_lnurl_comment,
                 ),
                 None => (
-                    self.get_exchange_rate(),
+                    self.support.get_exchange_rate(),
                     self.user_preferences.lock_unwrap().timezone_config.clone(),
                     None,
                     None,
@@ -313,7 +388,7 @@ impl Activities {
         }
     }
 
-    fn activity_from_breez_closed_channel_payment(
+    pub(crate) fn activity_from_breez_closed_channel_payment(
         &self,
         breez_payment: &breez_sdk_core::Payment,
         details: &ClosedChannelPaymentDetails,
@@ -321,7 +396,7 @@ impl Activities {
         let amount = breez_payment
             .amount_msat
             .as_msats()
-            .to_amount_up(&self.get_exchange_rate());
+            .to_amount_up(&self.support.get_exchange_rate());
 
         let user_preferences = self.user_preferences.lock_unwrap();
 

@@ -191,7 +191,7 @@ fn invoice_can_be_created() {
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn payments_can_be_listed() {
     let sender = TransactingNode::new(NodeType::Sender).unwrap();
-    sender.node.get_latest_activities(2).unwrap();
+    sender.node.activities().list(2).unwrap();
 }
 
 #[test]
@@ -280,7 +280,7 @@ fn payments_can_be_performed() {
     )
     .unwrap();
 
-    let payments = sender.node.get_latest_activities(2).unwrap();
+    let payments = sender.node.activities().list(2).unwrap();
     assert_eq!(payments.completed_activities.len(), 2);
 
     for payment in payments.completed_activities {

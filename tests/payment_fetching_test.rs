@@ -23,6 +23,7 @@ fn test_payment_fetching() {
         .unwrap();
 
     let payment = node
+        .activities()
         .get_incoming_payment(invoice.payment_hash.clone())
         .unwrap();
     assert_eq!(invoice, payment.payment_info.invoice_details);
@@ -30,7 +31,7 @@ fn test_payment_fetching() {
     assert_eq!(invoice.amount.as_ref().unwrap(), &payment.requested_amount);
     assert_eq!(invoice.description, payment.payment_info.description);
 
-    let latest_activities = node.get_latest_activities(1).unwrap();
+    let latest_activities = node.activities().list(1).unwrap();
     let activity_from_list = latest_activities.pending_activities.first().unwrap();
     assert_eq!(
         &Activity::IncomingPayment {

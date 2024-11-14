@@ -5,6 +5,7 @@
 //! Most functionality can be accessed by creating an instance of [`LightningNode`] and using its methods.
 
 #![allow(clippy::let_unit_value)]
+#![allow(deprecated)]
 
 extern crate core;
 
@@ -37,6 +38,7 @@ mod recovery;
 mod reverse_swap;
 mod sanitize_input;
 mod secret;
+mod support;
 mod swap;
 mod symmetric_encryption;
 mod task_manager;
@@ -51,12 +53,10 @@ use crate::async_runtime::AsyncRuntime;
 use crate::auth::{build_async_auth, build_auth};
 use crate::backup::BackupManager;
 pub use crate::callbacks::EventsCallback;
-use crate::config::WithTimezone;
 pub use crate::config::{
     BreezSdkConfig, Config, MaxRoutingFeeConfig, ReceiveLimitsConfig, RemoteServicesConfig,
     TzConfig, TzTime,
 };
-use crate::data_store::CreatedInvoice;
 use crate::errors::{
     map_lnurl_pay_error, map_lnurl_withdraw_error, map_send_payment_error, LnUrlWithdrawError,
     LnUrlWithdrawErrorCode, LnUrlWithdrawResult,
@@ -104,21 +104,21 @@ pub use crate::pocketclient::FiatTopupInfo;
 use crate::pocketclient::PocketClient;
 
 use crate::activities::Activities;
+use crate::support::Support;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 pub use breez_sdk_core::error::RedeemOnchainError as SweepError;
 use breez_sdk_core::error::{ReceiveOnchainError, RedeemOnchainError, SendPaymentError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
 pub use breez_sdk_core::ReverseSwapStatus;
 use breez_sdk_core::{
-    parse, parse_invoice, BitcoinAddressData, BreezServices, ClosedChannelPaymentDetails,
-    ConnectRequest, EnvironmentType, EventListener, GreenlightCredentials, GreenlightNodeConfig,
-    InputType, ListPaymentsRequest, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
-    LnUrlWithdrawRequestData, Network, NodeConfig, OpenChannelFeeRequest, OpeningFeeParams,
-    PayOnchainRequest, PaymentDetails, PaymentStatus, PaymentTypeFilter,
-    PrepareOnchainPaymentRequest, PrepareOnchainPaymentResponse, PrepareRedeemOnchainFundsRequest,
-    PrepareRefundRequest, ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
-    ReportIssueRequest, ReportPaymentFailureDetails, SendPaymentRequest, SignMessageRequest,
-    UnspentTransactionOutput,
+    parse, BitcoinAddressData, BreezServices, ConnectRequest, EnvironmentType, EventListener,
+    GreenlightCredentials, GreenlightNodeConfig, InputType, ListPaymentsRequest, LnUrlPayRequest,
+    LnUrlPayRequestData, LnUrlWithdrawRequest, LnUrlWithdrawRequestData, Network, NodeConfig,
+    OpenChannelFeeRequest, OpeningFeeParams, PayOnchainRequest, PaymentDetails, PaymentStatus,
+    PaymentTypeFilter, PrepareOnchainPaymentRequest, PrepareOnchainPaymentResponse,
+    PrepareRedeemOnchainFundsRequest, PrepareRefundRequest, ReceiveOnchainRequest,
+    RedeemOnchainFundsRequest, RefundRequest, ReportIssueRequest, ReportPaymentFailureDetails,
+    SendPaymentRequest, SignMessageRequest, UnspentTransactionOutput,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -137,13 +137,11 @@ use perro::{
     ensure, invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
 use squirrel::RemoteBackupClient;
-use std::cmp::{min, Reverse};
 use std::collections::HashSet;
 use std::ops::Not;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
 use std::{env, fs};
 use uuid::Uuid;
 
@@ -491,13 +489,18 @@ impl LightningNode {
         let phone_number_prefix_parser =
             PhoneNumberPrefixParser::new(&config.phone_number_allowed_countries_iso_3166_1_alpha_2);
 
+        let support = Arc::new(Support::new(
+            Arc::clone(&user_preferences),
+            Arc::clone(&task_manager),
+        ));
+
         let activities = Arc::new(Activities::new(
             rt.handle(),
             Arc::clone(&sdk),
             Arc::clone(&data_store),
             Arc::clone(&user_preferences),
-            Arc::clone(&task_manager),
             config.clone(),
+            support,
         ));
 
         Ok(LightningNode {
@@ -1065,37 +1068,14 @@ impl LightningNode {
     /// * `number_of_completed_activities` - the maximum number of completed activities that will be returned
     ///
     /// Requires network: **no**
+    ///
+    /// Warning: This method is **deprecated** - activities().list() should be used instead.
+    #[deprecated = "activities().list() should be used instead"]
     pub fn get_latest_activities(
         &self,
         number_of_completed_activities: u32,
     ) -> Result<ListActivitiesResponse> {
-  		self.activities().list(number_of_completed_activities)
-    }
-
-    /// Combines a list of activities with a list of locally created invoices
-    /// into a single activity list.
-    ///
-    /// Duplicates are removed.
-    fn multiplex_activities(
-        &self,
-        breez_activities: Vec<Activity>,
-        local_created_invoices: Vec<CreatedInvoice>,
-    ) -> Vec<Activity> {
-        let breez_payment_hashes: HashSet<_> = breez_activities
-            .iter()
-            .filter_map(|m| m.get_payment_info().map(|p| p.hash.clone()))
-            .collect();
-        let mut activities = local_created_invoices
-            .into_iter()
-            .filter(|i| !breez_payment_hashes.contains(i.hash.as_str()))
-            .map(|i| self.payment_from_created_invoice(&i))
-            .filter_map(filter_out_and_log_corrupted_payments)
-            .map(|p| Activity::IncomingPayment {
-                incoming_payment_info: p,
-            })
-            .collect::<Vec<_>>();
-        activities.extend(breez_activities);
-        activities
+        self.activities.list(number_of_completed_activities)
     }
 
     /// Get an incoming payment by its payment hash.
@@ -1104,43 +1084,11 @@ impl LightningNode {
     /// * `hash` - hex representation of payment hash
     ///
     /// Requires network: **no**
+    ///
+    /// Warning: This method is **deprecated** - activities().get_incoming_payment() should be used instead.
+    #[deprecated = "activities().get_incoming_payment() should be used instead"]
     pub fn get_incoming_payment(&self, hash: String) -> Result<IncomingPaymentInfo> {
-        if let Some(breez_payment) = self
-            .rt
-            .handle()
-            .block_on(self.sdk.payment_by_hash(hash.clone()))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to get payment by hash",
-            )?
-        {
-            return match self.activity_from_breez_ln_payment(breez_payment)? {
-                Activity::IncomingPayment {
-                    incoming_payment_info,
-                } => Ok(incoming_payment_info),
-                Activity::OutgoingPayment { .. } => invalid_input!("OutgoingPayment was found"),
-                Activity::OfferClaim {
-                    incoming_payment_info,
-                    ..
-                } => Ok(incoming_payment_info),
-                Activity::Swap {
-                    incoming_payment_info: Some(incoming_payment_info),
-                    ..
-                } => Ok(incoming_payment_info),
-                Activity::Swap {
-                    incoming_payment_info: None,
-                    ..
-                } => invalid_input!("Pending swap was found"),
-                Activity::ReverseSwap { .. } => invalid_input!("ReverseSwap was found"),
-                Activity::ChannelClose { .. } => invalid_input!("ChannelClose was found"),
-            };
-        }
-        let invoice = self
-            .data_store
-            .lock_unwrap()
-            .retrieve_created_invoice_by_hash(&hash)?
-            .ok_or_invalid_input("No payment with provided hash was found")?;
-        self.payment_from_created_invoice(&invoice)
+        self.activities.get_incoming_payment(hash)
     }
 
     /// Get an outgoing payment by its payment hash.
@@ -1149,30 +1097,11 @@ impl LightningNode {
     /// * `hash` - hex representation of payment hash
     ///
     /// Requires network: **no**
+    ///
+    /// Warning: This method is **deprecated** - activities().get_outgoing_payment() should be used instead.
+    #[deprecated = "activities().get_outgoing_payment() should be used instead"]
     pub fn get_outgoing_payment(&self, hash: String) -> Result<OutgoingPaymentInfo> {
-        let breez_payment = self
-            .rt
-            .handle()
-            .block_on(self.sdk.payment_by_hash(hash))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to get payment by hash",
-            )?
-            .ok_or_invalid_input("No payment with provided hash was found")?;
-
-        match self.activity_from_breez_ln_payment(breez_payment)? {
-            Activity::IncomingPayment { .. } => invalid_input!("IncomingPayment was found"),
-            Activity::OutgoingPayment {
-                outgoing_payment_info,
-            } => Ok(outgoing_payment_info),
-            Activity::OfferClaim { .. } => invalid_input!("OfferClaim was found"),
-            Activity::Swap { .. } => invalid_input!("Swap was found"),
-            Activity::ReverseSwap {
-                outgoing_payment_info,
-                ..
-            } => Ok(outgoing_payment_info),
-            Activity::ChannelClose { .. } => invalid_input!("ChannelClose was found"),
-        }
+        self.activities.get_outgoing_payment(hash)
     }
 
     /// Get an activity by its payment hash.
@@ -1181,18 +1110,11 @@ impl LightningNode {
     /// * `hash` - hex representation of payment hash
     ///
     /// Requires network: **no**
+    ///
+    /// Warning: This method is **deprecated** - activities().get() should be used instead.
+    #[deprecated = "activities().get() should be used instead"]
     pub fn get_activity(&self, hash: String) -> Result<Activity> {
-        let payment = self
-            .rt
-            .handle()
-            .block_on(self.sdk.payment_by_hash(hash))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to get payment by hash",
-            )?
-            .ok_or_invalid_input("No activity with provided hash was found")?;
-
-        self.activity_from_breez_ln_payment(payment)
+        self.activities.get(hash)
     }
 
     /// Set a personal note on a specific payment.
@@ -1202,250 +1124,18 @@ impl LightningNode {
     /// * `note` - The personal note.
     ///
     /// Requires network: **no**
+    ///
+    /// Warning: This method is **deprecated** - activities().set_personal_note() should be used instead.
+    #[deprecated = "activities().set_personal_note() should be used instead"]
     pub fn set_payment_personal_note(&self, payment_hash: String, note: String) -> Result<()> {
-        let note = Some(note.trim().to_string()).filter(|s| !s.is_empty());
-
-        self.data_store
-            .lock_unwrap()
-            .update_personal_note(&payment_hash, note.as_deref())
+        self.activities.set_personal_note(payment_hash, note)
     }
 
     fn activity_from_breez_payment(
         &self,
         breez_payment: breez_sdk_core::Payment,
     ) -> Result<Activity> {
-        match &breez_payment.details {
-            PaymentDetails::Ln { .. } => self.activity_from_breez_ln_payment(breez_payment),
-            PaymentDetails::ClosedChannel { data } => {
-                self.activity_from_breez_closed_channel_payment(&breez_payment, data)
-            }
-        }
-    }
-
-    fn activity_from_breez_ln_payment(
-        &self,
-        breez_payment: breez_sdk_core::Payment,
-    ) -> Result<Activity> {
-        let payment_details = match breez_payment.details {
-            PaymentDetails::Ln { ref data } => data,
-            PaymentDetails::ClosedChannel { .. } => {
-                invalid_input!("PaymentInfo cannot be created from channel close")
-            }
-        };
-        let local_payment_data = self
-            .data_store
-            .lock_unwrap()
-            .retrieve_payment_info(&payment_details.payment_hash)?;
-        let (exchange_rate, tz_config, personal_note, offer, received_on, received_lnurl_comment) =
-            match local_payment_data {
-                Some(data) => (
-                    Some(data.exchange_rate),
-                    data.user_preferences.timezone_config,
-                    data.personal_note,
-                    data.offer,
-                    data.received_on,
-                    data.received_lnurl_comment,
-                ),
-                None => (
-                    self.get_exchange_rate(),
-                    self.user_preferences.lock_unwrap().timezone_config.clone(),
-                    None,
-                    None,
-                    None,
-                    None,
-                ),
-            };
-
-        if let Some(offer) = offer {
-            let incoming_payment_info = IncomingPaymentInfo::new(
-                breez_payment,
-                &exchange_rate,
-                tz_config,
-                personal_note,
-                received_on,
-                received_lnurl_comment,
-                &self.config.remote_services_config.lipa_lightning_domain,
-            )?;
-            let offer_kind = fill_payout_fee(
-                offer,
-                incoming_payment_info.requested_amount.sats.as_msats(),
-                &exchange_rate,
-            );
-            Ok(Activity::OfferClaim {
-                incoming_payment_info,
-                offer_kind,
-            })
-        } else if let Some(ref s) = payment_details.swap_info {
-            let swap_info = SwapInfo {
-                bitcoin_address: s.bitcoin_address.clone(),
-                // TODO: Persist SwapInfo in local db on state change, requires https://github.com/breez/breez-sdk/issues/518
-                created_at: unix_timestamp_to_system_time(s.created_at as u64)
-                    .with_timezone(tz_config.clone()),
-                paid_amount: s.paid_msat.as_msats().to_amount_down(&exchange_rate),
-            };
-            let incoming_payment_info = IncomingPaymentInfo::new(
-                breez_payment,
-                &exchange_rate,
-                tz_config,
-                personal_note,
-                received_on,
-                received_lnurl_comment,
-                &self.config.remote_services_config.lipa_lightning_domain,
-            )?;
-            Ok(Activity::Swap {
-                incoming_payment_info: Some(incoming_payment_info),
-                swap_info,
-            })
-        } else if let Some(ref s) = payment_details.reverse_swap_info {
-            let reverse_swap_info = ReverseSwapInfo {
-                paid_onchain_amount: s.onchain_amount_sat.as_sats().to_amount_up(&exchange_rate),
-                swap_fees_amount: (breez_payment.amount_msat
-                    - s.onchain_amount_sat.as_sats().msats)
-                    .as_msats()
-                    .to_amount_up(&exchange_rate),
-                claim_txid: s.claim_txid.clone(),
-                status: s.status,
-            };
-            let outgoing_payment_info = OutgoingPaymentInfo::new(
-                breez_payment,
-                &exchange_rate,
-                tz_config,
-                personal_note,
-                &self.config.remote_services_config.lipa_lightning_domain,
-            )?;
-            Ok(Activity::ReverseSwap {
-                outgoing_payment_info,
-                reverse_swap_info,
-            })
-        } else if breez_payment.payment_type == breez_sdk_core::PaymentType::Received {
-            let incoming_payment_info = IncomingPaymentInfo::new(
-                breez_payment,
-                &exchange_rate,
-                tz_config,
-                personal_note,
-                received_on,
-                received_lnurl_comment,
-                &self.config.remote_services_config.lipa_lightning_domain,
-            )?;
-            Ok(Activity::IncomingPayment {
-                incoming_payment_info,
-            })
-        } else if breez_payment.payment_type == breez_sdk_core::PaymentType::Sent {
-            let outgoing_payment_info = OutgoingPaymentInfo::new(
-                breez_payment,
-                &exchange_rate,
-                tz_config,
-                personal_note,
-                &self.config.remote_services_config.lipa_lightning_domain,
-            )?;
-            Ok(Activity::OutgoingPayment {
-                outgoing_payment_info,
-            })
-        } else {
-            permanent_failure!("Unreachable code")
-        }
-    }
-
-    fn activity_from_breez_closed_channel_payment(
-        &self,
-        breez_payment: &breez_sdk_core::Payment,
-        details: &ClosedChannelPaymentDetails,
-    ) -> Result<Activity> {
-        let amount = breez_payment
-            .amount_msat
-            .as_msats()
-            .to_amount_up(&self.get_exchange_rate());
-
-        let user_preferences = self.user_preferences.lock_unwrap();
-
-        let time = unix_timestamp_to_system_time(breez_payment.payment_time as u64)
-            .with_timezone(user_preferences.timezone_config.clone());
-
-        let (closed_at, state) = match breez_payment.status {
-            PaymentStatus::Pending => (None, ChannelCloseState::Pending),
-            PaymentStatus::Complete => (Some(time), ChannelCloseState::Confirmed),
-            PaymentStatus::Failed => {
-                permanent_failure!("A channel close Breez Payment has status *Failed*");
-            }
-        };
-
-        // According to the docs, it can only be empty for older closed channels.
-        let closing_tx_id = details.closing_txid.clone().unwrap_or_default();
-
-        Ok(Activity::ChannelClose {
-            channel_close_info: ChannelCloseInfo {
-                amount,
-                state,
-                closed_at,
-                closing_tx_id,
-            },
-        })
-    }
-
-    fn payment_from_created_invoice(
-        &self,
-        created_invoice: &CreatedInvoice,
-    ) -> Result<IncomingPaymentInfo> {
-        let invoice =
-            parse_invoice(created_invoice.invoice.as_str()).map_to_permanent_failure(format!(
-                "Invalid invoice obtained from local db: {}",
-                created_invoice.invoice
-            ))?;
-        let invoice_details = InvoiceDetails::from_ln_invoice(invoice.clone(), &None);
-
-        let payment_state = if SystemTime::now() > invoice_details.expiry_timestamp {
-            PaymentState::InvoiceExpired
-        } else {
-            PaymentState::Created
-        };
-
-        let local_payment_data = self
-            .data_store
-            .lock_unwrap()
-            .retrieve_payment_info(&invoice_details.payment_hash)?
-            .ok_or_permanent_failure("Locally created invoice doesn't have local payment data")?;
-        let exchange_rate = Some(local_payment_data.exchange_rate);
-        let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
-        // For receiving payments, we use the invoice timestamp.
-        let time = invoice_details
-            .creation_timestamp
-            .with_timezone(local_payment_data.user_preferences.timezone_config);
-        let lsp_fees = created_invoice
-            .channel_opening_fees
-            .unwrap_or_default()
-            .as_msats()
-            .to_amount_up(&exchange_rate);
-        let requested_amount = invoice_details
-            .amount
-            .clone()
-            .ok_or_permanent_failure("Locally created invoice doesn't include an amount")?
-            .sats
-            .as_sats()
-            .to_amount_down(&exchange_rate);
-
-        let amount = requested_amount.clone().sats - lsp_fees.sats;
-        let amount = amount.as_sats().to_amount_down(&exchange_rate);
-
-        let personal_note = local_payment_data.personal_note;
-
-        let payment_info = PaymentInfo {
-            payment_state,
-            hash: invoice_details.payment_hash.clone(),
-            amount,
-            invoice_details: invoice_details.clone(),
-            created_at: time,
-            description: invoice_details.description,
-            preimage: None,
-            personal_note,
-        };
-        let incoming_payment_info = IncomingPaymentInfo {
-            payment_info,
-            requested_amount,
-            lsp_fees,
-            received_on: None,
-            received_lnurl_comment: None,
-        };
-        Ok(incoming_payment_info)
+        self.activities.activity_from_breez_payment(breez_payment)
     }
 
     /// Call the method when the app goes to foreground, such that the user can interact with it.
@@ -3245,8 +2935,10 @@ include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
 mod tests {
     use super::*;
     use crate::amount::Sats;
+    use crate::config::WithTimezone;
     use crow::TopupStatus;
     use perro::Error;
+    use std::time::SystemTime;
 
     const PAYMENT_HASH: &str = "0b78877a596f18d5f6effde3dda1df25a5cf20439ff1ac91478d7e518211040f";
     const PAYMENT_UUID: &str = "c6e597bd-0a98-5b46-8e74-f6098f5d16a3";
