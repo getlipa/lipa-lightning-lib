@@ -103,7 +103,7 @@ use pocketclient_mock as pocketclient;
 pub use crate::pocketclient::FiatTopupInfo;
 use crate::pocketclient::PocketClient;
 
-use crate::activities::Activities;
+pub use crate::activities::Activities;
 use crate::support::Support;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 pub use breez_sdk_core::error::RedeemOnchainError as SweepError;
