@@ -95,6 +95,10 @@ impl EventsCallback for ReturnFundsEventsHandler {
         // do nothing
     }
 
+    fn reverse_swap_sent(&self, _reverse_swap_id: String) {
+        // do nothing
+    }
+
     fn breez_health_status_changed_to(&self, _status: BreezHealthCheckStatus) {
         // do nothing
     }
