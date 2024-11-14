@@ -583,7 +583,7 @@ fn help() {
 }
 
 fn lsp_fee(node: &LightningNode) {
-    let lsp_fee = node.query_lsp_fee().unwrap();
+    let lsp_fee = node.lightning().get_lsp_fee().unwrap();
     println!(
         " Min fee: {}",
         amount_to_string(&lsp_fee.channel_minimum_fee)
@@ -600,13 +600,13 @@ fn calculate_lsp_fee(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
         .ok_or(anyhow!("Amount in SAT is required"))?
         .parse()
         .context("Amount should be a positive integer number")?;
-    let response = node.calculate_lsp_fee(amount)?;
+    let response = node.lightning().calculate_lsp_fee_for_amount(amount)?;
     println!(" LSP fee: {}", amount_to_string(&response.lsp_fee));
     Ok(())
 }
 
 fn payment_amount_limits(node: &LightningNode) {
-    let limits = node.get_payment_amount_limits().unwrap();
+    let limits = node.lightning().determine_receive_amount_limits().unwrap();
 
     println!(
         " Beta maximum receive: {}",
@@ -735,7 +735,7 @@ fn create_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -
         .parse()
         .context("Amount should be a positive integer number")?;
     let description = words.collect::<Vec<_>>().join(" ");
-    let invoice_details = node.create_invoice(
+    let invoice_details = node.lightning().bolt11().create(
         amount,
         None,
         description,
@@ -881,7 +881,7 @@ fn get_max_routing_fee_mode(
         .parse()
         .context("Amount should be a positive integer number")?;
 
-    let max_fee_strategy = node.get_payment_max_routing_fee_mode(amount);
+    let max_fee_strategy = node.lightning().determine_max_routing_fee_mode(amount);
 
     match max_fee_strategy {
         MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
@@ -912,7 +912,8 @@ fn get_invoice_affordability(
         .context("Couldn't parse amount as u64")?;
 
     let invoice_affordability = node
-        .get_invoice_affordability(amount_sat)
+        .lightning()
+        .determine_payment_affordability(amount_sat)
         .context("Couldn't get invoice affordability")?;
 
     println!("{invoice_affordability:?}");
@@ -929,7 +930,7 @@ fn pay_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
 
     let result = node.decode_data(invoice.to_string())?;
     if let DecodedData::Bolt11Invoice { invoice_details } = result {
-        node.pay_invoice(
+        node.lightning().bolt11().pay(
             invoice_details,
             PaymentMetadata {
                 source: PaymentSource::Clipboard,
@@ -954,7 +955,7 @@ fn pay_open_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>)
 
     let result = node.decode_data(invoice.to_string())?;
     if let DecodedData::Bolt11Invoice { invoice_details } = result {
-        node.pay_open_invoice(
+        node.lightning().bolt11().pay_open_amount(
             invoice_details,
             amount,
             PaymentMetadata {
@@ -1063,7 +1064,10 @@ fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Re
         Err(_) => bail!("Invalid lnurlp"),
     };
 
-    let hash = node.pay_lnurlp(lnurlp_details.request_data, amount, comment)?;
+    let hash = node
+        .lightning()
+        .lnurl()
+        .pay(lnurlp_details.request_data, amount, comment)?;
     println!("Started to pay lnurlp - payment hash is {hash}");
 
     Ok(())
@@ -1094,7 +1098,10 @@ fn withdraw_lnurlw(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
         Err(_) => bail!("Invalid lnurlw"),
     };
 
-    let hash = node.withdraw_lnurlw(lnurlw_details.request_data, amount)?;
+    let hash = node
+        .lightning()
+        .lnurl()
+        .withdraw(lnurlw_details.request_data, amount)?;
     println!("Started to withdraw lnurlw - payment hash is {hash}");
 
     Ok(())

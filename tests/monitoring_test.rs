@@ -141,7 +141,7 @@ fn node_can_start() {
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn lsp_fee_can_be_fetched() {
     let sender = TransactingNode::new(NodeType::Sender).unwrap();
-    wait_for!(sender.node.query_lsp_fee().is_ok());
+    wait_for!(sender.node.lightning().get_lsp_fee().is_ok());
 }
 
 #[test]
@@ -170,7 +170,9 @@ fn invoice_can_be_created() {
     let start = Instant::now();
     sender
         .node
-        .create_invoice(
+        .lightning()
+        .bolt11()
+        .create(
             10000,
             None,
             INVOICE_DESCRIPTION.to_string(),
@@ -212,7 +214,9 @@ fn payments_can_be_performed() {
 
     let send_invoice = receiver
         .node
-        .create_invoice(
+        .lightning()
+        .bolt11()
+        .create(
             amount.exact,
             None,
             INVOICE_DESCRIPTION.to_string(),
@@ -227,7 +231,9 @@ fn payments_can_be_performed() {
     let start = Instant::now();
     sender
         .node
-        .pay_invoice(
+        .lightning()
+        .bolt11()
+        .pay(
             send_invoice.clone(),
             PaymentMetadata {
                 source: PaymentSource::Manual,
@@ -255,7 +261,9 @@ fn payments_can_be_performed() {
     // return funds to keep sender well funded
     let return_invoice = sender
         .node
-        .create_invoice(
+        .lightning()
+        .bolt11()
+        .create(
             amount.minus_fees,
             None,
             INVOICE_DESCRIPTION.to_string(),
@@ -268,7 +276,9 @@ fn payments_can_be_performed() {
 
     receiver
         .node
-        .pay_invoice(
+        .lightning()
+        .bolt11()
+        .pay(
             return_invoice.clone(),
             PaymentMetadata {
                 source: PaymentSource::Manual,

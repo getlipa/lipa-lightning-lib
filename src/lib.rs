@@ -24,8 +24,8 @@ mod event;
 mod exchange_rate_provider;
 mod invoice_details;
 mod key_derivation;
+mod lightning;
 mod limits;
-mod lnurl;
 mod locker;
 mod logger;
 mod migrations;
@@ -57,23 +57,22 @@ pub use crate::config::{
     BreezSdkConfig, Config, MaxRoutingFeeConfig, ReceiveLimitsConfig, RemoteServicesConfig,
     TzConfig, TzTime,
 };
-use crate::errors::{
-    map_lnurl_pay_error, map_lnurl_withdraw_error, map_send_payment_error, LnUrlWithdrawError,
-    LnUrlWithdrawErrorCode, LnUrlWithdrawResult,
-};
 pub use crate::errors::{
     DecodeDataError, Error as LnError, LnUrlPayError, LnUrlPayErrorCode, LnUrlPayResult,
     MnemonicError, NotificationHandlingError, NotificationHandlingErrorCode, ParseError,
     ParsePhoneNumberError, ParsePhoneNumberPrefixError, PayError, PayErrorCode, PayResult, Result,
     RuntimeErrorCode, SimpleError, UnsupportedDataType,
 };
+use crate::errors::{LnUrlWithdrawError, LnUrlWithdrawErrorCode, LnUrlWithdrawResult};
 use crate::event::LipaEventListener;
 pub use crate::exchange_rate_provider::ExchangeRate;
 use crate::exchange_rate_provider::ExchangeRateProviderImpl;
 pub use crate::invoice_details::InvoiceDetails;
 use crate::key_derivation::derive_persistence_encryption_key;
-pub use crate::limits::{LiquidityLimit, PaymentAmountLimits};
-pub use crate::lnurl::{LnUrlPayDetails, LnUrlWithdrawDetails};
+pub use crate::lightning::bolt11::Bolt11;
+pub use crate::lightning::lnurl::{LnUrlPayDetails, LnUrlWithdrawDetails, Lnurl};
+pub use crate::lightning::receive_limits::{LiquidityLimit, ReceiveAmountLimits};
+pub use crate::limits::PaymentAmountLimits;
 use crate::locker::Locker;
 pub use crate::notification_handling::{handle_notification, Notification, NotificationToggles};
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
@@ -104,21 +103,21 @@ pub use crate::pocketclient::FiatTopupInfo;
 use crate::pocketclient::PocketClient;
 
 pub use crate::activities::Activities;
+pub use crate::lightning::{Lightning, PaymentAffordability};
 use crate::support::Support;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 pub use breez_sdk_core::error::RedeemOnchainError as SweepError;
-use breez_sdk_core::error::{ReceiveOnchainError, RedeemOnchainError, SendPaymentError};
+use breez_sdk_core::error::{ReceiveOnchainError, RedeemOnchainError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
 pub use breez_sdk_core::ReverseSwapStatus;
 use breez_sdk_core::{
     parse, BitcoinAddressData, BreezServices, ConnectRequest, EnvironmentType, EventListener,
-    GreenlightCredentials, GreenlightNodeConfig, InputType, ListPaymentsRequest, LnUrlPayRequest,
+    GreenlightCredentials, GreenlightNodeConfig, InputType, ListPaymentsRequest,
     LnUrlPayRequestData, LnUrlWithdrawRequest, LnUrlWithdrawRequestData, Network, NodeConfig,
-    OpenChannelFeeRequest, OpeningFeeParams, PayOnchainRequest, PaymentDetails, PaymentStatus,
-    PaymentTypeFilter, PrepareOnchainPaymentRequest, PrepareOnchainPaymentResponse,
-    PrepareRedeemOnchainFundsRequest, PrepareRefundRequest, ReceiveOnchainRequest,
-    RedeemOnchainFundsRequest, RefundRequest, ReportIssueRequest, ReportPaymentFailureDetails,
-    SendPaymentRequest, SignMessageRequest, UnspentTransactionOutput,
+    OpeningFeeParams, PayOnchainRequest, PaymentDetails, PaymentStatus, PaymentTypeFilter,
+    PrepareOnchainPaymentRequest, PrepareOnchainPaymentResponse, PrepareRedeemOnchainFundsRequest,
+    PrepareRefundRequest, ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
+    SignMessageRequest, UnspentTransactionOutput,
 };
 use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -128,7 +127,7 @@ use hex::FromHex;
 use honeybadger::Auth;
 pub use honeybadger::{TermsAndConditions, TermsAndConditionsStatus};
 use iban::Iban;
-use log::{debug, error, info, warn, Level};
+use log::{debug, error, info, Level};
 use logger::init_logger_once;
 use num_enum::TryFromPrimitive;
 use parrot::AnalyticsClient;
@@ -265,6 +264,16 @@ pub enum InvoiceAffordability {
     Affordable,
 }
 
+impl From<PaymentAffordability> for InvoiceAffordability {
+    fn from(value: PaymentAffordability) -> Self {
+        match value {
+            PaymentAffordability::NotEnoughFunds => InvoiceAffordability::NotEnoughFunds,
+            PaymentAffordability::UnaffordableFees => InvoiceAffordability::UnaffordableFees,
+            PaymentAffordability::Affordable => InvoiceAffordability::Affordable,
+        }
+    }
+}
+
 /// Information about a wallet clearance operation as returned by
 /// [`LightningNode::prepare_clear_wallet`].
 pub struct ClearWalletInfo {
@@ -310,6 +319,8 @@ pub struct LightningNode {
     persistence_encryption_key: [u8; 32],
     config: Config,
     activities: Arc<Activities>,
+    lightning: Arc<Lightning>,
+    support: Arc<Support>,
 }
 
 /// Contains the fee information for the options to resolve funds that have moved on-chain.
@@ -492,6 +503,7 @@ impl LightningNode {
         let support = Arc::new(Support::new(
             Arc::clone(&user_preferences),
             Arc::clone(&task_manager),
+            Arc::clone(&sdk),
         ));
 
         let activities = Arc::new(Activities::new(
@@ -500,7 +512,18 @@ impl LightningNode {
             Arc::clone(&data_store),
             Arc::clone(&user_preferences),
             config.clone(),
-            support,
+            Arc::clone(&support),
+        ));
+
+        let lightning = Arc::new(Lightning::new(
+            rt.handle(),
+            Arc::clone(&sdk),
+            Arc::clone(&data_store),
+            Arc::clone(&analytics_interceptor),
+            Arc::clone(&user_preferences),
+            Arc::clone(&support),
+            config.clone(),
+            Arc::clone(&task_manager),
         ));
 
         Ok(LightningNode {
@@ -521,6 +544,8 @@ impl LightningNode {
             persistence_encryption_key,
             config,
             activities,
+            lightning,
+            support,
         })
     }
 
@@ -528,39 +553,15 @@ impl LightningNode {
         Arc::clone(&self.activities)
     }
 
+    pub fn lightning(&self) -> Arc<Lightning> {
+        Arc::clone(&self.lightning)
+    }
+
     /// Request some basic info about the node
     ///
     /// Requires network: **no**
     pub fn get_node_info(&self) -> Result<NodeInfo> {
-        let node_state = self.sdk.node_info().map_to_runtime_error(
-            RuntimeErrorCode::NodeUnavailable,
-            "Failed to read node info",
-        )?;
-        let rate = self.get_exchange_rate();
-
-        Ok(NodeInfo {
-            node_pubkey: node_state.id,
-            peers: node_state.connected_peers,
-            onchain_balance: node_state
-                .onchain_balance_msat
-                .as_msats()
-                .to_amount_down(&rate),
-            channels_info: ChannelsInfo {
-                local_balance: node_state
-                    .channels_balance_msat
-                    .as_msats()
-                    .to_amount_down(&rate),
-                max_receivable_single_payment: node_state
-                    .max_receivable_single_payment_amount_msat
-                    .as_msats()
-                    .to_amount_down(&rate),
-                total_inbound_capacity: node_state
-                    .total_inbound_liquidity_msats
-                    .as_msats()
-                    .to_amount_down(&rate),
-                outbound_capacity: node_state.max_payable_msat.as_msats().to_amount_down(&rate),
-            },
-        })
+        self.support.get_node_info()
     }
 
     /// When *receiving* payments, a new channel MAY be required. A fee will be charged to the user.
@@ -568,13 +569,9 @@ impl LightningNode {
     /// Get information about the fee charged by the LSP for opening new channels
     ///
     /// Requires network: **no**
+    #[deprecated = "lightning().get_lsp_fee() should be used instead"]
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
-        let exchange_rate = self.get_exchange_rate();
-        let lsp_fee = self.task_manager.lock_unwrap().get_lsp_fee()?;
-        Ok(LspFee {
-            channel_minimum_fee: lsp_fee.min_msat.as_msats().to_amount_up(&exchange_rate),
-            channel_fee_permyriad: lsp_fee.proportional as u64 / 100,
-        })
+        self.lightning.get_lsp_fee()
     }
 
     /// Calculate the actual LSP fee for the given amount of an incoming payment.
@@ -587,27 +584,9 @@ impl LightningNode {
     /// provided to [`LightningNode::create_invoice`]
     ///
     /// Requires network: **yes**
+    #[deprecated = "lightning().calculate_lsp_fee_for_amount() should be used instead"]
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
-        let req = OpenChannelFeeRequest {
-            amount_msat: Some(amount_sat.as_sats().msats),
-            expiry: None,
-        };
-        let res = self
-            .rt
-            .handle()
-            .block_on(self.sdk.open_channel_fee(req))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to compute opening channel fee",
-            )?;
-        Ok(CalculateLspFeeResponse {
-            lsp_fee: res
-                .fee_msat
-                .ok_or_permanent_failure("Breez SDK open_channel_fee returned None lsp fee when provided with Some(amount_msat)")?
-                .as_msats()
-                .to_amount_up(&self.get_exchange_rate()),
-            lsp_fee_params: Some(res.fee_params),
-        })
+        self.lightning.calculate_lsp_fee_for_amount(amount_sat)
     }
 
     /// Get the current limits for the amount that can be transferred in a single payment.
@@ -618,16 +597,11 @@ impl LightningNode {
     /// he's typing the amount)
     ///
     /// Requires network: **no**
+    #[deprecated = "lightning().determine_receive_amount_limits() should be used instead"]
     pub fn get_payment_amount_limits(&self) -> Result<PaymentAmountLimits> {
-        // TODO: try to move this logic inside the SDK
-        let lsp_min_fee_amount = self.query_lsp_fee()?.channel_minimum_fee;
-        let max_inbound_amount = self.get_node_info()?.channels_info.total_inbound_capacity;
-        Ok(PaymentAmountLimits::calculate(
-            max_inbound_amount.sats,
-            lsp_min_fee_amount.sats,
-            &self.get_exchange_rate(),
-            &self.config.receive_limits_config,
-        ))
+        self.lightning
+            .determine_receive_amount_limits()
+            .map(PaymentAmountLimits::from)
     }
 
     /// Create an invoice to receive a payment with.
@@ -643,6 +617,7 @@ impl LightningNode {
     ///    used to improve the user experience
     ///
     /// Requires network: **yes**
+    #[deprecated = "lightning().bolt11().create() should be used instead"]
     pub fn create_invoice(
         &self,
         amount_sat: u64,
@@ -650,46 +625,9 @@ impl LightningNode {
         description: String,
         metadata: InvoiceCreationMetadata,
     ) -> Result<InvoiceDetails> {
-        let response = self
-            .rt
-            .handle()
-            .block_on(
-                self.sdk
-                    .receive_payment(breez_sdk_core::ReceivePaymentRequest {
-                        amount_msat: amount_sat.as_sats().msats,
-                        description,
-                        preimage: None,
-                        opening_fee_params: lsp_fee_params,
-                        use_description_hash: None,
-                        expiry: None,
-                        cltv: None,
-                    }),
-            )
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to create an invoice",
-            )?;
-
-        self.store_payment_info(&response.ln_invoice.payment_hash, None);
-        self.data_store
-            .lock_unwrap()
-            .store_created_invoice(
-                &response.ln_invoice.payment_hash,
-                &response.ln_invoice.bolt11,
-                &response.opening_fee_msat,
-                response.ln_invoice.timestamp + response.ln_invoice.expiry,
-            )
-            .map_to_permanent_failure("Failed to persist created invoice")?;
-
-        self.analytics_interceptor.request_initiated(
-            response.clone(),
-            self.get_exchange_rate(),
-            metadata,
-        );
-        Ok(InvoiceDetails::from_ln_invoice(
-            response.ln_invoice,
-            &self.get_exchange_rate(),
-        ))
+        self.lightning
+            .bolt11()
+            .create(amount_sat, lsp_fee_params, description, metadata)
     }
 
     /// Parse a phone number prefix, check against the list of allowed countries
@@ -789,12 +727,9 @@ impl LightningNode {
     /// Get the max routing fee mode that will be employed to restrict the fees for paying a given amount in sats
     ///
     /// Requires network: **no**
+    #[deprecated = "lightning().determine_max_routing_fee_mode() should be used instead"]
     pub fn get_payment_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
-        get_payment_max_routing_fee_mode(
-            &self.config.max_routing_fee_config,
-            amount_sat,
-            &self.get_exchange_rate(),
-        )
+        self.lightning.determine_max_routing_fee_mode(amount_sat)
     }
 
     /// Checks if the given amount could be spent on an invoice.
@@ -803,32 +738,11 @@ impl LightningNode {
     /// * `amount` - The to be spent amount.
     ///
     /// Requires network: **no**
+    #[deprecated = "lightning().determine_payment_affordability() should be used instead"]
     pub fn get_invoice_affordability(&self, amount_sat: u64) -> Result<InvoiceAffordability> {
-        let amount = amount_sat.as_sats();
-
-        let routing_fee_mode = self.get_payment_max_routing_fee_mode(amount_sat);
-
-        let max_fee_msats = match routing_fee_mode {
-            MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
-                Permyriad(max_fee_permyriad).of(&amount).msats
-            }
-            MaxRoutingFeeMode::Absolute { max_fee_amount } => max_fee_amount.sats.as_sats().msats,
-        };
-
-        let node_state = self.sdk.node_info().map_to_runtime_error(
-            RuntimeErrorCode::NodeUnavailable,
-            "Failed to read node info",
-        )?;
-
-        if amount.msats > node_state.max_payable_msat {
-            return Ok(InvoiceAffordability::NotEnoughFunds);
-        }
-
-        if amount.msats + max_fee_msats > node_state.max_payable_msat {
-            return Ok(InvoiceAffordability::UnaffordableFees);
-        }
-
-        Ok(InvoiceAffordability::Affordable)
+        self.lightning
+            .determine_payment_affordability(amount_sat)
+            .map(InvoiceAffordability::from)
     }
 
     /// Start an attempt to pay an invoice. Can immediately fail, meaning that the payment couldn't be started.
@@ -841,12 +755,13 @@ impl LightningNode {
     /// * `metadata` - additional meta information about the payment, used by analytics to improve the user experience.
     ///
     /// Requires network: **yes**
+    #[deprecated = "lightning().bolt11().pay() should be used instead"]
     pub fn pay_invoice(
         &self,
         invoice_details: InvoiceDetails,
         metadata: PaymentMetadata,
     ) -> PayResult<()> {
-        self.pay_open_invoice(invoice_details, 0, metadata)
+        self.lightning.bolt11().pay(invoice_details, metadata)
     }
 
     /// Similar to [`LightningNode::pay_invoice`] with the difference that the passed in invoice
@@ -857,61 +772,16 @@ impl LightningNode {
     /// * `amount_sat` - amount in sats to be paid
     ///
     /// Requires network: **yes**
+    #[deprecated = "lightning().bolt11().pay_open_amount() should be used instead"]
     pub fn pay_open_invoice(
         &self,
         invoice_details: InvoiceDetails,
         amount_sat: u64,
         metadata: PaymentMetadata,
     ) -> PayResult<()> {
-        let amount_msat = if amount_sat == 0 {
-            None
-        } else {
-            Some(amount_sat.as_sats().msats)
-        };
-        self.store_payment_info(&invoice_details.payment_hash, None);
-        let node_state = self
-            .sdk
-            .node_info()
-            .map_to_runtime_error(PayErrorCode::NodeUnavailable, "Failed to read node info")?;
-        ensure!(
-            node_state.id != invoice_details.payee_pub_key,
-            runtime_error(
-                PayErrorCode::PayingToSelf,
-                "A locally issued invoice tried to be paid"
-            )
-        );
-
-        self.analytics_interceptor.pay_initiated(
-            invoice_details.clone(),
-            metadata,
-            amount_msat,
-            self.get_exchange_rate(),
-        );
-
-        let result = self
-            .rt
-            .handle()
-            .block_on(self.sdk.send_payment(SendPaymentRequest {
-                bolt11: invoice_details.invoice,
-                use_trampoline: true,
-                amount_msat,
-                label: None,
-            }));
-
-        if matches!(
-            result,
-            Err(SendPaymentError::Generic { .. }
-                | SendPaymentError::PaymentFailed { .. }
-                | SendPaymentError::PaymentTimeout { .. }
-                | SendPaymentError::RouteNotFound { .. }
-                | SendPaymentError::RouteTooExpensive { .. }
-                | SendPaymentError::ServiceConnectivity { .. })
-        ) {
-            self.report_send_payment_issue(invoice_details.payment_hash);
-        }
-
-        result.map_err(map_send_payment_error)?;
-        Ok(())
+        self.lightning
+            .bolt11()
+            .pay_open_amount(invoice_details, amount_sat, metadata)
     }
 
     /// Pay an LNURL-pay the provided amount.
@@ -925,52 +795,16 @@ impl LightningNode {
     /// Returns the payment hash of the payment.
     ///
     /// Requires network: **yes**
+    #[deprecated = "lightning().lnurl().pay() should be used instead"]
     pub fn pay_lnurlp(
         &self,
         lnurl_pay_request_data: LnUrlPayRequestData,
         amount_sat: u64,
         comment: Option<String>,
     ) -> LnUrlPayResult<String> {
-        let comment_allowed = lnurl_pay_request_data.comment_allowed;
-        ensure!(
-            !matches!(comment, Some(ref comment) if comment.len() > comment_allowed as usize),
-            invalid_input(format!(
-                "The provided comment is longer than the allowed {comment_allowed} characters"
-            ))
-        );
-
-        let payment_hash = match self
-            .rt
-            .handle()
-            .block_on(self.sdk.lnurl_pay(LnUrlPayRequest {
-                data: lnurl_pay_request_data,
-                amount_msat: amount_sat.as_sats().msats,
-                use_trampoline: true,
-                comment,
-                payment_label: None,
-                validate_success_action_url: Some(false),
-            }))
-            .map_err(map_lnurl_pay_error)?
-        {
-            breez_sdk_core::lnurl::pay::LnUrlPayResult::EndpointSuccess { data } => {
-                Ok(data.payment.id)
-            }
-            breez_sdk_core::lnurl::pay::LnUrlPayResult::EndpointError { data } => runtime_error!(
-                LnUrlPayErrorCode::LnUrlServerError,
-                "LNURL server returned error: {}",
-                data.reason
-            ),
-            breez_sdk_core::lnurl::pay::LnUrlPayResult::PayError { data } => {
-                self.report_send_payment_issue(data.payment_hash);
-                runtime_error!(
-                    LnUrlPayErrorCode::PaymentFailed,
-                    "Paying invoice for LNURL pay failed: {}",
-                    data.reason
-                )
-            }
-        }?;
-        self.store_payment_info(&payment_hash, None);
-        Ok(payment_hash)
+        self.lightning
+            .lnurl()
+            .pay(lnurl_pay_request_data, amount_sat, comment)
     }
 
     /// List recipients from the most recent used.
@@ -1032,34 +866,15 @@ impl LightningNode {
     /// Returns the payment hash of the payment.
     ///
     /// Requires network: **yes**
+    #[deprecated = "lightning().lnurl().withdraw() should be used instead"]
     pub fn withdraw_lnurlw(
         &self,
         lnurl_withdraw_request_data: LnUrlWithdrawRequestData,
         amount_sat: u64,
     ) -> LnUrlWithdrawResult<String> {
-        let payment_hash = match self
-            .rt
-            .handle()
-            .block_on(self.sdk.lnurl_withdraw(LnUrlWithdrawRequest {
-                data: lnurl_withdraw_request_data,
-                amount_msat: amount_sat.as_sats().msats,
-                description: None,
-            }))
-            .map_err(map_lnurl_withdraw_error)?
-        {
-            breez_sdk_core::LnUrlWithdrawResult::Ok { data } => Ok(data.invoice.payment_hash),
-            breez_sdk_core::LnUrlWithdrawResult::Timeout { data } => {
-                warn!("Tolerating timeout on submitting invoice to LNURL-w");
-                Ok(data.invoice.payment_hash)
-            }
-            breez_sdk_core::LnUrlWithdrawResult::ErrorStatus { data } => runtime_error!(
-                LnUrlWithdrawErrorCode::LnUrlServerError,
-                "LNURL server returned error: {}",
-                data.reason
-            ),
-        }?;
-        self.store_payment_info(&payment_hash, None);
-        Ok(payment_hash)
+        self.lightning
+            .lnurl()
+            .withdraw(lnurl_withdraw_request_data, amount_sat)
     }
 
     /// Get a list of the latest activities
@@ -1847,7 +1662,7 @@ impl LightningNode {
         F: FnOnce(String, u32) -> Result<(Sats, Sats)>,
     {
         let rate = self.get_exchange_rate();
-        let lsp_fees = self.calculate_lsp_fee(amount.msats)?;
+        let lsp_fees = self.lightning.calculate_lsp_fee_for_amount(amount.msats)?;
 
         let swap_info = self
             .rt
@@ -1882,7 +1697,9 @@ impl LightningNode {
             return Ok(None);
         }
 
-        let lsp_fees = self.calculate_lsp_fee(sent_amount.sats)?;
+        let lsp_fees = self
+            .lightning
+            .calculate_lsp_fee_for_amount(sent_amount.sats)?;
 
         if swap_info.is_none()
             || sent_amount.sats < (swap_info.clone().unwrap().min_allowed_deposit as u64)
@@ -2031,7 +1848,11 @@ impl LightningNode {
             )
         );
 
-        let lsp_fees = self.calculate_lsp_fee(send_amount_sats)?.lsp_fee.sats;
+        let lsp_fees = self
+            .lightning
+            .calculate_lsp_fee_for_amount(send_amount_sats)?
+            .lsp_fee
+            .sats;
         ensure!(
             lsp_fees < send_amount_sats,
             runtime_error(
@@ -2160,7 +1981,8 @@ impl LightningNode {
         }
 
         let lsp_fees = self
-            .calculate_lsp_fee(send_amount_sats)
+            .lightning
+            .calculate_lsp_fee_for_amount(send_amount_sats)
             .map_err(|_| RedeemOnchainError::ServiceConnectivity {
                 err: "Could not get lsp fees".to_string(),
             })?
@@ -2619,19 +2441,6 @@ impl LightningNode {
             .try_for_each(|a| data_store.update_lightning_address(&a, to_status))
     }
 
-    fn report_send_payment_issue(&self, payment_hash: String) {
-        debug!("Reporting failure of payment: {payment_hash}");
-        let data = ReportPaymentFailureDetails {
-            payment_hash,
-            comment: None,
-        };
-        let request = ReportIssueRequest::PaymentFailure { data };
-        self.rt
-            .handle()
-            .block_on(self.sdk.report_issue(request))
-            .log_ignore_error(Level::Warn, "Failed to report issue");
-    }
-
     fn get_node_utxos(&self) -> Result<Vec<UnspentTransactionOutput>> {
         let node_state = self
             .sdk
@@ -2773,27 +2582,6 @@ pub(crate) fn enable_backtrace() {
     env::set_var("RUST_BACKTRACE", "1");
 }
 
-fn get_payment_max_routing_fee_mode(
-    config: &MaxRoutingFeeConfig,
-    amount_sat: u64,
-    exchange_rate: &Option<ExchangeRate>,
-) -> MaxRoutingFeeMode {
-    let max_fee_permyriad = Permyriad(config.max_routing_fee_permyriad);
-    let relative_fee = max_fee_permyriad.of(&amount_sat.as_sats());
-    if relative_fee.msats < config.max_routing_fee_exempt_fee_sats.as_sats().msats {
-        MaxRoutingFeeMode::Absolute {
-            max_fee_amount: config
-                .max_routing_fee_exempt_fee_sats
-                .as_sats()
-                .to_amount_up(exchange_rate),
-        }
-    } else {
-        MaxRoutingFeeMode::Relative {
-            max_fee_permyriad: max_fee_permyriad.0,
-        }
-    }
-}
-
 fn filter_out_recently_claimed_topups(
     topups: Vec<TopupInfo>,
     latest_activities: Vec<Activity>,
@@ -2924,7 +2712,6 @@ include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::amount::Sats;
     use crate::config::WithTimezone;
     use crow::TopupStatus;
     use perro::Error;
@@ -2953,51 +2740,6 @@ mod tests {
             &invalid_hash_encoding.unwrap_err().to_string()[0..43],
             "InvalidInput: Invalid payment hash encoding"
         );
-    }
-
-    const MAX_FEE_PERMYRIAD: Permyriad = Permyriad(150);
-    const EXEMPT_FEE: Sats = Sats::new(21);
-
-    #[test]
-    fn test_get_payment_max_routing_fee_mode_absolute() {
-        let max_routing_mode = get_payment_max_routing_fee_mode(
-            &MaxRoutingFeeConfig {
-                max_routing_fee_permyriad: MAX_FEE_PERMYRIAD.0,
-                max_routing_fee_exempt_fee_sats: EXEMPT_FEE.sats,
-            },
-            EXEMPT_FEE.msats / ((MAX_FEE_PERMYRIAD.0 as u64) / 10) - 1,
-            &None,
-        );
-
-        match max_routing_mode {
-            MaxRoutingFeeMode::Absolute { max_fee_amount } => {
-                assert_eq!(max_fee_amount.sats, EXEMPT_FEE.sats);
-            }
-            _ => {
-                panic!("Unexpected variant");
-            }
-        }
-    }
-
-    #[test]
-    fn test_get_payment_max_routing_fee_mode_relative() {
-        let max_routing_mode = get_payment_max_routing_fee_mode(
-            &MaxRoutingFeeConfig {
-                max_routing_fee_permyriad: MAX_FEE_PERMYRIAD.0,
-                max_routing_fee_exempt_fee_sats: EXEMPT_FEE.sats,
-            },
-            EXEMPT_FEE.msats / ((MAX_FEE_PERMYRIAD.0 as u64) / 10),
-            &None,
-        );
-
-        match max_routing_mode {
-            MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
-                assert_eq!(max_fee_permyriad, MAX_FEE_PERMYRIAD.0);
-            }
-            _ => {
-                panic!("Unexpected variant");
-            }
-        }
     }
 
     #[test]

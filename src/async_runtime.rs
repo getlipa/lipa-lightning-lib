@@ -11,6 +11,7 @@ pub(crate) struct AsyncRuntime {
     rt: Runtime,
 }
 
+#[derive(Clone)]
 pub(crate) struct Handle {
     handle: tokio::runtime::Handle,
 }
