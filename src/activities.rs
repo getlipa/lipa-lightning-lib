@@ -50,6 +50,12 @@ impl Activities {
         }
     }
 
+    /// List the latest activities
+    ///
+    /// Parameters:
+    /// * `number_of_completed_activities` - the maximum number of completed activities that will be returned
+    ///
+    /// Requires network: **no**
     pub fn list(&self, number_of_completed_activities: u32) -> Result<ListActivitiesResponse> {
         const LEEWAY_FOR_PENDING_PAYMENTS: u32 = 30;
         let list_payments_request = ListPaymentsRequest {
