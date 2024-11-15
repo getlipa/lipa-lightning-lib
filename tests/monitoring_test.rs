@@ -22,6 +22,8 @@ const INVOICE_DESCRIPTION: &str = "automated bolt11 test";
 
 const TIME_RESULTS_FILE_NAME: &str = "test_times.json";
 
+const DELAY_BEFORE_ACTION: Duration = Duration::from_secs(10);
+
 struct TransactingNode {
     node: LightningNode,
     sent_payment_receiver: Receiver<String>,
@@ -167,6 +169,7 @@ fn exchange_rate_can_be_fetched_and_is_recent() {
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn invoice_can_be_created() {
     let sender = TransactingNode::new(NodeType::Sender).unwrap();
+    sleep(DELAY_BEFORE_ACTION);
     let start = Instant::now();
     sender
         .node
@@ -224,6 +227,7 @@ fn payments_can_be_performed() {
 
     let payment_hash = send_invoice.payment_hash.clone();
 
+    sleep(DELAY_BEFORE_ACTION);
     let start = Instant::now();
     sender
         .node

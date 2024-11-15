@@ -2,7 +2,7 @@ name: Monitoring Tests
 
 on:
   schedule:
-    - cron: '21 2 * * *' # every day at 2:21 AM UTC
+    - cron: '0 */6 * * *' # At minute 0 past every 6th hour
   workflow_dispatch: # allow manually triggering a run
 
 
