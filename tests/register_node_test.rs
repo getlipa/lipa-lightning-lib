@@ -3,7 +3,9 @@ mod setup;
 
 use crate::print_events_handler::PrintEventsHandler;
 
-use uniffi_lipalightninglib::{generate_secret, Config, ReceiveLimitsConfig, TzConfig};
+use uniffi_lipalightninglib::{
+    generate_secret, LightningNodeConfig, ReceiveLimitsConfig, TzConfig,
+};
 use uniffi_lipalightninglib::{
     BreezSdkConfig, LightningNode, MaxRoutingFeeConfig, RemoteServicesConfig,
 };
@@ -27,7 +29,7 @@ fn test_register_node() {
     let mnemonic = secret.mnemonic.join(" ");
     println!("Mnemonic: {mnemonic}");
 
-    let config = Config {
+    let config = LightningNodeConfig {
         seed: secret.seed,
         default_fiat_currency: "EUR".to_string(),
         local_persistence_path: LOCAL_PERSISTENCE_PATH.to_string(),

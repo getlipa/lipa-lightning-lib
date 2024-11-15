@@ -1,5 +1,5 @@
 use crate::amount::Amount;
-use crate::config::TzTime;
+use crate::node_config::TzTime;
 
 use breez_sdk_core::OpeningFeeParams;
 use std::time::SystemTime;

@@ -1,5 +1,5 @@
-use crate::config::ReceiveLimitsConfig;
 use crate::lightning::receive_limits::{LiquidityLimit, ReceiveAmountLimits};
+use crate::node_config::ReceiveLimitsConfig;
 use crate::{Amount, ExchangeRate};
 
 /// Information on the limits imposed on the next receiving payment

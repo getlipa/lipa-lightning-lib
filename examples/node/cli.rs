@@ -323,10 +323,10 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     Err(message) => println!("{}", format!("{message:#}").red()),
                 },
                 "foreground" => {
-                    node.foreground();
+                    node.config().foreground();
                 }
                 "background" => {
-                    node.background();
+                    node.config().background();
                 }
                 "closechannels" => {
                     if let Err(message) = node.close_all_channels_with_current_lsp() {
@@ -694,7 +694,7 @@ fn get_exchange_rate(node: &LightningNode) {
 }
 
 fn list_currency_codes(node: &LightningNode) {
-    let codes = node.list_currency_codes();
+    let codes = node.config().list_currencies();
     println!("Supported currencies: {codes:?}");
 }
 
@@ -702,7 +702,8 @@ fn change_currency(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
     let fiat_currency = words
         .next()
         .ok_or(anyhow!("Fiat currency code is required"))?;
-    node.change_fiat_currency(String::from(fiat_currency))?;
+    node.config()
+        .set_fiat_currency(String::from(fiat_currency))?;
     Ok(())
 }
 
@@ -724,7 +725,7 @@ fn change_timezone(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
         tz_config.timezone_utc_offset_secs
     );
     println!(" Timezone id:          {}", tz_config.timezone_id);
-    node.change_timezone_config(tz_config);
+    node.config().set_timezone_config(tz_config);
     Ok(())
 }
 
@@ -1656,7 +1657,9 @@ fn set_feature_flag(node: &LightningNode, words: &mut dyn Iterator<Item = &str>)
         .next()
         .ok_or(anyhow!("<enabled> is required"))?
         .parse()?;
-    node.set_feature_flag(feature, enabled).map_err(Into::into)
+    node.config()
+        .set_feature_flag(feature, enabled)
+        .map_err(Into::into)
 }
 
 fn hide_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {

@@ -4,7 +4,7 @@
 
 interface LightningNode {
     [Throws=LnError]
-    constructor(Config config, EventsCallback events_callback);
+    constructor(LightningNodeConfig config, EventsCallback events_callback);
 
     [Throws=LnError]
     NodeInfo get_node_info();
@@ -198,6 +198,33 @@ interface LightningNode {
     Activities activities();
 
     Lightning lightning();
+
+    Config config();
+};
+
+interface Config {
+    [Throws=LnError]
+    void set_fiat_currency(string fiat_currency);
+
+    void set_timezone_config(TzConfig timezone_config);
+
+    [Throws=LnError]
+    void set_analytics_config(AnalyticsConfig config);
+
+    [Throws=LnError]
+    AnalyticsConfig get_analytics_config();
+
+    [Throws=LnError]
+    void register_notification_token(string notification_token, string language_iso_639_1, string country_iso_3166_1_alpha_2);
+
+    [Throws=LnError]
+    void set_feature_flag(FeatureFlag feature, boolean flag_enabled);
+
+    sequence<string> list_currencies();
+
+    void foreground();
+
+    void background();
 };
 
 interface Lightning {
@@ -258,7 +285,7 @@ interface Activities {
     void set_personal_note(string payment_hash, string note);
 };
 
-dictionary Config {
+dictionary LightningNodeConfig {
     bytes seed;
     string default_fiat_currency;
     string local_persistence_path;
@@ -794,7 +821,7 @@ namespace lipalightninglib {
     void parse_lightning_address([ByRef] string address);
 
     [Throws=NotificationHandlingError]
-    Notification handle_notification(Config config, string notification_payload, NotificationToggles notification_toggles, duration timeout);
+    Notification handle_notification(LightningNodeConfig config, string notification_payload, NotificationToggles notification_toggles, duration timeout);
 };
 
 dictionary Secret {

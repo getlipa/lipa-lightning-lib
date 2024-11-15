@@ -700,8 +700,8 @@ fn fiat_topup_info_from_row(row: &Row) -> rusqlite::Result<Option<FiatTopupInfo>
 
 #[cfg(test)]
 mod tests {
-    use crate::config::TzConfig;
     use crate::data_store::{CreatedInvoice, DataStore};
+    use crate::node_config::TzConfig;
     use crate::{EnableStatus, ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
 
     use crate::analytics::AnalyticsConfig;

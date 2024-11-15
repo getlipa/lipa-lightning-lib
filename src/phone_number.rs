@@ -46,6 +46,7 @@ pub(crate) fn lightning_address_to_phone_number(address: &str, domain: &str) -> 
     None
 }
 
+#[derive(Clone)]
 pub(crate) struct PhoneNumberPrefixParser {
     allowed_country_codes: Vec<String>,
 }

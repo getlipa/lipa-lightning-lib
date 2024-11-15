@@ -9,8 +9,8 @@ use crate::exchange_rate_provider::{ExchangeRateProvider, ExchangeRateProviderIm
 use crate::logger::init_logger_once;
 use crate::util::LogIgnoreError;
 use crate::{
-    enable_backtrace, register_webhook_url, sanitize_input, start_sdk, Config, EnableStatus,
-    RuntimeErrorCode, UserPreferences, DB_FILENAME, LOGS_DIR,
+    enable_backtrace, register_webhook_url, sanitize_input, start_sdk, EnableStatus,
+    LightningNodeConfig, RuntimeErrorCode, UserPreferences, DB_FILENAME, LOGS_DIR,
 };
 use breez_sdk_core::{
     BreezEvent, BreezServices, EventListener, InvoicePaidDetails, OpenChannelFeeRequest, Payment,
@@ -75,7 +75,7 @@ pub struct NotificationToggles {
 ///
 /// Requires network: **yes**
 pub fn handle_notification(
-    config: Config,
+    config: LightningNodeConfig,
     notification_payload: String,
     notification_toggles: NotificationToggles,
     timeout: Duration,
@@ -151,7 +151,7 @@ pub fn handle_notification(
 }
 
 fn build_analytics_interceptor(
-    config: &Config,
+    config: &LightningNodeConfig,
     rt: &AsyncRuntime,
 ) -> NotificationHandlingResult<AnalyticsInterceptor> {
     let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
@@ -297,7 +297,7 @@ fn handle_address_txs_confirmed_notification(
 fn handle_lnurl_pay_request_notification(
     rt: AsyncRuntime,
     sdk: Arc<BreezServices>,
-    config: Config,
+    config: LightningNodeConfig,
     data: LnurlPayRequestData,
 ) -> NotificationHandlingResult<Notification> {
     // Prevent payments that need a new channel from being received
@@ -529,7 +529,7 @@ fn wait_for_synced_event(event_receiver: &Receiver<BreezEvent>) -> NotificationH
     }
 }
 
-fn get_strong_typed_seed(config: &Config) -> NotificationHandlingResult<[u8; 64]> {
+fn get_strong_typed_seed(config: &LightningNodeConfig) -> NotificationHandlingResult<[u8; 64]> {
     sanitize_input::strong_type_seed(&config.seed)
         .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)
 }

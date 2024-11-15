@@ -3,27 +3,21 @@ pub mod lnurl;
 pub mod receive_limits;
 
 use crate::amount::{AsSats, Permyriad, ToAmount};
-use crate::analytics::AnalyticsInterceptor;
-use crate::async_runtime::Handle;
-use crate::data_store::DataStore;
 use crate::errors::Result;
 use crate::lightning::bolt11::Bolt11;
 use crate::lightning::lnurl::Lnurl;
 use crate::lightning::receive_limits::ReceiveAmountLimits;
 use crate::locker::Locker;
 use crate::support::Support;
-use crate::task_manager::TaskManager;
 use crate::util::LogIgnoreError;
 use crate::{
-    CalculateLspFeeResponse, Config, ExchangeRate, LspFee, MaxRoutingFeeConfig, MaxRoutingFeeMode,
-    OfferKind, RuntimeErrorCode, UserPreferences,
+    CalculateLspFeeResponse, ExchangeRate, LspFee, MaxRoutingFeeConfig, MaxRoutingFeeMode,
+    OfferKind, RuntimeErrorCode,
 };
-use breez_sdk_core::{
-    BreezServices, OpenChannelFeeRequest, ReportIssueRequest, ReportPaymentFailureDetails,
-};
+use breez_sdk_core::{OpenChannelFeeRequest, ReportIssueRequest, ReportPaymentFailureDetails};
 use log::{debug, Level};
 use perro::{MapToError, OptionToError};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// Payment affordability returned by [`Lightning::determine_payment_affordability`].
 #[derive(Debug)]
@@ -38,50 +32,20 @@ pub enum PaymentAffordability {
 }
 
 pub struct Lightning {
-    rt_handle: Handle,
-    sdk: Arc<BreezServices>,
     bolt11: Arc<Bolt11>,
     lnurl: Arc<Lnurl>,
-    config: Config,
     support: Arc<Support>,
-    task_manager: Arc<Mutex<TaskManager>>,
 }
 
 impl Lightning {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
-        rt_handle: Handle,
-        sdk: Arc<BreezServices>,
-        data_store: Arc<Mutex<DataStore>>,
-        analytics_interceptor: Arc<AnalyticsInterceptor>,
-        user_preferences: Arc<Mutex<UserPreferences>>,
-        support: Arc<Support>,
-        config: Config,
-        task_manager: Arc<Mutex<TaskManager>>,
-    ) -> Self {
-        let bolt11 = Arc::new(Bolt11::new(
-            rt_handle.clone(),
-            Arc::clone(&sdk),
-            Arc::clone(&data_store),
-            analytics_interceptor,
-            Arc::clone(&user_preferences),
-            Arc::clone(&support),
-        ));
-        let lnurl = Arc::new(Lnurl::new(
-            rt_handle.clone(),
-            Arc::clone(&sdk),
-            data_store,
-            user_preferences,
-            Arc::clone(&support),
-        ));
+    pub(crate) fn new(support: Arc<Support>) -> Self {
+        let bolt11 = Arc::new(Bolt11::new(Arc::clone(&support)));
+        let lnurl = Arc::new(Lnurl::new(Arc::clone(&support)));
         Self {
-            rt_handle,
-            sdk,
             bolt11,
             lnurl,
-            config,
             support,
-            task_manager,
         }
     }
 
@@ -99,7 +63,7 @@ impl Lightning {
     /// Requires network: **no**
     pub fn determine_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
         get_payment_max_routing_fee_mode(
-            &self.config.max_routing_fee_config,
+            &self.support.node_config.max_routing_fee_config,
             amount_sat,
             &self.support.get_exchange_rate(),
         )
@@ -126,7 +90,7 @@ impl Lightning {
             MaxRoutingFeeMode::Absolute { max_fee_amount } => max_fee_amount.sats.as_sats().msats,
         };
 
-        let node_state = self.sdk.node_info().map_to_runtime_error(
+        let node_state = self.support.sdk.node_info().map_to_runtime_error(
             RuntimeErrorCode::NodeUnavailable,
             "Failed to read node info",
         )?;
@@ -162,7 +126,7 @@ impl Lightning {
             max_inbound_amount.sats,
             lsp_min_fee_amount.sats,
             &self.support.get_exchange_rate(),
-            &self.config.receive_limits_config,
+            &self.support.node_config.receive_limits_config,
         ))
     }
 
@@ -182,8 +146,10 @@ impl Lightning {
             expiry: None,
         };
         let res = self
-            .rt_handle
-            .block_on(self.sdk.open_channel_fee(req))
+            .support
+            .rt
+            .handle()
+            .block_on(self.support.sdk.open_channel_fee(req))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to compute opening channel fee",
@@ -205,7 +171,7 @@ impl Lightning {
     /// Requires network: **no**
     pub fn get_lsp_fee(&self) -> Result<LspFee> {
         let exchange_rate = self.support.get_exchange_rate();
-        let lsp_fee = self.task_manager.lock_unwrap().get_lsp_fee()?;
+        let lsp_fee = self.support.task_manager.lock_unwrap().get_lsp_fee()?;
         Ok(LspFee {
             channel_minimum_fee: lsp_fee.min_msat.as_msats().to_amount_up(&exchange_rate),
             channel_fee_permyriad: lsp_fee.proportional as u64 / 100,
@@ -235,10 +201,6 @@ fn get_payment_max_routing_fee_mode(
 }
 
 trait Payments {
-    fn handle(&self) -> &Handle;
-    fn sdk(&self) -> &BreezServices;
-    fn user_preferences(&self) -> &Mutex<UserPreferences>;
-    fn data_store(&self) -> &Mutex<DataStore>;
     fn support(&self) -> &Support;
 
     fn report_send_payment_issue(&self, payment_hash: String) {
@@ -248,15 +210,18 @@ trait Payments {
             comment: None,
         };
         let request = ReportIssueRequest::PaymentFailure { data };
-        self.handle()
-            .block_on(self.sdk().report_issue(request))
+        self.support()
+            .rt
+            .handle()
+            .block_on(self.support().sdk.report_issue(request))
             .log_ignore_error(Level::Warn, "Failed to report issue");
     }
 
     fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) {
-        let user_preferences = self.user_preferences().lock_unwrap().clone();
+        let user_preferences = self.support().user_preferences.lock_unwrap().clone();
         let exchange_rates = self.support().get_exchange_rates();
-        self.data_store()
+        self.support()
+            .data_store
             .lock_unwrap()
             .store_payment_info(hash, user_preferences, exchange_rates, offer, None, None)
             .log_ignore_error(Level::Error, "Failed to persist payment info")

@@ -15,8 +15,8 @@ use std::collections::HashSet;
 use std::env;
 use std::time::Duration;
 use uniffi_lipalightninglib::{
-    handle_notification, mnemonic_to_secret, BreezSdkConfig, Config, MaxRoutingFeeConfig,
-    NotificationToggles, ReceiveLimitsConfig, RemoteServicesConfig, TzConfig,
+    handle_notification, mnemonic_to_secret, BreezSdkConfig, LightningNodeConfig,
+    MaxRoutingFeeConfig, NotificationToggles, ReceiveLimitsConfig, RemoteServicesConfig, TzConfig,
 };
 
 static BASE_DIR: &str = ".3l_node";
@@ -112,7 +112,7 @@ fn map_environment_code(code: &str) -> EnvironmentCode {
     }
 }
 
-fn get_config() -> Config {
+fn get_config() -> LightningNodeConfig {
     let base_dir = format!("{BASE_DIR}_{}", ENVIRONMENT.as_str());
 
     let environment_code = map_environment_code(ENVIRONMENT.as_str());
@@ -120,7 +120,7 @@ fn get_config() -> Config {
 
     let seed = read_seed_from_env();
 
-    Config {
+    LightningNodeConfig {
         seed,
         default_fiat_currency: "EUR".to_string(),
         local_persistence_path: base_dir.clone(),

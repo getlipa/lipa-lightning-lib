@@ -1,31 +1,40 @@
 use crate::amount::{AsSats, ToAmount};
+use crate::analytics::AnalyticsInterceptor;
+use crate::async_runtime::AsyncRuntime;
+use crate::data_store::DataStore;
 use crate::errors::Result;
 use crate::locker::Locker;
+use crate::phone_number::PhoneNumberPrefixParser;
+use crate::pocketclient::PocketClient;
 use crate::task_manager::TaskManager;
-use crate::{ChannelsInfo, ExchangeRate, NodeInfo, RuntimeErrorCode, UserPreferences};
+use crate::{
+    ChannelsInfo, ExchangeRate, LightningNodeConfig, NodeInfo, RuntimeErrorCode, UserPreferences,
+};
 use breez_sdk_core::BreezServices;
+use crow::OfferManager;
+use honeybadger::Auth;
 use perro::MapToError;
 use std::sync::{Arc, Mutex};
 
+#[allow(dead_code)]
 pub(crate) struct Support {
-    user_preferences: Arc<Mutex<UserPreferences>>,
-    task_manager: Arc<Mutex<TaskManager>>,
-    sdk: Arc<BreezServices>,
+    pub user_preferences: Arc<Mutex<UserPreferences>>,
+    pub sdk: Arc<BreezServices>,
+    pub auth: Arc<Auth>,
+    pub async_auth: Arc<honeybadger::asynchronous::Auth>,
+    pub fiat_topup_client: Arc<PocketClient>,
+    pub offer_manager: Arc<OfferManager>,
+    pub rt: Arc<AsyncRuntime>,
+    pub data_store: Arc<Mutex<DataStore>>,
+    pub task_manager: Arc<Mutex<TaskManager>>,
+    pub allowed_countries_country_iso_3166_1_alpha_2: Vec<String>,
+    pub phone_number_prefix_parser: PhoneNumberPrefixParser,
+    pub persistence_encryption_key: [u8; 32],
+    pub node_config: LightningNodeConfig,
+    pub analytics_interceptor: Arc<AnalyticsInterceptor>,
 }
 
 impl Support {
-    pub fn new(
-        user_preferences: Arc<Mutex<UserPreferences>>,
-        task_manager: Arc<Mutex<TaskManager>>,
-        sdk: Arc<BreezServices>,
-    ) -> Self {
-        Self {
-            user_preferences,
-            task_manager,
-            sdk,
-        }
-    }
-
     /// Get exchange rate on the BTC/default currency pair
     /// Please keep in mind that this method doesn't make any network calls. It simply retrieves
     /// previously fetched values that are frequently updated by a background task.
