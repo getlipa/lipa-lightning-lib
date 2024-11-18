@@ -1,45 +1,25 @@
 use crate::amount::{AsSats, ToAmount};
-use crate::async_runtime::Handle;
-use crate::data_store::DataStore;
 use crate::errors::{
     map_lnurl_pay_error, map_lnurl_withdraw_error, LnUrlWithdrawErrorCode, LnUrlWithdrawResult,
 };
-use crate::lightning::Payments;
+use crate::lightning::{report_send_payment_issue, store_payment_info};
 use crate::support::Support;
-use crate::{
-    Amount, DecodeDataError, ExchangeRate, LnUrlPayErrorCode, LnUrlPayResult, UserPreferences,
-};
+use crate::{Amount, DecodeDataError, ExchangeRate, LnUrlPayErrorCode, LnUrlPayResult};
 use breez_sdk_core::{
-    BreezServices, LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest,
-    LnUrlWithdrawRequestData, MetadataItem,
+    LnUrlPayRequest, LnUrlPayRequestData, LnUrlWithdrawRequest, LnUrlWithdrawRequestData,
+    MetadataItem,
 };
 use log::warn;
 use perro::{ensure, invalid_input, runtime_error};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub struct Lnurl {
-    rt_handle: Handle,
-    sdk: Arc<BreezServices>,
-    data_store: Arc<Mutex<DataStore>>,
-    user_preferences: Arc<Mutex<UserPreferences>>,
     support: Arc<Support>,
 }
 
 impl Lnurl {
-    pub(crate) fn new(
-        rt_handle: Handle,
-        sdk: Arc<BreezServices>,
-        data_store: Arc<Mutex<DataStore>>,
-        user_preferences: Arc<Mutex<UserPreferences>>,
-        support: Arc<Support>,
-    ) -> Self {
-        Self {
-            rt_handle,
-            sdk,
-            data_store,
-            user_preferences,
-            support,
-        }
+    pub(crate) fn new(support: Arc<Support>) -> Self {
+        Self { support }
     }
 
     /// Pay an LNURL-pay the provided amount.
@@ -69,8 +49,10 @@ impl Lnurl {
         );
 
         let payment_hash = match self
-            .rt_handle
-            .block_on(self.sdk.lnurl_pay(LnUrlPayRequest {
+            .support
+            .rt
+            .handle()
+            .block_on(self.support.sdk.lnurl_pay(LnUrlPayRequest {
                 data: lnurl_pay_request_data,
                 amount_msat: amount_sat.as_sats().msats,
                 use_trampoline: true,
@@ -89,7 +71,7 @@ impl Lnurl {
                 data.reason
             ),
             breez_sdk_core::lnurl::pay::LnUrlPayResult::PayError { data } => {
-                self.report_send_payment_issue(data.payment_hash);
+                report_send_payment_issue(&self.support, data.payment_hash);
                 runtime_error!(
                     LnUrlPayErrorCode::PaymentFailed,
                     "Paying invoice for LNURL pay failed: {}",
@@ -97,7 +79,7 @@ impl Lnurl {
                 )
             }
         }?;
-        self.store_payment_info(&payment_hash, None);
+        store_payment_info(&self.support, &payment_hash, None);
         Ok(payment_hash)
     }
 
@@ -120,8 +102,10 @@ impl Lnurl {
         amount_sat: u64,
     ) -> LnUrlWithdrawResult<String> {
         let payment_hash = match self
-            .rt_handle
-            .block_on(self.sdk.lnurl_withdraw(LnUrlWithdrawRequest {
+            .support
+            .rt
+            .handle()
+            .block_on(self.support.sdk.lnurl_withdraw(LnUrlWithdrawRequest {
                 data: lnurl_withdraw_request_data,
                 amount_msat: amount_sat.as_sats().msats,
                 description: None,
@@ -139,30 +123,8 @@ impl Lnurl {
                 data.reason
             ),
         }?;
-        self.store_payment_info(&payment_hash, None);
+        store_payment_info(&self.support, &payment_hash, None);
         Ok(payment_hash)
-    }
-}
-
-impl Payments for Lnurl {
-    fn handle(&self) -> &Handle {
-        &self.rt_handle
-    }
-
-    fn sdk(&self) -> &BreezServices {
-        &self.sdk
-    }
-
-    fn user_preferences(&self) -> &Mutex<UserPreferences> {
-        &self.user_preferences
-    }
-
-    fn data_store(&self) -> &Mutex<DataStore> {
-        &self.data_store
-    }
-
-    fn support(&self) -> &Support {
-        &self.support
     }
 }
 

@@ -1,48 +1,24 @@
 use crate::amount::AsSats;
-use crate::analytics::AnalyticsInterceptor;
-use crate::async_runtime::Handle;
-use crate::data_store::DataStore;
 use crate::errors::map_send_payment_error;
-use crate::lightning::Payments;
+use crate::lightning::{report_send_payment_issue, store_payment_info};
 use crate::locker::Locker;
 use crate::support::Support;
-use crate::util::LogIgnoreError;
 use crate::{
-    InvoiceCreationMetadata, InvoiceDetails, OfferKind, PayErrorCode, PayResult, PaymentMetadata,
-    RuntimeErrorCode, UserPreferences,
+    InvoiceCreationMetadata, InvoiceDetails, PayErrorCode, PayResult, PaymentMetadata,
+    RuntimeErrorCode,
 };
 use breez_sdk_core::error::SendPaymentError;
-use breez_sdk_core::{BreezServices, OpeningFeeParams, SendPaymentRequest};
-use log::Level;
+use breez_sdk_core::{OpeningFeeParams, SendPaymentRequest};
 use perro::{ensure, runtime_error, MapToError};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub struct Bolt11 {
-    rt_handle: Handle,
-    sdk: Arc<BreezServices>,
-    data_store: Arc<Mutex<DataStore>>,
-    analytics_interceptor: Arc<AnalyticsInterceptor>,
-    user_preferences: Arc<Mutex<UserPreferences>>,
     support: Arc<Support>,
 }
 
 impl Bolt11 {
-    pub(crate) fn new(
-        rt_handle: Handle,
-        sdk: Arc<BreezServices>,
-        data_store: Arc<Mutex<DataStore>>,
-        analytics_interceptor: Arc<AnalyticsInterceptor>,
-        user_preferences: Arc<Mutex<UserPreferences>>,
-        support: Arc<Support>,
-    ) -> Self {
-        Self {
-            rt_handle,
-            sdk,
-            data_store,
-            analytics_interceptor,
-            user_preferences,
-            support,
-        }
+    pub(crate) fn new(support: Arc<Support>) -> Self {
+        Self { support }
     }
 
     /// Create a bolt11 invoice to receive a payment with.
@@ -66,9 +42,12 @@ impl Bolt11 {
         metadata: InvoiceCreationMetadata,
     ) -> crate::Result<InvoiceDetails> {
         let response = self
-            .rt_handle
+            .support
+            .rt
+            .handle()
             .block_on(
-                self.sdk
+                self.support
+                    .sdk
                     .receive_payment(breez_sdk_core::ReceivePaymentRequest {
                         amount_msat: amount_sat.as_sats().msats,
                         description,
@@ -84,8 +63,9 @@ impl Bolt11 {
                 "Failed to create an invoice",
             )?;
 
-        self.store_payment_info(&response.ln_invoice.payment_hash, None);
-        self.data_store
+        store_payment_info(&self.support, &response.ln_invoice.payment_hash, None);
+        self.support
+            .data_store
             .lock_unwrap()
             .store_created_invoice(
                 &response.ln_invoice.payment_hash,
@@ -95,7 +75,7 @@ impl Bolt11 {
             )
             .map_to_permanent_failure("Failed to persist created invoice")?;
 
-        self.analytics_interceptor.request_initiated(
+        self.support.analytics_interceptor.request_initiated(
             response.clone(),
             self.support.get_exchange_rate(),
             metadata,
@@ -140,8 +120,9 @@ impl Bolt11 {
         } else {
             Some(amount_sat.as_sats().msats)
         };
-        self.store_payment_info(&invoice_details.payment_hash, None);
+        store_payment_info(&self.support, &invoice_details.payment_hash, None);
         let node_state = self
+            .support
             .sdk
             .node_info()
             .map_to_runtime_error(PayErrorCode::NodeUnavailable, "Failed to read node info")?;
@@ -153,7 +134,7 @@ impl Bolt11 {
             )
         );
 
-        self.analytics_interceptor.pay_initiated(
+        self.support.analytics_interceptor.pay_initiated(
             invoice_details.clone(),
             metadata,
             amount_msat,
@@ -161,8 +142,10 @@ impl Bolt11 {
         );
 
         let result = self
-            .rt_handle
-            .block_on(self.sdk.send_payment(SendPaymentRequest {
+            .support
+            .rt
+            .handle()
+            .block_on(self.support.sdk.send_payment(SendPaymentRequest {
                 bolt11: invoice_details.invoice,
                 use_trampoline: true,
                 amount_msat,
@@ -178,41 +161,10 @@ impl Bolt11 {
                 | SendPaymentError::RouteTooExpensive { .. }
                 | SendPaymentError::ServiceConnectivity { .. })
         ) {
-            self.report_send_payment_issue(invoice_details.payment_hash);
+            report_send_payment_issue(&self.support, invoice_details.payment_hash);
         }
 
         result.map_err(map_send_payment_error)?;
         Ok(())
-    }
-
-    fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) {
-        let user_preferences = self.user_preferences.lock_unwrap().clone();
-        let exchange_rates = self.support.get_exchange_rates();
-        self.data_store
-            .lock_unwrap()
-            .store_payment_info(hash, user_preferences, exchange_rates, offer, None, None)
-            .log_ignore_error(Level::Error, "Failed to persist payment info")
-    }
-}
-
-impl Payments for Bolt11 {
-    fn handle(&self) -> &Handle {
-        &self.rt_handle
-    }
-
-    fn sdk(&self) -> &BreezServices {
-        &self.sdk
-    }
-
-    fn user_preferences(&self) -> &Mutex<UserPreferences> {
-        &self.user_preferences
-    }
-
-    fn data_store(&self) -> &Mutex<DataStore> {
-        &self.data_store
-    }
-
-    fn support(&self) -> &Support {
-        &self.support
     }
 }

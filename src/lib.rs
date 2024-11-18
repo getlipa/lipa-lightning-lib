@@ -29,6 +29,7 @@ mod limits;
 mod locker;
 mod logger;
 mod migrations;
+mod node_config;
 mod notification_handling;
 mod offer;
 mod payment;
@@ -53,10 +54,6 @@ use crate::async_runtime::AsyncRuntime;
 use crate::auth::{build_async_auth, build_auth};
 use crate::backup::BackupManager;
 pub use crate::callbacks::EventsCallback;
-pub use crate::config::{
-    BreezSdkConfig, Config, MaxRoutingFeeConfig, ReceiveLimitsConfig, RemoteServicesConfig,
-    TzConfig, TzTime,
-};
 pub use crate::errors::{
     DecodeDataError, Error as LnError, LnUrlPayError, LnUrlPayErrorCode, LnUrlPayResult,
     MnemonicError, NotificationHandlingError, NotificationHandlingErrorCode, ParseError,
@@ -74,6 +71,10 @@ pub use crate::lightning::lnurl::{LnUrlPayDetails, LnUrlWithdrawDetails, Lnurl};
 pub use crate::lightning::receive_limits::{LiquidityLimit, ReceiveAmountLimits};
 pub use crate::limits::PaymentAmountLimits;
 use crate::locker::Locker;
+pub use crate::node_config::{
+    BreezSdkConfig, LightningNodeConfig, MaxRoutingFeeConfig, ReceiveLimitsConfig,
+    RemoteServicesConfig, TzConfig, TzTime,
+};
 pub use crate::notification_handling::{handle_notification, Notification, NotificationToggles};
 pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
 pub use crate::payment::{
@@ -103,6 +104,7 @@ pub use crate::pocketclient::FiatTopupInfo;
 use crate::pocketclient::PocketClient;
 
 pub use crate::activities::Activities;
+use crate::config::Config;
 pub use crate::lightning::{Lightning, PaymentAffordability};
 use crate::support::Support;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
@@ -119,7 +121,7 @@ use breez_sdk_core::{
     PrepareRefundRequest, ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
     SignMessageRequest, UnspentTransactionOutput,
 };
-use crow::{CountryCode, LanguageCode, OfferManager, TopupError, TopupInfo};
+use crow::{OfferManager, TopupError, TopupInfo};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 use data_store::DataStore;
 use email_address::EmailAddress;
@@ -308,19 +310,19 @@ pub struct LightningNode {
     sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
     async_auth: Arc<honeybadger::asynchronous::Auth>,
-    fiat_topup_client: PocketClient,
-    offer_manager: OfferManager,
-    rt: AsyncRuntime,
+    fiat_topup_client: Arc<PocketClient>,
+    offer_manager: Arc<OfferManager>,
+    rt: Arc<AsyncRuntime>,
     data_store: Arc<Mutex<DataStore>>,
     task_manager: Arc<Mutex<TaskManager>>,
-    analytics_interceptor: Arc<AnalyticsInterceptor>,
     allowed_countries_country_iso_3166_1_alpha_2: Vec<String>,
     phone_number_prefix_parser: PhoneNumberPrefixParser,
     persistence_encryption_key: [u8; 32],
-    config: Config,
+    node_config: LightningNodeConfig,
     activities: Arc<Activities>,
     lightning: Arc<Lightning>,
     support: Arc<Support>,
+    config: Arc<Config>,
 }
 
 /// Contains the fee information for the options to resolve funds that have moved on-chain.
@@ -370,39 +372,44 @@ impl LightningNode {
     ///   of certain events.
     ///
     /// Requires network: **yes**
-    pub fn new(config: Config, events_callback: Box<dyn EventsCallback>) -> Result<Self> {
+    pub fn new(
+        node_config: LightningNodeConfig,
+        events_callback: Box<dyn EventsCallback>,
+    ) -> Result<Self> {
         enable_backtrace();
-        fs::create_dir_all(&config.local_persistence_path).map_to_permanent_failure(format!(
-            "Failed to create directory: {}",
-            &config.local_persistence_path,
-        ))?;
-        if let Some(level) = config.file_logging_level {
+        fs::create_dir_all(&node_config.local_persistence_path).map_to_permanent_failure(
+            format!(
+                "Failed to create directory: {}",
+                &node_config.local_persistence_path,
+            ),
+        )?;
+        if let Some(level) = node_config.file_logging_level {
             init_logger_once(
                 level,
-                &Path::new(&config.local_persistence_path).join(LOGS_DIR),
+                &Path::new(&node_config.local_persistence_path).join(LOGS_DIR),
             )?;
         }
         info!("3L version: {}", env!("GITHUB_REF"));
 
-        let rt = AsyncRuntime::new()?;
+        let rt = Arc::new(AsyncRuntime::new()?);
 
-        let strong_typed_seed = sanitize_input::strong_type_seed(&config.seed)?;
+        let strong_typed_seed = sanitize_input::strong_type_seed(&node_config.seed)?;
         let auth = Arc::new(build_auth(
             &strong_typed_seed,
-            &config.remote_services_config.backend_url,
+            &node_config.remote_services_config.backend_url,
         )?);
         let async_auth = Arc::new(build_async_auth(
             &strong_typed_seed,
-            &config.remote_services_config.backend_url,
+            &node_config.remote_services_config.backend_url,
         )?);
 
-        let db_path = format!("{}/{DB_FILENAME}", config.local_persistence_path);
+        let db_path = format!("{}/{DB_FILENAME}", node_config.local_persistence_path);
         let mut data_store = DataStore::new(&db_path)?;
 
         let fiat_currency = match data_store.retrieve_last_set_fiat_currency()? {
             None => {
-                data_store.store_selected_fiat_currency(&config.default_fiat_currency)?;
-                config.default_fiat_currency.clone()
+                data_store.store_selected_fiat_currency(&node_config.default_fiat_currency)?;
+                node_config.default_fiat_currency.clone()
             }
             Some(c) => c,
         };
@@ -411,11 +418,11 @@ impl LightningNode {
 
         let user_preferences = Arc::new(Mutex::new(UserPreferences {
             fiat_currency,
-            timezone_config: config.timezone_config.clone(),
+            timezone_config: node_config.timezone_config.clone(),
         }));
 
         let analytics_client = AnalyticsClient::new(
-            config.remote_services_config.backend_url.clone(),
+            node_config.remote_services_config.backend_url.clone(),
             derive_analytics_keys(&strong_typed_seed)?,
             Arc::clone(&async_auth),
         );
@@ -435,7 +442,7 @@ impl LightningNode {
         ));
 
         let sdk = rt.handle().block_on(async {
-            let sdk = start_sdk(&config, event_listener).await?;
+            let sdk = start_sdk(&node_config, event_listener).await?;
             if sdk
                 .lsp_id()
                 .await
@@ -462,24 +469,26 @@ impl LightningNode {
         })?;
 
         let exchange_rate_provider = Box::new(ExchangeRateProviderImpl::new(
-            config.remote_services_config.backend_url.clone(),
+            node_config.remote_services_config.backend_url.clone(),
             Arc::clone(&auth),
         ));
 
-        let offer_manager = OfferManager::new(
-            config.remote_services_config.backend_url.clone(),
+        let offer_manager = Arc::new(OfferManager::new(
+            node_config.remote_services_config.backend_url.clone(),
             Arc::clone(&auth),
-        );
+        ));
 
-        let fiat_topup_client = PocketClient::new(config.remote_services_config.pocket_url.clone())
-            .map_to_runtime_error(
-                RuntimeErrorCode::OfferServiceUnavailable,
-                "Couldn't create a fiat topup client",
-            )?;
+        let fiat_topup_client = Arc::new(
+            PocketClient::new(node_config.remote_services_config.pocket_url.clone())
+                .map_to_runtime_error(
+                    RuntimeErrorCode::OfferServiceUnavailable,
+                    "Couldn't create a fiat topup client",
+                )?,
+        );
 
         let persistence_encryption_key = derive_persistence_encryption_key(&strong_typed_seed)?;
         let backup_client = RemoteBackupClient::new(
-            config.remote_services_config.backend_url.clone(),
+            node_config.remote_services_config.backend_url.clone(),
             Arc::clone(&async_auth),
         );
         let backup_manager = BackupManager::new(backup_client, db_path, persistence_encryption_key);
@@ -491,40 +500,40 @@ impl LightningNode {
             Arc::clone(&sdk),
             backup_manager,
             events_callback,
-            config.breez_sdk_config.breez_sdk_api_key.clone(),
+            node_config.breez_sdk_config.breez_sdk_api_key.clone(),
         )?));
         task_manager.lock_unwrap().foreground();
 
-        register_webhook_url(&rt, &sdk, &auth, &config)?;
+        register_webhook_url(&rt, &sdk, &auth, &node_config)?;
 
-        let phone_number_prefix_parser =
-            PhoneNumberPrefixParser::new(&config.phone_number_allowed_countries_iso_3166_1_alpha_2);
+        let phone_number_prefix_parser = PhoneNumberPrefixParser::new(
+            &node_config.phone_number_allowed_countries_iso_3166_1_alpha_2,
+        );
 
-        let support = Arc::new(Support::new(
-            Arc::clone(&user_preferences),
-            Arc::clone(&task_manager),
-            Arc::clone(&sdk),
-        ));
+        let support = Arc::new(Support {
+            user_preferences: Arc::clone(&user_preferences),
+            sdk: Arc::clone(&sdk),
+            auth: Arc::clone(&auth),
+            async_auth: Arc::clone(&async_auth),
+            fiat_topup_client: Arc::clone(&fiat_topup_client),
+            offer_manager: Arc::clone(&offer_manager),
+            rt: Arc::clone(&rt),
+            data_store: Arc::clone(&data_store),
+            task_manager: Arc::clone(&task_manager),
+            allowed_countries_country_iso_3166_1_alpha_2: node_config
+                .phone_number_allowed_countries_iso_3166_1_alpha_2
+                .clone(),
+            phone_number_prefix_parser: phone_number_prefix_parser.clone(),
+            persistence_encryption_key,
+            node_config: node_config.clone(),
+            analytics_interceptor,
+        });
 
-        let activities = Arc::new(Activities::new(
-            rt.handle(),
-            Arc::clone(&sdk),
-            Arc::clone(&data_store),
-            Arc::clone(&user_preferences),
-            config.clone(),
-            Arc::clone(&support),
-        ));
+        let activities = Arc::new(Activities::new(Arc::clone(&support)));
 
-        let lightning = Arc::new(Lightning::new(
-            rt.handle(),
-            Arc::clone(&sdk),
-            Arc::clone(&data_store),
-            Arc::clone(&analytics_interceptor),
-            Arc::clone(&user_preferences),
-            Arc::clone(&support),
-            config.clone(),
-            Arc::clone(&task_manager),
-        ));
+        let lightning = Arc::new(Lightning::new(Arc::clone(&support)));
+
+        let config = Arc::new(Config::new(Arc::clone(&support)));
 
         Ok(LightningNode {
             user_preferences,
@@ -536,16 +545,16 @@ impl LightningNode {
             rt,
             data_store,
             task_manager,
-            analytics_interceptor,
-            allowed_countries_country_iso_3166_1_alpha_2: config
+            allowed_countries_country_iso_3166_1_alpha_2: node_config
                 .phone_number_allowed_countries_iso_3166_1_alpha_2
                 .clone(),
             phone_number_prefix_parser,
             persistence_encryption_key,
-            config,
+            node_config,
             activities,
             lightning,
             support,
+            config,
         })
     }
 
@@ -555,6 +564,10 @@ impl LightningNode {
 
     pub fn lightning(&self) -> Arc<Lightning> {
         Arc::clone(&self.lightning)
+    }
+
+    pub fn config(&self) -> Arc<Config> {
+        Arc::clone(&self.config)
     }
 
     /// Request some basic info about the node
@@ -631,7 +644,7 @@ impl LightningNode {
     }
 
     /// Parse a phone number prefix, check against the list of allowed countries
-    /// (set in [`Config::phone_number_allowed_countries_iso_3166_1_alpha_2`]).
+    /// (set in [`LightningNodeConfig::phone_number_allowed_countries_iso_3166_1_alpha_2`]).
     /// The parser is not strict, it parses some invalid prefixes as valid.
     ///
     /// Requires network: **no**
@@ -643,7 +656,7 @@ impl LightningNode {
     }
 
     /// Parse a phone number, check against the list of allowed countries
-    /// (set in [`Config::phone_number_allowed_countries_iso_3166_1_alpha_2`]).
+    /// (set in [`LightningNodeConfig::phone_number_allowed_countries_iso_3166_1_alpha_2`]).
     ///
     /// Returns a possible lightning address, which can be checked for existence
     /// with [`LightningNode::decode_data`].
@@ -654,8 +667,12 @@ impl LightningNode {
         phone_number: String,
     ) -> std::result::Result<String, ParsePhoneNumberError> {
         let phone_number = self.parse_phone_number(phone_number)?;
-        Ok(phone_number
-            .to_lightning_address(&self.config.remote_services_config.lipa_lightning_domain))
+        Ok(phone_number.to_lightning_address(
+            &self
+                .node_config
+                .remote_services_config
+                .lipa_lightning_domain,
+        ))
     }
 
     fn parse_phone_number(
@@ -846,7 +863,10 @@ impl LightningNode {
             .map(|p| {
                 Recipient::from_lightning_address(
                     &p.0,
-                    &self.config.remote_services_config.lipa_lightning_domain,
+                    &self
+                        .node_config
+                        .remote_services_config
+                        .lipa_lightning_domain,
                 )
             })
             .collect();
@@ -947,8 +967,9 @@ impl LightningNode {
     /// The library starts running the background tasks more frequently to improve user experience.
     ///
     /// Requires network: **no**
+    #[deprecated = "config().foreground() should be used instead"]
     pub fn foreground(&self) {
-        self.task_manager.lock_unwrap().foreground();
+        self.config.foreground()
     }
 
     /// Call the method when the app goes to background, such that the user can not interact with it.
@@ -956,8 +977,9 @@ impl LightningNode {
     /// It should save battery and internet traffic.
     ///
     /// Requires network: **no**
+    #[deprecated = "config().background() should be used instead"]
     pub fn background(&self) {
-        self.task_manager.lock_unwrap().background();
+        self.config.background()
     }
 
     /// List codes of supported fiat currencies.
@@ -970,9 +992,9 @@ impl LightningNode {
     /// the values are not yet fetched from the service.
     ///
     /// Requires network: **no**
+    #[deprecated = "config().list_currencies() should be used instead"]
     pub fn list_currency_codes(&self) -> Vec<String> {
-        let rates = self.task_manager.lock_unwrap().get_exchange_rates();
-        rates.iter().map(|r| r.currency_code.clone()).collect()
+        self.config.list_currencies()
     }
 
     /// Get exchange rate on the BTC/default currency pair
@@ -999,12 +1021,9 @@ impl LightningNode {
     /// The method [`LightningNode::list_currency_codes`] can used to list supported codes.
     ///
     /// Requires network: **no**
+    #[deprecated = "config().set_fiat_currency() should be used instead"]
     pub fn change_fiat_currency(&self, fiat_currency: String) -> Result<()> {
-        self.data_store
-            .lock_unwrap()
-            .store_selected_fiat_currency(&fiat_currency)?;
-        self.user_preferences.lock_unwrap().fiat_currency = fiat_currency;
-        Ok(())
+        self.config.set_fiat_currency(fiat_currency)
     }
 
     /// Change the timezone config.
@@ -1013,8 +1032,9 @@ impl LightningNode {
     /// * `timezone_config` - the user's current timezone
     ///
     /// Requires network: **no**
+    #[deprecated = "config().set_timezone_config() should be used instead"]
     pub fn change_timezone_config(&self, timezone_config: TzConfig) {
-        self.user_preferences.lock_unwrap().timezone_config = timezone_config;
+        self.config.set_timezone_config(timezone_config)
     }
 
     /// Accepts Pocket's T&C.
@@ -1393,20 +1413,18 @@ impl LightningNode {
     /// Registers a new notification token. If a token has already been registered, it will be updated.
     ///
     /// Requires network: **yes**
+    #[deprecated = "config().register_notification_token() should be used instead"]
     pub fn register_notification_token(
         &self,
         notification_token: String,
         language_iso_639_1: String,
         country_iso_3166_1_alpha_2: String,
     ) -> Result<()> {
-        let language = LanguageCode::from_str(&language_iso_639_1.to_lowercase())
-            .map_to_invalid_input("Invalid language code")?;
-        let country = CountryCode::for_alpha2(&country_iso_3166_1_alpha_2.to_uppercase())
-            .map_to_invalid_input("Invalid country code")?;
-
-        self.offer_manager
-            .register_notification_token(notification_token, language, country)
-            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)
+        self.config.register_notification_token(
+            notification_token,
+            language_iso_639_1,
+            country_iso_3166_1_alpha_2,
+        )
     }
 
     /// Get the wallet UUID v5 from the wallet pubkey
@@ -2104,7 +2122,7 @@ impl LightningNode {
             .rt
             .handle()
             .block_on(BreezServices::service_health_check(
-                self.config.breez_sdk_config.breez_sdk_api_key.clone(),
+                self.node_config.breez_sdk_config.breez_sdk_api_key.clone(),
             ))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
@@ -2141,9 +2159,13 @@ impl LightningNode {
         let exchange_rate = self.get_exchange_rate();
 
         // Accomodating lightning network routing fees.
-        let routing_fee = Permyriad(self.config.max_routing_fee_config.max_routing_fee_permyriad)
-            .of(&limits.min_sat.as_sats())
-            .sats_round_up();
+        let routing_fee = Permyriad(
+            self.node_config
+                .max_routing_fee_config
+                .max_routing_fee_permyriad,
+        )
+        .of(&limits.min_sat.as_sats())
+        .sats_round_up();
         let min = limits.min_sat + routing_fee.sats;
         let range_hit = match balance_sat {
             balance_sat if balance_sat < min => RangeHit::Below {
@@ -2241,18 +2263,17 @@ impl LightningNode {
     /// This can be used to completely prevent any analytics data from being reported.
     ///
     /// Requires network: **no**
+    #[deprecated = "config().set_analytics_config() should be used instead"]
     pub fn set_analytics_config(&self, config: AnalyticsConfig) -> Result<()> {
-        *self.analytics_interceptor.config.lock_unwrap() = config.clone();
-        self.data_store
-            .lock_unwrap()
-            .append_analytics_config(config)
+        self.config.set_analytics_config(config)
     }
 
     /// Get the currently configured analytics configuration.
     ///
     /// Requires network: **no**
+    #[deprecated = "config().get_analytics_config() should be used instead"]
     pub fn get_analytics_config(&self) -> Result<AnalyticsConfig> {
-        self.data_store.lock_unwrap().retrieve_analytics_config()
+        self.config.get_analytics_config()
     }
 
     /// Register a human-readable lightning address or return the previously
@@ -2264,7 +2285,7 @@ impl LightningNode {
             .rt
             .handle()
             .block_on(pigeon::assign_lightning_address(
-                &self.config.remote_services_config.backend_url,
+                &self.node_config.remote_services_config.backend_url,
                 &self.async_auth,
             ))
             .map_to_runtime_error(
@@ -2304,7 +2325,10 @@ impl LightningNode {
             .and_then(|a| {
                 lightning_address_to_phone_number(
                     &a,
-                    &self.config.remote_services_config.lipa_lightning_domain,
+                    &self
+                        .node_config
+                        .remote_services_config
+                        .lipa_lightning_domain,
                 )
             }))
     }
@@ -2332,7 +2356,7 @@ impl LightningNode {
         self.rt
             .handle()
             .block_on(pigeon::request_phone_number_verification(
-                &self.config.remote_services_config.backend_url,
+                &self.node_config.remote_services_config.backend_url,
                 &self.async_auth,
                 phone_number.e164,
                 encrypted_number,
@@ -2358,7 +2382,7 @@ impl LightningNode {
         self.rt
             .handle()
             .block_on(pigeon::verify_phone_number(
-                &self.config.remote_services_config.backend_url,
+                &self.node_config.remote_services_config.backend_url,
                 &self.async_auth,
                 phone_number.e164.clone(),
                 otp,
@@ -2367,8 +2391,12 @@ impl LightningNode {
                 RuntimeErrorCode::AuthServiceUnavailable,
                 "Failed to submit phone number registration otp",
             )?;
-        let address = phone_number
-            .to_lightning_address(&self.config.remote_services_config.lipa_lightning_domain);
+        let address = phone_number.to_lightning_address(
+            &self
+                .node_config
+                .remote_services_config
+                .lipa_lightning_domain,
+        );
         self.data_store
             .lock_unwrap()
             .store_lightning_address(&address)
@@ -2382,63 +2410,9 @@ impl LightningNode {
     /// * `enable` - enable or disable the feature.
     ///
     /// Requires network: **yes**
+    #[deprecated = "config().set_feature_flag() should be used instead"]
     pub fn set_feature_flag(&self, feature: FeatureFlag, flag_enabled: bool) -> Result<()> {
-        let kind_of_address = match feature {
-            FeatureFlag::LightningAddress => |a: &String| !a.starts_with('-'),
-            FeatureFlag::PhoneNumber => |a: &String| a.starts_with('-'),
-        };
-        let (from_status, to_status) = match flag_enabled {
-            true => (EnableStatus::FeatureDisabled, EnableStatus::Enabled),
-            false => (EnableStatus::Enabled, EnableStatus::FeatureDisabled),
-        };
-
-        let addresses = self
-            .data_store
-            .lock_unwrap()
-            .retrieve_lightning_addresses()?
-            .into_iter()
-            .filter_map(with_status(from_status))
-            .filter(kind_of_address)
-            .collect::<Vec<_>>();
-
-        if addresses.is_empty() {
-            info!("No lightning addresses to change the status");
-            return Ok(());
-        }
-
-        let doing = match flag_enabled {
-            true => "Enabling",
-            false => "Disabling",
-        };
-        info!("{doing} {addresses:?} on the backend");
-
-        self.rt
-            .handle()
-            .block_on(async {
-                if flag_enabled {
-                    pigeon::enable_lightning_addresses(
-                        &self.config.remote_services_config.backend_url,
-                        &self.async_auth,
-                        addresses.clone(),
-                    )
-                    .await
-                } else {
-                    pigeon::disable_lightning_addresses(
-                        &self.config.remote_services_config.backend_url,
-                        &self.async_auth,
-                        addresses.clone(),
-                    )
-                    .await
-                }
-            })
-            .map_to_runtime_error(
-                RuntimeErrorCode::AuthServiceUnavailable,
-                "Failed to enable/disable a lightning address",
-            )?;
-        let mut data_store = self.data_store.lock_unwrap();
-        addresses
-            .into_iter()
-            .try_for_each(|a| data_store.update_lightning_address(&a, to_status))
+        self.config.set_feature_flag(feature, flag_enabled)
     }
 
     fn get_node_utxos(&self) -> Result<Vec<UnspentTransactionOutput>> {
@@ -2465,7 +2439,7 @@ impl LightningNode {
 }
 
 pub(crate) async fn start_sdk(
-    config: &Config,
+    config: &LightningNodeConfig,
     event_listener: Box<dyn EventListener>,
 ) -> Result<Arc<BreezServices>> {
     let developer_cert = config
@@ -2672,7 +2646,7 @@ pub(crate) fn register_webhook_url(
     rt: &AsyncRuntime,
     sdk: &BreezServices,
     auth: &Auth,
-    config: &Config,
+    config: &LightningNodeConfig,
 ) -> Result<()> {
     let id = auth.get_wallet_pubkey_id().map_to_runtime_error(
         RuntimeErrorCode::AuthServiceUnavailable,
@@ -2712,7 +2686,7 @@ include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::WithTimezone;
+    use crate::node_config::WithTimezone;
     use crow::TopupStatus;
     use perro::Error;
     use std::time::SystemTime;

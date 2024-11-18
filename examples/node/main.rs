@@ -11,7 +11,7 @@ use uniffi_lipalightninglib::{
     mnemonic_to_secret, recover_lightning_node, BreezSdkConfig, LightningNode, MaxRoutingFeeConfig,
     ReceiveLimitsConfig, RemoteServicesConfig,
 };
-use uniffi_lipalightninglib::{Config, TzConfig};
+use uniffi_lipalightninglib::{LightningNodeConfig, TzConfig};
 
 use crate::environment::{Environment, EnvironmentCode};
 use log::Level;
@@ -53,7 +53,7 @@ fn main() {
         .unwrap();
     }
 
-    let config = Config {
+    let config = LightningNodeConfig {
         seed,
         default_fiat_currency: "EUR".to_string(),
         local_persistence_path: base_dir.clone(),

@@ -1,53 +1,33 @@
 use crate::amount::{AsSats, ToAmount};
-use crate::async_runtime::Handle;
-use crate::config::WithTimezone;
-use crate::data_store::{CreatedInvoice, DataStore};
+use crate::data_store::CreatedInvoice;
 use crate::errors::Result;
 use crate::locker::Locker;
+use crate::node_config::WithTimezone;
 use crate::support::Support;
 use crate::util::unix_timestamp_to_system_time;
 use crate::{
     fill_payout_fee, filter_out_and_log_corrupted_activities,
-    filter_out_and_log_corrupted_payments, Activity, ChannelCloseInfo, ChannelCloseState, Config,
+    filter_out_and_log_corrupted_payments, Activity, ChannelCloseInfo, ChannelCloseState,
     IncomingPaymentInfo, InvoiceDetails, ListActivitiesResponse, OutgoingPaymentInfo, PaymentInfo,
-    PaymentState, ReverseSwapInfo, RuntimeErrorCode, SwapInfo, UserPreferences,
+    PaymentState, ReverseSwapInfo, RuntimeErrorCode, SwapInfo,
 };
 use breez_sdk_core::{
-    parse_invoice, BreezServices, ClosedChannelPaymentDetails, ListPaymentsRequest, PaymentDetails,
-    PaymentStatus, PaymentTypeFilter,
+    parse_invoice, ClosedChannelPaymentDetails, ListPaymentsRequest, PaymentDetails, PaymentStatus,
+    PaymentTypeFilter,
 };
 use perro::{invalid_input, permanent_failure, MapToError, OptionToError};
 use std::cmp::{min, Reverse};
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 pub struct Activities {
-    rt_handle: Handle,
-    sdk: Arc<BreezServices>,
-    data_store: Arc<Mutex<DataStore>>,
-    user_preferences: Arc<Mutex<UserPreferences>>,
-    config: Config,
     support: Arc<Support>,
 }
 
 impl Activities {
-    pub(crate) fn new(
-        rt_handle: Handle,
-        sdk: Arc<BreezServices>,
-        data_store: Arc<Mutex<DataStore>>,
-        user_preferences: Arc<Mutex<UserPreferences>>,
-        config: Config,
-        support: Arc<Support>,
-    ) -> Self {
-        Self {
-            rt_handle,
-            sdk,
-            data_store,
-            user_preferences,
-            config,
-            support,
-        }
+    pub(crate) fn new(support: Arc<Support>) -> Self {
+        Self { support }
     }
 
     /// List the latest activities
@@ -72,8 +52,10 @@ impl Activities {
             offset: None,
         };
         let breez_activities = self
-            .rt_handle
-            .block_on(self.sdk.list_payments(list_payments_request))
+            .support
+            .rt
+            .handle()
+            .block_on(self.support.sdk.list_payments(list_payments_request))
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
             .into_iter()
             .map(|p| self.activity_from_breez_payment(p))
@@ -82,6 +64,7 @@ impl Activities {
 
         // Query created invoices, filter out ones which are in the breez db.
         let created_invoices = self
+            .support
             .data_store
             .lock_unwrap()
             .retrieve_created_invoices(number_of_completed_activities)?;
@@ -103,15 +86,23 @@ impl Activities {
         completed_activities.truncate(number_of_completed_activities as usize);
 
         if let Some(in_progress_swap) = self
-            .rt_handle
-            .block_on(self.sdk.in_progress_swap())
+            .support
+            .rt
+            .handle()
+            .block_on(self.support.sdk.in_progress_swap())
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to get in-progress swap",
             )?
         {
             let created_at = unix_timestamp_to_system_time(in_progress_swap.created_at as u64)
-                .with_timezone(self.user_preferences.lock_unwrap().clone().timezone_config);
+                .with_timezone(
+                    self.support
+                        .user_preferences
+                        .lock_unwrap()
+                        .clone()
+                        .timezone_config,
+                );
 
             pending_activities.push(Activity::Swap {
                 incoming_payment_info: None,
@@ -145,8 +136,10 @@ impl Activities {
     /// Requires network: **no**
     pub fn get(&self, hash: String) -> Result<Activity> {
         if let Some(activity) = self
-            .rt_handle
-            .block_on(self.sdk.payment_by_hash(hash.clone()))
+            .support
+            .rt
+            .handle()
+            .block_on(self.support.sdk.payment_by_hash(hash.clone()))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to get payment by hash",
@@ -155,6 +148,7 @@ impl Activities {
         {
             Ok(activity?)
         } else if let Some(incoming_payment_info) = self
+            .support
             .data_store
             .lock_unwrap()
             .retrieve_created_invoice_by_hash(&hash)?
@@ -194,8 +188,10 @@ impl Activities {
             }
             false
         };
-        self.rt_handle
-            .block_on(self.sdk.list_payments(list_payments_request))
+        self.support
+            .rt
+            .handle()
+            .block_on(self.support.sdk.list_payments(list_payments_request))
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
             .into_iter()
             .find(is_swap_with_id)
@@ -262,7 +258,8 @@ impl Activities {
     pub fn set_personal_note(&self, payment_hash: String, note: String) -> Result<()> {
         let note = Some(note.trim().to_string()).filter(|s| !s.is_empty());
 
-        self.data_store
+        self.support
+            .data_store
             .lock_unwrap()
             .update_personal_note(&payment_hash, note.as_deref())
     }
@@ -316,6 +313,7 @@ impl Activities {
             }
         };
         let local_payment_data = self
+            .support
             .data_store
             .lock_unwrap()
             .retrieve_payment_info(&payment_details.payment_hash)?;
@@ -331,7 +329,11 @@ impl Activities {
                 ),
                 None => (
                     self.support.get_exchange_rate(),
-                    self.user_preferences.lock_unwrap().timezone_config.clone(),
+                    self.support
+                        .user_preferences
+                        .lock_unwrap()
+                        .timezone_config
+                        .clone(),
                     None,
                     None,
                     None,
@@ -347,7 +349,11 @@ impl Activities {
                 personal_note,
                 received_on,
                 received_lnurl_comment,
-                &self.config.remote_services_config.lipa_lightning_domain,
+                &self
+                    .support
+                    .node_config
+                    .remote_services_config
+                    .lipa_lightning_domain,
             )?;
             let offer_kind = fill_payout_fee(
                 offer,
@@ -373,7 +379,11 @@ impl Activities {
                 personal_note,
                 received_on,
                 received_lnurl_comment,
-                &self.config.remote_services_config.lipa_lightning_domain,
+                &self
+                    .support
+                    .node_config
+                    .remote_services_config
+                    .lipa_lightning_domain,
             )?;
             Ok(Activity::Swap {
                 incoming_payment_info: Some(incoming_payment_info),
@@ -394,7 +404,11 @@ impl Activities {
                 &exchange_rate,
                 tz_config,
                 personal_note,
-                &self.config.remote_services_config.lipa_lightning_domain,
+                &self
+                    .support
+                    .node_config
+                    .remote_services_config
+                    .lipa_lightning_domain,
             )?;
             Ok(Activity::ReverseSwap {
                 outgoing_payment_info,
@@ -408,7 +422,11 @@ impl Activities {
                 personal_note,
                 received_on,
                 received_lnurl_comment,
-                &self.config.remote_services_config.lipa_lightning_domain,
+                &self
+                    .support
+                    .node_config
+                    .remote_services_config
+                    .lipa_lightning_domain,
             )?;
             Ok(Activity::IncomingPayment {
                 incoming_payment_info,
@@ -419,7 +437,11 @@ impl Activities {
                 &exchange_rate,
                 tz_config,
                 personal_note,
-                &self.config.remote_services_config.lipa_lightning_domain,
+                &self
+                    .support
+                    .node_config
+                    .remote_services_config
+                    .lipa_lightning_domain,
             )?;
             Ok(Activity::OutgoingPayment {
                 outgoing_payment_info,
@@ -439,7 +461,7 @@ impl Activities {
             .as_msats()
             .to_amount_up(&self.support.get_exchange_rate());
 
-        let user_preferences = self.user_preferences.lock_unwrap();
+        let user_preferences = self.support.user_preferences.lock_unwrap();
 
         let time = unix_timestamp_to_system_time(breez_payment.payment_time as u64)
             .with_timezone(user_preferences.timezone_config.clone());
@@ -483,6 +505,7 @@ impl Activities {
         };
 
         let local_payment_data = self
+            .support
             .data_store
             .lock_unwrap()
             .retrieve_payment_info(&invoice_details.payment_hash)?

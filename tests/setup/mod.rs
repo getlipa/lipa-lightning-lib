@@ -1,8 +1,9 @@
 use crate::print_events_handler::PrintEventsHandler;
 
 use uniffi_lipalightninglib::{
-    mnemonic_to_secret, AnalyticsConfig, BreezSdkConfig, Config, EventsCallback, LightningNode,
-    MaxRoutingFeeConfig, ReceiveLimitsConfig, RemoteServicesConfig, RuntimeErrorCode, TzConfig,
+    mnemonic_to_secret, AnalyticsConfig, BreezSdkConfig, EventsCallback, LightningNode,
+    LightningNodeConfig, MaxRoutingFeeConfig, ReceiveLimitsConfig, RemoteServicesConfig,
+    RuntimeErrorCode, TzConfig,
 };
 
 use log::Level;
@@ -98,7 +99,7 @@ pub fn start_specific_node(
     let mnemonic = mnemonic.split_whitespace().map(String::from).collect();
     let seed = mnemonic_to_secret(mnemonic, "".to_string()).unwrap().seed;
 
-    let config = Config {
+    let config = LightningNodeConfig {
         seed,
         default_fiat_currency: "EUR".to_string(),
         local_persistence_path,
@@ -146,7 +147,8 @@ pub fn start_specific_node(
     };
 
     let node = LightningNode::new(config, events_callback)?;
-    node.set_analytics_config(AnalyticsConfig::Disabled)?; // tests produce misleading noise
+    node.config()
+        .set_analytics_config(AnalyticsConfig::Disabled)?; // tests produce misleading noise
 
     Ok(node)
 }

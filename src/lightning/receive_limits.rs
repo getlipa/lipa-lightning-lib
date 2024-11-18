@@ -1,5 +1,5 @@
 use crate::amount::{AsSats, ToAmount};
-use crate::config::ReceiveLimitsConfig;
+use crate::node_config::ReceiveLimitsConfig;
 use crate::{Amount, ExchangeRate};
 
 /// Information on the limits imposed on the next receiving payment
