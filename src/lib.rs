@@ -978,7 +978,6 @@ impl LightningNode {
     ///
     /// Requires network: **no**
     #[deprecated = "config().background() should be used instead"]
-
     pub fn background(&self) {
         self.config.background()
     }
@@ -2273,7 +2272,6 @@ impl LightningNode {
     ///
     /// Requires network: **no**
     #[deprecated = "config().get_analytics_config() should be used instead"]
-
     pub fn get_analytics_config(&self) -> Result<AnalyticsConfig> {
         self.config.get_analytics_config()
     }
