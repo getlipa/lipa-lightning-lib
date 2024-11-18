@@ -200,32 +200,28 @@ fn get_payment_max_routing_fee_mode(
     }
 }
 
-trait Payments {
-    fn support(&self) -> &Support;
+fn report_send_payment_issue(support: &Support, payment_hash: String) {
+    debug!("Reporting failure of payment: {payment_hash}");
+    let data = ReportPaymentFailureDetails {
+        payment_hash,
+        comment: None,
+    };
+    let request = ReportIssueRequest::PaymentFailure { data };
+    support
+        .rt
+        .handle()
+        .block_on(support.sdk.report_issue(request))
+        .log_ignore_error(Level::Warn, "Failed to report issue");
+}
 
-    fn report_send_payment_issue(&self, payment_hash: String) {
-        debug!("Reporting failure of payment: {payment_hash}");
-        let data = ReportPaymentFailureDetails {
-            payment_hash,
-            comment: None,
-        };
-        let request = ReportIssueRequest::PaymentFailure { data };
-        self.support()
-            .rt
-            .handle()
-            .block_on(self.support().sdk.report_issue(request))
-            .log_ignore_error(Level::Warn, "Failed to report issue");
-    }
-
-    fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) {
-        let user_preferences = self.support().user_preferences.lock_unwrap().clone();
-        let exchange_rates = self.support().get_exchange_rates();
-        self.support()
-            .data_store
-            .lock_unwrap()
-            .store_payment_info(hash, user_preferences, exchange_rates, offer, None, None)
-            .log_ignore_error(Level::Error, "Failed to persist payment info")
-    }
+fn store_payment_info(support: &Support, hash: &str, offer: Option<OfferKind>) {
+    let user_preferences = support.user_preferences.lock_unwrap().clone();
+    let exchange_rates = support.get_exchange_rates();
+    support
+        .data_store
+        .lock_unwrap()
+        .store_payment_info(hash, user_preferences, exchange_rates, offer, None, None)
+        .log_ignore_error(Level::Error, "Failed to persist payment info")
 }
 
 #[cfg(test)]

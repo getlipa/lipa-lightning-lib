@@ -1,16 +1,14 @@
 use crate::amount::AsSats;
 use crate::errors::map_send_payment_error;
-use crate::lightning::Payments;
+use crate::lightning::{report_send_payment_issue, store_payment_info};
 use crate::locker::Locker;
 use crate::support::Support;
-use crate::util::LogIgnoreError;
 use crate::{
-    InvoiceCreationMetadata, InvoiceDetails, OfferKind, PayErrorCode, PayResult, PaymentMetadata,
+    InvoiceCreationMetadata, InvoiceDetails, PayErrorCode, PayResult, PaymentMetadata,
     RuntimeErrorCode,
 };
 use breez_sdk_core::error::SendPaymentError;
 use breez_sdk_core::{OpeningFeeParams, SendPaymentRequest};
-use log::Level;
 use perro::{ensure, runtime_error, MapToError};
 use std::sync::Arc;
 
@@ -65,7 +63,7 @@ impl Bolt11 {
                 "Failed to create an invoice",
             )?;
 
-        self.store_payment_info(&response.ln_invoice.payment_hash, None);
+        store_payment_info(&self.support, &response.ln_invoice.payment_hash, None);
         self.support
             .data_store
             .lock_unwrap()
@@ -122,7 +120,7 @@ impl Bolt11 {
         } else {
             Some(amount_sat.as_sats().msats)
         };
-        self.store_payment_info(&invoice_details.payment_hash, None);
+        store_payment_info(&self.support, &invoice_details.payment_hash, None);
         let node_state = self
             .support
             .sdk
@@ -163,26 +161,10 @@ impl Bolt11 {
                 | SendPaymentError::RouteTooExpensive { .. }
                 | SendPaymentError::ServiceConnectivity { .. })
         ) {
-            self.report_send_payment_issue(invoice_details.payment_hash);
+            report_send_payment_issue(&self.support, invoice_details.payment_hash);
         }
 
         result.map_err(map_send_payment_error)?;
         Ok(())
-    }
-
-    fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) {
-        let user_preferences = self.support.user_preferences.lock_unwrap().clone();
-        let exchange_rates = self.support.get_exchange_rates();
-        self.support
-            .data_store
-            .lock_unwrap()
-            .store_payment_info(hash, user_preferences, exchange_rates, offer, None, None)
-            .log_ignore_error(Level::Error, "Failed to persist payment info")
-    }
-}
-
-impl Payments for Bolt11 {
-    fn support(&self) -> &Support {
-        &self.support
     }
 }

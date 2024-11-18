@@ -2,7 +2,7 @@ use crate::amount::{AsSats, ToAmount};
 use crate::errors::{
     map_lnurl_pay_error, map_lnurl_withdraw_error, LnUrlWithdrawErrorCode, LnUrlWithdrawResult,
 };
-use crate::lightning::Payments;
+use crate::lightning::{report_send_payment_issue, store_payment_info};
 use crate::support::Support;
 use crate::{Amount, DecodeDataError, ExchangeRate, LnUrlPayErrorCode, LnUrlPayResult};
 use breez_sdk_core::{
@@ -71,7 +71,7 @@ impl Lnurl {
                 data.reason
             ),
             breez_sdk_core::lnurl::pay::LnUrlPayResult::PayError { data } => {
-                self.report_send_payment_issue(data.payment_hash);
+                report_send_payment_issue(&self.support, data.payment_hash);
                 runtime_error!(
                     LnUrlPayErrorCode::PaymentFailed,
                     "Paying invoice for LNURL pay failed: {}",
@@ -79,7 +79,7 @@ impl Lnurl {
                 )
             }
         }?;
-        self.store_payment_info(&payment_hash, None);
+        store_payment_info(&self.support, &payment_hash, None);
         Ok(payment_hash)
     }
 
@@ -123,14 +123,8 @@ impl Lnurl {
                 data.reason
             ),
         }?;
-        self.store_payment_info(&payment_hash, None);
+        store_payment_info(&self.support, &payment_hash, None);
         Ok(payment_hash)
-    }
-}
-
-impl Payments for Lnurl {
-    fn support(&self) -> &Support {
-        &self.support
     }
 }
 
