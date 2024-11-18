@@ -12,7 +12,9 @@ fn test_payment_fetching() {
     let node = start_node().unwrap();
 
     let invoice = node
-        .create_invoice(
+        .lightning()
+        .bolt11()
+        .create(
             100_000,
             None,
             "pay.err.generic".into(),

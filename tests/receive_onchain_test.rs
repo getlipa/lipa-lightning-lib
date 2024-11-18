@@ -19,7 +19,11 @@ fn test_receive_onchain() {
     assert!(swap_info.address.starts_with("bc1"));
     assert!(swap_info.min_deposit.sats < swap_info.max_deposit.sats);
 
-    let lsp_fee_params = node.calculate_lsp_fee(100000).unwrap().lsp_fee_params;
+    let lsp_fee_params = node
+        .lightning()
+        .calculate_lsp_fee_for_amount(100000)
+        .unwrap()
+        .lsp_fee_params;
     let swap_info = node.generate_swap_address(lsp_fee_params).unwrap();
     assert!(swap_info.address.starts_with("bc1"));
 }

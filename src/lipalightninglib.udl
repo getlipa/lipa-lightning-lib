@@ -196,6 +196,46 @@ interface LightningNode {
     void set_feature_flag(FeatureFlag feature, boolean flag_enabled);
 
     Activities activities();
+
+    Lightning lightning();
+};
+
+interface Lightning {
+    Bolt11 bolt11();
+    Lnurl lnurl();
+
+    MaxRoutingFeeMode determine_max_routing_fee_mode(u64 amount_sat);
+
+    [Throws=LnError]
+    PaymentAffordability determine_payment_affordability(u64 amount_sat);
+
+    [Throws=LnError]
+    ReceiveAmountLimits determine_receive_amount_limits();
+
+    [Throws=LnError]
+    CalculateLspFeeResponse calculate_lsp_fee_for_amount(u64 amount_sat);
+
+    [Throws=LnError]
+    LspFee get_lsp_fee();
+};
+
+interface Bolt11 {
+    [Throws=LnError]
+    InvoiceDetails create(u64 amount_sat, OpeningFeeParams? lsp_fee_params, string description, InvoiceCreationMetadata metadata);
+
+    [Throws=PayError]
+    void pay(InvoiceDetails invoice_details, PaymentMetadata metadata);
+
+    [Throws=PayError]
+    void pay_open_amount(InvoiceDetails invoice_details, u64 amount_sat, PaymentMetadata metadata);
+};
+
+interface Lnurl {
+    [Throws=LnUrlPayError]
+    string pay(LnUrlPayRequestData lnurl_pay_request_data, u64 amount_sat, string? comment);
+
+    [Throws=LnUrlWithdrawError]
+    string withdraw(LnUrlWithdrawRequestData lnurl_withdraw_request_data, u64 amount_sat);
 };
 
 interface Activities {
@@ -207,13 +247,13 @@ interface Activities {
 
     [Throws=LnError]
     Activity? get_by_reverse_swap(string reverse_swap_id);
-    
+
     [Throws=LnError]
     IncomingPaymentInfo get_incoming_payment(string hash);
 
     [Throws=LnError]
     OutgoingPaymentInfo get_outgoing_payment(string hash);
-    
+
     [Throws=LnError]
     void set_personal_note(string payment_hash, string note);
 };
@@ -306,6 +346,11 @@ dictionary LspFee {
 };
 
 dictionary PaymentAmountLimits {
+    Amount max_receive;
+    LiquidityLimit liquidity_limit;
+};
+
+dictionary ReceiveAmountLimits {
     Amount max_receive;
     LiquidityLimit liquidity_limit;
 };
@@ -662,6 +707,12 @@ enum BreezHealthCheckStatus {
 };
 
 enum InvoiceAffordability {
+    "NotEnoughFunds",
+    "UnaffordableFees",
+    "Affordable",
+};
+
+enum PaymentAffordability {
     "NotEnoughFunds",
     "UnaffordableFees",
     "Affordable",

@@ -1,0 +1,316 @@
+pub mod bolt11;
+pub mod lnurl;
+pub mod receive_limits;
+
+use crate::amount::{AsSats, Permyriad, ToAmount};
+use crate::analytics::AnalyticsInterceptor;
+use crate::async_runtime::Handle;
+use crate::data_store::DataStore;
+use crate::errors::Result;
+use crate::lightning::bolt11::Bolt11;
+use crate::lightning::lnurl::Lnurl;
+use crate::lightning::receive_limits::ReceiveAmountLimits;
+use crate::locker::Locker;
+use crate::support::Support;
+use crate::task_manager::TaskManager;
+use crate::util::LogIgnoreError;
+use crate::{
+    CalculateLspFeeResponse, Config, ExchangeRate, LspFee, MaxRoutingFeeConfig, MaxRoutingFeeMode,
+    OfferKind, RuntimeErrorCode, UserPreferences,
+};
+use breez_sdk_core::{
+    BreezServices, OpenChannelFeeRequest, ReportIssueRequest, ReportPaymentFailureDetails,
+};
+use log::{debug, Level};
+use perro::{MapToError, OptionToError};
+use std::sync::{Arc, Mutex};
+
+/// Payment affordability returned by [`Lightning::determine_payment_affordability`].
+#[derive(Debug)]
+pub enum PaymentAffordability {
+    /// Not enough funds available to pay the requested amount.
+    NotEnoughFunds,
+    /// Not enough funds available to pay the requested amount and the max routing fees.
+    /// There might be a route that is affordable enough but it is unknown until tried.
+    UnaffordableFees,
+    /// Enough funds for the payment and routing fees are available.
+    Affordable,
+}
+
+pub struct Lightning {
+    rt_handle: Handle,
+    sdk: Arc<BreezServices>,
+    bolt11: Arc<Bolt11>,
+    lnurl: Arc<Lnurl>,
+    config: Config,
+    support: Arc<Support>,
+    task_manager: Arc<Mutex<TaskManager>>,
+}
+
+impl Lightning {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
+        rt_handle: Handle,
+        sdk: Arc<BreezServices>,
+        data_store: Arc<Mutex<DataStore>>,
+        analytics_interceptor: Arc<AnalyticsInterceptor>,
+        user_preferences: Arc<Mutex<UserPreferences>>,
+        support: Arc<Support>,
+        config: Config,
+        task_manager: Arc<Mutex<TaskManager>>,
+    ) -> Self {
+        let bolt11 = Arc::new(Bolt11::new(
+            rt_handle.clone(),
+            Arc::clone(&sdk),
+            Arc::clone(&data_store),
+            analytics_interceptor,
+            Arc::clone(&user_preferences),
+            Arc::clone(&support),
+        ));
+        let lnurl = Arc::new(Lnurl::new(
+            rt_handle.clone(),
+            Arc::clone(&sdk),
+            data_store,
+            user_preferences,
+            Arc::clone(&support),
+        ));
+        Self {
+            rt_handle,
+            sdk,
+            bolt11,
+            lnurl,
+            config,
+            support,
+            task_manager,
+        }
+    }
+
+    pub fn bolt11(&self) -> Arc<Bolt11> {
+        Arc::clone(&self.bolt11)
+    }
+
+    pub fn lnurl(&self) -> Arc<Lnurl> {
+        Arc::clone(&self.lnurl)
+    }
+
+    /// Determine the max routing fee mode that will be employed to restrict the fees for paying a
+    /// given amount in sats.
+    ///
+    /// Requires network: **no**
+    pub fn determine_max_routing_fee_mode(&self, amount_sat: u64) -> MaxRoutingFeeMode {
+        get_payment_max_routing_fee_mode(
+            &self.config.max_routing_fee_config,
+            amount_sat,
+            &self.support.get_exchange_rate(),
+        )
+    }
+
+    /// Checks if the given amount could be spent on a payment.
+    ///
+    /// Parameters:
+    /// * `amount` - The to be spent amount.
+    ///
+    /// Requires network: **no**
+    pub fn determine_payment_affordability(
+        &self,
+        amount_sat: u64,
+    ) -> crate::Result<PaymentAffordability> {
+        let amount = amount_sat.as_sats();
+
+        let routing_fee_mode = self.determine_max_routing_fee_mode(amount_sat);
+
+        let max_fee_msats = match routing_fee_mode {
+            MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
+                Permyriad(max_fee_permyriad).of(&amount).msats
+            }
+            MaxRoutingFeeMode::Absolute { max_fee_amount } => max_fee_amount.sats.as_sats().msats,
+        };
+
+        let node_state = self.sdk.node_info().map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to read node info",
+        )?;
+
+        if amount.msats > node_state.max_payable_msat {
+            return Ok(PaymentAffordability::NotEnoughFunds);
+        }
+
+        if amount.msats + max_fee_msats > node_state.max_payable_msat {
+            return Ok(PaymentAffordability::UnaffordableFees);
+        }
+
+        Ok(PaymentAffordability::Affordable)
+    }
+
+    /// Get the current limits for the amount that can be transferred in a single payment.
+    /// Currently there are only limits for receiving payments.
+    /// The limits (partly) depend on the channel situation of the node, so it should be called
+    /// again every time the user is about to receive a payment.
+    /// The limits stay the same regardless of what amount wants to receive (= no changes while
+    /// he's typing the amount)
+    ///
+    /// Requires network: **no**
+    pub fn determine_receive_amount_limits(&self) -> Result<ReceiveAmountLimits> {
+        // TODO: try to move this logic inside the SDK
+        let lsp_min_fee_amount = self.get_lsp_fee()?.channel_minimum_fee;
+        let max_inbound_amount = self
+            .support
+            .get_node_info()?
+            .channels_info
+            .total_inbound_capacity;
+        Ok(ReceiveAmountLimits::calculate(
+            max_inbound_amount.sats,
+            lsp_min_fee_amount.sats,
+            &self.support.get_exchange_rate(),
+            &self.config.receive_limits_config,
+        ))
+    }
+
+    /// Calculate the actual LSP fee for the given amount of an incoming payment.
+    /// If the already existing inbound capacity is enough, no new channel is required.
+    ///
+    /// Parameters:
+    /// * `amount_sat` - amount in sats to compute LSP fee for
+    ///
+    /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
+    /// provided to [`Bolt11::create`]
+    ///
+    /// Requires network: **yes**
+    pub fn calculate_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
+        let req = OpenChannelFeeRequest {
+            amount_msat: Some(amount_sat.as_sats().msats),
+            expiry: None,
+        };
+        let res = self
+            .rt_handle
+            .block_on(self.sdk.open_channel_fee(req))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to compute opening channel fee",
+            )?;
+        Ok(CalculateLspFeeResponse {
+            lsp_fee: res
+                .fee_msat
+                .ok_or_permanent_failure("Breez SDK open_channel_fee returned None lsp fee when provided with Some(amount_msat)")?
+                .as_msats()
+                .to_amount_up(&self.support.get_exchange_rate()),
+            lsp_fee_params: Some(res.fee_params),
+        })
+    }
+
+    /// When *receiving* payments, a new channel MAY be required. A fee will be charged to the user.
+    /// This does NOT impact *sending* payments.
+    /// Get information about the fee charged by the LSP for opening new channels
+    ///
+    /// Requires network: **no**
+    pub fn get_lsp_fee(&self) -> Result<LspFee> {
+        let exchange_rate = self.support.get_exchange_rate();
+        let lsp_fee = self.task_manager.lock_unwrap().get_lsp_fee()?;
+        Ok(LspFee {
+            channel_minimum_fee: lsp_fee.min_msat.as_msats().to_amount_up(&exchange_rate),
+            channel_fee_permyriad: lsp_fee.proportional as u64 / 100,
+        })
+    }
+}
+
+fn get_payment_max_routing_fee_mode(
+    config: &MaxRoutingFeeConfig,
+    amount_sat: u64,
+    exchange_rate: &Option<ExchangeRate>,
+) -> MaxRoutingFeeMode {
+    let max_fee_permyriad = Permyriad(config.max_routing_fee_permyriad);
+    let relative_fee = max_fee_permyriad.of(&amount_sat.as_sats());
+    if relative_fee.msats < config.max_routing_fee_exempt_fee_sats.as_sats().msats {
+        MaxRoutingFeeMode::Absolute {
+            max_fee_amount: config
+                .max_routing_fee_exempt_fee_sats
+                .as_sats()
+                .to_amount_up(exchange_rate),
+        }
+    } else {
+        MaxRoutingFeeMode::Relative {
+            max_fee_permyriad: max_fee_permyriad.0,
+        }
+    }
+}
+
+trait Payments {
+    fn handle(&self) -> &Handle;
+    fn sdk(&self) -> &BreezServices;
+    fn user_preferences(&self) -> &Mutex<UserPreferences>;
+    fn data_store(&self) -> &Mutex<DataStore>;
+    fn support(&self) -> &Support;
+
+    fn report_send_payment_issue(&self, payment_hash: String) {
+        debug!("Reporting failure of payment: {payment_hash}");
+        let data = ReportPaymentFailureDetails {
+            payment_hash,
+            comment: None,
+        };
+        let request = ReportIssueRequest::PaymentFailure { data };
+        self.handle()
+            .block_on(self.sdk().report_issue(request))
+            .log_ignore_error(Level::Warn, "Failed to report issue");
+    }
+
+    fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) {
+        let user_preferences = self.user_preferences().lock_unwrap().clone();
+        let exchange_rates = self.support().get_exchange_rates();
+        self.data_store()
+            .lock_unwrap()
+            .store_payment_info(hash, user_preferences, exchange_rates, offer, None, None)
+            .log_ignore_error(Level::Error, "Failed to persist payment info")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::amount::{Permyriad, Sats};
+    use crate::lightning::get_payment_max_routing_fee_mode;
+    use crate::{MaxRoutingFeeConfig, MaxRoutingFeeMode};
+
+    const MAX_FEE_PERMYRIAD: Permyriad = Permyriad(150);
+    const EXEMPT_FEE: Sats = Sats::new(21);
+
+    #[test]
+    fn test_get_payment_max_routing_fee_mode_absolute() {
+        let max_routing_mode = get_payment_max_routing_fee_mode(
+            &MaxRoutingFeeConfig {
+                max_routing_fee_permyriad: MAX_FEE_PERMYRIAD.0,
+                max_routing_fee_exempt_fee_sats: EXEMPT_FEE.sats,
+            },
+            EXEMPT_FEE.msats / ((MAX_FEE_PERMYRIAD.0 as u64) / 10) - 1,
+            &None,
+        );
+
+        match max_routing_mode {
+            MaxRoutingFeeMode::Absolute { max_fee_amount } => {
+                assert_eq!(max_fee_amount.sats, EXEMPT_FEE.sats);
+            }
+            _ => {
+                panic!("Unexpected variant");
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_payment_max_routing_fee_mode_relative() {
+        let max_routing_mode = get_payment_max_routing_fee_mode(
+            &MaxRoutingFeeConfig {
+                max_routing_fee_permyriad: MAX_FEE_PERMYRIAD.0,
+                max_routing_fee_exempt_fee_sats: EXEMPT_FEE.sats,
+            },
+            EXEMPT_FEE.msats / ((MAX_FEE_PERMYRIAD.0 as u64) / 10),
+            &None,
+        );
+
+        match max_routing_mode {
+            MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
+                assert_eq!(max_fee_permyriad, MAX_FEE_PERMYRIAD.0);
+            }
+            _ => {
+                panic!("Unexpected variant");
+            }
+        }
+    }
+}

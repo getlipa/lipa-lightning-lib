@@ -2,7 +2,7 @@ use std::ops::Add;
 
 use crate::amount::{AsSats, ToAmount};
 use crate::config::WithTimezone;
-use crate::lnurl::parse_metadata;
+use crate::lightning::lnurl::parse_metadata;
 use crate::phone_number::lightning_address_to_phone_number;
 use crate::util::unix_timestamp_to_system_time;
 use crate::{Amount, ExchangeRate, InvoiceDetails, Result, TzConfig, TzTime};
