@@ -91,7 +91,7 @@ anyhow = "1"
 colored = "2.1.0"
 ctor = "0.2.8"
 qrcode = { version = "0.14.1", default-features = false }
-rustyline = { version = "14.0.0", features = ["derive"] }
+rustyline = { version = "15.0.0", features = ["derive"] }
 serial_test = { version = "3.2.0", features = ["file_locks"] }
 strip-ansi-escapes = "0.2.0"
 thousands = "0.2.0"
