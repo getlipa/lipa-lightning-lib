@@ -200,6 +200,10 @@ interface LightningNode {
     Lightning lightning();
 
     Config config();
+
+    FiatTopup fiat_topup();
+
+    ActionsRequired actions_required();
 };
 
 interface Config {
@@ -263,6 +267,43 @@ interface Lnurl {
 
     [Throws=LnUrlWithdrawError]
     string withdraw(LnUrlWithdrawRequestData lnurl_withdraw_request_data, u64 amount_sat);
+};
+
+interface FiatTopup {
+    [Throws=LnError]
+    void accept_tc(i64 version, string fingerprint);
+
+    [Throws=LnError]
+    TermsAndConditionsStatus query_tc_status();
+
+    [Throws=LnError]
+    FiatTopupInfo register(string? email, string user_iban, string user_currency);
+
+    [Throws=LnError]
+    void reset();
+
+    [Throws=LnError]
+    FiatTopupInfo? get_info();
+
+    [Throws=LnError]
+    Amount calculate_payout_fee(OfferInfo offer);
+
+    [Throws=LnError]
+    string request_collection(OfferInfo offer);
+};
+
+interface ActionsRequired {
+    [Throws=LnError]
+    sequence<ActionRequiredItem> list();
+
+    [Throws=LnError]
+    void dismiss_topup(string id);
+
+    [Throws=LnError]
+    void hide_unrecoverable_channel_close_funds_item();
+
+    [Throws=LnError]
+    void hide_unrecoverable_failed_swap_item(FailedSwapInfo failed_swap_info);
 };
 
 interface Activities {

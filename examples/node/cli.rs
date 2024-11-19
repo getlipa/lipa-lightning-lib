@@ -159,7 +159,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     }
                 }
                 "resettopup" => {
-                    if let Err(message) = node.reset_fiat_topup() {
+                    if let Err(message) = node.fiat_topup().reset() {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
@@ -189,8 +189,9 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     }
                 }
                 "hidechannelcloseitem" => {
-                    if let Err(message) =
-                        node.hide_channel_closes_funds_available_action_required_item()
+                    if let Err(message) = node
+                        .actions_required()
+                        .hide_unrecoverable_channel_close_funds_item()
                     {
                         println!("{}", format!("{message:#}").red())
                     }
@@ -989,7 +990,7 @@ fn get_swap_address(node: &LightningNode) -> Result<()> {
 }
 
 fn list_failed_swaps(node: &LightningNode) -> Result<()> {
-    let failed_swaps = node.get_unresolved_failed_swaps()?;
+    let failed_swaps = failed_swap_from_actions_required_list(&node.actions_required().list()?);
 
     println!(
         "Total of {} failed swaps\n",
@@ -1016,9 +1017,12 @@ fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str
 
     let fee_rate = node.query_onchain_fee_rate()?;
 
-    let failed_swaps = node
-        .get_unresolved_failed_swaps()
-        .map_err(|e| anyhow!("Failed to fetch currently unresolved failed swaps: {e}"))?;
+    let failed_swaps = failed_swap_from_actions_required_list(
+        &node
+            .actions_required()
+            .list()
+            .map_err(|e| anyhow!("Failed to fetch currently unresolved failed swaps: {e}"))?,
+    );
     let failed_swap = failed_swaps
         .into_iter()
         .find(|s| s.address.eq(swap_address))
@@ -1026,7 +1030,9 @@ fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str
             "No unresolved failed swap with provided swap address was found"
         ))?;
     let resolve_failed_swap_info = node
-        .prepare_resolve_failed_swap(failed_swap, to_address.into(), fee_rate)
+        .onchain()
+        .swaps()
+        .prepare_sweep(failed_swap, to_address.into(), fee_rate)
         .map_err(|e| anyhow!("Failed to prepare the resolution of the failed swap: {e}"))?;
     let txid = node
         .resolve_failed_swap(resolve_failed_swap_info)
@@ -1115,14 +1121,16 @@ fn register_topup(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -
 
     let email = words.next().map(String::from);
 
-    let topup_info = node.register_fiat_topup(email, iban.to_string(), currency.to_string())?;
+    let topup_info = node
+        .fiat_topup()
+        .register(email, iban.to_string(), currency.to_string())?;
     println!("{topup_info:?}");
 
     Ok(())
 }
 
 fn list_offers(node: &LightningNode) -> Result<()> {
-    let offers = node.query_uncompleted_offers()?;
+    let offers = offer_info_from_actions_required_list(&node.actions_required().list()?);
 
     println!("Total of {} offers\n", offers.len().to_string().bold());
     for offer in offers {
@@ -1134,12 +1142,11 @@ fn list_offers(node: &LightningNode) -> Result<()> {
 }
 
 fn collect_last_offer(node: &LightningNode) -> Result<()> {
-    let offer = node
-        .query_uncompleted_offers()?
+    let offer = offer_info_from_actions_required_list(&node.actions_required().list()?)
         .into_iter()
         .max_by_key(|o| o.created_at)
         .ok_or(anyhow!("No uncompleted offers available"))?;
-    let payment_hash = node.request_offer_collection(offer)?;
+    let payment_hash = node.fiat_topup().request_collection(offer)?;
     println!("Collected offer payment hash: {payment_hash}");
 
     Ok(())
@@ -1200,7 +1207,7 @@ fn print_offer(offer: &OfferInfo) {
 }
 
 fn list_actionable_items(node: &LightningNode) -> Result<()> {
-    let items = node.list_action_required_items()?;
+    let items = node.actions_required().list()?;
 
     println!(
         "Total of {} actionable items\n",
@@ -1502,7 +1509,7 @@ fn amount_to_string(amount: &Amount) -> String {
 }
 
 fn get_registered_topup(node: &LightningNode) -> Result<()> {
-    let topup_info = node.retrieve_latest_fiat_topup_info()?;
+    let topup_info = node.fiat_topup().get_info()?;
     println!("{topup_info:?}");
 
     Ok(())
@@ -1514,9 +1521,12 @@ fn calculate_lightning_payout_fee(
 ) -> Result<()> {
     let offer_id = words.next().ok_or(anyhow!("<offer id> is required"))?;
 
-    let uncompleted_offers = node
-        .query_uncompleted_offers()
-        .context("Couldn't fetch uncompleted offers")?;
+    let uncompleted_offers = offer_info_from_actions_required_list(
+        &node
+            .actions_required()
+            .list()
+            .context("Couldn't fetch uncompleted offers")?,
+    );
 
     let offer = uncompleted_offers
         .into_iter()
@@ -1525,7 +1535,7 @@ fn calculate_lightning_payout_fee(
         })
         .ok_or(anyhow!("Couldn't find offer with id: {offer_id}"))?;
 
-    let lightning_payout_fee = node.calculate_lightning_payout_fee(offer)?;
+    let lightning_payout_fee = node.fiat_topup().calculate_payout_fee(offer)?;
     println!(
         "Lightning payout fee: {}",
         amount_to_string(&lightning_payout_fee)
@@ -1540,9 +1550,13 @@ fn get_failed_swap_resolving_fees(
 ) -> Result<()> {
     let swap_address = words.next().ok_or(anyhow!("Swap address is required"))?;
 
-    let failed_swaps = node
-        .get_unresolved_failed_swaps()
-        .map_err(|e| anyhow!("Failed to fetch currently unresolved failed swaps: {e}"))?;
+    let failed_swaps = failed_swap_from_actions_required_list(
+        &node
+            .actions_required()
+            .list()
+            .map_err(|e| anyhow!("Failed to fetch currently unresolved failed swaps: {e}"))?,
+    );
+
     let failed_swap = failed_swaps
         .into_iter()
         .find(|s| s.address.eq(swap_address))
@@ -1665,9 +1679,12 @@ fn set_feature_flag(node: &LightningNode, words: &mut dyn Iterator<Item = &str>)
 fn hide_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let swap_address = words.next().ok_or(anyhow!("Swap address is required"))?;
 
-    let failed_swaps = node
-        .get_unresolved_failed_swaps()
-        .map_err(|e| anyhow!("Failed to fetch currently unresolved failed swaps: {e}"))?;
+    let failed_swaps = failed_swap_from_actions_required_list(
+        &node
+            .actions_required()
+            .list()
+            .map_err(|e| anyhow!("Failed to fetch currently unresolved failed swaps: {e}"))?,
+    );
     let failed_swap = failed_swaps
         .into_iter()
         .find(|s| s.address.eq(swap_address))
@@ -1675,6 +1692,27 @@ fn hide_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str>)
             "No unresolved failed swap with provided swap address was found"
         ))?;
 
-    node.hide_unresolved_failed_swap_action_required_item(failed_swap)
+    node.actions_required()
+        .hide_unrecoverable_failed_swap_item(failed_swap)
         .map_err(Into::into)
+}
+
+fn offer_info_from_actions_required_list(list: &[ActionRequiredItem]) -> Vec<OfferInfo> {
+    list.iter()
+        .filter_map(|i| match i {
+            ActionRequiredItem::UncompletedOffer { offer } => Some(offer.clone()),
+            ActionRequiredItem::UnresolvedFailedSwap { .. } => None,
+            ActionRequiredItem::ChannelClosesFundsAvailable { .. } => None,
+        })
+        .collect::<Vec<_>>()
+}
+
+fn failed_swap_from_actions_required_list(list: &[ActionRequiredItem]) -> Vec<FailedSwapInfo> {
+    list.iter()
+        .filter_map(|i| match i {
+            ActionRequiredItem::UncompletedOffer { .. } => None,
+            ActionRequiredItem::UnresolvedFailedSwap { failed_swap } => Some(failed_swap.clone()),
+            ActionRequiredItem::ChannelClosesFundsAvailable { .. } => None,
+        })
+        .collect::<Vec<_>>()
 }

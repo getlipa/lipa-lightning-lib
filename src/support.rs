@@ -7,13 +7,19 @@ use crate::locker::Locker;
 use crate::phone_number::PhoneNumberPrefixParser;
 use crate::pocketclient::PocketClient;
 use crate::task_manager::TaskManager;
+use crate::util::LogIgnoreError;
 use crate::{
-    ChannelsInfo, ExchangeRate, LightningNodeConfig, NodeInfo, RuntimeErrorCode, UserPreferences,
+    CalculateLspFeeResponse, ChannelsInfo, ExchangeRate, LightningNodeConfig, NodeInfo, OfferKind,
+    RuntimeErrorCode, UserPreferences,
 };
-use breez_sdk_core::BreezServices;
+use breez_sdk_core::{
+    BreezServices, OpenChannelFeeRequest, ReportIssueRequest, ReportPaymentFailureDetails,
+    UnspentTransactionOutput,
+};
 use crow::OfferManager;
 use honeybadger::Auth;
-use perro::MapToError;
+use log::{debug, Level};
+use perro::{MapToError, OptionToError};
 use std::sync::{Arc, Mutex};
 
 #[allow(dead_code)]
@@ -22,7 +28,7 @@ pub(crate) struct Support {
     pub sdk: Arc<BreezServices>,
     pub auth: Arc<Auth>,
     pub async_auth: Arc<honeybadger::asynchronous::Auth>,
-    pub fiat_topup_client: Arc<PocketClient>,
+    pub fiat_topup_client: PocketClient,
     pub offer_manager: Arc<OfferManager>,
     pub rt: Arc<AsyncRuntime>,
     pub data_store: Arc<Mutex<DataStore>>,
@@ -92,5 +98,83 @@ impl Support {
                 outbound_capacity: node_state.max_payable_msat.as_msats().to_amount_down(&rate),
             },
         })
+    }
+
+    pub fn get_node_utxos(&self) -> Result<Vec<UnspentTransactionOutput>> {
+        let node_state = self
+            .sdk
+            .node_info()
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Couldn't get node info")?;
+
+        Ok(node_state.utxos)
+    }
+
+    /// Calculate the actual LSP fee for the given amount of an incoming payment.
+    /// If the already existing inbound capacity is enough, no new channel is required.
+    ///
+    /// Parameters:
+    /// * `amount_sat` - amount in sats to compute LSP fee for
+    ///
+    /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
+    /// provided to [`Bolt11::create`]
+    ///
+    /// Requires network: **yes**
+    pub fn calculate_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
+        let req = OpenChannelFeeRequest {
+            amount_msat: Some(amount_sat.as_sats().msats),
+            expiry: None,
+        };
+        let res = self
+            .rt
+            .handle()
+            .block_on(self.sdk.open_channel_fee(req))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to compute opening channel fee",
+            )?;
+        Ok(CalculateLspFeeResponse {
+            lsp_fee: res
+                .fee_msat
+                .ok_or_permanent_failure("Breez SDK open_channel_fee returned None lsp fee when provided with Some(amount_msat)")?
+                .as_msats()
+                .to_amount_up(&self.get_exchange_rate()),
+            lsp_fee_params: Some(res.fee_params),
+        })
+    }
+
+    /// Query the current recommended on-chain fee rate.
+    pub(crate) fn query_onchain_fee_rate(&self) -> Result<u32> {
+        let recommended_fees = self
+            .rt
+            .handle()
+            .block_on(self.sdk.recommended_fees())
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Couldn't fetch recommended fees",
+            )?;
+
+        Ok(recommended_fees.half_hour_fee as u32)
+    }
+
+    pub fn report_send_payment_issue(&self, payment_hash: String) {
+        debug!("Reporting failure of payment: {payment_hash}");
+        let data = ReportPaymentFailureDetails {
+            payment_hash,
+            comment: None,
+        };
+        let request = ReportIssueRequest::PaymentFailure { data };
+        self.rt
+            .handle()
+            .block_on(self.sdk.report_issue(request))
+            .log_ignore_error(Level::Warn, "Failed to report issue");
+    }
+
+    pub fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) {
+        let user_preferences = self.user_preferences.lock_unwrap().clone();
+        let exchange_rates = self.get_exchange_rates();
+        self.data_store
+            .lock_unwrap()
+            .store_payment_info(hash, user_preferences, exchange_rates, offer, None, None)
+            .log_ignore_error(Level::Error, "Failed to persist payment info")
     }
 }

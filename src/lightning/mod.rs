@@ -9,14 +9,11 @@ use crate::lightning::lnurl::Lnurl;
 use crate::lightning::receive_limits::ReceiveAmountLimits;
 use crate::locker::Locker;
 use crate::support::Support;
-use crate::util::LogIgnoreError;
 use crate::{
     CalculateLspFeeResponse, ExchangeRate, LspFee, MaxRoutingFeeConfig, MaxRoutingFeeMode,
-    OfferKind, RuntimeErrorCode,
+    RuntimeErrorCode,
 };
-use breez_sdk_core::{OpenChannelFeeRequest, ReportIssueRequest, ReportPaymentFailureDetails};
-use log::{debug, Level};
-use perro::{MapToError, OptionToError};
+use perro::MapToError;
 use std::sync::Arc;
 
 /// Payment affordability returned by [`Lightning::determine_payment_affordability`].
@@ -141,27 +138,7 @@ impl Lightning {
     ///
     /// Requires network: **yes**
     pub fn calculate_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
-        let req = OpenChannelFeeRequest {
-            amount_msat: Some(amount_sat.as_sats().msats),
-            expiry: None,
-        };
-        let res = self
-            .support
-            .rt
-            .handle()
-            .block_on(self.support.sdk.open_channel_fee(req))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to compute opening channel fee",
-            )?;
-        Ok(CalculateLspFeeResponse {
-            lsp_fee: res
-                .fee_msat
-                .ok_or_permanent_failure("Breez SDK open_channel_fee returned None lsp fee when provided with Some(amount_msat)")?
-                .as_msats()
-                .to_amount_up(&self.support.get_exchange_rate()),
-            lsp_fee_params: Some(res.fee_params),
-        })
+        self.support.calculate_lsp_fee_for_amount(amount_sat)
     }
 
     /// When *receiving* payments, a new channel MAY be required. A fee will be charged to the user.
@@ -198,30 +175,6 @@ fn get_payment_max_routing_fee_mode(
             max_fee_permyriad: max_fee_permyriad.0,
         }
     }
-}
-
-fn report_send_payment_issue(support: &Support, payment_hash: String) {
-    debug!("Reporting failure of payment: {payment_hash}");
-    let data = ReportPaymentFailureDetails {
-        payment_hash,
-        comment: None,
-    };
-    let request = ReportIssueRequest::PaymentFailure { data };
-    support
-        .rt
-        .handle()
-        .block_on(support.sdk.report_issue(request))
-        .log_ignore_error(Level::Warn, "Failed to report issue");
-}
-
-fn store_payment_info(support: &Support, hash: &str, offer: Option<OfferKind>) {
-    let user_preferences = support.user_preferences.lock_unwrap().clone();
-    let exchange_rates = support.get_exchange_rates();
-    support
-        .data_store
-        .lock_unwrap()
-        .store_payment_info(hash, user_preferences, exchange_rates, offer, None, None)
-        .log_ignore_error(Level::Error, "Failed to persist payment info")
 }
 
 #[cfg(test)]
