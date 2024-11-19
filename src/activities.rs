@@ -146,14 +146,16 @@ impl Activities {
             )?
             .map(|p| self.activity_from_breez_payment(p))
         {
-            Ok(activity?)
-        } else if let Some(incoming_payment_info) = self
+            return activity;
+        }
+
+        let invoice = self
             .support
             .data_store
             .lock_unwrap()
-            .retrieve_created_invoice_by_hash(&hash)?
-            .map(|i| self.payment_from_created_invoice(&i))
-        {
+            .retrieve_created_invoice_by_hash(&hash)?;
+        if let Some(invoice) = invoice {
+            let incoming_payment_info = self.payment_from_created_invoice(&invoice);
             Ok(Activity::IncomingPayment {
                 incoming_payment_info: incoming_payment_info?,
             })
