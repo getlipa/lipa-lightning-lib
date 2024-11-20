@@ -22,7 +22,7 @@ pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
         .parse()
         .context("Fun mode should be true of false")?;
 
-    let health_message = match node.get_health_status()? {
+    let health_message = match node.util().query_health_status()? {
         BreezHealthCheckStatus::Operational => None,
         BreezHealthCheckStatus::Maintenance => Some("Maintenance".yellow()),
         BreezHealthCheckStatus::ServiceDisruption => Some("Service Disruption".red().bold()),
@@ -35,7 +35,7 @@ pub fn overview(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
     let line = format!("{:^28}", "Balance".bold());
     println!("{}", line.reversed());
 
-    let info = node.get_node_info()?;
+    let info = node.util().get_node_info()?;
     let balance = format_balance(info.channels_info.local_balance);
     let balance = format!("⚡ {balance}");
     println!("{balance:^35}");

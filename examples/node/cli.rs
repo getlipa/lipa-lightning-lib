@@ -31,7 +31,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
     println!("To stop the node, please type \"stop\" for a graceful shutdown.");
     println!(
         "Local Node ID is: {}",
-        &node.get_node_info().unwrap().node_pubkey
+        &node.util().get_node_info().unwrap().node_pubkey
     );
 
     let prompt = "3L ϟ ".bold().blue().to_string();
@@ -98,7 +98,7 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                 }
                 "parsephonenumber" => {
                     let number = words.collect::<Vec<_>>().join(" ");
-                    match node.parse_phone_number_to_lightning_address(number) {
+                    match node.phone_number().parse_to_lightning_address(number) {
                         Ok(address) => println!("{address}"),
                         Err(message) => println!("{}", format!("{message:#}").red()),
                     }
@@ -280,17 +280,17 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
-                "registerlightningaddress" => match node.register_lightning_address() {
+                "registerlightningaddress" => match node.lightning_address().register() {
                     Ok(address) => println!("{address}"),
                     Err(message) => println!("{}", format!("{message:#}").red()),
                 },
-                "querylightningaddress" => match node.query_lightning_address() {
+                "querylightningaddress" => match node.lightning_address().get() {
                     Ok(address) => println!("{address:?}"),
                     Err(message) => println!("{}", format!("{message:#}").red()),
                 },
                 "registerphonenumber" => {
                     let phone_number = words.collect::<Vec<_>>().join(" ");
-                    match node.request_phone_number_verification(phone_number) {
+                    match node.phone_number().register(phone_number) {
                         Ok(_) => {}
                         Err(message) => println!("{}", format!("{message:#}").red()),
                     }
@@ -305,12 +305,12 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         }
                     };
                     let phone_number = words.collect::<Vec<_>>().join(" ");
-                    match node.verify_phone_number(phone_number, otp) {
+                    match node.phone_number().verify(phone_number, otp) {
                         Ok(_) => {}
                         Err(message) => println!("{}", format!("{message:#}").red()),
                     }
                 }
-                "queryverifiedphonenumber" => match node.query_verified_phone_number() {
+                "queryverifiedphonenumber" => match node.phone_number().get() {
                     Ok(n) => println!("{n:?}"),
                     Err(message) => println!("{}", format!("{message:#}").red()),
                 },
@@ -320,11 +320,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     }
                 }
                 "logdebug" => {
-                    if let Err(message) = node.log_debug_info() {
+                    if let Err(message) = node.util().log_debug_info() {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
-                "health" => match node.get_health_status() {
+                "health" => match node.util().query_health_status() {
                     Ok(status) => println!("{status:?}"),
                     Err(message) => println!("{}", format!("{message:#}").red()),
                 },
@@ -639,7 +639,7 @@ fn payment_amount_limits(node: &LightningNode) {
 }
 
 fn node_info(node: &LightningNode) {
-    let node_info = match node.get_node_info() {
+    let node_info = match node.util().get_node_info() {
         Ok(n) => n,
         Err(e) => {
             eprintln!("{e}");
@@ -677,7 +677,7 @@ fn node_info(node: &LightningNode) {
 }
 
 fn wallet_pubkey_id(node: &LightningNode) -> Result<()> {
-    let wallet_pubkey_id = node.get_wallet_pubkey_id()?;
+    let wallet_pubkey_id = node.util().query_wallet_pubkey_id()?;
 
     println!("{wallet_pubkey_id}");
 
@@ -685,7 +685,7 @@ fn wallet_pubkey_id(node: &LightningNode) -> Result<()> {
 }
 
 fn get_exchange_rate(node: &LightningNode) {
-    match node.get_exchange_rate() {
+    match node.util().get_exchange_rate() {
         Some(r) => {
             let dt: DateTime<Utc> = r.updated_at.into();
             println!(
@@ -764,7 +764,7 @@ fn create_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -
 fn decode_data(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let data = words.next().ok_or(anyhow!("Data is required"))?;
 
-    match node.decode_data(data.to_string())? {
+    match node.util().decode_data(data.to_string())? {
         DecodedData::Bolt11Invoice { invoice_details } => print_invoice_details(invoice_details),
         DecodedData::LnUrlPay { lnurl_pay_details } => print_lnurl_pay_details(lnurl_pay_details),
         DecodedData::LnUrlWithdraw {
@@ -937,7 +937,7 @@ fn pay_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> R
         "To many arguments. Specifying an amount is only allowed for open invoices. To pay an open invoice use 'payopeninvoice'"
     );
 
-    let result = node.decode_data(invoice.to_string())?;
+    let result = node.util().decode_data(invoice.to_string())?;
     if let DecodedData::Bolt11Invoice { invoice_details } = result {
         node.lightning().bolt11().pay(
             invoice_details,
@@ -962,7 +962,7 @@ fn pay_open_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>)
         .parse()
         .context("Amount should be a positive integer number")?;
 
-    let result = node.decode_data(invoice.to_string())?;
+    let result = node.util().decode_data(invoice.to_string())?;
     if let DecodedData::Bolt11Invoice { invoice_details } = result {
         node.lightning().bolt11().pay_open_amount(
             invoice_details,
@@ -1066,7 +1066,7 @@ fn pay_lnurlp(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Re
         Some(comment)
     };
 
-    let lnurlp_details = match node.decode_data(lnurlp.into()) {
+    let lnurlp_details = match node.util().decode_data(lnurlp.into()) {
         Ok(DecodedData::LnUrlPay { lnurl_pay_details }) => lnurl_pay_details,
         Ok(DecodedData::LnUrlWithdraw { .. }) => {
             bail!("An LNURL-Withdraw was provided instead of an LNURL-Pay")
@@ -1098,7 +1098,7 @@ fn withdraw_lnurlw(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
         .parse()
         .context("Amount should be a positive integer number")?;
 
-    let lnurlw_details = match node.decode_data(lnurlw.into()) {
+    let lnurlw_details = match node.util().decode_data(lnurlw.into()) {
         Ok(DecodedData::LnUrlWithdraw {
             lnurl_withdraw_details,
         }) => lnurl_withdraw_details,
@@ -1408,7 +1408,7 @@ fn print_channel_close(channel_close: ChannelCloseInfo) -> Result<()> {
 
 fn payment_uuid(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<String> {
     let payment_hash = words.next().ok_or(anyhow!("Payment Hash is required"))?;
-    Ok(node.get_payment_uuid(payment_hash.to_string())?)
+    Ok(node.util().derive_payment_uuid(payment_hash.to_string())?)
 }
 
 fn set_personal_note(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
@@ -1469,7 +1469,7 @@ fn clear_wallet(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
 
     let clear_wallet_info = node.onchain().reverse_swap().prepare_clear_wallet()?;
 
-    let result = node.decode_data(address.to_string())?;
+    let result = node.util().decode_data(address.to_string())?;
     if let DecodedData::OnchainAddress {
         onchain_address_details,
     } = result

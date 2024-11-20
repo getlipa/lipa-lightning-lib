@@ -68,5 +68,5 @@ fn test_register_node() {
     let events_handler = PrintEventsHandler {};
     let node = LightningNode::new(config, Box::new(events_handler)).unwrap();
     // Wait for the the P2P background task to connect to the LSP
-    wait_for!(!node.get_node_info().unwrap().peers.is_empty());
+    wait_for!(!node.util().get_node_info().unwrap().peers.is_empty());
 }

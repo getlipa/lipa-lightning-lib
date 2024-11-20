@@ -11,7 +11,7 @@ use std::str::FromStr;
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
 fn test_get_node_info() {
     let node = start_node().unwrap();
-    let node_info = node.get_node_info().unwrap();
+    let node_info = node.util().get_node_info().unwrap();
 
     assert!(
         PublicKey::from_str(&node_info.node_pubkey).is_ok(),

@@ -27,6 +27,7 @@ mod fiat_topup;
 mod invoice_details;
 mod key_derivation;
 mod lightning;
+mod lightning_address;
 mod limits;
 mod locker;
 mod logger;
@@ -83,19 +84,18 @@ pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
 pub use crate::payment::{
     IncomingPaymentInfo, OutgoingPaymentInfo, PaymentInfo, PaymentState, Recipient,
 };
-pub use crate::phone_number::PhoneNumber;
-use crate::phone_number::{lightning_address_to_phone_number, PhoneNumberPrefixParser};
+use crate::phone_number::PhoneNumberPrefixParser;
+pub use crate::phone_number::{PhoneNumber, PhoneNumberRecipient};
 pub use crate::recovery::recover_lightning_node;
 pub use crate::reverse_swap::ReverseSwapInfo;
 pub use crate::secret::{generate_secret, mnemonic_to_secret, words_by_prefix, Secret};
 pub use crate::swap::{
     FailedSwapInfo, ResolveFailedSwapInfo, SwapAddressInfo, SwapInfo, SwapToLightningFees,
 };
-use crate::symmetric_encryption::{deterministic_encrypt, encrypt};
+use crate::symmetric_encryption::deterministic_encrypt;
 use crate::task_manager::TaskManager;
-use crate::util::{
-    replace_byte_arrays_by_hex_string, unix_timestamp_to_system_time, LogIgnoreError,
-};
+use crate::util::unix_timestamp_to_system_time;
+pub use crate::util::Util;
 
 #[cfg(not(feature = "mock-deps"))]
 #[allow(clippy::single_component_path_imports)]
@@ -111,6 +111,7 @@ pub use crate::activities::Activities;
 pub use crate::config::Config;
 pub use crate::fiat_topup::FiatTopup;
 pub use crate::lightning::{Lightning, PaymentAffordability};
+pub use crate::lightning_address::LightningAddress;
 pub use crate::onchain::channel_closes::{ChannelClose, SweepChannelCloseInfo};
 pub use crate::onchain::reverse_swap::ReverseSwap;
 pub use crate::onchain::swap::{Swap, SweepFailedSwapInfo};
@@ -122,10 +123,10 @@ use breez_sdk_core::error::{ReceiveOnchainError, RedeemOnchainError};
 pub use breez_sdk_core::HealthCheckStatus as BreezHealthCheckStatus;
 pub use breez_sdk_core::ReverseSwapStatus;
 use breez_sdk_core::{
-    parse, BitcoinAddressData, BreezServices, ConnectRequest, EnvironmentType, EventListener,
-    GreenlightCredentials, GreenlightNodeConfig, InputType, ListPaymentsRequest,
-    LnUrlPayRequestData, LnUrlWithdrawRequestData, Network, NodeConfig, OpeningFeeParams,
-    PaymentDetails, PaymentTypeFilter, PrepareOnchainPaymentResponse,
+    BitcoinAddressData, BreezServices, ConnectRequest, EnvironmentType, EventListener,
+    GreenlightCredentials, GreenlightNodeConfig, ListPaymentsRequest, LnUrlPayRequestData,
+    LnUrlWithdrawRequestData, Network, NodeConfig, OpeningFeeParams, PaymentDetails,
+    PaymentTypeFilter, PrepareOnchainPaymentResponse,
 };
 use crow::{OfferManager, TopupError};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -145,7 +146,6 @@ use squirrel::RemoteBackupClient;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::{env, fs};
-use uuid::Uuid;
 
 const LOGS_DIR: &str = "logs";
 
@@ -307,25 +307,20 @@ pub enum FeatureFlag {
 /// run it in the background. As long as an instance of `LightningNode` is held, the node will continue to run
 /// in the background. Dropping the instance will start a deinit process.  
 pub struct LightningNode {
-    user_preferences: Arc<Mutex<UserPreferences>>,
     sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
-    async_auth: Arc<honeybadger::asynchronous::Auth>,
     offer_manager: Arc<OfferManager>,
     rt: Arc<AsyncRuntime>,
-    data_store: Arc<Mutex<DataStore>>,
-    task_manager: Arc<Mutex<TaskManager>>,
-    allowed_countries_country_iso_3166_1_alpha_2: Vec<String>,
-    phone_number_prefix_parser: PhoneNumberPrefixParser,
-    persistence_encryption_key: [u8; 32],
     node_config: LightningNodeConfig,
     activities: Arc<Activities>,
     lightning: Arc<Lightning>,
-    support: Arc<Support>,
     config: Arc<Config>,
     fiat_topup: Arc<FiatTopup>,
     actions_required: Arc<ActionsRequired>,
     onchain: Arc<Onchain>,
+    lightning_address: Arc<LightningAddress>,
+    phone_number: Arc<PhoneNumber>,
+    util: Arc<Util>,
 }
 
 /// Contains the fee information for the options to resolve funds that have moved on-chain.
@@ -550,28 +545,27 @@ impl LightningNode {
             Arc::clone(&onchain),
         ));
 
+        let lightning_address = Arc::new(LightningAddress::new(Arc::clone(&support)));
+
+        let phone_number = Arc::new(PhoneNumber::new(Arc::clone(&support)));
+
+        let util = Arc::new(Util::new(Arc::clone(&support)));
+
         Ok(LightningNode {
-            user_preferences,
             sdk,
             auth,
-            async_auth,
             offer_manager,
             rt,
-            data_store,
-            task_manager,
-            allowed_countries_country_iso_3166_1_alpha_2: node_config
-                .phone_number_allowed_countries_iso_3166_1_alpha_2
-                .clone(),
-            phone_number_prefix_parser,
-            persistence_encryption_key,
             node_config,
             activities,
             lightning,
-            support,
             config,
             fiat_topup,
             actions_required,
             onchain,
+            lightning_address,
+            phone_number,
+            util,
         })
     }
 
@@ -599,11 +593,24 @@ impl LightningNode {
         Arc::clone(&self.onchain)
     }
 
+    pub fn lightning_address(&self) -> Arc<LightningAddress> {
+        Arc::clone(&self.lightning_address)
+    }
+
+    pub fn phone_number(&self) -> Arc<PhoneNumber> {
+        Arc::clone(&self.phone_number)
+    }
+
+    pub fn util(&self) -> Arc<Util> {
+        Arc::clone(&self.util)
+    }
+
     /// Request some basic info about the node
     ///
     /// Requires network: **no**
+    #[deprecated = "util().get_node_info() should be used instead"]
     pub fn get_node_info(&self) -> Result<NodeInfo> {
-        self.support.get_node_info()
+        self.util.get_node_info()
     }
 
     /// When *receiving* payments, a new channel MAY be required. A fee will be charged to the user.
@@ -677,11 +684,12 @@ impl LightningNode {
     /// The parser is not strict, it parses some invalid prefixes as valid.
     ///
     /// Requires network: **no**
+    #[deprecated = "phone_number().parse_prefix() should be used instead"]
     pub fn parse_phone_number_prefix(
         &self,
         phone_number_prefix: String,
     ) -> std::result::Result<(), ParsePhoneNumberPrefixError> {
-        self.phone_number_prefix_parser.parse(&phone_number_prefix)
+        self.phone_number.parse_prefix(phone_number_prefix)
     }
 
     /// Parse a phone number, check against the list of allowed countries
@@ -691,83 +699,20 @@ impl LightningNode {
     /// with [`LightningNode::decode_data`].
     ///
     /// Requires network: **no**
+    #[deprecated = "phone_number().parse_to_lightning_address() should be used instead"]
     pub fn parse_phone_number_to_lightning_address(
         &self,
         phone_number: String,
     ) -> std::result::Result<String, ParsePhoneNumberError> {
-        let phone_number = self.parse_phone_number(phone_number)?;
-        Ok(phone_number.to_lightning_address(
-            &self
-                .node_config
-                .remote_services_config
-                .lipa_lightning_domain,
-        ))
-    }
-
-    fn parse_phone_number(
-        &self,
-        phone_number: String,
-    ) -> std::result::Result<PhoneNumber, ParsePhoneNumberError> {
-        let phone_number = PhoneNumber::parse(&phone_number)?;
-        ensure!(
-            self.allowed_countries_country_iso_3166_1_alpha_2
-                .contains(&phone_number.country_code.as_ref().to_string()),
-            ParsePhoneNumberError::UnsupportedCountry
-        );
-        Ok(phone_number)
+        self.phone_number.parse_to_lightning_address(phone_number)
     }
 
     /// Decode a user-provided string (usually obtained from QR-code or pasted).
     ///
     /// Requires network: **yes**
+    #[deprecated = "util().decode_data() should be used instead"]
     pub fn decode_data(&self, data: String) -> std::result::Result<DecodedData, DecodeDataError> {
-        match self.rt.handle().block_on(parse(&data)) {
-            Ok(InputType::Bolt11 { invoice }) => {
-                ensure!(
-                    invoice.network == Network::Bitcoin,
-                    DecodeDataError::Unsupported {
-                        typ: UnsupportedDataType::Network {
-                            network: invoice.network.to_string(),
-                        },
-                    }
-                );
-
-                Ok(DecodedData::Bolt11Invoice {
-                    invoice_details: InvoiceDetails::from_ln_invoice(
-                        invoice,
-                        &self.get_exchange_rate(),
-                    ),
-                })
-            }
-            Ok(InputType::LnUrlPay { data }) => Ok(DecodedData::LnUrlPay {
-                lnurl_pay_details: LnUrlPayDetails::from_lnurl_pay_request_data(
-                    data,
-                    &self.get_exchange_rate(),
-                )?,
-            }),
-            Ok(InputType::BitcoinAddress { address }) => Ok(DecodedData::OnchainAddress {
-                onchain_address_details: address,
-            }),
-            Ok(InputType::LnUrlAuth { .. }) => Err(DecodeDataError::Unsupported {
-                typ: UnsupportedDataType::LnUrlAuth,
-            }),
-            Ok(InputType::LnUrlError { data }) => {
-                Err(DecodeDataError::LnUrlError { msg: data.reason })
-            }
-            Ok(InputType::LnUrlWithdraw { data }) => Ok(DecodedData::LnUrlWithdraw {
-                lnurl_withdraw_details: LnUrlWithdrawDetails::from_lnurl_withdraw_request_data(
-                    data,
-                    &self.get_exchange_rate(),
-                ),
-            }),
-            Ok(InputType::NodeId { .. }) => Err(DecodeDataError::Unsupported {
-                typ: UnsupportedDataType::NodeId,
-            }),
-            Ok(InputType::Url { .. }) => Err(DecodeDataError::Unsupported {
-                typ: UnsupportedDataType::Url,
-            }),
-            Err(e) => Err(DecodeDataError::Unrecognized { msg: e.to_string() }),
-        }
+        self.util.decode_data(data)
     }
 
     /// Get the max routing fee mode that will be employed to restrict the fees for paying a given amount in sats
@@ -1030,13 +975,9 @@ impl LightningNode {
     /// of no exchange rate values being known.
     ///
     /// Requires network: **no**
+    #[deprecated = "util().get_exchange_rate() should be used instead"]
     pub fn get_exchange_rate(&self) -> Option<ExchangeRate> {
-        let rates = self.task_manager.lock_unwrap().get_exchange_rates();
-        let currency_code = self.user_preferences.lock_unwrap().fiat_currency.clone();
-        rates
-            .iter()
-            .find(|r| r.currency_code == currency_code)
-            .cloned()
+        self.util.get_exchange_rate()
     }
 
     /// Change the fiat currency (ISO 4217 currency code) - not all are supported
@@ -1228,11 +1169,9 @@ impl LightningNode {
     /// access.
     ///
     /// Requires network: **yes**
+    #[deprecated = "util().query_wallet_pubkey_id() should be used instead"]
     pub fn get_wallet_pubkey_id(&self) -> Result<String> {
-        self.auth.get_wallet_pubkey_id().map_to_runtime_error(
-            RuntimeErrorCode::AuthServiceUnavailable,
-            "Failed to authenticate in order to get the wallet pubkey id",
-        )
+        self.util.query_wallet_pubkey_id()
     }
 
     /// Get the payment UUID v5 from the payment hash
@@ -1244,8 +1183,9 @@ impl LightningNode {
     /// * `payment_hash` - a payment hash represented in hex
     ///
     /// Requires network: **no**
+    #[deprecated = "util().derive_payment_uuid() should be used instead"]
     pub fn get_payment_uuid(&self, payment_hash: String) -> Result<String> {
-        get_payment_uuid(payment_hash)
+        self.util.derive_payment_uuid(payment_hash)
     }
 
     /// Query the current recommended on-chain fee rate.
@@ -1485,79 +1425,9 @@ impl LightningNode {
     /// Throws an error in case that the necessary information can't be retrieved.
     ///
     /// Requires network: **yes**
+    #[deprecated = "util().log_debug_info() should be used instead"]
     pub fn log_debug_info(&self) -> Result<()> {
-        self.rt
-            .handle()
-            .block_on(self.sdk.sync())
-            .log_ignore_error(Level::Error, "Failed to sync node");
-
-        let available_lsps = self
-            .rt
-            .handle()
-            .block_on(self.sdk.list_lsps())
-            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Couldn't list lsps")?;
-
-        let connected_lsp = self
-            .rt
-            .handle()
-            .block_on(self.sdk.lsp_id())
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to get current lsp id",
-            )?
-            .unwrap_or("<no connection>".to_string());
-
-        let node_state = self.sdk.node_info().map_to_runtime_error(
-            RuntimeErrorCode::NodeUnavailable,
-            "Failed to read node info",
-        )?;
-
-        let channels = self
-            .rt
-            .handle()
-            .block_on(self.sdk.execute_dev_command("listpeerchannels".to_string()))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Couldn't execute `listpeerchannels` command",
-            )?;
-
-        let payments = self
-            .rt
-            .handle()
-            .block_on(self.sdk.execute_dev_command("listpayments".to_string()))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Couldn't execute `listpayments` command",
-            )?;
-
-        let diagnostics = self
-            .rt
-            .handle()
-            .block_on(self.sdk.generate_diagnostic_data())
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Couldn't call generate_diagnostic_data",
-            )?;
-
-        info!("3L version: {}", env!("GITHUB_REF"));
-        info!("Wallet pubkey id: {:?}", self.get_wallet_pubkey_id());
-        // Print connected peers, balances, inbound/outbound capacities, on-chain funds.
-        info!("Node state:\n{node_state:?}");
-        info!(
-            "List of available lsps:\n{}",
-            replace_byte_arrays_by_hex_string(&format!("{available_lsps:?}"))
-        );
-        info!("Connected lsp id: {connected_lsp}");
-        info!(
-            "List of peer channels:\n{}",
-            replace_byte_arrays_by_hex_string(&channels)
-        );
-        info!(
-            "List of payments:\n{}",
-            replace_byte_arrays_by_hex_string(&payments)
-        );
-        info!("Diagnostic data:\n{diagnostics}");
-        Ok(())
+        self.util.log_debug_info()
     }
 
     /// Returns the latest [`FiatTopupInfo`] if the user has registered for the fiat topup.
@@ -1571,18 +1441,9 @@ impl LightningNode {
     /// Returns the health check status of Breez and Greenlight services.
     ///
     /// Requires network: **yes**
+    #[deprecated = "util().query_health_status() should be used instead"]
     pub fn get_health_status(&self) -> Result<BreezHealthCheckStatus> {
-        Ok(self
-            .rt
-            .handle()
-            .block_on(BreezServices::service_health_check(
-                self.node_config.breez_sdk_config.breez_sdk_api_key.clone(),
-            ))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to get health status",
-            )?
-            .status)
+        self.util.query_health_status()
     }
 
     /// Check if clearing the wallet is feasible.
@@ -1652,57 +1513,25 @@ impl LightningNode {
     /// registered one.
     ///
     /// Requires network: **yes**
+    #[deprecated = "lightning_address().register() should be used instead"]
     pub fn register_lightning_address(&self) -> Result<String> {
-        let address = self
-            .rt
-            .handle()
-            .block_on(pigeon::assign_lightning_address(
-                &self.node_config.remote_services_config.backend_url,
-                &self.async_auth,
-            ))
-            .map_to_runtime_error(
-                RuntimeErrorCode::AuthServiceUnavailable,
-                "Failed to register a lightning address",
-            )?;
-        self.data_store
-            .lock_unwrap()
-            .store_lightning_address(&address)?;
-        Ok(address)
+        self.lightning_address.register()
     }
 
     /// Query the registered lightning address.
     ///
     /// Requires network: **no**
+    #[deprecated = "lightning_address().get() should be used instead"]
     pub fn query_lightning_address(&self) -> Result<Option<String>> {
-        Ok(self
-            .data_store
-            .lock_unwrap()
-            .retrieve_lightning_addresses()?
-            .into_iter()
-            .filter_map(with_status(EnableStatus::Enabled))
-            .find(|a| !a.starts_with('-')))
+        self.lightning_address.get()
     }
 
     /// Query for a previously verified phone number.
     ///
     /// Requires network: **no**
+    #[deprecated = "phone_number().get() should be used instead"]
     pub fn query_verified_phone_number(&self) -> Result<Option<String>> {
-        Ok(self
-            .data_store
-            .lock_unwrap()
-            .retrieve_lightning_addresses()?
-            .into_iter()
-            .filter_map(with_status(EnableStatus::Enabled))
-            .find(|a| a.starts_with('-'))
-            .and_then(|a| {
-                lightning_address_to_phone_number(
-                    &a,
-                    &self
-                        .node_config
-                        .remote_services_config
-                        .lipa_lightning_domain,
-                )
-            }))
+        self.phone_number.get()
     }
 
     /// Start the verification process for a new phone number. This will trigger an SMS containing
@@ -1714,29 +1543,9 @@ impl LightningNode {
     ///   [LightningNode::parse_phone_number_to_lightning_address].
     ///
     /// Requires network: **yes**
+    #[deprecated = "phone_number().register() should be used instead"]
     pub fn request_phone_number_verification(&self, phone_number: String) -> Result<()> {
-        let phone_number = self
-            .parse_phone_number(phone_number)
-            .map_to_invalid_input("Invalid phone number")?;
-
-        let encrypted_number = encrypt(
-            phone_number.e164.as_bytes(),
-            &self.persistence_encryption_key,
-        )?;
-        let encrypted_number = hex::encode(encrypted_number);
-
-        self.rt
-            .handle()
-            .block_on(pigeon::request_phone_number_verification(
-                &self.node_config.remote_services_config.backend_url,
-                &self.async_auth,
-                phone_number.e164,
-                encrypted_number,
-            ))
-            .map_to_runtime_error(
-                RuntimeErrorCode::AuthServiceUnavailable,
-                "Failed to register phone number",
-            )
+        self.phone_number.register(phone_number)
     }
 
     /// Finish the verification process for a new phone number.
@@ -1746,32 +1555,9 @@ impl LightningNode {
     /// * `otp` - the OTP code sent as an SMS to the phone number.
     ///
     /// Requires network: **yes**
+    #[deprecated = "phone_number().verify() should be used instead"]
     pub fn verify_phone_number(&self, phone_number: String, otp: String) -> Result<()> {
-        let phone_number = self
-            .parse_phone_number(phone_number)
-            .map_to_invalid_input("Invalid phone number")?;
-
-        self.rt
-            .handle()
-            .block_on(pigeon::verify_phone_number(
-                &self.node_config.remote_services_config.backend_url,
-                &self.async_auth,
-                phone_number.e164.clone(),
-                otp,
-            ))
-            .map_to_runtime_error(
-                RuntimeErrorCode::AuthServiceUnavailable,
-                "Failed to submit phone number registration otp",
-            )?;
-        let address = phone_number.to_lightning_address(
-            &self
-                .node_config
-                .remote_services_config
-                .lipa_lightning_domain,
-        );
-        self.data_store
-            .lock_unwrap()
-            .store_lightning_address(&address)
+        self.phone_number.verify(phone_number, otp)
     }
 
     /// Set value of a feature flag.
@@ -1907,14 +1693,6 @@ pub fn get_terms_and_conditions_status(
         .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
 }
 
-fn get_payment_uuid(payment_hash: String) -> Result<String> {
-    let hash = hex::decode(payment_hash).map_to_invalid_input("Invalid payment hash encoding")?;
-
-    Ok(Uuid::new_v5(&Uuid::NAMESPACE_OID, &hash)
-        .hyphenated()
-        .to_string())
-}
-
 pub(crate) fn enable_backtrace() {
     env::set_var("RUST_BACKTRACE", "1");
 }
@@ -2023,34 +1801,3 @@ fn with_status(status: EnableStatus) -> impl Fn((String, EnableStatus)) -> Optio
 }
 
 include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use perro::Error;
-
-    const PAYMENT_HASH: &str = "0b78877a596f18d5f6effde3dda1df25a5cf20439ff1ac91478d7e518211040f";
-    const PAYMENT_UUID: &str = "c6e597bd-0a98-5b46-8e74-f6098f5d16a3";
-
-    #[test]
-    fn test_payment_uuid() {
-        let payment_uuid = get_payment_uuid(PAYMENT_HASH.to_string());
-
-        assert_eq!(payment_uuid, Ok(PAYMENT_UUID.to_string()));
-    }
-
-    #[test]
-    fn test_payment_uuid_invalid_input() {
-        let invalid_hash_encoding = get_payment_uuid("INVALID_HEX_STRING".to_string());
-
-        assert!(matches!(
-            invalid_hash_encoding,
-            Err(Error::InvalidInput { .. })
-        ));
-
-        assert_eq!(
-            &invalid_hash_encoding.unwrap_err().to_string()[0..43],
-            "InvalidInput: Invalid payment hash encoding"
-        );
-    }
-}

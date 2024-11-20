@@ -53,13 +53,13 @@ impl TransactingNode {
     }
 
     pub fn has_enough_outbound(&self, min_outbound_sats: u64) -> Result<bool> {
-        let node_info = self.node.get_node_info()?;
+        let node_info = self.node.util().get_node_info()?;
         let outbound_capacity = node_info.channels_info.outbound_capacity.sats;
         Ok(outbound_capacity > min_outbound_sats)
     }
 
     pub fn has_enough_inbound(&self, min_inbound_sats: u64) -> Result<bool> {
-        let node_info = self.node.get_node_info()?;
+        let node_info = self.node.util().get_node_info()?;
         let inbound_capacity = node_info.channels_info.total_inbound_capacity.sats;
         Ok(inbound_capacity > min_inbound_sats)
     }
@@ -152,7 +152,7 @@ fn lsp_fee_can_be_fetched() {
 fn exchange_rate_can_be_fetched_and_is_recent() {
     let sender = TransactingNode::new(NodeType::Sender).unwrap();
     sleep(Duration::from_secs(5)); // Wait a bit, otherwise we can end up using persisted rate
-    let rate = sender.node.get_exchange_rate().unwrap();
+    let rate = sender.node.util().get_exchange_rate().unwrap();
     // Check exchange rate is recent
     let leeway_secs = 2 * 60;
     let backend_exchange_rate_update_interval_secs: u64 = 5 * 60 + leeway_secs;
