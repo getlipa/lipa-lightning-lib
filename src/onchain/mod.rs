@@ -8,9 +8,10 @@ use crate::onchain::channel_closes::ChannelClose;
 use crate::onchain::reverse_swap::ReverseSwap;
 use crate::onchain::swap::Swap;
 use crate::support::Support;
-use crate::{OnchainResolvingFees, SwapToLightningFees};
+use crate::{OnchainResolvingFees, RuntimeErrorCode, SwapToLightningFees};
 use breez_sdk_core::ReceiveOnchainRequest;
 use log::error;
+use perro::MapToError;
 use std::sync::Arc;
 
 pub struct Onchain {
@@ -50,7 +51,7 @@ fn get_onchain_resolving_fees<F>(
     prepare_onchain_tx: F,
 ) -> Result<Option<OnchainResolvingFees>>
 where
-    F: FnOnce(String, u32) -> Result<(Sats, Sats)>,
+    F: FnOnce(String) -> Result<(Sats, Sats, u32)>,
 {
     let rate = support.get_exchange_rate();
     let lsp_fees = support.calculate_lsp_fee_for_amount(amount.msats)?;
@@ -63,14 +64,11 @@ where
         }))
         .ok();
 
-    let sat_per_vbyte = support.query_onchain_fee_rate()?;
-
-    let (sent_amount, onchain_fee) = match prepare_onchain_tx(
+    let (sent_amount, onchain_fee, sats_per_vbyte) = match prepare_onchain_tx(
         swap_info
             .clone()
             .map(|s| s.bitcoin_address)
             .unwrap_or("1BitcoinEaterAddressDontSendf59kuE".to_string()),
-        sat_per_vbyte,
     ) {
         Ok(t) => t,
         // TODO: expose distinction between insufficient funds failure and other failures
@@ -98,7 +96,7 @@ where
         return Ok(Some(OnchainResolvingFees {
             swap_fees: None,
             sweep_onchain_fee_estimate: onchain_fee.to_amount_up(&rate),
-            sat_per_vbyte,
+            sats_per_vbyte,
         }));
     }
 
@@ -116,6 +114,19 @@ where
     Ok(Some(OnchainResolvingFees {
         swap_fees: Some(swap_to_lightning_fees),
         sweep_onchain_fee_estimate: onchain_fee.to_amount_up(&rate),
-        sat_per_vbyte,
+        sats_per_vbyte,
     }))
+}
+
+fn query_onchain_fee_rate(support: &Support) -> Result<u32> {
+    let recommended_fees = support
+        .rt
+        .handle()
+        .block_on(support.sdk.recommended_fees())
+        .map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Couldn't fetch recommended fees",
+        )?;
+
+    Ok(recommended_fees.half_hour_fee as u32)
 }

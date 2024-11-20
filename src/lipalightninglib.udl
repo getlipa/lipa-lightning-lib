@@ -139,7 +139,7 @@ interface LightningNode {
     ResolveFailedSwapInfo prepare_resolve_failed_swap(FailedSwapInfo failed_swap_info, string to_address, u32 onchain_fee_rate);
 
     [Throws=LnError]
-    string swap_failed_swap_funds_to_lightning(FailedSwapInfo failed_swap_info, u32 sat_per_vbyte, OpeningFeeParams? lsp_fee_param);
+    string swap_failed_swap_funds_to_lightning(FailedSwapInfo failed_swap_info, u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_param);
 
     [Throws=LnError]
     string resolve_failed_swap(ResolveFailedSwapInfo resolve_failed_swap_info);
@@ -324,13 +324,13 @@ interface Swap {
     OnchainResolvingFees? determine_resolving_fees(FailedSwapInfo failed_swap_info);
 
     [Throws=LnError]
-    SweepFailedSwapInfo prepare_sweep(FailedSwapInfo failed_swap_info, string to_address, u32 onchain_fee_rate);
+    SweepFailedSwapInfo prepare_sweep(FailedSwapInfo failed_swap_info, string to_address);
 
     [Throws=LnError]
     string sweep(SweepFailedSwapInfo sweep_failed_swap_info);
 
     [Throws=LnError]
-    string swap(FailedSwapInfo failed_swap_info, u32 sat_per_vbyte, OpeningFeeParams? lsp_fee_param);
+    string swap(FailedSwapInfo failed_swap_info, u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_param);
 };
 
 interface ReverseSwap {
@@ -349,7 +349,7 @@ interface ChannelClose {
     OnchainResolvingFees? determine_resolving_fees();
 
     [Throws=SweepError]
-    SweepChannelCloseInfo prepare_sweep(string address, u32 onchain_fee_rate);
+    SweepChannelCloseInfo prepare_sweep(string address);
 
     [Throws=LnError]
     string sweep(SweepChannelCloseInfo sweep_info);
@@ -874,7 +874,7 @@ dictionary ClearWalletInfo {
 dictionary OnchainResolvingFees {
     SwapToLightningFees? swap_fees;
     Amount sweep_onchain_fee_estimate;
-    u32 sat_per_vbyte;
+    u32 sats_per_vbyte;
 };
 
 dictionary SwapToLightningFees {

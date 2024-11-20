@@ -344,7 +344,7 @@ pub struct OnchainResolvingFees {
     /// The fee rate used to compute `swaps_fees` and `sweep_onchain_fee_estimate`.
     /// It should be provided when swapping funds back to lightning or when sweeping funds
     /// to on-chain to ensure the same fee rate is used.
-    pub sat_per_vbyte: u32,
+    pub sats_per_vbyte: u32,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -1253,6 +1253,7 @@ impl LightningNode {
     /// This is useful to obtain a fee rate to be used for [`LightningNode::sweep_funds_from_channel_closes`].
     ///
     /// Requires network: **yes**
+    #[deprecated = "New onchain interface automatically chooses fee rate"]
     pub fn query_onchain_fee_rate(&self) -> Result<u32> {
         let recommended_fees = self
             .rt
@@ -1270,8 +1271,7 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `address` - the funds will be sweeped to this address
-    /// * `onchain_fee_rate` - the fee rate that should be applied for the transaction.
-    ///   The recommended on-chain fee rate can be queried using [`LightningNode::query_onchain_fee_rate`]
+    /// * `onchain_fee_rate` - ignored
     ///
     /// Returns information on the prepared sweep, including the exact fee that results from
     /// using the provided fee rate. The method [`LightningNode::sweep_funds_from_channel_closes`] can be used to broadcast
@@ -1282,11 +1282,11 @@ impl LightningNode {
     pub fn prepare_sweep_funds_from_channel_closes(
         &self,
         address: String,
-        onchain_fee_rate: u32,
+        _onchain_fee_rate: u32,
     ) -> std::result::Result<SweepInfo, RedeemOnchainError> {
         self.onchain
             .channel_close()
-            .prepare_sweep(address, onchain_fee_rate)
+            .prepare_sweep(address)
             .map(SweepInfo::from)
     }
 
@@ -1375,8 +1375,7 @@ impl LightningNode {
     /// Parameters:
     /// * `failed_swap_info` - the failed swap that will be prepared
     /// * `to_address` - the destination address to which funds will be sent
-    /// * `onchain_fee_rate` - the fee rate that will be applied. The recommended one can be fetched
-    ///   using [`LightningNode::query_onchain_fee_rate`]
+    /// * `onchain_fee_rate` - ignored
     ///
     /// Requires network: **yes**
     #[deprecated = "onchain().swaps().prepare_sweep() should be used instead"]
@@ -1384,11 +1383,11 @@ impl LightningNode {
         &self,
         failed_swap_info: FailedSwapInfo,
         to_address: String,
-        onchain_fee_rate: u32,
+        _onchain_fee_rate: u32,
     ) -> Result<ResolveFailedSwapInfo> {
         self.onchain
             .swap()
-            .prepare_sweep(failed_swap_info, to_address, onchain_fee_rate)
+            .prepare_sweep(failed_swap_info, to_address)
             .map(ResolveFailedSwapInfo::from)
     }
 
@@ -1421,7 +1420,7 @@ impl LightningNode {
     /// Before using this method use [`LightningNode::get_failed_swap_resolving_fees`] to validate a swap is available.
     ///
     /// Parameters:
-    /// * `sat_per_vbyte` - the fee rate to use for the on-chain transaction.
+    /// * `sats_per_vbyte` - the fee rate to use for the on-chain transaction.
     ///   Can be obtained with [`LightningNode::get_failed_swap_resolving_fees`].
     /// * `lsp_fee_params` - the lsp fee params for opening a new channel if necessary.
     ///   Can be obtained with [`LightningNode::get_failed_swap_resolving_fees`].
@@ -1433,12 +1432,12 @@ impl LightningNode {
     pub fn swap_failed_swap_funds_to_lightning(
         &self,
         failed_swap_info: FailedSwapInfo,
-        sat_per_vbyte: u32,
+        sats_per_vbyte: u32,
         lsp_fee_param: Option<OpeningFeeParams>,
     ) -> Result<String> {
         self.onchain
             .swap()
-            .swap(failed_swap_info, sat_per_vbyte, lsp_fee_param)
+            .swap(failed_swap_info, sats_per_vbyte, lsp_fee_param)
     }
 
     /// Returns the fees for resolving channel closes if there are enough funds to pay for fees.
@@ -1461,7 +1460,7 @@ impl LightningNode {
     /// Before using this method use [`LightningNode::get_channel_close_resolving_fees`] to validate a swap is available.
     ///
     /// Parameters:
-    /// * `sat_per_vbyte` - the fee rate to use for the on-chain transaction.
+    /// * `sats_per_vbyte` - the fee rate to use for the on-chain transaction.
     ///   Can be obtained with [`LightningNode::get_channel_close_resolving_fees`].
     /// * `lsp_fee_params` - the lsp fee params for opening a new channel if necessary.
     ///   Can be obtained with [`LightningNode::get_channel_close_resolving_fees`].
@@ -1472,12 +1471,12 @@ impl LightningNode {
     #[deprecated = "onchain().channel_close().swap() should be used instead"]
     pub fn swap_channel_close_funds_to_lightning(
         &self,
-        sat_per_vbyte: u32,
+        sats_per_vbyte: u32,
         lsp_fee_params: Option<OpeningFeeParams>,
     ) -> std::result::Result<String, RedeemOnchainError> {
         self.onchain
             .channel_close()
-            .swap(sat_per_vbyte, lsp_fee_params)
+            .swap(sats_per_vbyte, lsp_fee_params)
     }
 
     /// Prints additional debug information to the logs.

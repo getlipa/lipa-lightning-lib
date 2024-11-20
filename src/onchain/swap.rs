@@ -1,6 +1,6 @@
 use crate::amount::{AsSats, Sats, ToAmount};
 use crate::errors::Result;
-use crate::onchain::get_onchain_resolving_fees;
+use crate::onchain::{get_onchain_resolving_fees, query_onchain_fee_rate};
 use crate::support::Support;
 use crate::util::unix_timestamp_to_system_time;
 use crate::{
@@ -72,28 +72,16 @@ impl Swap {
         &self,
         failed_swap_info: FailedSwapInfo,
     ) -> Result<Option<OnchainResolvingFees>> {
-        let sdk = Arc::clone(&self.support.sdk);
-        let handle = self.support.rt.handle();
-        let swap_address = failed_swap_info.address;
-        let prepare_onchain_tx =
-            move |to_address: String, sat_per_vbyte: u32| -> Result<(Sats, Sats)> {
-                let prepare_refund_response = handle
-                    .block_on(sdk.prepare_refund(PrepareRefundRequest {
-                        swap_address,
-                        to_address,
-                        sat_per_vbyte,
-                    }))
-                    .map_to_runtime_error(
-                        RuntimeErrorCode::NodeUnavailable,
-                        "Failed to prepare refund",
-                    )?;
-                let sent_amount = (failed_swap_info.amount.sats
-                    - prepare_refund_response.refund_tx_fee_sat)
-                    .as_sats();
-                let onchain_fee = prepare_refund_response.refund_tx_fee_sat.as_sats();
+        let failed_swap_closure = failed_swap_info.clone();
+        let prepare_onchain_tx = move |to_address: String| -> Result<(Sats, Sats, u32)> {
+            let sweep_info = self.prepare_sweep(failed_swap_closure, to_address)?;
 
-                Ok((sent_amount, onchain_fee))
-            };
+            Ok((
+                sweep_info.recovered_amount.sats.as_sats(),
+                sweep_info.onchain_fee.sats.as_sats(),
+                sweep_info.onchain_fee_rate,
+            ))
+        };
         get_onchain_resolving_fees(
             &self.support,
             failed_swap_info.amount.sats.as_sats().msats(),
@@ -107,16 +95,14 @@ impl Swap {
     /// Parameters:
     /// * `failed_swap_info` - the failed swap that will be prepared
     /// * `to_address` - the destination address to which funds will be sent
-    /// * `onchain_fee_rate` - the fee rate that will be applied. The recommended one can be fetched
-    ///   using [`LightningNode::query_onchain_fee_rate`](crate::LightningNode::query_onchain_fee_rate)
     ///
     /// Requires network: **yes**
     pub fn prepare_sweep(
         &self,
         failed_swap_info: FailedSwapInfo,
         to_address: String,
-        onchain_fee_rate: u32,
     ) -> Result<SweepFailedSwapInfo> {
+        let onchain_fee_rate = query_onchain_fee_rate(&self.support)?;
         let response = self
             .support
             .rt
@@ -195,7 +181,7 @@ impl Swap {
     pub fn swap(
         &self,
         failed_swap_info: FailedSwapInfo,
-        sat_per_vbyte: u32,
+        sats_per_vbyte: u32,
         lsp_fee_param: Option<OpeningFeeParams>,
     ) -> Result<String> {
         let swap_address_info = self.create(lsp_fee_param.clone()).map_to_runtime_error(
@@ -210,7 +196,7 @@ impl Swap {
             .block_on(self.support.sdk.prepare_refund(PrepareRefundRequest {
                 swap_address: failed_swap_info.address.clone(),
                 to_address: swap_address_info.address.clone(),
-                sat_per_vbyte,
+                sat_per_vbyte: sats_per_vbyte,
             }))
             .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Coudln't prepare refund")?;
 
@@ -252,7 +238,7 @@ impl Swap {
             .block_on(self.support.sdk.refund(RefundRequest {
                 swap_address: failed_swap_info.address,
                 to_address: swap_address_info.address,
-                sat_per_vbyte,
+                sat_per_vbyte: sats_per_vbyte,
             }))
             .map_to_runtime_error(
                 RuntimeErrorCode::NodeUnavailable,

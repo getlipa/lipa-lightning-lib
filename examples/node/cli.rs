@@ -1022,8 +1022,6 @@ fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str
     let swap_address = words.next().ok_or(anyhow!("Swap address is required"))?;
     let to_address = words.next().ok_or(anyhow!("To address is required"))?;
 
-    let fee_rate = node.query_onchain_fee_rate()?;
-
     let failed_swaps = failed_swap_from_actions_required_list(
         &node
             .actions_required()
@@ -1039,7 +1037,7 @@ fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str
     let resolve_failed_swap_info = node
         .onchain()
         .swap()
-        .prepare_sweep(failed_swap, to_address.into(), fee_rate)
+        .prepare_sweep(failed_swap, to_address.into())
         .map_err(|e| anyhow!("Failed to prepare the resolution of the failed swap: {e}"))?;
     let txid = node
         .onchain()
@@ -1422,11 +1420,7 @@ fn set_personal_note(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
 }
 
 fn sweep(node: &LightningNode, address: String) -> Result<String> {
-    let fee_rate = node.query_onchain_fee_rate()?;
-    let sweep_info = node
-        .onchain()
-        .channel_close()
-        .prepare_sweep(address, fee_rate)?;
+    let sweep_info = node.onchain().channel_close().prepare_sweep(address)?;
     Ok(node.onchain().channel_close().sweep(sweep_info)?)
 }
 
@@ -1683,7 +1677,7 @@ fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
     let txid = node
         .onchain()
         .channel_close()
-        .swap(resolving_fees.sat_per_vbyte, swap_fees.lsp_fee_params)?;
+        .swap(resolving_fees.sats_per_vbyte, swap_fees.lsp_fee_params)?;
 
     println!("Sweeping transaction: {txid}");
 
