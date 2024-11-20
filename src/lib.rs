@@ -9,6 +9,7 @@
 
 extern crate core;
 
+mod actions_required;
 mod activities;
 mod activity;
 mod amount;
@@ -22,6 +23,7 @@ mod data_store;
 mod errors;
 mod event;
 mod exchange_rate_provider;
+mod fiat_topup;
 mod invoice_details;
 mod key_derivation;
 mod lightning;
@@ -32,6 +34,7 @@ mod migrations;
 mod node_config;
 mod notification_handling;
 mod offer;
+mod onchain;
 mod payment;
 mod phone_number;
 mod random;
@@ -103,9 +106,12 @@ use pocketclient_mock as pocketclient;
 pub use crate::pocketclient::FiatTopupInfo;
 use crate::pocketclient::PocketClient;
 
+use crate::actions_required::ActionsRequired;
 pub use crate::activities::Activities;
 use crate::config::Config;
+use crate::fiat_topup::FiatTopup;
 pub use crate::lightning::{Lightning, PaymentAffordability};
+use crate::onchain::Onchain;
 use crate::support::Support;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 pub use breez_sdk_core::error::RedeemOnchainError as SweepError;
@@ -115,20 +121,17 @@ pub use breez_sdk_core::ReverseSwapStatus;
 use breez_sdk_core::{
     parse, BitcoinAddressData, BreezServices, ConnectRequest, EnvironmentType, EventListener,
     GreenlightCredentials, GreenlightNodeConfig, InputType, ListPaymentsRequest,
-    LnUrlPayRequestData, LnUrlWithdrawRequest, LnUrlWithdrawRequestData, Network, NodeConfig,
-    OpeningFeeParams, PayOnchainRequest, PaymentDetails, PaymentStatus, PaymentTypeFilter,
-    PrepareOnchainPaymentRequest, PrepareOnchainPaymentResponse, PrepareRedeemOnchainFundsRequest,
-    PrepareRefundRequest, ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
-    SignMessageRequest, UnspentTransactionOutput,
+    LnUrlPayRequestData, LnUrlWithdrawRequestData, Network, NodeConfig, OpeningFeeParams,
+    PayOnchainRequest, PaymentDetails, PaymentTypeFilter, PrepareOnchainPaymentRequest,
+    PrepareOnchainPaymentResponse, PrepareRedeemOnchainFundsRequest, PrepareRefundRequest,
+    ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
 };
-use crow::{OfferManager, TopupError, TopupInfo};
+use crow::{OfferManager, TopupError};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
 use data_store::DataStore;
-use email_address::EmailAddress;
 use hex::FromHex;
 use honeybadger::Auth;
 pub use honeybadger::{TermsAndConditions, TermsAndConditionsStatus};
-use iban::Iban;
 use log::{debug, error, info, Level};
 use logger::init_logger_once;
 use num_enum::TryFromPrimitive;
@@ -138,10 +141,7 @@ use perro::{
     ensure, invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
 };
 use squirrel::RemoteBackupClient;
-use std::collections::HashSet;
-use std::ops::Not;
 use std::path::Path;
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::{env, fs};
 use uuid::Uuid;
@@ -310,7 +310,6 @@ pub struct LightningNode {
     sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
     async_auth: Arc<honeybadger::asynchronous::Auth>,
-    fiat_topup_client: Arc<PocketClient>,
     offer_manager: Arc<OfferManager>,
     rt: Arc<AsyncRuntime>,
     data_store: Arc<Mutex<DataStore>>,
@@ -323,6 +322,9 @@ pub struct LightningNode {
     lightning: Arc<Lightning>,
     support: Arc<Support>,
     config: Arc<Config>,
+    fiat_topup: Arc<FiatTopup>,
+    actions_required: Arc<ActionsRequired>,
+    onchain: Arc<Onchain>,
 }
 
 /// Contains the fee information for the options to resolve funds that have moved on-chain.
@@ -478,13 +480,12 @@ impl LightningNode {
             Arc::clone(&auth),
         ));
 
-        let fiat_topup_client = Arc::new(
+        let fiat_topup_client =
             PocketClient::new(node_config.remote_services_config.pocket_url.clone())
                 .map_to_runtime_error(
                     RuntimeErrorCode::OfferServiceUnavailable,
                     "Couldn't create a fiat topup client",
-                )?,
-        );
+                )?;
 
         let persistence_encryption_key = derive_persistence_encryption_key(&strong_typed_seed)?;
         let backup_client = RemoteBackupClient::new(
@@ -515,7 +516,7 @@ impl LightningNode {
             sdk: Arc::clone(&sdk),
             auth: Arc::clone(&auth),
             async_auth: Arc::clone(&async_auth),
-            fiat_topup_client: Arc::clone(&fiat_topup_client),
+            fiat_topup_client,
             offer_manager: Arc::clone(&offer_manager),
             rt: Arc::clone(&rt),
             data_store: Arc::clone(&data_store),
@@ -535,12 +536,24 @@ impl LightningNode {
 
         let config = Arc::new(Config::new(Arc::clone(&support)));
 
+        let fiat_topup = Arc::new(FiatTopup::new(
+            Arc::clone(&support),
+            Arc::clone(&activities),
+        ));
+
+        let onchain = Arc::new(Onchain::new(Arc::clone(&support)));
+
+        let actions_required = Arc::new(ActionsRequired::new(
+            Arc::clone(&support),
+            Arc::clone(&fiat_topup),
+            Arc::clone(&onchain),
+        ));
+
         Ok(LightningNode {
             user_preferences,
             sdk,
             auth,
             async_auth,
-            fiat_topup_client,
             offer_manager,
             rt,
             data_store,
@@ -555,6 +568,9 @@ impl LightningNode {
             lightning,
             support,
             config,
+            fiat_topup,
+            actions_required,
+            onchain,
         })
     }
 
@@ -568,6 +584,18 @@ impl LightningNode {
 
     pub fn config(&self) -> Arc<Config> {
         Arc::clone(&self.config)
+    }
+
+    pub fn fiat_topup(&self) -> Arc<FiatTopup> {
+        Arc::clone(&self.fiat_topup)
+    }
+
+    pub fn actions_required(&self) -> Arc<ActionsRequired> {
+        Arc::clone(&self.actions_required)
+    }
+
+    pub fn onchain(&self) -> Arc<Onchain> {
+        Arc::clone(&self.onchain)
     }
 
     /// Request some basic info about the node
@@ -956,13 +984,6 @@ impl LightningNode {
         self.activities.set_personal_note(payment_hash, note)
     }
 
-    fn activity_from_breez_payment(
-        &self,
-        breez_payment: breez_sdk_core::Payment,
-    ) -> Result<Activity> {
-        self.activities.activity_from_breez_payment(breez_payment)
-    }
-
     /// Call the method when the app goes to foreground, such that the user can interact with it.
     /// The library starts running the background tasks more frequently to improve user experience.
     ///
@@ -1044,20 +1065,20 @@ impl LightningNode {
     /// * `fingerprint` - the fingerprint of the version being accepted.
     ///
     /// Requires network: **yes**
+    #[deprecated = "fiat_topup().accept_tc() should be used instead"]
     pub fn accept_pocket_terms_and_conditions(
         &self,
         version: i64,
         fingerprint: String,
     ) -> Result<()> {
-        self.auth
-            .accept_terms_and_conditions(TermsAndConditions::Pocket, version, fingerprint)
-            .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
+        self.fiat_topup.accept_tc(version, fingerprint)
     }
 
     /// Similar to [`get_terms_and_conditions_status`] with the difference that this method is pre-filling
     /// the environment and seed based on the node configuration.
     ///
     /// Requires network: **yes**
+    #[deprecated = "fiat_topup().query_tc_status() should be used instead"]
     pub fn get_terms_and_conditions_status(
         &self,
         terms_and_conditions: TermsAndConditions,
@@ -1079,58 +1100,22 @@ impl LightningNode {
     ///    ones using other sources.
     ///
     /// Requires network: **yes**
+    #[deprecated = "fiat_topup().register() should be used instead"]
     pub fn register_fiat_topup(
         &self,
         email: Option<String>,
         user_iban: String,
         user_currency: String,
     ) -> Result<FiatTopupInfo> {
-        debug!("register_fiat_topup() - called with - email: {email:?} - user_iban: {user_iban} - user_currency: {user_currency:?}");
-        user_iban
-            .parse::<Iban>()
-            .map_to_invalid_input("Invalid user_iban")?;
-
-        if let Some(email) = email.as_ref() {
-            EmailAddress::from_str(email).map_to_invalid_input("Invalid email")?;
-        }
-
-        let sdk = Arc::clone(&self.sdk);
-        let sign_message = |message| async move {
-            sdk.sign_message(SignMessageRequest { message })
-                .await
-                .ok()
-                .map(|r| r.signature)
-        };
-        let topup_info = self
-            .rt
-            .handle()
-            .block_on(self.fiat_topup_client.register_pocket_fiat_topup(
-                &user_iban,
-                user_currency,
-                self.get_node_info()?.node_pubkey,
-                sign_message,
-            ))
-            .map_to_runtime_error(
-                RuntimeErrorCode::OfferServiceUnavailable,
-                "Failed to register pocket fiat topup",
-            )?;
-
-        self.data_store
-            .lock_unwrap()
-            .store_fiat_topup_info(topup_info.clone())?;
-
-        self.offer_manager
-            .register_topup(topup_info.order_id.clone(), email)
-            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
-
-        Ok(topup_info)
+        self.fiat_topup.register(email, user_iban, user_currency)
     }
 
     /// Resets a previous fiat topups registration.
     ///
     /// Requires network: **no**
+    #[deprecated = "fiat_topup().reset() should be used instead"]
     pub fn reset_fiat_topup(&self) -> Result<()> {
-        self.data_store.lock_unwrap().clear_fiat_topup_info()
+        self.fiat_topup.reset()
     }
 
     /// Hides the topup with the given id. Can be called on expired topups so that they stop being returned
@@ -1139,6 +1124,7 @@ impl LightningNode {
     /// Topup id can be obtained from [`OfferKind::Pocket`].
     ///
     /// Requires network: **yes**
+    #[deprecated = "fiat_topup().dismiss_topup() should be used instead"]
     pub fn hide_topup(&self, id: String) -> Result<()> {
         self.offer_manager
             .hide_topup(id)
@@ -1153,76 +1139,9 @@ impl LightningNode {
     /// * Available funds resulting from channel closes.
     ///
     /// Requires network: **yes**
+    #[deprecated = "actions_required().list() should be used instead"]
     pub fn list_action_required_items(&self) -> Result<Vec<ActionRequiredItem>> {
-        let uncompleted_offers = self.query_uncompleted_offers()?;
-
-        let sat_per_vbyte = self.query_onchain_fee_rate()?;
-        let hidden_failed_swap_addresses = self
-            .data_store
-            .lock_unwrap()
-            .retrieve_hidden_unresolved_failed_swaps()?;
-        let failed_swaps: Vec<_> = self
-            .get_unresolved_failed_swaps()?
-            .into_iter()
-            .filter(|s| {
-                hidden_failed_swap_addresses.contains(&s.address).not()
-                    || self
-                        .prepare_resolve_failed_swap(
-                            s.clone(),
-                            "1BitcoinEaterAddressDontSendf59kuE".to_string(),
-                            sat_per_vbyte * 2,
-                        )
-                        .is_ok()
-            })
-            .collect();
-
-        let available_channel_closes_funds = self.get_node_info()?.onchain_balance;
-
-        let mut action_required_items: Vec<ActionRequiredItem> = uncompleted_offers
-            .into_iter()
-            .map(Into::into)
-            .chain(failed_swaps.into_iter().map(Into::into))
-            .collect();
-
-        // CLN currently forces a min-emergency onchain balance of 546 (the dust limit)
-        // TODO: Replace CLN_DUST_LIMIT_SAT with 0 if/when
-        //      https://github.com/ElementsProject/lightning/issues/7131 is addressed
-        if available_channel_closes_funds.sats > CLN_DUST_LIMIT_SAT {
-            let utxos = self.get_node_utxos()?;
-
-            // If we already have a 546 sat UTXO, then we hide from the total amount available
-            let available_funds_sats = if utxos
-                .iter()
-                .any(|u| u.amount_millisatoshi == CLN_DUST_LIMIT_SAT * 1_000)
-            {
-                available_channel_closes_funds.sats
-            } else {
-                available_channel_closes_funds.sats - CLN_DUST_LIMIT_SAT
-            };
-
-            let optional_hidden_amount_sat = self
-                .data_store
-                .lock_unwrap()
-                .retrieve_hidden_channel_close_onchain_funds_amount_sat()?;
-
-            let include_item_in_list = match optional_hidden_amount_sat {
-                Some(amount) if amount == available_channel_closes_funds.sats => {
-                    self.get_channel_close_resolving_fees()?.is_some()
-                }
-                _ => true,
-            };
-
-            if include_item_in_list {
-                action_required_items.push(ActionRequiredItem::ChannelClosesFundsAvailable {
-                    available_funds: available_funds_sats
-                        .as_sats()
-                        .to_amount_down(&self.get_exchange_rate()),
-                });
-            }
-        }
-
-        // TODO: improve ordering of items in the returned vec
-        Ok(action_required_items)
+        self.actions_required.list()
     }
 
     /// Hides the channel close action required item in case the amount cannot be recovered due
@@ -1230,12 +1149,10 @@ impl LightningNode {
     /// onchain-fees go down enough to make the amount recoverable.
     ///
     /// Requires network: **no**
+    #[deprecated = "actions_required().hide_unrecoverable_channel_close_funds_item() should be used instead"]
     pub fn hide_channel_closes_funds_available_action_required_item(&self) -> Result<()> {
-        let onchain_balance_sat = self.get_node_info()?.onchain_balance.sats;
-        self.data_store
-            .lock_unwrap()
-            .store_hidden_channel_close_onchain_funds_amount_sat(onchain_balance_sat)?;
-        Ok(())
+        self.actions_required()
+            .hide_unrecoverable_channel_close_funds_item()
     }
 
     /// Hides the unresolved failed swap action required item in case the amount cannot be
@@ -1243,52 +1160,21 @@ impl LightningNode {
     /// down enough to make the amount recoverable.
     ///
     /// Requires network: **no**
+    #[deprecated = "actions_required().hide_unrecoverable_failed_swap_item() should be used instead"]
     pub fn hide_unresolved_failed_swap_action_required_item(
         &self,
         failed_swap_info: FailedSwapInfo,
     ) -> Result<()> {
-        self.data_store
-            .lock_unwrap()
-            .store_hidden_unresolved_failed_swap(&failed_swap_info.address)?;
-        Ok(())
+        self.actions_required()
+            .hide_unrecoverable_failed_swap_item(failed_swap_info)
     }
 
     /// Get a list of unclaimed fund offers
     ///
     /// Requires network: **yes**
+    #[deprecated = "actions_required().list() should be used instead"]
     pub fn query_uncompleted_offers(&self) -> Result<Vec<OfferInfo>> {
-        let topup_infos = self
-            .offer_manager
-            .query_uncompleted_topups()
-            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
-        let rate = self.get_exchange_rate();
-
-        let list_payments_request = ListPaymentsRequest {
-            filters: Some(vec![PaymentTypeFilter::Received]),
-            metadata_filters: None,
-            from_timestamp: None,
-            to_timestamp: None,
-            include_failures: Some(false),
-            limit: Some(5),
-            offset: None,
-        };
-        let latest_activities = self
-            .rt
-            .handle()
-            .block_on(self.sdk.list_payments(list_payments_request))
-            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to list payments")?
-            .into_iter()
-            .filter(|p| p.status == PaymentStatus::Complete)
-            .map(|p| self.activity_from_breez_payment(p))
-            .filter_map(filter_out_and_log_corrupted_activities)
-            .collect::<Vec<_>>();
-
-        Ok(
-            filter_out_recently_claimed_topups(topup_infos, latest_activities)
-                .into_iter()
-                .map(|topup_info| OfferInfo::from(topup_info, &rate))
-                .collect(),
-        )
+        self.fiat_topup.query_uncompleted_offers()
     }
 
     /// Calculates the lightning payout fee for an uncompleted offer.
@@ -1297,37 +1183,9 @@ impl LightningNode {
     /// * `offer` - An uncompleted offer for which the lightning payout fee should get calculated.
     ///
     /// Requires network: **yes**
+    #[deprecated = "fiat_topup().calculate_payout_fee() should be used instead"]
     pub fn calculate_lightning_payout_fee(&self, offer: OfferInfo) -> Result<Amount> {
-        ensure!(
-            offer.status != OfferStatus::REFUNDED && offer.status != OfferStatus::SETTLED,
-            invalid_input(format!("Provided offer is already completed: {offer:?}"))
-        );
-
-        let max_withdrawable_msats = match self.rt.handle().block_on(parse(
-            &offer
-                .lnurlw
-                .ok_or_permanent_failure("Uncompleted offer didn't include an lnurlw")?,
-        )) {
-            Ok(InputType::LnUrlWithdraw { data }) => data,
-            Ok(input_type) => {
-                permanent_failure!("Invalid input type LNURLw in uncompleted offer: {input_type:?}")
-            }
-            Err(err) => {
-                permanent_failure!("Invalid LNURLw in uncompleted offer: {err}")
-            }
-        }
-        .max_withdrawable;
-
-        ensure!(
-            max_withdrawable_msats <= offer.amount.sats.as_sats().msats,
-            permanent_failure("LNURLw provides more")
-        );
-
-        let exchange_rate = self.get_exchange_rate();
-
-        Ok((offer.amount.sats.as_sats().msats - max_withdrawable_msats)
-            .as_msats()
-            .to_amount_up(&exchange_rate))
+        self.fiat_topup().calculate_payout_fee(offer)
     }
 
     /// Request to collect the offer (e.g. a Pocket topup).
@@ -1341,73 +1199,9 @@ impl LightningNode {
     ///   filled in.
     ///
     /// Requires network: **yes**
+    #[deprecated = "fiat_topup().request_collection() should be used instead"]
     pub fn request_offer_collection(&self, offer: OfferInfo) -> Result<String> {
-        let lnurlw_data = match self.rt.handle().block_on(parse(
-            &offer
-                .lnurlw
-                .ok_or_invalid_input("The provided offer didn't include an lnurlw")?,
-        )) {
-            Ok(InputType::LnUrlWithdraw { data }) => data,
-            Ok(input_type) => {
-                permanent_failure!("Invalid input type LNURLw in offer: {input_type:?}")
-            }
-            Err(err) => permanent_failure!("Invalid LNURLw in offer: {err}"),
-        };
-        let collectable_amount = lnurlw_data.max_withdrawable;
-        let hash = match self
-            .rt
-            .handle()
-            .block_on(self.sdk.lnurl_withdraw(LnUrlWithdrawRequest {
-                data: lnurlw_data,
-                amount_msat: collectable_amount,
-                description: None,
-            })) {
-            Ok(breez_sdk_core::LnUrlWithdrawResult::Ok { data }) => data.invoice.payment_hash,
-            Ok(breez_sdk_core::LnUrlWithdrawResult::Timeout { .. }) => runtime_error!(
-                RuntimeErrorCode::OfferServiceUnavailable,
-                "Failed to withdraw offer due to timeout on submitting invoice"
-            ),
-            Ok(breez_sdk_core::LnUrlWithdrawResult::ErrorStatus { data }) => runtime_error!(
-                RuntimeErrorCode::OfferServiceUnavailable,
-                "Failed to withdraw offer due to: {}",
-                data.reason
-            ),
-            Err(breez_sdk_core::LnUrlWithdrawError::Generic { err }) => runtime_error!(
-                RuntimeErrorCode::OfferServiceUnavailable,
-                "Failed to withdraw offer due to: {err}"
-            ),
-            Err(breez_sdk_core::LnUrlWithdrawError::InvalidAmount { err }) => {
-                permanent_failure!("Invalid amount in invoice for LNURL withdraw: {err}")
-            }
-            Err(breez_sdk_core::LnUrlWithdrawError::InvalidInvoice { err }) => {
-                permanent_failure!("Invalid invoice for LNURL withdraw: {err}")
-            }
-            Err(breez_sdk_core::LnUrlWithdrawError::InvalidUri { err }) => {
-                permanent_failure!("Invalid URL in LNURL withdraw: {err}")
-            }
-            Err(breez_sdk_core::LnUrlWithdrawError::ServiceConnectivity { err }) => {
-                runtime_error!(
-                    RuntimeErrorCode::OfferServiceUnavailable,
-                    "Failed to withdraw offer due to: {err}"
-                )
-            }
-            Err(breez_sdk_core::LnUrlWithdrawError::InvoiceNoRoutingHints { err }) => {
-                permanent_failure!(
-                    "A locally created invoice doesn't have any routing hints: {err}"
-                )
-            }
-        };
-
-        // MOCK: We need to simulate the backend receiving an update from Pocket that the offer has been settled.
-        #[allow(irrefutable_let_patterns)]
-        #[cfg(feature = "mock-deps")]
-        if let OfferKind::Pocket { id, .. } = offer.offer_kind.clone() {
-            self.offer_manager.hide_topup(id).unwrap();
-        }
-
-        self.store_payment_info(&hash, Some(offer.offer_kind));
-
-        Ok(hash)
+        self.fiat_topup().request_collection(offer)
     }
 
     /// Registers a new notification token. If a token has already been registered, it will be updated.
@@ -1451,15 +1245,6 @@ impl LightningNode {
     /// Requires network: **no**
     pub fn get_payment_uuid(&self, payment_hash: String) -> Result<String> {
         get_payment_uuid(payment_hash)
-    }
-
-    fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) {
-        let user_preferences = self.user_preferences.lock_unwrap().clone();
-        let exchange_rates = self.task_manager.lock_unwrap().get_exchange_rates();
-        self.data_store
-            .lock_unwrap()
-            .store_payment_info(hash, user_preferences, exchange_rates, offer, None, None)
-            .log_ignore_error(Level::Error, "Failed to persist payment info")
     }
 
     /// Query the current recommended on-chain fee rate.
@@ -1524,6 +1309,7 @@ impl LightningNode {
         // TODO: remove CLN_DUST_LIMIT_SAT addition if/when
         //      https://github.com/ElementsProject/lightning/issues/7131 is addressed
         let utxos = self
+            .support
             .get_node_utxos()
             .map_err(|e| RedeemOnchainError::Generic { err: e.to_string() })?;
         let onchain_fee_sat = if utxos
@@ -1610,6 +1396,7 @@ impl LightningNode {
     /// using [`LightningNode::resolve_failed_swap`].
     ///
     /// Requires network: **yes**
+    #[deprecated = "actions_required().list() should be used instead"]
     pub fn get_unresolved_failed_swaps(&self) -> Result<Vec<FailedSwapInfo>> {
         Ok(self
             .rt
@@ -1759,38 +1546,16 @@ impl LightningNode {
     ///   using [`LightningNode::query_onchain_fee_rate`]
     ///
     /// Requires network: **yes**
+    #[deprecated = "onchain().swaps().prepare_sweep() should be used instead"]
     pub fn prepare_resolve_failed_swap(
         &self,
         failed_swap_info: FailedSwapInfo,
         to_address: String,
         onchain_fee_rate: u32,
     ) -> Result<ResolveFailedSwapInfo> {
-        let response = self
-            .rt
-            .handle()
-            .block_on(self.sdk.prepare_refund(PrepareRefundRequest {
-                swap_address: failed_swap_info.address.clone(),
-                to_address: to_address.clone(),
-                sat_per_vbyte: onchain_fee_rate,
-            }))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to prepare a failed swap refund transaction",
-            )?;
-
-        let rate = self.get_exchange_rate();
-        let onchain_fee = response.refund_tx_fee_sat.as_sats().to_amount_up(&rate);
-        let recovered_amount = (failed_swap_info.amount.sats - onchain_fee.sats)
-            .as_sats()
-            .to_amount_down(&rate);
-
-        Ok(ResolveFailedSwapInfo {
-            swap_address: failed_swap_info.address,
-            recovered_amount,
-            onchain_fee,
-            to_address,
-            onchain_fee_rate,
-        })
+        self.onchain
+            .swaps()
+            .prepare_sweep(failed_swap_info, to_address, onchain_fee_rate)
     }
 
     /// Creates and broadcasts a resolving transaction to recover funds from a failed swap. Existing
@@ -2108,10 +1873,9 @@ impl LightningNode {
     /// Returns the latest [`FiatTopupInfo`] if the user has registered for the fiat topup.
     ///
     /// Requires network: **no**
+    #[deprecated = "fiat_topup().get_info() should be used instead"]
     pub fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupInfo>> {
-        self.data_store
-            .lock_unwrap()
-            .retrieve_latest_fiat_topup_info()
+        self.fiat_topup.get_info()
     }
 
     /// Returns the health check status of Breez and Greenlight services.
@@ -2415,15 +2179,6 @@ impl LightningNode {
         self.config.set_feature_flag(feature, flag_enabled)
     }
 
-    fn get_node_utxos(&self) -> Result<Vec<UnspentTransactionOutput>> {
-        let node_state = self
-            .sdk
-            .node_info()
-            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Couldn't get node info")?;
-
-        Ok(node_state.utxos)
-    }
-
     // Only meant for example CLI use
     #[doc(hidden)]
     pub fn close_all_channels_with_current_lsp(&self) -> Result<()> {
@@ -2556,28 +2311,6 @@ pub(crate) fn enable_backtrace() {
     env::set_var("RUST_BACKTRACE", "1");
 }
 
-fn filter_out_recently_claimed_topups(
-    topups: Vec<TopupInfo>,
-    latest_activities: Vec<Activity>,
-) -> Vec<TopupInfo> {
-    let pocket_id = |a: Activity| match a {
-        Activity::OfferClaim {
-            incoming_payment_info: _,
-            offer_kind: OfferKind::Pocket { id, .. },
-        } => Some(id),
-        _ => None,
-    };
-    let latest_succeeded_payment_offer_ids: HashSet<String> = latest_activities
-        .into_iter()
-        .filter(|a| a.get_payment_info().map(|p| p.payment_state) == Some(PaymentState::Succeeded))
-        .filter_map(pocket_id)
-        .collect();
-    topups
-        .into_iter()
-        .filter(|o| !latest_succeeded_payment_offer_ids.contains(&o.id))
-        .collect()
-}
-
 fn fill_payout_fee(
     offer: OfferKind,
     requested_amount: Msats,
@@ -2686,10 +2419,7 @@ include!(concat!(env!("OUT_DIR"), "/lipalightninglib.uniffi.rs"));
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node_config::WithTimezone;
-    use crow::TopupStatus;
     use perro::Error;
-    use std::time::SystemTime;
 
     const PAYMENT_HASH: &str = "0b78877a596f18d5f6effde3dda1df25a5cf20439ff1ac91478d7e518211040f";
     const PAYMENT_UUID: &str = "c6e597bd-0a98-5b46-8e74-f6098f5d16a3";
@@ -2714,130 +2444,5 @@ mod tests {
             &invalid_hash_encoding.unwrap_err().to_string()[0..43],
             "InvalidInput: Invalid payment hash encoding"
         );
-    }
-
-    #[test]
-    fn test_filter_out_recently_claimed_topups() {
-        let topups = vec![
-            TopupInfo {
-                id: "123".to_string(),
-                status: TopupStatus::READY,
-                amount_sat: 0,
-                topup_value_minor_units: 0,
-                exchange_fee_rate_permyriad: 0,
-                exchange_fee_minor_units: 0,
-                exchange_rate: graphql::ExchangeRate {
-                    currency_code: "eur".to_string(),
-                    sats_per_unit: 0,
-                    updated_at: SystemTime::now(),
-                },
-                expires_at: None,
-                lnurlw: None,
-                error: None,
-            },
-            TopupInfo {
-                id: "234".to_string(),
-                status: TopupStatus::READY,
-                amount_sat: 0,
-                topup_value_minor_units: 0,
-                exchange_fee_rate_permyriad: 0,
-                exchange_fee_minor_units: 0,
-                exchange_rate: graphql::ExchangeRate {
-                    currency_code: "eur".to_string(),
-                    sats_per_unit: 0,
-                    updated_at: SystemTime::now(),
-                },
-                expires_at: None,
-                lnurlw: None,
-                error: None,
-            },
-        ];
-
-        let mut payment_info = PaymentInfo {
-            payment_state: PaymentState::Succeeded,
-            hash: "hash".to_string(),
-            amount: Amount::default(),
-            invoice_details: InvoiceDetails {
-                invoice: "bca".to_string(),
-                amount: None,
-                description: "".to_string(),
-                payment_hash: "".to_string(),
-                payee_pub_key: "".to_string(),
-                creation_timestamp: SystemTime::now(),
-                expiry_interval: Default::default(),
-                expiry_timestamp: SystemTime::now(),
-            },
-            created_at: SystemTime::now().with_timezone(TzConfig::default()),
-            description: "".to_string(),
-            preimage: None,
-            personal_note: None,
-        };
-
-        let incoming_payment = Activity::IncomingPayment {
-            incoming_payment_info: IncomingPaymentInfo {
-                payment_info: payment_info.clone(),
-                requested_amount: Amount::default(),
-                lsp_fees: Amount::default(),
-                received_on: None,
-                received_lnurl_comment: None,
-            },
-        };
-
-        payment_info.hash = "hash2".to_string();
-        let topup = Activity::OfferClaim {
-            incoming_payment_info: IncomingPaymentInfo {
-                payment_info: payment_info.clone(),
-                requested_amount: Amount::default(),
-                lsp_fees: Amount::default(),
-                received_on: None,
-                received_lnurl_comment: None,
-            },
-            offer_kind: OfferKind::Pocket {
-                id: "123".to_string(),
-                exchange_rate: ExchangeRate {
-                    currency_code: "".to_string(),
-                    rate: 0,
-                    updated_at: SystemTime::now(),
-                },
-                topup_value_minor_units: 0,
-                topup_value_sats: Some(0),
-                exchange_fee_minor_units: 0,
-                exchange_fee_rate_permyriad: 0,
-                lightning_payout_fee: None,
-                error: None,
-            },
-        };
-
-        payment_info.hash = "hash3".to_string();
-        payment_info.payment_state = PaymentState::Failed;
-        let failed_topup = Activity::OfferClaim {
-            incoming_payment_info: IncomingPaymentInfo {
-                payment_info,
-                requested_amount: Amount::default(),
-                lsp_fees: Amount::default(),
-                received_on: None,
-                received_lnurl_comment: None,
-            },
-            offer_kind: OfferKind::Pocket {
-                id: "234".to_string(),
-                exchange_rate: ExchangeRate {
-                    currency_code: "".to_string(),
-                    rate: 0,
-                    updated_at: SystemTime::now(),
-                },
-                topup_value_minor_units: 0,
-                topup_value_sats: Some(0),
-                exchange_fee_minor_units: 0,
-                exchange_fee_rate_permyriad: 0,
-                lightning_payout_fee: None,
-                error: None,
-            },
-        };
-        let latest_payments = vec![incoming_payment, topup, failed_topup];
-
-        let filtered_topups = filter_out_recently_claimed_topups(topups, latest_payments);
-
-        assert_eq!(filtered_topups.len(), 1);
-        assert_eq!(filtered_topups.first().unwrap().id, "234");
     }
 }

@@ -1,6 +1,5 @@
 use crate::amount::AsSats;
 use crate::errors::map_send_payment_error;
-use crate::lightning::{report_send_payment_issue, store_payment_info};
 use crate::locker::Locker;
 use crate::support::Support;
 use crate::{
@@ -63,7 +62,8 @@ impl Bolt11 {
                 "Failed to create an invoice",
             )?;
 
-        store_payment_info(&self.support, &response.ln_invoice.payment_hash, None);
+        self.support
+            .store_payment_info(&response.ln_invoice.payment_hash, None);
         self.support
             .data_store
             .lock_unwrap()
@@ -120,7 +120,8 @@ impl Bolt11 {
         } else {
             Some(amount_sat.as_sats().msats)
         };
-        store_payment_info(&self.support, &invoice_details.payment_hash, None);
+        self.support
+            .store_payment_info(&invoice_details.payment_hash, None);
         let node_state = self
             .support
             .sdk
@@ -161,7 +162,8 @@ impl Bolt11 {
                 | SendPaymentError::RouteTooExpensive { .. }
                 | SendPaymentError::ServiceConnectivity { .. })
         ) {
-            report_send_payment_issue(&self.support, invoice_details.payment_hash);
+            self.support
+                .report_send_payment_issue(invoice_details.payment_hash);
         }
 
         result.map_err(map_send_payment_error)?;
