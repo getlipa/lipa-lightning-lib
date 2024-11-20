@@ -142,8 +142,6 @@ pub type LnUrlWithdrawResult<T> = std::result::Result<T, LnUrlWithdrawError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum UnsupportedDataType {
-    #[error("Bitcoin on-chain address")]
-    BitcoinAddress,
     #[error("LNURL Auth")]
     LnUrlAuth,
     #[error("Lightning node id")]
