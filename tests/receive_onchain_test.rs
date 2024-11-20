@@ -10,12 +10,12 @@ use serial_test::file_serial;
 fn test_receive_onchain() {
     let node = start_node().unwrap();
 
-    let swap_info = node.generate_swap_address(None).unwrap();
+    let swap_info = node.onchain().swap().create(None).unwrap();
     assert!(swap_info.address.starts_with("bc1"));
     assert!(swap_info.min_deposit.sats < swap_info.max_deposit.sats);
 
     // Calling a second time isn't an issue because no swap has been started
-    let swap_info = node.generate_swap_address(None).unwrap();
+    let swap_info = node.onchain().swap().create(None).unwrap();
     assert!(swap_info.address.starts_with("bc1"));
     assert!(swap_info.min_deposit.sats < swap_info.max_deposit.sats);
 
@@ -24,6 +24,6 @@ fn test_receive_onchain() {
         .calculate_lsp_fee_for_amount(100000)
         .unwrap()
         .lsp_fee_params;
-    let swap_info = node.generate_swap_address(lsp_fee_params).unwrap();
+    let swap_info = node.onchain().swap().create(lsp_fee_params).unwrap();
     assert!(swap_info.address.starts_with("bc1"));
 }

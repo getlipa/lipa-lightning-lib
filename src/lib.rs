@@ -50,7 +50,7 @@ mod util;
 
 pub use crate::activity::{Activity, ChannelCloseInfo, ChannelCloseState, ListActivitiesResponse};
 pub use crate::amount::{Amount, FiatValue};
-use crate::amount::{AsSats, Msats, Permyriad, Sats, ToAmount};
+use crate::amount::{AsSats, Msats, Permyriad, ToAmount};
 use crate::analytics::{derive_analytics_keys, AnalyticsInterceptor};
 pub use crate::analytics::{AnalyticsConfig, InvoiceCreationMetadata, PaymentMetadata};
 use crate::async_runtime::AsyncRuntime;
@@ -106,12 +106,15 @@ use pocketclient_mock as pocketclient;
 pub use crate::pocketclient::FiatTopupInfo;
 use crate::pocketclient::PocketClient;
 
-use crate::actions_required::ActionsRequired;
+pub use crate::actions_required::ActionsRequired;
 pub use crate::activities::Activities;
-use crate::config::Config;
-use crate::fiat_topup::FiatTopup;
+pub use crate::config::Config;
+pub use crate::fiat_topup::FiatTopup;
 pub use crate::lightning::{Lightning, PaymentAffordability};
-use crate::onchain::Onchain;
+pub use crate::onchain::channel_closes::{ChannelClose, SweepChannelCloseInfo};
+pub use crate::onchain::reverse_swap::ReverseSwap;
+pub use crate::onchain::swap::{Swap, SweepFailedSwapInfo};
+pub use crate::onchain::Onchain;
 use crate::support::Support;
 pub use breez_sdk_core::error::ReceiveOnchainError as SwapError;
 pub use breez_sdk_core::error::RedeemOnchainError as SweepError;
@@ -122,9 +125,7 @@ use breez_sdk_core::{
     parse, BitcoinAddressData, BreezServices, ConnectRequest, EnvironmentType, EventListener,
     GreenlightCredentials, GreenlightNodeConfig, InputType, ListPaymentsRequest,
     LnUrlPayRequestData, LnUrlWithdrawRequestData, Network, NodeConfig, OpeningFeeParams,
-    PayOnchainRequest, PaymentDetails, PaymentTypeFilter, PrepareOnchainPaymentRequest,
-    PrepareOnchainPaymentResponse, PrepareRedeemOnchainFundsRequest, PrepareRefundRequest,
-    ReceiveOnchainRequest, RedeemOnchainFundsRequest, RefundRequest,
+    PaymentDetails, PaymentTypeFilter, PrepareOnchainPaymentResponse,
 };
 use crow::{OfferManager, TopupError};
 pub use crow::{PermanentFailureCode, TemporaryFailureCode};
@@ -1277,60 +1278,16 @@ impl LightningNode {
     /// the sweep transaction.
     ///
     /// Requires network: **yes**
+    #[deprecated = "onchain().channel_close().prepare_sweep() should be used instead"]
     pub fn prepare_sweep_funds_from_channel_closes(
         &self,
         address: String,
         onchain_fee_rate: u32,
     ) -> std::result::Result<SweepInfo, RedeemOnchainError> {
-        let res =
-            self.rt
-                .handle()
-                .block_on(self.sdk.prepare_redeem_onchain_funds(
-                    PrepareRedeemOnchainFundsRequest {
-                        to_address: address.clone(),
-                        sat_per_vbyte: onchain_fee_rate,
-                    },
-                ))?;
-
-        let onchain_balance_sat = self
-            .sdk
-            .node_info()
-            .map_err(|e| RedeemOnchainError::ServiceConnectivity {
-                err: format!("Failed to fetch on-chain balance: {e}"),
-            })?
-            .onchain_balance_msat
-            .as_msats()
-            .to_amount_down(&None)
-            .sats;
-
-        let rate = self.get_exchange_rate();
-
-        // Add the amount that won't be possible to be swept due to CLN's min-emergency limit (546 sats)
-        // TODO: remove CLN_DUST_LIMIT_SAT addition if/when
-        //      https://github.com/ElementsProject/lightning/issues/7131 is addressed
-        let utxos = self
-            .support
-            .get_node_utxos()
-            .map_err(|e| RedeemOnchainError::Generic { err: e.to_string() })?;
-        let onchain_fee_sat = if utxos
-            .iter()
-            .any(|u| u.amount_millisatoshi == CLN_DUST_LIMIT_SAT * 1_000)
-        {
-            res.tx_fee_sat
-        } else {
-            res.tx_fee_sat + CLN_DUST_LIMIT_SAT
-        };
-
-        let onchain_fee_amount = onchain_fee_sat.as_sats().to_amount_up(&rate);
-
-        Ok(SweepInfo {
-            address,
-            onchain_fee_rate,
-            onchain_fee_amount,
-            amount: (onchain_balance_sat - res.tx_fee_sat)
-                .as_sats()
-                .to_amount_up(&rate),
-        })
+        self.onchain
+            .channel_close()
+            .prepare_sweep(address, onchain_fee_rate)
+            .map(SweepInfo::from)
     }
 
     /// Sweeps all available on-chain funds to the specified on-chain address.
@@ -1342,17 +1299,9 @@ impl LightningNode {
     /// Returns the txid of the sweep transaction.
     ///
     /// Requires network: **yes**
+    #[deprecated = "onchain().channel_close().sweep() should be used instead"]
     pub fn sweep_funds_from_channel_closes(&self, sweep_info: SweepInfo) -> Result<String> {
-        let txid = self
-            .rt
-            .handle()
-            .block_on(self.sdk.redeem_onchain_funds(RedeemOnchainFundsRequest {
-                to_address: sweep_info.address,
-                sat_per_vbyte: sweep_info.onchain_fee_rate,
-            }))
-            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to sweep funds")?
-            .txid;
-        Ok(hex::encode(txid))
+        self.onchain.channel_close().sweep(sweep_info.into())
     }
 
     /// Generates a Bitcoin on-chain address that can be used to topup the local LN wallet from an
@@ -1368,28 +1317,12 @@ impl LightningNode {
     ///   be opened. Can be obtained using [`LightningNode::calculate_lsp_fee`].
     ///
     /// Requires network: **yes**
+    #[deprecated = "onchain().swaps().create() should be used instead"]
     pub fn generate_swap_address(
         &self,
         lsp_fee_params: Option<OpeningFeeParams>,
     ) -> std::result::Result<SwapAddressInfo, ReceiveOnchainError> {
-        let swap_info =
-            self.rt
-                .handle()
-                .block_on(self.sdk.receive_onchain(ReceiveOnchainRequest {
-                    opening_fee_params: lsp_fee_params,
-                }))?;
-        let rate = self.get_exchange_rate();
-
-        Ok(SwapAddressInfo {
-            address: swap_info.bitcoin_address,
-            min_deposit: (swap_info.min_allowed_deposit as u64)
-                .as_sats()
-                .to_amount_up(&rate),
-            max_deposit: (swap_info.max_allowed_deposit as u64)
-                .as_sats()
-                .to_amount_down(&rate),
-            swap_fee: 0_u64.as_sats().to_amount_up(&rate),
-        })
+        self.onchain.swap().create(lsp_fee_params)
     }
 
     /// Lists all unresolved failed swaps. Each individual failed swap can be recovered
@@ -1426,114 +1359,14 @@ impl LightningNode {
     /// Returns the fee information for the available resolving options.
     ///
     /// Requires network: *yes*
+    #[deprecated = "onchain().swaps().determine_resolving_fees() should be used instead"]
     pub fn get_failed_swap_resolving_fees(
         &self,
         failed_swap_info: FailedSwapInfo,
     ) -> Result<Option<OnchainResolvingFees>> {
-        let sdk = Arc::clone(&self.sdk);
-        let handle = self.rt.handle();
-        let swap_address = failed_swap_info.address;
-        let prepare_onchain_tx =
-            move |to_address: String, sat_per_vbyte: u32| -> Result<(Sats, Sats)> {
-                let prepare_refund_response = handle
-                    .block_on(sdk.prepare_refund(PrepareRefundRequest {
-                        swap_address,
-                        to_address,
-                        sat_per_vbyte,
-                    }))
-                    .map_to_runtime_error(
-                        RuntimeErrorCode::NodeUnavailable,
-                        "Failed to prepare refund",
-                    )?;
-                let sent_amount = (failed_swap_info.amount.sats
-                    - prepare_refund_response.refund_tx_fee_sat)
-                    .as_sats();
-                let onchain_fee = prepare_refund_response.refund_tx_fee_sat.as_sats();
-
-                Ok((sent_amount, onchain_fee))
-            };
-        self.get_onchain_resolving_fees(
-            failed_swap_info.amount.sats.as_sats().msats(),
-            prepare_onchain_tx,
-        )
-    }
-
-    fn get_onchain_resolving_fees<F>(
-        &self,
-        amount: Msats,
-        prepare_onchain_tx: F,
-    ) -> Result<Option<OnchainResolvingFees>>
-    where
-        F: FnOnce(String, u32) -> Result<(Sats, Sats)>,
-    {
-        let rate = self.get_exchange_rate();
-        let lsp_fees = self.lightning.calculate_lsp_fee_for_amount(amount.msats)?;
-
-        let swap_info = self
-            .rt
-            .handle()
-            .block_on(self.sdk.receive_onchain(ReceiveOnchainRequest {
-                opening_fee_params: lsp_fees.lsp_fee_params,
-            }))
-            .ok();
-
-        let sat_per_vbyte = self.query_onchain_fee_rate()?;
-
-        let (sent_amount, onchain_fee) = match prepare_onchain_tx(
-            swap_info
-                .clone()
-                .map(|s| s.bitcoin_address)
-                .unwrap_or("1BitcoinEaterAddressDontSendf59kuE".to_string()),
-            sat_per_vbyte,
-        ) {
-            Ok(t) => t,
-            // TODO: expose distinction between insufficient funds failure and other failures
-            //  -> requires that the SDK exposes an error when preparing for resolving failed swaps
-            //  for now, it only does for preparing to resolve onchain funds from channel closes.
-            Err(e) => {
-                error!("Failed to prepare onchain tx due to {e}");
-                return Ok(None);
-            }
-        };
-
-        // Require onchain fees to be less than half of the onchain balance to leave some leeway
-        //  (for now, the onchain fee is just an estimation because the destination address is unknown)
-        if onchain_fee.sats * 2 > amount.sats_round_down().sats {
-            return Ok(None);
-        }
-
-        let lsp_fees = self
-            .lightning
-            .calculate_lsp_fee_for_amount(sent_amount.sats)?;
-
-        if swap_info.is_none()
-            || sent_amount.sats < (swap_info.clone().unwrap().min_allowed_deposit as u64)
-            || sent_amount.sats > (swap_info.clone().unwrap().max_allowed_deposit as u64)
-            || sent_amount.sats <= lsp_fees.lsp_fee.sats
-        {
-            return Ok(Some(OnchainResolvingFees {
-                swap_fees: None,
-                sweep_onchain_fee_estimate: onchain_fee.to_amount_up(&rate),
-                sat_per_vbyte,
-            }));
-        }
-
-        let swap_fee = 0_u64.as_sats();
-        let swap_to_lightning_fees = SwapToLightningFees {
-            swap_fee: swap_fee.sats.as_sats().to_amount_up(&rate),
-            onchain_fee: onchain_fee.to_amount_up(&rate),
-            channel_opening_fee: lsp_fees.lsp_fee.clone(),
-            total_fees: (swap_fee.sats + onchain_fee.sats + lsp_fees.lsp_fee.sats)
-                .as_sats()
-                .to_amount_up(&rate),
-            lsp_fee_params: lsp_fees.lsp_fee_params,
-        };
-
-        Ok(Some(OnchainResolvingFees {
-            swap_fees: Some(swap_to_lightning_fees),
-            sweep_onchain_fee_estimate: onchain_fee.to_amount_up(&rate),
-            sat_per_vbyte,
-        }))
+        self.onchain
+            .swap()
+            .determine_resolving_fees(failed_swap_info)
     }
 
     /// Prepares the resolution of a failed swap in order to know how much will be recovered and how much
@@ -1554,8 +1387,9 @@ impl LightningNode {
         onchain_fee_rate: u32,
     ) -> Result<ResolveFailedSwapInfo> {
         self.onchain
-            .swaps()
+            .swap()
             .prepare_sweep(failed_swap_info, to_address, onchain_fee_rate)
+            .map(ResolveFailedSwapInfo::from)
     }
 
     /// Creates and broadcasts a resolving transaction to recover funds from a failed swap. Existing
@@ -1571,93 +1405,40 @@ impl LightningNode {
     /// Paid on-chain fees can be known in advance using [`LightningNode::prepare_resolve_failed_swap`].
     ///
     /// Requires network: **yes**
+    #[deprecated = "onchain().swaps().sweep() should be used instead"]
     pub fn resolve_failed_swap(
         &self,
         resolve_failed_swap_info: ResolveFailedSwapInfo,
     ) -> Result<String> {
-        Ok(self
-            .rt
-            .handle()
-            .block_on(self.sdk.refund(RefundRequest {
-                swap_address: resolve_failed_swap_info.swap_address,
-                to_address: resolve_failed_swap_info.to_address,
-                sat_per_vbyte: resolve_failed_swap_info.onchain_fee_rate,
-            }))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to create and broadcast failed swap refund transaction",
-            )?
-            .refund_tx_id)
+        self.onchain.swap().sweep(resolve_failed_swap_info.into())
     }
 
+    /// Automatically swaps failed swap funds back to lightning.
+    ///
+    /// If a swap is in progress, this method will return an error.
+    ///
+    /// If the current balance doesn't fulfill the limits, this method will return an error.
+    /// Before using this method use [`LightningNode::get_failed_swap_resolving_fees`] to validate a swap is available.
+    ///
+    /// Parameters:
+    /// * `sat_per_vbyte` - the fee rate to use for the on-chain transaction.
+    ///   Can be obtained with [`LightningNode::get_failed_swap_resolving_fees`].
+    /// * `lsp_fee_params` - the lsp fee params for opening a new channel if necessary.
+    ///   Can be obtained with [`LightningNode::get_failed_swap_resolving_fees`].
+    ///
+    /// Returns the txid of the sweeping tx.
+    ///
+    /// Requires network: **yes**
+    #[deprecated = "onchain().swaps().swap() should be used instead"]
     pub fn swap_failed_swap_funds_to_lightning(
         &self,
         failed_swap_info: FailedSwapInfo,
         sat_per_vbyte: u32,
         lsp_fee_param: Option<OpeningFeeParams>,
     ) -> Result<String> {
-        let swap_address_info = self
-            .generate_swap_address(lsp_fee_param.clone())
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Couldn't generate swap address",
-            )?;
-
-        let prepare_response = self
-            .rt
-            .handle()
-            .block_on(self.sdk.prepare_refund(PrepareRefundRequest {
-                swap_address: failed_swap_info.address.clone(),
-                to_address: swap_address_info.address.clone(),
-                sat_per_vbyte,
-            }))
-            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Coudln't prepare refund")?;
-
-        let send_amount_sats = failed_swap_info.amount.sats - prepare_response.refund_tx_fee_sat;
-
-        ensure!(
-            swap_address_info.min_deposit.sats <= send_amount_sats,
-            runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed swap amount isn't enough for creating new swap"
-            )
-        );
-
-        ensure!(
-            swap_address_info.max_deposit.sats >= send_amount_sats,
-            runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed swap amount is too big for creating new swap"
-            )
-        );
-
-        let lsp_fees = self
-            .lightning
-            .calculate_lsp_fee_for_amount(send_amount_sats)?
-            .lsp_fee
-            .sats;
-        ensure!(
-            lsp_fees < send_amount_sats,
-            runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "A new channel is needed and the failed swap amount is not enough to pay for fees"
-            )
-        );
-
-        let refund_response = self
-            .rt
-            .handle()
-            .block_on(self.sdk.refund(RefundRequest {
-                swap_address: failed_swap_info.address,
-                to_address: swap_address_info.address,
-                sat_per_vbyte,
-            }))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Couldn't broadcast swap refund transaction",
-            )?;
-
-        Ok(refund_response.refund_tx_id)
+        self.onchain
+            .swap()
+            .swap(failed_swap_info, sat_per_vbyte, lsp_fee_param)
     }
 
     /// Returns the fees for resolving channel closes if there are enough funds to pay for fees.
@@ -1667,37 +1448,9 @@ impl LightningNode {
     /// Returns the fee information for the available resolving options.
     ///
     /// Requires network: **yes**
+    #[deprecated = "onchain().channel_close().determine_resolving_fees() should be used instead"]
     pub fn get_channel_close_resolving_fees(&self) -> Result<Option<OnchainResolvingFees>> {
-        let onchain_balance = self
-            .sdk
-            .node_info()
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Couldn't fetch on-chain balance",
-            )?
-            .onchain_balance_msat
-            .as_msats();
-        ensure!(
-            onchain_balance.msats != 0,
-            invalid_input("No on-chain funds to resolve")
-        );
-
-        let prepare_onchain_tx =
-            move |to_address: String, sat_per_vbyte: u32| -> Result<(Sats, Sats)> {
-                let sweep_info = self
-                    .prepare_sweep_funds_from_channel_closes(to_address, sat_per_vbyte)
-                    .map_to_runtime_error(
-                        RuntimeErrorCode::NodeUnavailable,
-                        "Failed to prepare sweep funds from channel closes",
-                    )?;
-
-                Ok((
-                    sweep_info.amount.sats.as_sats(),
-                    sweep_info.onchain_fee_amount.sats.as_sats(),
-                ))
-            };
-
-        self.get_onchain_resolving_fees(onchain_balance, prepare_onchain_tx)
+        self.onchain.channel_close().determine_resolving_fees()
     }
 
     /// Automatically swaps on-chain funds back to lightning.
@@ -1716,78 +1469,15 @@ impl LightningNode {
     /// Returns the txid of the sweeping tx.
     ///
     /// Requires network: **yes**
+    #[deprecated = "onchain().channel_close().swap() should be used instead"]
     pub fn swap_channel_close_funds_to_lightning(
         &self,
         sat_per_vbyte: u32,
         lsp_fee_params: Option<OpeningFeeParams>,
     ) -> std::result::Result<String, RedeemOnchainError> {
-        let onchain_balance = self.sdk.node_info()?.onchain_balance_msat.as_msats();
-
-        let swap_address_info =
-            self.generate_swap_address(lsp_fee_params.clone())
-                .map_err(|e| RedeemOnchainError::Generic {
-                    err: format!("Couldn't generate swap address: {}", e),
-                })?;
-
-        let prepare_response =
-            self.rt
-                .handle()
-                .block_on(self.sdk.prepare_redeem_onchain_funds(
-                    PrepareRedeemOnchainFundsRequest {
-                        to_address: swap_address_info.address.clone(),
-                        sat_per_vbyte,
-                    },
-                ))?;
-        // TODO: remove CLN_DUST_LIMIT_SAT component if/when
-        //      https://github.com/ElementsProject/lightning/issues/7131 is addressed
-        let send_amount_sats = onchain_balance.sats_round_down().sats
-            - CLN_DUST_LIMIT_SAT
-            - prepare_response.tx_fee_sat;
-
-        if swap_address_info.min_deposit.sats > send_amount_sats {
-            return Err(RedeemOnchainError::InsufficientFunds {
-                err: format!(
-                    "Not enough funds ({} sats after onchain fees) available for min swap amount({} sats)",
-                    send_amount_sats,
-                    swap_address_info.min_deposit.sats,
-                ),
-            });
-        }
-
-        if swap_address_info.max_deposit.sats < send_amount_sats {
-            return Err(RedeemOnchainError::Generic {
-                err: format!(
-                    "Available funds ({} sats after onchain fees) exceed limit for swap ({} sats)",
-                    send_amount_sats, swap_address_info.max_deposit.sats,
-                ),
-            });
-        }
-
-        let lsp_fees = self
-            .lightning
-            .calculate_lsp_fee_for_amount(send_amount_sats)
-            .map_err(|_| RedeemOnchainError::ServiceConnectivity {
-                err: "Could not get lsp fees".to_string(),
-            })?
-            .lsp_fee
-            .sats;
-        if lsp_fees >= send_amount_sats {
-            return Err(RedeemOnchainError::InsufficientFunds {
-                err: format!(
-                    "Available funds ({} sats after onchain fees) are not enough for lsp fees ({} sats)",
-                    send_amount_sats, lsp_fees,
-                ),
-            });
-        }
-
-        let sweep_result = self.rt.handle().block_on(self.sdk.redeem_onchain_funds(
-            RedeemOnchainFundsRequest {
-                to_address: swap_address_info.address,
-                sat_per_vbyte,
-            },
-        ))?;
-
-        Ok(hex::encode(sweep_result.txid))
+        self.onchain
+            .channel_close()
+            .swap(sat_per_vbyte, lsp_fee_params)
     }
 
     /// Prints additional debug information to the logs.
@@ -1900,48 +1590,11 @@ impl LightningNode {
     /// Meaning that the balance is within the range of what can be reverse-swapped.
     ///
     /// Requires network: **yes**
+    #[deprecated = "onchain().reverse_swap().determine_clear_wallet_feasibility() should be used instead"]
     pub fn check_clear_wallet_feasibility(&self) -> Result<RangeHit> {
-        let limits = self
-            .rt
-            .handle()
-            .block_on(self.sdk.onchain_payment_limits())
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to get on-chain payment limits",
-            )?;
-        let balance_sat = self
-            .sdk
-            .node_info()
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to read node info",
-            )?
-            .channels_balance_msat
-            .as_msats()
-            .sats_round_down()
-            .sats;
-        let exchange_rate = self.get_exchange_rate();
-
-        // Accomodating lightning network routing fees.
-        let routing_fee = Permyriad(
-            self.node_config
-                .max_routing_fee_config
-                .max_routing_fee_permyriad,
-        )
-        .of(&limits.min_sat.as_sats())
-        .sats_round_up();
-        let min = limits.min_sat + routing_fee.sats;
-        let range_hit = match balance_sat {
-            balance_sat if balance_sat < min => RangeHit::Below {
-                min: min.as_sats().to_amount_up(&exchange_rate),
-            },
-            balance_sat if balance_sat <= limits.max_sat => RangeHit::In,
-            balance_sat if limits.max_sat < balance_sat => RangeHit::Above {
-                max: limits.max_sat.as_sats().to_amount_down(&exchange_rate),
-            },
-            _ => permanent_failure!("Unreachable code in check_clear_wallet_feasibility()"),
-        };
-        Ok(range_hit)
+        self.onchain
+            .reverse_swap()
+            .determine_clear_wallet_feasibility()
     }
 
     /// Prepares a reverse swap that sends all funds in LN channels. This is possible because the
@@ -1952,47 +1605,9 @@ impl LightningNode {
     /// is within the required range.
     ///
     /// Requires network: **yes**
+    #[deprecated = "onchain().reverse_swap().prepare_clear_wallet() should be used instead"]
     pub fn prepare_clear_wallet(&self) -> Result<ClearWalletInfo> {
-        let claim_tx_feerate = self.query_onchain_fee_rate()?;
-        let limits = self
-            .rt
-            .handle()
-            .block_on(self.sdk.onchain_payment_limits())
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to get on-chain payment limits",
-            )?;
-        let prepare_response = self
-            .rt
-            .handle()
-            .block_on(
-                self.sdk
-                    .prepare_onchain_payment(PrepareOnchainPaymentRequest {
-                        amount_sat: limits.max_payable_sat,
-                        amount_type: breez_sdk_core::SwapAmountType::Send,
-                        claim_tx_feerate,
-                    }),
-            )
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to prepare on-chain payment",
-            )?;
-
-        let total_fees_sat = prepare_response.total_fees;
-        let onchain_fee_sat = prepare_response.fees_claim + prepare_response.fees_lockup;
-        let swap_fee_sat = total_fees_sat - onchain_fee_sat;
-        let exchange_rate = self.get_exchange_rate();
-
-        Ok(ClearWalletInfo {
-            clear_amount: prepare_response
-                .sender_amount_sat
-                .as_sats()
-                .to_amount_up(&exchange_rate),
-            total_estimated_fees: total_fees_sat.as_sats().to_amount_up(&exchange_rate),
-            onchain_fee: onchain_fee_sat.as_sats().to_amount_up(&exchange_rate),
-            swap_fee: swap_fee_sat.as_sats().to_amount_up(&exchange_rate),
-            prepare_response,
-        })
+        self.onchain.reverse_swap().prepare_clear_wallet()
     }
 
     /// Starts a reverse swap that sends all funds in LN channels to the provided on-chain address.
@@ -2004,22 +1619,15 @@ impl LightningNode {
     ///   using [`LightningNode::decode_data`].
     ///
     /// Requires network: **yes**
+    #[deprecated = "onchain().reverse_swap().clear_wallet() should be used instead"]
     pub fn clear_wallet(
         &self,
         clear_wallet_info: ClearWalletInfo,
         destination_onchain_address_data: BitcoinAddressData,
     ) -> Result<()> {
-        self.rt
-            .handle()
-            .block_on(self.sdk.pay_onchain(PayOnchainRequest {
-                recipient_address: destination_onchain_address_data.address,
-                prepare_res: clear_wallet_info.prepare_response,
-            }))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to start reverse swap",
-            )?;
-        Ok(())
+        self.onchain
+            .reverse_swap()
+            .clear_wallet(clear_wallet_info, destination_onchain_address_data)
     }
 
     /// Set the analytics configuration.

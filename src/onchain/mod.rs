@@ -1,10 +1,12 @@
-mod channel_closes;
-mod swaps;
+pub mod channel_closes;
+pub mod reverse_swap;
+pub mod swap;
 
 use crate::amount::{AsSats, Msats, Sats, ToAmount};
 use crate::errors::Result;
-use crate::onchain::channel_closes::ChannelCloses;
-use crate::onchain::swaps::Swaps;
+use crate::onchain::channel_closes::ChannelClose;
+use crate::onchain::reverse_swap::ReverseSwap;
+use crate::onchain::swap::Swap;
 use crate::support::Support;
 use crate::{OnchainResolvingFees, SwapToLightningFees};
 use breez_sdk_core::ReceiveOnchainRequest;
@@ -12,26 +14,33 @@ use log::error;
 use std::sync::Arc;
 
 pub struct Onchain {
-    swaps: Arc<Swaps>,
-    channel_closes: Arc<ChannelCloses>,
+    swap: Arc<Swap>,
+    reverse_swap: Arc<ReverseSwap>,
+    channel_close: Arc<ChannelClose>,
 }
 
 impl Onchain {
     pub(crate) fn new(support: Arc<Support>) -> Self {
-        let swaps = Arc::new(Swaps::new(Arc::clone(&support)));
-        let channel_closes = Arc::new(ChannelCloses::new(Arc::clone(&support)));
+        let swap = Arc::new(Swap::new(Arc::clone(&support)));
+        let reverse_swap = Arc::new(ReverseSwap::new(Arc::clone(&support)));
+        let channel_close = Arc::new(ChannelClose::new(Arc::clone(&support), Arc::clone(&swap)));
         Self {
-            swaps,
-            channel_closes,
+            swap,
+            reverse_swap,
+            channel_close,
         }
     }
 
-    pub fn swaps(&self) -> Arc<Swaps> {
-        Arc::clone(&self.swaps)
+    pub fn swap(&self) -> Arc<Swap> {
+        Arc::clone(&self.swap)
     }
 
-    pub fn channel_closes(&self) -> Arc<ChannelCloses> {
-        Arc::clone(&self.channel_closes)
+    pub fn reverse_swap(&self) -> Arc<ReverseSwap> {
+        Arc::clone(&self.reverse_swap)
+    }
+
+    pub fn channel_close(&self) -> Arc<ChannelClose> {
+        Arc::clone(&self.channel_close)
     }
 }
 

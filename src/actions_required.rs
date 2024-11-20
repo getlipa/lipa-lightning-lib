@@ -47,14 +47,14 @@ impl ActionsRequired {
             .retrieve_hidden_unresolved_failed_swaps()?;
         let failed_swaps: Vec<_> = self
             .onchain
-            .swaps()
+            .swap()
             .list_failed_unresolved()?
             .into_iter()
             .filter(|s| {
                 hidden_failed_swap_addresses.contains(&s.address).not()
                     || self
                         .onchain
-                        .swaps()
+                        .swap()
                         .prepare_sweep(
                             s.clone(),
                             "1BitcoinEaterAddressDontSendf59kuE".to_string(),
@@ -97,7 +97,7 @@ impl ActionsRequired {
             let include_item_in_list = match optional_hidden_amount_sat {
                 Some(amount) if amount == available_channel_closes_funds.sats => self
                     .onchain
-                    .channel_closes()
+                    .channel_close()
                     .determine_resolving_fees()?
                     .is_some(),
                 _ => true,
@@ -117,9 +117,9 @@ impl ActionsRequired {
     }
 
     /// Hides the topup with the given id. Can be called on expired topups so that they stop being returned
-    /// by [`LightningNode::query_uncompleted_offers`].
+    /// by [`ActionsRequired::list`].
     ///
-    /// Topup id can be obtained from [`OfferKind::Pocket`].
+    /// Topup id can be obtained from [`OfferKind::Pocket`](crate::OfferKind::Pocket).
     ///
     /// Requires network: **yes**
     pub fn dismiss_topup(&self, id: String) -> Result<()> {

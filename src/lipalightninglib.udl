@@ -204,6 +204,8 @@ interface LightningNode {
     FiatTopup fiat_topup();
 
     ActionsRequired actions_required();
+
+    Onchain onchain();
 };
 
 interface Config {
@@ -304,6 +306,56 @@ interface ActionsRequired {
 
     [Throws=LnError]
     void hide_unrecoverable_failed_swap_item(FailedSwapInfo failed_swap_info);
+};
+
+interface Onchain {
+    Swap swap();
+
+    ReverseSwap reverse_swap();
+
+    ChannelClose channel_close();
+};
+
+interface Swap {
+    [Throws=SwapError]
+    SwapAddressInfo create(OpeningFeeParams? lsp_fee_params);
+
+    [Throws=LnError]
+    OnchainResolvingFees? determine_resolving_fees(FailedSwapInfo failed_swap_info);
+
+    [Throws=LnError]
+    SweepFailedSwapInfo prepare_sweep(FailedSwapInfo failed_swap_info, string to_address, u32 onchain_fee_rate);
+
+    [Throws=LnError]
+    string sweep(SweepFailedSwapInfo sweep_failed_swap_info);
+
+    [Throws=LnError]
+    string swap(FailedSwapInfo failed_swap_info, u32 sat_per_vbyte, OpeningFeeParams? lsp_fee_param);
+};
+
+interface ReverseSwap {
+    [Throws=LnError]
+    RangeHit determine_clear_wallet_feasibility();
+
+    [Throws=LnError]
+    ClearWalletInfo prepare_clear_wallet();
+
+    [Throws=LnError]
+    void clear_wallet(ClearWalletInfo clear_wallet_info, BitcoinAddressData destination_onchain_address_data);
+};
+
+interface ChannelClose {
+    [Throws=LnError]
+    OnchainResolvingFees? determine_resolving_fees();
+
+    [Throws=SweepError]
+    SweepChannelCloseInfo prepare_sweep(string address, u32 onchain_fee_rate);
+
+    [Throws=LnError]
+    string sweep(SweepChannelCloseInfo sweep_info);
+
+    [Throws=SweepError]
+    string swap(u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_params);
 };
 
 interface Activities {
@@ -699,6 +751,13 @@ dictionary SweepInfo {
     Amount amount;
 };
 
+dictionary SweepChannelCloseInfo {
+    string address;
+    u32 onchain_fee_rate;
+    Amount onchain_fee_amount;
+    Amount amount;
+};
+
 dictionary SwapAddressInfo {
     string address;
     Amount min_deposit;
@@ -707,6 +766,14 @@ dictionary SwapAddressInfo {
 };
 
 dictionary ResolveFailedSwapInfo {
+    string swap_address;
+    Amount recovered_amount;
+    Amount onchain_fee;
+    string to_address;
+    u32 onchain_fee_rate;
+};
+
+dictionary SweepFailedSwapInfo {
     string swap_address;
     Amount recovered_amount;
     Amount onchain_fee;
