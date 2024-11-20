@@ -1270,12 +1270,10 @@ fn list_activities(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
 }
 
 fn get_activity(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
-    let hash = words.next().ok_or(anyhow!("LNURL withdraw is required"))?;
+    let hash = words.next().ok_or(anyhow!("Payment hash is required"))?;
 
     let activity = node.activities().get(hash.to_string())?;
-    print_activity(activity)?;
-
-    Ok(())
+    print_activity(activity)
 }
 
 fn print_activity(activity: Activity) -> Result<()> {
