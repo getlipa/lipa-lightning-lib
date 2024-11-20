@@ -945,7 +945,6 @@ enum PayErrorCode {
 
 [Enum]
 interface UnsupportedDataType {
-    BitcoinAddress();
     LnUrlAuth();
     NodeId();
     Url();
