@@ -224,7 +224,7 @@ impl FiatTopup {
     /// Request to collect the offer (e.g. a Pocket topup).
     /// A payment hash will be returned to track incoming payment.
     /// The offer collection might be considered successful once
-    /// [`EventsCallback::payment_received`] is called,
+    /// [`EventsCallback::payment_received`](crate::EventsCallback::payment_received) is called,
     /// or the [`PaymentState`] of the respective payment becomes [`PaymentState::Succeeded`].
     ///
     /// Parameters:

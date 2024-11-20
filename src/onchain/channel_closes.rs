@@ -1,20 +1,24 @@
 use crate::amount::{AsSats, Sats, ToAmount};
 use crate::errors::Result;
 use crate::onchain::get_onchain_resolving_fees;
+use crate::onchain::swap::Swap;
 use crate::support::Support;
-use crate::{OnchainResolvingFees, RuntimeErrorCode, SweepInfo, CLN_DUST_LIMIT_SAT};
+use crate::{Amount, OnchainResolvingFees, RuntimeErrorCode, SweepInfo, CLN_DUST_LIMIT_SAT};
 use breez_sdk_core::error::RedeemOnchainError;
-use breez_sdk_core::PrepareRedeemOnchainFundsRequest;
+use breez_sdk_core::{
+    OpeningFeeParams, PrepareRedeemOnchainFundsRequest, RedeemOnchainFundsRequest,
+};
 use perro::{ensure, invalid_input, MapToError};
 use std::sync::Arc;
 
-pub struct ChannelCloses {
+pub struct ChannelClose {
     support: Arc<Support>,
+    swap: Arc<Swap>,
 }
 
-impl ChannelCloses {
-    pub(crate) fn new(support: Arc<Support>) -> Self {
-        Self { support }
+impl ChannelClose {
+    pub(crate) fn new(support: Arc<Support>, swap: Arc<Swap>) -> Self {
+        Self { support, swap }
     }
 
     /// Returns the fees for resolving channel closes if there are enough funds to pay for fees.
@@ -63,10 +67,10 @@ impl ChannelCloses {
     /// Parameters:
     /// * `address` - the funds will be sweeped to this address
     /// * `onchain_fee_rate` - the fee rate that should be applied for the transaction.
-    ///   The recommended on-chain fee rate can be queried using [`LightningNode::query_onchain_fee_rate`]
+    ///   The recommended on-chain fee rate can be queried using [`LightningNode::query_onchain_fee_rate`](crate::LightningNode::query_onchain_fee_rate)
     ///
     /// Returns information on the prepared sweep, including the exact fee that results from
-    /// using the provided fee rate. The method [`LightningNode::sweep_funds_from_channel_closes`] can be used to broadcast
+    /// using the provided fee rate. The method [`ChannelClose::sweep`] can be used to broadcast
     /// the sweep transaction.
     ///
     /// Requires network: **yes**
@@ -74,7 +78,7 @@ impl ChannelCloses {
         &self,
         address: String,
         onchain_fee_rate: u32,
-    ) -> std::result::Result<SweepInfo, RedeemOnchainError> {
+    ) -> std::result::Result<SweepChannelCloseInfo, RedeemOnchainError> {
         let res =
             self.support
                 .rt
@@ -118,7 +122,7 @@ impl ChannelCloses {
 
         let onchain_fee_amount = onchain_fee_sat.as_sats().to_amount_up(&rate);
 
-        Ok(SweepInfo {
+        Ok(SweepChannelCloseInfo {
             address,
             onchain_fee_rate,
             onchain_fee_amount,
@@ -126,5 +130,165 @@ impl ChannelCloses {
                 .as_sats()
                 .to_amount_up(&rate),
         })
+    }
+
+    /// Sweeps all available channel close funds to the specified on-chain address.
+    ///
+    /// Parameters:
+    /// * `sweep_info` - a prepared sweep info that can be obtained using
+    ///     [`ChannelClose::prepare_sweep`]
+    ///
+    /// Returns the txid of the sweep transaction.
+    ///
+    /// Requires network: **yes**
+    pub fn sweep(&self, sweep_info: SweepChannelCloseInfo) -> Result<String> {
+        let txid = self
+            .support
+            .rt
+            .handle()
+            .block_on(
+                self.support
+                    .sdk
+                    .redeem_onchain_funds(RedeemOnchainFundsRequest {
+                        to_address: sweep_info.address,
+                        sat_per_vbyte: sweep_info.onchain_fee_rate,
+                    }),
+            )
+            .map_to_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to sweep funds")?
+            .txid;
+        Ok(hex::encode(txid))
+    }
+
+    /// Automatically swaps on-chain funds back to lightning.
+    ///
+    /// If a swap is in progress, this method will return an error.
+    ///
+    /// If the current balance doesn't fulfill the limits, this method will return an error.
+    /// Before using this method use [`ChannelClose::determine_resolving_fees`] to validate a swap is available.
+    ///
+    /// Parameters:
+    /// * `sat_per_vbyte` - the fee rate to use for the on-chain transaction.
+    ///   Can be obtained with [`ChannelClose::determine_resolving_fees`].
+    /// * `lsp_fee_params` - the lsp fee params for opening a new channel if necessary.
+    ///   Can be obtained with [`ChannelClose::determine_resolving_fees`].
+    ///
+    /// Returns the txid of the sweeping tx.
+    ///
+    /// Requires network: **yes**
+    pub fn swap(
+        &self,
+        sat_per_vbyte: u32,
+        lsp_fee_params: Option<OpeningFeeParams>,
+    ) -> std::result::Result<String, RedeemOnchainError> {
+        let onchain_balance = self
+            .support
+            .sdk
+            .node_info()?
+            .onchain_balance_msat
+            .as_msats();
+
+        let swap_address_info =
+            self.swap
+                .create(lsp_fee_params.clone())
+                .map_err(|e| RedeemOnchainError::Generic {
+                    err: format!("Couldn't generate swap address: {}", e),
+                })?;
+
+        let prepare_response =
+            self.support
+                .rt
+                .handle()
+                .block_on(self.support.sdk.prepare_redeem_onchain_funds(
+                    PrepareRedeemOnchainFundsRequest {
+                        to_address: swap_address_info.address.clone(),
+                        sat_per_vbyte,
+                    },
+                ))?;
+        // TODO: remove CLN_DUST_LIMIT_SAT component if/when
+        //      https://github.com/ElementsProject/lightning/issues/7131 is addressed
+        let send_amount_sats = onchain_balance.sats_round_down().sats
+            - CLN_DUST_LIMIT_SAT
+            - prepare_response.tx_fee_sat;
+
+        if swap_address_info.min_deposit.sats > send_amount_sats {
+            return Err(RedeemOnchainError::InsufficientFunds {
+                err: format!(
+                    "Not enough funds ({} sats after onchain fees) available for min swap amount({} sats)",
+                    send_amount_sats,
+                    swap_address_info.min_deposit.sats,
+                ),
+            });
+        }
+
+        if swap_address_info.max_deposit.sats < send_amount_sats {
+            return Err(RedeemOnchainError::Generic {
+                err: format!(
+                    "Available funds ({} sats after onchain fees) exceed limit for swap ({} sats)",
+                    send_amount_sats, swap_address_info.max_deposit.sats,
+                ),
+            });
+        }
+
+        let lsp_fees = self
+            .support
+            .calculate_lsp_fee_for_amount(send_amount_sats)
+            .map_err(|_| RedeemOnchainError::ServiceConnectivity {
+                err: "Could not get lsp fees".to_string(),
+            })?
+            .lsp_fee
+            .sats;
+        if lsp_fees >= send_amount_sats {
+            return Err(RedeemOnchainError::InsufficientFunds {
+                err: format!(
+                    "Available funds ({} sats after onchain fees) are not enough for lsp fees ({} sats)",
+                    send_amount_sats, lsp_fees,
+                ),
+            });
+        }
+
+        let sweep_result =
+            self.support
+                .rt
+                .handle()
+                .block_on(
+                    self.support
+                        .sdk
+                        .redeem_onchain_funds(RedeemOnchainFundsRequest {
+                            to_address: swap_address_info.address,
+                            sat_per_vbyte,
+                        }),
+                )?;
+
+        Ok(hex::encode(sweep_result.txid))
+    }
+}
+
+#[derive(Clone)]
+pub struct SweepChannelCloseInfo {
+    pub address: String,
+    pub onchain_fee_rate: u32,
+    pub onchain_fee_amount: Amount,
+    pub amount: Amount,
+}
+
+impl From<SweepInfo> for SweepChannelCloseInfo {
+    fn from(value: SweepInfo) -> Self {
+        Self {
+            address: value.address,
+            onchain_fee_rate: value.onchain_fee_rate,
+            onchain_fee_amount: value.onchain_fee_amount,
+            amount: value.amount,
+        }
+    }
+}
+
+impl From<SweepChannelCloseInfo> for SweepInfo {
+    fn from(value: SweepChannelCloseInfo) -> Self {
+        Self {
+            address: value.address,
+            onchain_fee_rate: value.onchain_fee_rate,
+            onchain_fee_amount: value.onchain_fee_amount,
+            amount: value.amount,
+        }
     }
 }

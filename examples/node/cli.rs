@@ -973,7 +973,7 @@ fn pay_open_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>)
 }
 
 fn get_swap_address(node: &LightningNode) -> Result<()> {
-    let swap_address_info = node.generate_swap_address(None)?;
+    let swap_address_info = node.onchain().swap().create(None)?;
 
     println!("Swap Address Information:");
     println!("  Address             {}", swap_address_info.address);
@@ -1031,11 +1031,13 @@ fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str
         ))?;
     let resolve_failed_swap_info = node
         .onchain()
-        .swaps()
+        .swap()
         .prepare_sweep(failed_swap, to_address.into(), fee_rate)
         .map_err(|e| anyhow!("Failed to prepare the resolution of the failed swap: {e}"))?;
     let txid = node
-        .resolve_failed_swap(resolve_failed_swap_info)
+        .onchain()
+        .swap()
+        .sweep(resolve_failed_swap_info)
         .map_err(|e| anyhow!("Failed to resolve failed swap: {e}"))?;
     println!("Successfully broadcasted refund transaction - txid: {txid}");
 
@@ -1407,18 +1409,25 @@ fn set_personal_note(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
 
 fn sweep(node: &LightningNode, address: String) -> Result<String> {
     let fee_rate = node.query_onchain_fee_rate()?;
-    let sweep_info = node.prepare_sweep_funds_from_channel_closes(address, fee_rate)?;
-    Ok(node.sweep_funds_from_channel_closes(sweep_info)?)
+    let sweep_info = node
+        .onchain()
+        .channel_close()
+        .prepare_sweep(address, fee_rate)?;
+    Ok(node.onchain().channel_close().sweep(sweep_info)?)
 }
 
 fn clear_wallet_info(node: &LightningNode) -> Result<()> {
-    match node.check_clear_wallet_feasibility()? {
+    match node
+        .onchain()
+        .reverse_swap()
+        .determine_clear_wallet_feasibility()?
+    {
         RangeHit::Below { min } => bail!("Balance is below min: {}", amount_to_string(&min)),
         RangeHit::In => (),
         RangeHit::Above { max } => bail!("Balance is above max: {}", amount_to_string(&max)),
     };
 
-    let clear_wallet_info = node.prepare_clear_wallet()?;
+    let clear_wallet_info = node.onchain().reverse_swap().prepare_clear_wallet()?;
 
     println!("Clear Wallet Information:");
     println!(
@@ -1444,14 +1453,16 @@ fn clear_wallet_info(node: &LightningNode) -> Result<()> {
 fn clear_wallet(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let address = words.next().ok_or(anyhow!("Address is required"))?;
 
-    let clear_wallet_info = node.prepare_clear_wallet()?;
+    let clear_wallet_info = node.onchain().reverse_swap().prepare_clear_wallet()?;
 
     let result = node.decode_data(address.to_string())?;
     if let DecodedData::OnchainAddress {
         onchain_address_details,
     } = result
     {
-        node.clear_wallet(clear_wallet_info, onchain_address_details)?;
+        node.onchain()
+            .reverse_swap()
+            .clear_wallet(clear_wallet_info, onchain_address_details)?;
     } else {
         bail!("Provided data is not an on-chain address");
     }
@@ -1564,7 +1575,10 @@ fn get_failed_swap_resolving_fees(
             "No unresolved failed swap with provided swap address was found"
         ))?;
 
-    let resolving_fees = node.get_failed_swap_resolving_fees(failed_swap)?;
+    let resolving_fees = node
+        .onchain()
+        .swap()
+        .determine_resolving_fees(failed_swap)?;
 
     let resolving_fees = match resolving_fees {
         None => {
@@ -1602,7 +1616,7 @@ fn get_failed_swap_resolving_fees(
 }
 
 fn get_channel_close_resolving_fees(node: &LightningNode) -> Result<()> {
-    let resolving_fees = node.get_channel_close_resolving_fees()?;
+    let resolving_fees = node.onchain().channel_close().determine_resolving_fees()?;
 
     let resolving_fees = match resolving_fees {
         None => {
@@ -1640,18 +1654,22 @@ fn get_channel_close_resolving_fees(node: &LightningNode) -> Result<()> {
 }
 
 fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
-    let resolving_fees = node.get_channel_close_resolving_fees()?.ok_or(anyhow!(
-        "Channel funds cannot be resolved as they are too little"
-    ))?;
+    let resolving_fees = node
+        .onchain()
+        .channel_close()
+        .determine_resolving_fees()?
+        .ok_or(anyhow!(
+            "Channel funds cannot be resolved as they are too little"
+        ))?;
 
     let swap_fees = resolving_fees
         .swap_fees
         .ok_or(anyhow!("Swap isn't available, not enough on-chain funds"))?;
 
-    let txid = node.swap_channel_close_funds_to_lightning(
-        resolving_fees.sat_per_vbyte,
-        swap_fees.lsp_fee_params,
-    )?;
+    let txid = node
+        .onchain()
+        .channel_close()
+        .swap(resolving_fees.sat_per_vbyte, swap_fees.lsp_fee_params)?;
 
     println!("Sweeping transaction: {txid}");
 
