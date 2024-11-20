@@ -26,6 +26,7 @@ const LSP_ADDED_LIQUIDITY_ON_NEW_CHANNELS_MSAT: u64 = 50_000_000;
 const OPENING_FEE_PARAMS_MIN_MSAT: u64 = 5_000_000;
 const OPENING_FEE_PARAMS_PROPORTIONAL: u32 = 50;
 const OPENING_FEE_PARAMS_VALID_UNTIL: &str = "2030-02-16T11:46:49Z";
+const OPENING_FEE_PARAMS_VALID_UNTIL_LONGER: &str = "2031-02-16T11:46:49Z";
 const OPENING_FEE_PARAMS_MAX_IDLE_TIME: u32 = 10000;
 const OPENING_FEE_PARAMS_MAX_CLIENT_TO_SELF_DELAY: u32 = 256;
 const OPENING_FEE_PARAMS_PROMISE: &str = "promite";
@@ -793,21 +794,33 @@ impl BreezServices {
             None => None,
             Some(amount_msat) => {
                 if get_inbound_liquidity_msat() < amount_msat {
-                    Some(max(
+                    let mut opening_fee = max(
                         OPENING_FEE_PARAMS_MIN_MSAT,
                         amount_msat * OPENING_FEE_PARAMS_PROPORTIONAL as u64 / 10_000,
-                    ))
+                    );
+                    // simulate the lsp offering a higher expiry time for a higher fee
+                    if req.expiry.is_some() {
+                        opening_fee += 1_000;
+                    }
+                    Some(opening_fee)
                 } else {
                     Some(0)
                 }
             }
         };
+
+        let valid_until = if req.expiry.is_some() {
+            OPENING_FEE_PARAMS_VALID_UNTIL.to_string()
+        } else {
+            OPENING_FEE_PARAMS_VALID_UNTIL_LONGER.to_string()
+        };
+
         Ok(OpenChannelFeeResponse {
             fee_msat,
             fee_params: OpeningFeeParams {
                 min_msat: OPENING_FEE_PARAMS_MIN_MSAT,
                 proportional: OPENING_FEE_PARAMS_PROPORTIONAL,
-                valid_until: OPENING_FEE_PARAMS_VALID_UNTIL.to_string(),
+                valid_until,
                 max_idle_time: OPENING_FEE_PARAMS_MAX_IDLE_TIME,
                 max_client_to_self_delay: OPENING_FEE_PARAMS_MAX_CLIENT_TO_SELF_DELAY,
                 promise: OPENING_FEE_PARAMS_PROMISE.to_string(),

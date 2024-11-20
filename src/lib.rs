@@ -625,17 +625,26 @@ impl LightningNode {
 
     /// Calculate the actual LSP fee for the given amount of an incoming payment.
     /// If the already existing inbound capacity is enough, no new channel is required.
+    /// The LSP may offer multiple fee rates, tied to different expiration dates.
+    /// Increased expiry dates mean higher fee rates.
+    /// This method returns the best offer within the given expiry.
     ///
     /// Parameters:
     /// * `amount_sat` - amount in sats to compute LSP fee for
+    /// * `expiry` - expiry time in seconds
     ///
     /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
     /// provided to [`LightningNode::create_invoice`]
     ///
     /// Requires network: **yes**
     #[deprecated = "lightning().calculate_lsp_fee_for_amount() should be used instead"]
-    pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
-        self.lightning.calculate_lsp_fee_for_amount(amount_sat)
+    pub fn calculate_lsp_fee(
+        &self,
+        amount_sat: u64,
+        expiry: Option<u32>,
+    ) -> Result<CalculateLspFeeResponse> {
+        self.lightning
+            .calculate_lsp_fee_for_amount(amount_sat, expiry)
     }
 
     /// Get the current limits for the amount that can be transferred in a single payment.

@@ -364,7 +364,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     hints.insert(CommandHint::new("walletpubkeyid", "walletpubkeyid"));
     hints.insert(CommandHint::new("lspfee", "lspfee"));
     hints.insert(CommandHint::new(
-        "calculatelspfee <amount in SAT>",
+        "calculatelspfee <amount in SAT> [expiry in seconds]",
         "calculatelspfee ",
     ));
     hints.insert(CommandHint::new("exchangerates", "exchangerates"));
@@ -608,7 +608,17 @@ fn calculate_lsp_fee(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
         .ok_or(anyhow!("Amount in SAT is required"))?
         .parse()
         .context("Amount should be a positive integer number")?;
-    let response = node.lightning().calculate_lsp_fee_for_amount(amount)?;
+    let expiry: Option<u32> = words
+        .next()
+        .map(|expiry| {
+            expiry
+                .parse()
+                .context("Expiry should be a positive integer number")
+        })
+        .transpose()?;
+    let response = node
+        .lightning()
+        .calculate_lsp_fee_for_amount(amount, expiry)?;
     println!(" LSP fee: {}", amount_to_string(&response.lsp_fee));
     Ok(())
 }

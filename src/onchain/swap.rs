@@ -232,7 +232,7 @@ impl Swap {
 
         let lsp_fees = self
             .support
-            .calculate_lsp_fee_for_amount(send_amount_sats)?
+            .calculate_lsp_fee_for_amount(send_amount_sats, None)?
             .lsp_fee
             .sats;
         ensure!(

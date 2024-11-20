@@ -14,6 +14,8 @@ use log::error;
 use perro::MapToError;
 use std::sync::Arc;
 
+const TWO_WEEKS: u32 = 2 * 7 * 24 * 60 * 60;
+
 pub struct Onchain {
     swap: Arc<Swap>,
     reverse_swap: Arc<ReverseSwap>,
@@ -54,7 +56,7 @@ where
     F: FnOnce(String) -> Result<(Sats, Sats, u32)>,
 {
     let rate = support.get_exchange_rate();
-    let lsp_fees = support.calculate_lsp_fee_for_amount(amount.msats)?;
+    let lsp_fees = support.calculate_lsp_fee_for_amount(amount.msats, Some(TWO_WEEKS))?;
 
     let swap_info = support
         .rt
@@ -86,7 +88,7 @@ where
         return Ok(None);
     }
 
-    let lsp_fees = support.calculate_lsp_fee_for_amount(sent_amount.sats)?;
+    let lsp_fees = support.calculate_lsp_fee_for_amount(sent_amount.sats, Some(TWO_WEEKS))?;
 
     if swap_info.is_none()
         || sent_amount.sats < (swap_info.clone().unwrap().min_allowed_deposit as u64)
