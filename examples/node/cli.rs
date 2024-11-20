@@ -206,6 +206,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "getactivity" => {
+                    if let Err(message) = get_activity(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "o" | "overview" => {
                     if let Err(message) = overview(node, &mut words) {
                         println!("{}", format!("{message:#}").red());
@@ -457,6 +462,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "listactivities [number of activities = 2]",
         "listactivities ",
     ));
+    hints.insert(CommandHint::new("getactivity <hash>", "getactivity "));
     hints.insert(CommandHint::new("listrecipients", "listrecipients"));
     hints.insert(CommandHint::new(
         "registerlightningaddress",
@@ -556,6 +562,7 @@ fn help() {
     println!();
     println!("  o | overview [number of activities = 10] [fun mode = false]");
     println!("  l | listactivities [number of activities = 2]");
+    println!("  getactivity <hash>");
     println!("  listrecipients");
     println!("  registerlightningaddress");
     println!("  querylightningaddress");
@@ -1267,6 +1274,13 @@ fn list_activities(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) 
     }
 
     Ok(())
+}
+
+fn get_activity(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let hash = words.next().ok_or(anyhow!("Payment hash is required"))?;
+
+    let activity = node.activities().get(hash.to_string())?;
+    print_activity(activity)
 }
 
 fn print_activity(activity: Activity) -> Result<()> {
