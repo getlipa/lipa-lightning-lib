@@ -204,20 +204,27 @@ fn handle_payment_received_notification(
     timeout_instant: Instant,
 ) -> NotificationHandlingResult<Notification> {
     // Check if the payment was already received
+	debug!("Checking exitent payments...");
     if let Some(payment) = get_confirmed_payment(&rt, &sdk, &payment_hash)? {
+		debug!("Checking exitent payments... Found");
         return Ok(Notification::Bolt11PaymentReceived {
             amount_sat: payment.amount_msat / 1000,
             payment_hash,
         });
     }
+	debug!("Checking exitent payments... None");
 
     // Wait for payment to be received
+	debug!("Waiting for payment to be received...");
     if let Some(details) =
         wait_for_payment_with_timeout(&event_receiver, &payment_hash, timeout_instant)?
     {
+		debug!("Received payment event");
+		debug!("Waiting for synced event...");
         // We want to wait as long as possible to decrease the likelihood of the signer being shut down
         //  while HTLCs are still in-flight.
         wait_for_synced_event(&event_receiver)?;
+		debug!("Received synced event");
         return Ok(Notification::Bolt11PaymentReceived {
             amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
             payment_hash,
