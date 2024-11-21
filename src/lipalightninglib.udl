@@ -206,6 +206,12 @@ interface LightningNode {
     ActionsRequired actions_required();
 
     Onchain onchain();
+
+    LightningAddress lightning_address();
+
+    PhoneNumber phone_number();
+
+    Util util();
 };
 
 interface Config {
@@ -376,6 +382,53 @@ interface Activities {
 
     [Throws=LnError]
     void set_personal_note(string payment_hash, string note);
+};
+
+interface LightningAddress {
+    [Throws=LnError]
+    string register();
+
+    [Throws=LnError]
+    string? get();
+};
+
+interface PhoneNumber {
+    [Throws=LnError]
+    string? get();
+
+    [Throws=LnError]
+    void register(string phone_number);
+
+    [Throws=LnError]
+    void verify(string phone_number, string otp);
+
+    [Throws=ParsePhoneNumberPrefixError]
+    void parse_prefix(string phone_number);
+
+    [Throws=ParsePhoneNumberError]
+    string parse_to_lightning_address(string phone_number);
+};
+
+interface Util {
+    [Throws=DecodeDataError]
+    DecodedData decode_data(string data);
+
+    [Throws=LnError]
+    string query_wallet_pubkey_id();
+
+    [Throws=LnError]
+    string derive_payment_uuid(string payment_hash);
+
+    [Throws=LnError]
+    NodeInfo get_node_info();
+
+    ExchangeRate? get_exchange_rate();
+
+    [Throws=LnError]
+    void log_debug_info();
+
+    [Throws=LnError]
+    BreezHealthCheckStatus query_health_status();
 };
 
 dictionary LightningNodeConfig {
