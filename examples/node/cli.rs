@@ -1021,6 +1021,7 @@ fn print_failed_swap(swap: &FailedSwapInfo) {
 fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let swap_address = words.next().ok_or(anyhow!("Swap address is required"))?;
     let to_address = words.next().ok_or(anyhow!("To address is required"))?;
+    let address_data = get_bitcoin_address_data(node.util().decode_data(to_address.to_string())?)?;
 
     let failed_swaps = failed_swap_from_actions_required_list(
         &node
@@ -1037,7 +1038,7 @@ fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str
     let resolve_failed_swap_info = node
         .onchain()
         .swap()
-        .prepare_sweep(failed_swap, to_address.into())
+        .prepare_sweep(failed_swap, address_data)
         .map_err(|e| anyhow!("Failed to prepare the resolution of the failed swap: {e}"))?;
     let txid = node
         .onchain()
@@ -1420,7 +1421,8 @@ fn set_personal_note(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
 }
 
 fn sweep(node: &LightningNode, address: String) -> Result<String> {
-    let sweep_info = node.onchain().channel_close().prepare_sweep(address)?;
+    let address_data = get_bitcoin_address_data(node.util().decode_data(address)?)?;
+    let sweep_info = node.onchain().channel_close().prepare_sweep(address_data)?;
     Ok(node.onchain().channel_close().sweep(sweep_info)?)
 }
 
@@ -1741,4 +1743,15 @@ fn failed_swap_from_actions_required_list(list: &[ActionRequiredItem]) -> Vec<Fa
             ActionRequiredItem::ChannelClosesFundsAvailable { .. } => None,
         })
         .collect::<Vec<_>>()
+}
+
+fn get_bitcoin_address_data(decoded_data: DecodedData) -> Result<BitcoinAddressData> {
+    if let DecodedData::OnchainAddress {
+        onchain_address_details,
+    } = decoded_data
+    {
+        Ok(onchain_address_details)
+    } else {
+        bail!("Not an onchain address")
+    }
 }

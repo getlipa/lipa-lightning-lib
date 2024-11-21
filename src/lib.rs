@@ -1226,7 +1226,13 @@ impl LightningNode {
     ) -> std::result::Result<SweepInfo, RedeemOnchainError> {
         self.onchain
             .channel_close()
-            .prepare_sweep(address)
+            .prepare_sweep(BitcoinAddressData {
+                address,
+                network: Network::Bitcoin,
+                amount_sat: None,
+                label: None,
+                message: None,
+            })
             .map(SweepInfo::from)
     }
 
@@ -1327,7 +1333,16 @@ impl LightningNode {
     ) -> Result<ResolveFailedSwapInfo> {
         self.onchain
             .swap()
-            .prepare_sweep(failed_swap_info, to_address)
+            .prepare_sweep(
+                failed_swap_info,
+                BitcoinAddressData {
+                    address: to_address,
+                    network: Network::Bitcoin,
+                    amount_sat: None,
+                    label: None,
+                    message: None,
+                },
+            )
             .map(ResolveFailedSwapInfo::from)
     }
 

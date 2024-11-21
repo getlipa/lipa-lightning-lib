@@ -5,6 +5,7 @@ use crate::locker::Locker;
 use crate::onchain::Onchain;
 use crate::support::Support;
 use crate::{ActionRequiredItem, FailedSwapInfo, RuntimeErrorCode, CLN_DUST_LIMIT_SAT};
+use breez_sdk_core::{BitcoinAddressData, Network};
 use perro::ResultTrait;
 use std::ops::Not;
 use std::sync::Arc;
@@ -54,7 +55,16 @@ impl ActionsRequired {
                     || self
                         .onchain
                         .swap()
-                        .prepare_sweep(s.clone(), "1BitcoinEaterAddressDontSendf59kuE".to_string())
+                        .prepare_sweep(
+                            s.clone(),
+                            BitcoinAddressData {
+                                address: "1BitcoinEaterAddressDontSendf59kuE".to_string(),
+                                network: Network::Bitcoin,
+                                amount_sat: None,
+                                label: None,
+                                message: None,
+                            },
+                        )
                         .is_ok()
             })
             .collect();
