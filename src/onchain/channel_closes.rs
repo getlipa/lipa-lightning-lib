@@ -1,7 +1,7 @@
 use crate::amount::{AsSats, Sats, ToAmount};
 use crate::errors::Result;
-use crate::onchain::get_onchain_resolving_fees;
 use crate::onchain::swap::Swap;
+use crate::onchain::{get_onchain_resolving_fees, query_onchain_fee_rate};
 use crate::support::Support;
 use crate::{Amount, OnchainResolvingFees, RuntimeErrorCode, SweepInfo, CLN_DUST_LIMIT_SAT};
 use breez_sdk_core::error::RedeemOnchainError;
@@ -44,20 +44,18 @@ impl ChannelClose {
             invalid_input("No on-chain funds to resolve")
         );
 
-        let prepare_onchain_tx =
-            move |to_address: String, sat_per_vbyte: u32| -> Result<(Sats, Sats)> {
-                let sweep_info = self
-                    .prepare_sweep(to_address, sat_per_vbyte)
-                    .map_to_runtime_error(
-                        RuntimeErrorCode::NodeUnavailable,
-                        "Failed to prepare sweep funds from channel closes",
-                    )?;
+        let prepare_onchain_tx = move |to_address: String| -> Result<(Sats, Sats, u32)> {
+            let sweep_info = self.prepare_sweep(to_address).map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to prepare sweep funds from channel closes",
+            )?;
 
-                Ok((
-                    sweep_info.amount.sats.as_sats(),
-                    sweep_info.onchain_fee_amount.sats.as_sats(),
-                ))
-            };
+            Ok((
+                sweep_info.amount.sats.as_sats(),
+                sweep_info.onchain_fee_amount.sats.as_sats(),
+                sweep_info.onchain_fee_rate,
+            ))
+        };
 
         get_onchain_resolving_fees(&self.support, onchain_balance, prepare_onchain_tx)
     }
@@ -66,8 +64,6 @@ impl ChannelClose {
     ///
     /// Parameters:
     /// * `address` - the funds will be sweeped to this address
-    /// * `onchain_fee_rate` - the fee rate that should be applied for the transaction.
-    ///   The recommended on-chain fee rate can be queried using [`LightningNode::query_onchain_fee_rate`](crate::LightningNode::query_onchain_fee_rate)
     ///
     /// Returns information on the prepared sweep, including the exact fee that results from
     /// using the provided fee rate. The method [`ChannelClose::sweep`] can be used to broadcast
@@ -77,8 +73,9 @@ impl ChannelClose {
     pub fn prepare_sweep(
         &self,
         address: String,
-        onchain_fee_rate: u32,
     ) -> std::result::Result<SweepChannelCloseInfo, RedeemOnchainError> {
+        let onchain_fee_rate = query_onchain_fee_rate(&self.support)
+            .map_err(|e| RedeemOnchainError::ServiceConnectivity { err: e.to_string() })?;
         let res =
             self.support
                 .rt

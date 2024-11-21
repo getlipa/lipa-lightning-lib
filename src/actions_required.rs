@@ -39,7 +39,6 @@ impl ActionsRequired {
     pub fn list(&self) -> Result<Vec<ActionRequiredItem>> {
         let uncompleted_offers = self.fiat_topup.query_uncompleted_offers()?;
 
-        let sat_per_vbyte = self.support.query_onchain_fee_rate()?;
         let hidden_failed_swap_addresses = self
             .support
             .data_store
@@ -55,11 +54,7 @@ impl ActionsRequired {
                     || self
                         .onchain
                         .swap()
-                        .prepare_sweep(
-                            s.clone(),
-                            "1BitcoinEaterAddressDontSendf59kuE".to_string(),
-                            sat_per_vbyte * 2,
-                        )
+                        .prepare_sweep(s.clone(), "1BitcoinEaterAddressDontSendf59kuE".to_string())
                         .is_ok()
             })
             .collect();
