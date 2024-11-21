@@ -29,7 +29,7 @@ test:
 integrationtests: FILE = *
 integrationtests: TEST = ''
 integrationtests:
-	cargo test --no-default-features --features mock-deps --workspace --test '$(FILE)' -- --ignored $(TEST)
+	cargo test --no-default-features --features mock-deps --workspace --test '$(FILE)' -- --include-ignored $(TEST)
 
 .PHONY: e2etests
 e2etests: FILE = *
