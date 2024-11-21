@@ -330,7 +330,7 @@ interface Swap {
     OnchainResolvingFees? determine_resolving_fees(FailedSwapInfo failed_swap_info);
 
     [Throws=LnError]
-    SweepFailedSwapInfo prepare_sweep(FailedSwapInfo failed_swap_info, string to_address);
+    SweepFailedSwapInfo prepare_sweep(FailedSwapInfo failed_swap_info, BitcoinAddressData destination);
 
     [Throws=LnError]
     string sweep(SweepFailedSwapInfo sweep_failed_swap_info);
@@ -347,7 +347,7 @@ interface ReverseSwap {
     ClearWalletInfo prepare_clear_wallet();
 
     [Throws=LnError]
-    void clear_wallet(ClearWalletInfo clear_wallet_info, BitcoinAddressData destination_onchain_address_data);
+    void clear_wallet(ClearWalletInfo clear_wallet_info, BitcoinAddressData destination);
 };
 
 interface ChannelClose {
@@ -355,7 +355,7 @@ interface ChannelClose {
     OnchainResolvingFees? determine_resolving_fees();
 
     [Throws=SweepError]
-    SweepChannelCloseInfo prepare_sweep(string address);
+    SweepChannelCloseInfo prepare_sweep(BitcoinAddressData destination);
 
     [Throws=LnError]
     string sweep(SweepChannelCloseInfo sweep_info);

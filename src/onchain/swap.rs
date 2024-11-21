@@ -9,7 +9,8 @@ use crate::{
 };
 use breez_sdk_core::error::ReceiveOnchainError;
 use breez_sdk_core::{
-    OpeningFeeParams, PrepareRefundRequest, ReceiveOnchainRequest, RefundRequest,
+    BitcoinAddressData, Network, OpeningFeeParams, PrepareRefundRequest, ReceiveOnchainRequest,
+    RefundRequest,
 };
 use perro::{ensure, runtime_error, MapToError};
 use std::sync::Arc;
@@ -73,8 +74,17 @@ impl Swap {
         failed_swap_info: FailedSwapInfo,
     ) -> Result<Option<OnchainResolvingFees>> {
         let failed_swap_closure = failed_swap_info.clone();
-        let prepare_onchain_tx = move |to_address: String| -> Result<(Sats, Sats, u32)> {
-            let sweep_info = self.prepare_sweep(failed_swap_closure, to_address)?;
+        let prepare_onchain_tx = move |address: String| -> Result<(Sats, Sats, u32)> {
+            let sweep_info = self.prepare_sweep(
+                failed_swap_closure,
+                BitcoinAddressData {
+                    address,
+                    network: Network::Bitcoin,
+                    amount_sat: None,
+                    label: None,
+                    message: None,
+                },
+            )?;
 
             Ok((
                 sweep_info.recovered_amount.sats.as_sats(),
@@ -94,14 +104,16 @@ impl Swap {
     ///
     /// Parameters:
     /// * `failed_swap_info` - the failed swap that will be prepared
-    /// * `to_address` - the destination address to which funds will be sent
+    /// * `destination` - the destination address to which funds will be sent.
+    ///     Can be obtained using [`Util::decode_data`](crate::Util::decode_data)
     ///
     /// Requires network: **yes**
     pub fn prepare_sweep(
         &self,
         failed_swap_info: FailedSwapInfo,
-        to_address: String,
+        destination: BitcoinAddressData,
     ) -> Result<SweepFailedSwapInfo> {
+        let to_address = destination.address;
         let onchain_fee_rate = query_onchain_fee_rate(&self.support)?;
         let response = self
             .support

@@ -126,20 +126,20 @@ impl ReverseSwap {
     /// Parameters:
     /// * `clear_wallet_info` - An instance of [`ClearWalletInfo`] obtained using
     ///   [`ReverseSwap::prepare_clear_wallet`].
-    /// * `destination_onchain_address_data` - An on-chain address data instance. Can be obtained
+    /// * `destination` - An on-chain address data instance. Can be obtained
     ///   using [`LightningNode::decode_data`](crate::LightningNode::decode_data).
     ///
     /// Requires network: **yes**
     pub fn clear_wallet(
         &self,
         clear_wallet_info: ClearWalletInfo,
-        destination_onchain_address_data: BitcoinAddressData,
+        destination: BitcoinAddressData,
     ) -> Result<()> {
         self.support
             .rt
             .handle()
             .block_on(self.support.sdk.pay_onchain(PayOnchainRequest {
-                recipient_address: destination_onchain_address_data.address,
+                recipient_address: destination.address,
                 prepare_res: clear_wallet_info.prepare_response,
             }))
             .map_to_runtime_error(

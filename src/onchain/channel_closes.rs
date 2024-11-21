@@ -6,7 +6,8 @@ use crate::support::Support;
 use crate::{Amount, OnchainResolvingFees, RuntimeErrorCode, SweepInfo, CLN_DUST_LIMIT_SAT};
 use breez_sdk_core::error::RedeemOnchainError;
 use breez_sdk_core::{
-    OpeningFeeParams, PrepareRedeemOnchainFundsRequest, RedeemOnchainFundsRequest,
+    BitcoinAddressData, Network, OpeningFeeParams, PrepareRedeemOnchainFundsRequest,
+    RedeemOnchainFundsRequest,
 };
 use perro::{ensure, invalid_input, MapToError};
 use std::sync::Arc;
@@ -44,11 +45,19 @@ impl ChannelClose {
             invalid_input("No on-chain funds to resolve")
         );
 
-        let prepare_onchain_tx = move |to_address: String| -> Result<(Sats, Sats, u32)> {
-            let sweep_info = self.prepare_sweep(to_address).map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Failed to prepare sweep funds from channel closes",
-            )?;
+        let prepare_onchain_tx = move |address: String| -> Result<(Sats, Sats, u32)> {
+            let sweep_info = self
+                .prepare_sweep(BitcoinAddressData {
+                    address,
+                    network: Network::Bitcoin,
+                    amount_sat: None,
+                    label: None,
+                    message: None,
+                })
+                .map_to_runtime_error(
+                    RuntimeErrorCode::NodeUnavailable,
+                    "Failed to prepare sweep funds from channel closes",
+                )?;
 
             Ok((
                 sweep_info.amount.sats.as_sats(),
@@ -63,7 +72,8 @@ impl ChannelClose {
     /// Prepares a sweep of all available on-chain funds to the provided on-chain address.
     ///
     /// Parameters:
-    /// * `address` - the funds will be sweeped to this address
+    /// * `destination` - the destination address to which funds will be sent.
+    ///     Can be obtained using [`Util::decode_data`](crate::Util::decode_data)
     ///
     /// Returns information on the prepared sweep, including the exact fee that results from
     /// using the provided fee rate. The method [`ChannelClose::sweep`] can be used to broadcast
@@ -72,8 +82,9 @@ impl ChannelClose {
     /// Requires network: **yes**
     pub fn prepare_sweep(
         &self,
-        address: String,
+        destination: BitcoinAddressData,
     ) -> std::result::Result<SweepChannelCloseInfo, RedeemOnchainError> {
+        let address = destination.address;
         let onchain_fee_rate = query_onchain_fee_rate(&self.support)
             .map_err(|e| RedeemOnchainError::ServiceConnectivity { err: e.to_string() })?;
         let res =
