@@ -6,15 +6,13 @@ use crate::amount::{AsSats, Msats, Sats, ToAmount};
 use crate::errors::Result;
 use crate::onchain::channel_closes::ChannelClose;
 use crate::onchain::reverse_swap::ReverseSwap;
-use crate::onchain::swap::Swap;
+use crate::onchain::swap::{calculate_swap_lsp_fee_for_amount, Swap};
 use crate::support::Support;
 use crate::{OnchainResolvingFees, RuntimeErrorCode, SwapToLightningFees};
 use breez_sdk_core::ReceiveOnchainRequest;
 use log::error;
 use perro::MapToError;
 use std::sync::Arc;
-
-const TWO_WEEKS: u32 = 2 * 7 * 24 * 60 * 60;
 
 pub struct Onchain {
     swap: Arc<Swap>,
@@ -56,7 +54,7 @@ where
     F: FnOnce(String) -> Result<(Sats, Sats, u32)>,
 {
     let rate = support.get_exchange_rate();
-    let lsp_fees = support.calculate_lsp_fee_for_amount(amount.msats, Some(TWO_WEEKS))?;
+    let lsp_fees = calculate_swap_lsp_fee_for_amount(support, amount.msats)?;
 
     let swap_info = support
         .rt
@@ -88,7 +86,7 @@ where
         return Ok(None);
     }
 
-    let lsp_fees = support.calculate_lsp_fee_for_amount(sent_amount.sats, Some(TWO_WEEKS))?;
+    let lsp_fees = calculate_swap_lsp_fee_for_amount(support, amount.msats)?;
 
     if swap_info.is_none()
         || sent_amount.sats < (swap_info.clone().unwrap().min_allowed_deposit as u64)

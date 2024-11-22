@@ -16,7 +16,7 @@ interface LightningNode {
     PaymentAmountLimits get_payment_amount_limits();
 
     [Throws=LnError]
-    CalculateLspFeeResponse calculate_lsp_fee(u64 amount_sat, u32? expiry);
+    CalculateLspFeeResponse calculate_lsp_fee(u64 amount_sat);
 
     [Throws=LnError]
     InvoiceDetails create_invoice(u64 amount_sat, OpeningFeeParams? lsp_fee_params, string description, InvoiceCreationMetadata metadata);
@@ -252,7 +252,7 @@ interface Lightning {
     ReceiveAmountLimits determine_receive_amount_limits();
 
     [Throws=LnError]
-    CalculateLspFeeResponse calculate_lsp_fee_for_amount(u64 amount_sat, u32? expiry);
+    CalculateLspFeeResponse calculate_lsp_fee_for_amount(u64 amount_sat);
 
     [Throws=LnError]
     LspFee get_lsp_fee();
@@ -325,6 +325,9 @@ interface Onchain {
 interface Swap {
     [Throws=SwapError]
     SwapAddressInfo create(OpeningFeeParams? lsp_fee_params);
+
+    [Throws=LnError]
+    CalculateLspFeeResponse calculate_swap_lsp_fee_for_amount(u64 amount_sat);
 
     [Throws=LnError]
     OnchainResolvingFees? determine_resolving_fees(FailedSwapInfo failed_swap_info);

@@ -129,25 +129,19 @@ impl Lightning {
 
     /// Calculate the actual LSP fee for the given amount of an incoming payment.
     /// If the already existing inbound capacity is enough, no new channel is required.
-    /// The LSP may offer multiple fee rates, tied to different expiration dates.
-    /// Increased expiry dates mean higher fee rates.
-    /// This method returns the best offer within the given expiry.
     ///
     /// Parameters:
     /// * `amount_sat` - amount in sats to compute LSP fee for
-    /// * `expiry` - expiry time in seconds
     ///
     /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
     /// provided to [`Bolt11::create`]
     ///
+    /// For swaps, use [`Swap::calculate_swap_lsp_fee_for_amount`] instead,
+    /// which uses fee offer from the LSP that is valid for a longer time period
+    ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee_for_amount(
-        &self,
-        amount_sat: u64,
-        expiry: Option<u32>,
-    ) -> Result<CalculateLspFeeResponse> {
-        self.support
-            .calculate_lsp_fee_for_amount(amount_sat, expiry)
+    pub fn calculate_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
+        self.support.calculate_lsp_fee_for_amount(amount_sat, None)
     }
 
     /// When *receiving* payments, a new channel MAY be required. A fee will be charged to the user.

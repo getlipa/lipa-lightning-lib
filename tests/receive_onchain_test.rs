@@ -21,11 +21,12 @@ fn test_receive_onchain() {
 
     let lsp_fee = node
         .lightning()
-        .calculate_lsp_fee_for_amount(100000, None)
+        .calculate_lsp_fee_for_amount(100000)
         .unwrap();
     let lsp_fee_high_expiry = node
-        .lightning()
-        .calculate_lsp_fee_for_amount(100000, Some(2 * 7 * 24 * 6 * 6))
+        .onchain()
+        .swap()
+        .calculate_swap_lsp_fee_for_amount(100000)
         .unwrap();
     assert_ne!(
         lsp_fee.lsp_fee_params.clone().unwrap().valid_until,
