@@ -625,13 +625,9 @@ impl LightningNode {
 
     /// Calculate the actual LSP fee for the given amount of an incoming payment.
     /// If the already existing inbound capacity is enough, no new channel is required.
-    /// The LSP may offer multiple fee rates, tied to different expiration dates.
-    /// Increased expiry dates mean higher fee rates.
-    /// This method returns the best offer within the given expiry.
     ///
     /// Parameters:
     /// * `amount_sat` - amount in sats to compute LSP fee for
-    /// * `expiry` - expiry time in seconds
     ///
     /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
     /// provided to [`LightningNode::create_invoice`]
