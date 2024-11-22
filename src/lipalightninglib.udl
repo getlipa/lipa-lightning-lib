@@ -148,7 +148,7 @@ interface LightningNode {
     OnchainResolvingFees? get_channel_close_resolving_fees();
 
     [Throws=SweepError]
-    string swap_channel_close_funds_to_lightning(u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_params);
+    string swap_channel_close_funds_to_lightning(u32 sats_per_vbyte, u64 lsp_fee, OpeningFeeParams? lsp_fee_params);
 
     [Throws=LnError]
     void hide_topup(string id);
@@ -364,7 +364,7 @@ interface ChannelClose {
     string sweep(SweepChannelCloseInfo sweep_info);
 
     [Throws=SweepError]
-    string swap(u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_params);
+    string swap(u32 sats_per_vbyte, u64 lsp_fee, OpeningFeeParams? lsp_fee_params);
 };
 
 interface Activities {

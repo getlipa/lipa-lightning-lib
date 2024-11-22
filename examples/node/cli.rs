@@ -1700,10 +1700,11 @@ fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
         .swap_fees
         .ok_or(anyhow!("Swap isn't available, not enough on-chain funds"))?;
 
-    let txid = node
-        .onchain()
-        .channel_close()
-        .swap(resolving_fees.sats_per_vbyte, swap_fees.lsp_fee_params)?;
+    let txid = node.onchain().channel_close().swap(
+        resolving_fees.sats_per_vbyte,
+        swap_fees.channel_opening_fee.sats,
+        swap_fees.lsp_fee_params,
+    )?;
 
     println!("Sweeping transaction: {txid}");
 

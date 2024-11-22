@@ -191,6 +191,7 @@ impl ChannelClose {
     pub fn swap(
         &self,
         sat_per_vbyte: u32,
+        lsp_fee: u64,
         lsp_fee_params: Option<OpeningFeeParams>,
     ) -> std::result::Result<String, RedeemOnchainError> {
         let onchain_balance = self
@@ -242,19 +243,11 @@ impl ChannelClose {
             });
         }
 
-        let lsp_fees = self
-            .swap
-            .calculate_lsp_fee_for_amount(send_amount_sats)
-            .map_err(|_| RedeemOnchainError::ServiceConnectivity {
-                err: "Could not get lsp fees".to_string(),
-            })?
-            .lsp_fee
-            .sats;
-        if lsp_fees >= send_amount_sats {
+        if lsp_fee >= send_amount_sats {
             return Err(RedeemOnchainError::InsufficientFunds {
                 err: format!(
                     "Available funds ({} sats after onchain fees) are not enough for lsp fees ({} sats)",
-                    send_amount_sats, lsp_fees,
+                    send_amount_sats, lsp_fee,
                 ),
             });
         }
