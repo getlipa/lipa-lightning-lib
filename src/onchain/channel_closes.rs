@@ -238,8 +238,8 @@ impl ChannelClose {
         }
 
         let lsp_fees = self
-            .support
-            .calculate_lsp_fee_for_amount(send_amount_sats, None)
+            .swap
+            .calculate_swap_lsp_fee_for_amount(send_amount_sats)
             .map_err(|_| RedeemOnchainError::ServiceConnectivity {
                 err: "Could not get lsp fees".to_string(),
             })?
