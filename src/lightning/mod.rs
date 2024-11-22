@@ -136,7 +136,7 @@ impl Lightning {
     /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
     /// provided to [`Bolt11::create`]
     ///
-    /// For swaps, use [`Swap::calculate_swap_lsp_fee_for_amount`] instead,
+    /// For swaps, use [`Swap::calculate_lsp_fee_for_amount`] instead,
     /// which uses fee offer from the LSP that is valid for a longer time period
     ///
     /// Requires network: **yes**

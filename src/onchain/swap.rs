@@ -234,7 +234,7 @@ impl Swap {
         );
 
         let lsp_fees = self
-            .calculate_swap_lsp_fee_for_amount(send_amount_sats)?
+            .calculate_lsp_fee_for_amount(send_amount_sats)?
             .lsp_fee
             .sats;
         ensure!(
@@ -292,10 +292,7 @@ impl Swap {
     /// * `amount_sat` - amount in sats to compute LSP fee for
     ///
     /// Requires network: **yes**
-    pub fn calculate_swap_lsp_fee_for_amount(
-        &self,
-        amount_sat: u64,
-    ) -> Result<CalculateLspFeeResponse> {
+    pub fn calculate_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
         self.support
             .calculate_lsp_fee_for_amount(amount_sat, Some(TWO_WEEKS))
     }

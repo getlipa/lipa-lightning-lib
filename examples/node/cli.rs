@@ -632,10 +632,7 @@ fn calculate_swap_lsp_fee(
         .ok_or(anyhow!("Amount in SAT is required"))?
         .parse()
         .context("Amount should be a positive integer number")?;
-    let response = node
-        .onchain()
-        .swap()
-        .calculate_swap_lsp_fee_for_amount(amount)?;
+    let response = node.onchain().swap().calculate_lsp_fee_for_amount(amount)?;
     println!("LSP fee for Swaps: {}", amount_to_string(&response.lsp_fee));
     Ok(())
 }

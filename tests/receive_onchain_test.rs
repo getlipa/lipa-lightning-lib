@@ -26,7 +26,7 @@ fn test_receive_onchain() {
     let lsp_fee_high_expiry = node
         .onchain()
         .swap()
-        .calculate_swap_lsp_fee_for_amount(100000)
+        .calculate_lsp_fee_for_amount(100000)
         .unwrap();
     assert_ne!(
         lsp_fee.lsp_fee_params.clone().unwrap().valid_until,

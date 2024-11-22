@@ -327,7 +327,7 @@ interface Swap {
     SwapAddressInfo create(OpeningFeeParams? lsp_fee_params);
 
     [Throws=LnError]
-    CalculateLspFeeResponse calculate_swap_lsp_fee_for_amount(u64 amount_sat);
+    CalculateLspFeeResponse calculate_lsp_fee_for_amount(u64 amount_sat);
 
     [Throws=LnError]
     OnchainResolvingFees? determine_resolving_fees(FailedSwapInfo failed_swap_info);
