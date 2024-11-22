@@ -67,6 +67,11 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                         println!("{}", format!("{message:#}").red());
                     }
                 }
+                "calculateswaplspfee" => {
+                    if let Err(message) = calculate_swap_lsp_fee(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
+                    }
+                }
                 "paymentamountlimits" => {
                     payment_amount_limits(node);
                 }
@@ -367,6 +372,10 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
         "calculatelspfee <amount in SAT>",
         "calculatelspfee ",
     ));
+    hints.insert(CommandHint::new(
+        "calculateswaplspfee <amount in SAT>",
+        "calculateswaplspfee ",
+    ));
     hints.insert(CommandHint::new("exchangerates", "exchangerates"));
     hints.insert(CommandHint::new("listcurrencies", "listcurrencies"));
     hints.insert(CommandHint::new(
@@ -528,6 +537,7 @@ fn help() {
     println!("  walletpubkeyid");
     println!("  lspfee");
     println!("  calculatelspfee <amount in SAT>");
+    println!("  calculateswaplspfee <amount in SAT>");
     println!("  paymentamountlimits");
     println!("  exchangerates");
     println!("  listcurrencies");
@@ -610,6 +620,20 @@ fn calculate_lsp_fee(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
         .context("Amount should be a positive integer number")?;
     let response = node.lightning().calculate_lsp_fee_for_amount(amount)?;
     println!(" LSP fee: {}", amount_to_string(&response.lsp_fee));
+    Ok(())
+}
+
+fn calculate_swap_lsp_fee(
+    node: &LightningNode,
+    words: &mut dyn Iterator<Item = &str>,
+) -> Result<()> {
+    let amount: u64 = words
+        .next()
+        .ok_or(anyhow!("Amount in SAT is required"))?
+        .parse()
+        .context("Amount should be a positive integer number")?;
+    let response = node.onchain().swap().calculate_lsp_fee_for_amount(amount)?;
+    println!("LSP fee for Swaps: {}", amount_to_string(&response.lsp_fee));
     Ok(())
 }
 

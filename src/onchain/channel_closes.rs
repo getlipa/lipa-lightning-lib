@@ -66,7 +66,12 @@ impl ChannelClose {
             ))
         };
 
-        get_onchain_resolving_fees(&self.support, onchain_balance, prepare_onchain_tx)
+        get_onchain_resolving_fees(
+            &self.support,
+            &self.swap,
+            onchain_balance,
+            prepare_onchain_tx,
+        )
     }
 
     /// Prepares a sweep of all available on-chain funds to the provided on-chain address.
@@ -238,7 +243,7 @@ impl ChannelClose {
         }
 
         let lsp_fees = self
-            .support
+            .swap
             .calculate_lsp_fee_for_amount(send_amount_sats)
             .map_err(|_| RedeemOnchainError::ServiceConnectivity {
                 err: "Could not get lsp fees".to_string(),

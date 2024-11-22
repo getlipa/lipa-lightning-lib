@@ -4,8 +4,8 @@ use crate::onchain::{get_onchain_resolving_fees, query_onchain_fee_rate};
 use crate::support::Support;
 use crate::util::unix_timestamp_to_system_time;
 use crate::{
-    Amount, FailedSwapInfo, OnchainResolvingFees, ResolveFailedSwapInfo, RuntimeErrorCode,
-    SwapAddressInfo,
+    Amount, CalculateLspFeeResponse, FailedSwapInfo, OnchainResolvingFees, ResolveFailedSwapInfo,
+    RuntimeErrorCode, SwapAddressInfo,
 };
 use breez_sdk_core::error::ReceiveOnchainError;
 use breez_sdk_core::{
@@ -14,6 +14,8 @@ use breez_sdk_core::{
 };
 use perro::{ensure, runtime_error, MapToError};
 use std::sync::Arc;
+
+const TWO_WEEKS: u32 = 2 * 7 * 24 * 60 * 60;
 
 pub struct Swap {
     support: Arc<Support>,
@@ -94,6 +96,7 @@ impl Swap {
         };
         get_onchain_resolving_fees(
             &self.support,
+            self,
             failed_swap_info.amount.sats.as_sats().msats(),
             prepare_onchain_tx,
         )
@@ -231,7 +234,6 @@ impl Swap {
         );
 
         let lsp_fees = self
-            .support
             .calculate_lsp_fee_for_amount(send_amount_sats)?
             .lsp_fee
             .sats;
@@ -281,6 +283,18 @@ impl Swap {
                 created_at: unix_timestamp_to_system_time(s.created_at as u64),
             })
             .collect())
+    }
+
+    /// Calculate the actual LSP fee for the given amount of a swap.
+    /// If the already existing inbound capacity is enough, no new channel is required.
+    ///
+    /// Parameters:
+    /// * `amount_sat` - amount in sats to compute LSP fee for
+    ///
+    /// Requires network: **yes**
+    pub fn calculate_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
+        self.support
+            .calculate_lsp_fee_for_amount(amount_sat, Some(TWO_WEEKS))
     }
 }
 
