@@ -96,6 +96,7 @@ impl Swap {
         };
         get_onchain_resolving_fees(
             &self.support,
+            &self,
             failed_swap_info.amount.sats.as_sats().msats(),
             prepare_onchain_tx,
         )
@@ -295,15 +296,9 @@ impl Swap {
         &self,
         amount_sat: u64,
     ) -> Result<CalculateLspFeeResponse> {
-        calculate_swap_lsp_fee_for_amount(&self.support, amount_sat)
+        self.support
+            .calculate_lsp_fee_for_amount(amount_sat, Some(TWO_WEEKS))
     }
-}
-
-pub fn calculate_swap_lsp_fee_for_amount(
-    support: &Support,
-    amount_sat: u64,
-) -> Result<CalculateLspFeeResponse> {
-    support.calculate_lsp_fee_for_amount(amount_sat, Some(TWO_WEEKS))
 }
 
 /// Information the resolution of a failed swap.
