@@ -12,7 +12,7 @@ use breez_sdk_core::{
     BitcoinAddressData, Network, OpeningFeeParams, PrepareRefundRequest, ReceiveOnchainRequest,
     RefundRequest,
 };
-use perro::{ensure, runtime_error, MapToError};
+use perro::{ensure, runtime_error, MapToError, OptionToError};
 use std::sync::Arc;
 
 const TWO_WEEKS: u32 = 2 * 7 * 24 * 60 * 60;
@@ -233,10 +233,15 @@ impl Swap {
             )
         );
 
+        // todo stop treating lsp_fee_param as an Option anywhere. In reality it is always Some(). Leaving it as is for now, to not break backwards-compatibility
+        let lsp_fee_param =
+            lsp_fee_param.ok_or_permanent_failure("lsp_fee_param is expected to never be None")?;
+
         let lsp_fees = self
-            .calculate_lsp_fee_for_amount(send_amount_sats)?
+            .compute_lsp_fee_for_amount(send_amount_sats, lsp_fee_param)
             .lsp_fee
             .sats;
+
         ensure!(
             lsp_fees < send_amount_sats,
             runtime_error(
@@ -285,16 +290,34 @@ impl Swap {
             .collect())
     }
 
-    /// Calculate the actual LSP fee for the given amount of a swap.
+    /// Retrieve the actual LSP fee for the given amount of a swap.
     /// If the already existing inbound capacity is enough, no new channel is required.
     ///
     /// Parameters:
     /// * `amount_sat` - amount in sats to compute LSP fee for
     ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
+    pub fn retrieve_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
         self.support
-            .calculate_lsp_fee_for_amount(amount_sat, Some(TWO_WEEKS))
+            .retrieve_lsp_fee_for_amount(amount_sat, Some(TWO_WEEKS))
+    }
+
+    /// Calculate the actual LSP fee for the given amount of an incoming payment,
+    /// providing the fee params provided by the LSP
+    /// If the already existing inbound capacity is enough, no new channel is required.
+    ///
+    /// Parameters:
+    /// * `amount_sat` - amount in sats to compute LSP fee for
+    /// * `lsp_fee_param` - Fee terms offered by the LSP
+    ///
+    /// Requires network: **no**
+    pub fn compute_lsp_fee_for_amount(
+        &self,
+        amount_sat: u64,
+        lsp_fee_param: OpeningFeeParams,
+    ) -> CalculateLspFeeResponse {
+        self.support
+            .compute_lsp_fee_for_amount(amount_sat, lsp_fee_param)
     }
 }
 

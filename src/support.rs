@@ -13,8 +13,8 @@ use crate::{
     RuntimeErrorCode, UserPreferences,
 };
 use breez_sdk_core::{
-    BreezServices, OpenChannelFeeRequest, ReportIssueRequest, ReportPaymentFailureDetails,
-    UnspentTransactionOutput,
+    BreezServices, OpenChannelFeeRequest, OpeningFeeParams, ReportIssueRequest,
+    ReportPaymentFailureDetails, UnspentTransactionOutput,
 };
 use crow::OfferManager;
 use honeybadger::Auth;
@@ -109,7 +109,7 @@ impl Support {
         Ok(node_state.utxos)
     }
 
-    /// Calculate the actual LSP fee for the given amount of an incoming payment.
+    /// Retrieve the actual LSP fee for the given amount of an incoming payment.
     /// If the already existing inbound capacity is enough, no new channel is required.
     /// The LSP may offer multiple fee rates, tied to different expiration dates.
     /// Increased expiry dates mean higher fee rates.
@@ -123,7 +123,7 @@ impl Support {
     /// provided to [`Bolt11::create`]
     ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee_for_amount(
+    pub fn retrieve_lsp_fee_for_amount(
         &self,
         amount_sat: u64,
         expiry: Option<u32>,
@@ -148,6 +148,31 @@ impl Support {
                 .to_amount_up(&self.get_exchange_rate()),
             lsp_fee_params: Some(res.fee_params),
         })
+    }
+
+    /// Calculate the actual LSP fee for the given amount of an incoming payment,
+    /// providing the fee params provided by the LSP
+    /// If the already existing inbound capacity is enough, no new channel is required.
+    ///
+    /// Parameters:
+    /// * `amount_sat` - amount in sats to compute LSP fee for
+    /// * `lsp_fee_param` - Fee terms offered by the LSP
+    ///
+    /// Requires network: **no**
+    pub fn compute_lsp_fee_for_amount(
+        &self,
+        amount_sat: u64,
+        lsp_fee_param: OpeningFeeParams,
+    ) -> CalculateLspFeeResponse {
+        let lsp_fee_sat = amount_sat * lsp_fee_param.proportional as u64 / 1_000_000;
+        let lsp_fee_msat_rounded_to_sat = lsp_fee_sat * 1000;
+
+        let amount = std::cmp::max(lsp_fee_msat_rounded_to_sat, lsp_fee_param.min_msat);
+
+        CalculateLspFeeResponse {
+            lsp_fee: amount.as_msats().to_amount_up(&self.get_exchange_rate()),
+            lsp_fee_params: Some(lsp_fee_param),
+        }
     }
 
     /// Query the current recommended on-chain fee rate.

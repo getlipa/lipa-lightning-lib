@@ -635,7 +635,7 @@ impl LightningNode {
     /// Requires network: **yes**
     #[deprecated = "lightning().calculate_lsp_fee_for_amount() should be used instead"]
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
-        self.lightning.calculate_lsp_fee_for_amount(amount_sat)
+        self.lightning.retrieve_lsp_fee_for_amount(amount_sat)
     }
 
     /// Get the current limits for the amount that can be transferred in a single payment.
@@ -1427,12 +1427,11 @@ impl LightningNode {
     pub fn swap_channel_close_funds_to_lightning(
         &self,
         sats_per_vbyte: u32,
-        lsp_fee: u64,
         lsp_fee_params: Option<OpeningFeeParams>,
     ) -> std::result::Result<String, RedeemOnchainError> {
         self.onchain
             .channel_close()
-            .swap(sats_per_vbyte, lsp_fee, lsp_fee_params)
+            .swap(sats_per_vbyte, lsp_fee_params)
     }
 
     /// Prints additional debug information to the logs.

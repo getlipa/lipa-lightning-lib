@@ -136,12 +136,30 @@ impl Lightning {
     /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
     /// provided to [`Bolt11::create`]
     ///
-    /// For swaps, use [`Swap::calculate_lsp_fee_for_amount`](crate::Swap::calculate_lsp_fee_for_amount) instead,
+    /// For swaps, use [`Swap::retrieve_lsp_fee_for_amount`](crate::Swap::retrieve_lsp_fee_for_amount) instead,
     /// which uses fee offer from the LSP that is valid for a longer time period
     ///
     /// Requires network: **yes**
+    /// #[deprecated = "Renamed to retrieve_lsp_fee_for_amount"]
     pub fn calculate_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
-        self.support.calculate_lsp_fee_for_amount(amount_sat, None)
+        self.support.retrieve_lsp_fee_for_amount(amount_sat, None)
+    }
+
+    /// Calculate the actual LSP fee for the given amount of an incoming payment.
+    /// If the already existing inbound capacity is enough, no new channel is required.
+    ///
+    /// Parameters:
+    /// * `amount_sat` - amount in sats to compute LSP fee for
+    ///
+    /// For the returned fees to be guaranteed to be accurate, the returned `lsp_fee_params` must be
+    /// provided to [`Bolt11::create`]
+    ///
+    /// For swaps, use [`Swap::retrieve_lsp_fee_for_amount`](crate::Swap::retrieve_lsp_fee_for_amount) instead,
+    /// which uses fee offer from the LSP that is valid for a longer time period
+    ///
+    /// Requires network: **yes**
+    pub fn retrieve_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
+        self.support.retrieve_lsp_fee_for_amount(amount_sat, None)
     }
 
     /// When *receiving* payments, a new channel MAY be required. A fee will be charged to the user.
