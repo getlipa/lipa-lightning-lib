@@ -59,8 +59,7 @@ pub use breez_sdk_core::{
     PrepareRedeemOnchainFundsRequest, PrepareRefundRequest, ReceiveOnchainRequest,
     ReceivePaymentRequest, ReceivePaymentResponse, RedeemOnchainFundsRequest, RefundRequest,
     ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, ReverseSwapStatus,
-    SendOnchainRequest, SendPaymentRequest, SignMessageRequest, SwapAmountType, SwapStatus,
-    UnspentTransactionOutput,
+    SendPaymentRequest, SignMessageRequest, SwapAmountType, SwapStatus, UnspentTransactionOutput,
 };
 use breez_sdk_core::{
     ChannelState, Config, LspInformation, NodeState, OpenChannelFeeResponse, PayOnchainResponse,

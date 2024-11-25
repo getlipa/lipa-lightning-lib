@@ -649,8 +649,8 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-core"
-version = "0.6.2"
-source = "git+https://github.com/breez/breez-sdk?tag=0.6.2#df86eec7b0745edb1736e6fcbb39c12fff15e920"
+version = "0.6.4"
+source = "git+https://github.com/breez/breez-sdk?tag=0.6.4#87a48d545e6656188549a9ac057c924d4448c667"
 dependencies = [
  "aes 0.8.4",
  "anyhow",
@@ -693,7 +693,7 @@ dependencies = [
 
 [[package]]
 name = "breez-sdk-mock"
-version = "0.6.2"
+version = "0.6.4"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -4074,8 +4074,8 @@ checksum = "60a7b59a5d9b0099720b417b6325d91a52cbf5b3dcb5041d864be53eefa58abc"
 
 [[package]]
 name = "sdk-common"
-version = "0.6.2"
-source = "git+https://github.com/breez/breez-sdk?tag=0.6.2#df86eec7b0745edb1736e6fcbb39c12fff15e920"
+version = "0.6.4"
+source = "git+https://github.com/breez/breez-sdk?tag=0.6.4#87a48d545e6656188549a9ac057c924d4448c667"
 dependencies = [
  "aes 0.8.4",
  "anyhow",
@@ -4095,6 +4095,7 @@ dependencies = [
  "serde_json",
  "strum_macros 0.25.3",
  "thiserror 1.0.68",
+ "tokio",
  "tonic",
  "tonic-build",
  "url",
