@@ -13,8 +13,8 @@ use crate::{
     LightningNodeConfig, RuntimeErrorCode, UserPreferences, DB_FILENAME, LOGS_DIR,
 };
 use breez_sdk_core::{
-    BreezEvent, BreezServices, EventListener, InvoicePaidDetails, OpenChannelFeeRequest, Payment,
-    PaymentStatus, ReceivePaymentRequest,
+    BreezEvent, BreezServices, EventListener, OpenChannelFeeRequest, Payment, PaymentStatus,
+    ReceivePaymentRequest,
 };
 use log::{debug, Level};
 use parrot::AnalyticsClient;
@@ -203,31 +203,11 @@ fn handle_payment_received_notification(
     payment_hash: String,
     timeout_instant: Instant,
 ) -> NotificationHandlingResult<Notification> {
-    // Check if the payment was already received
-    if let Some(payment) = get_confirmed_payment(&rt, &sdk, &payment_hash)? {
-        return Ok(Notification::Bolt11PaymentReceived {
-            amount_sat: payment.amount_msat / 1000,
-            payment_hash,
-        });
-    }
-
-    // Wait for payment to be received
-    if let Some(details) =
-        wait_for_payment_with_timeout(&event_receiver, &payment_hash, timeout_instant)?
-    {
-        // We want to wait as long as possible to decrease the likelihood of the signer being shut down
-        //  while HTLCs are still in-flight.
-        wait_for_synced_event(&event_receiver)?;
-        return Ok(Notification::Bolt11PaymentReceived {
-            amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
-            payment_hash,
-        });
-    }
-
-    runtime_error!(
-        NotificationHandlingErrorCode::ExpectedPaymentNotReceived,
-        "Expected incoming payment with hash {payment_hash} but it was not received"
-    )
+    let payment = wait_for_payment(rt, sdk, event_receiver, &payment_hash, timeout_instant)?;
+    Ok(Notification::Bolt11PaymentReceived {
+        amount_sat: payment.amount_msat / 1000,
+        payment_hash,
+    })
 }
 
 fn handle_address_txs_confirmed_notification(
@@ -266,32 +246,12 @@ fn handle_address_txs_confirmed_notification(
             "Failed to start a swap redeem",
         )?;
 
-    // Check if the payment was already received
     let payment_hash = hex::encode(in_progress_swap.payment_hash);
-    if let Some(payment) = get_confirmed_payment(&rt, &sdk, &payment_hash)? {
-        return Ok(Notification::OnchainPaymentSwappedIn {
-            amount_sat: payment.amount_msat / 1000,
-            payment_hash,
-        });
-    }
-
-    // Wait for payment to arrive
-    if let Some(details) =
-        wait_for_payment_with_timeout(&event_receiver, &payment_hash, timeout_instant)?
-    {
-        // We want to wait as long as possible to decrease the likelihood of the signer being shut down
-        //  while HTLCs are still in-flight.
-        wait_for_synced_event(&event_receiver)?;
-        return Ok(Notification::OnchainPaymentSwappedIn {
-            amount_sat: details.payment.map(|p| p.amount_msat).unwrap_or(0) / 1000, // payment will only be None for corrupted GL payments. This is unlikely, so giving an optional amount seems overkill.
-            payment_hash,
-        });
-    }
-
-    runtime_error!(
-        NotificationHandlingErrorCode::ExpectedPaymentNotReceived,
-        "Expected incoming payment with hash {payment_hash} but it was not received"
-    )
+    let payment = wait_for_payment(rt, sdk, event_receiver, &payment_hash, timeout_instant)?;
+    Ok(Notification::OnchainPaymentSwappedIn {
+        amount_sat: payment.amount_msat / 1000,
+        payment_hash,
+    })
 }
 
 fn handle_lnurl_pay_request_notification(
@@ -495,24 +455,52 @@ fn get_confirmed_payment(
     Ok(None)
 }
 
-fn wait_for_payment_with_timeout(
-    event_receiver: &Receiver<BreezEvent>,
+fn wait_for_payment(
+    rt: AsyncRuntime,
+    sdk: Arc<BreezServices>,
+    event_receiver: Receiver<BreezEvent>,
     payment_hash: &str,
     timeout_instant: Instant,
-) -> NotificationHandlingResult<Option<InvoicePaidDetails>> {
+) -> NotificationHandlingResult<Payment> {
     while Instant::now() < timeout_instant {
-        match event_receiver.recv_timeout(Duration::from_secs(1)) {
-            Ok(BreezEvent::InvoicePaid { details }) if details.payment_hash == payment_hash => {
-                return Ok(Some(details))
-            }
-            Ok(_) => continue,
-            Err(RecvTimeoutError::Timeout) => continue,
-            Err(RecvTimeoutError::Disconnected) => {
-                permanent_failure!("The SDK stopped running unexpectedly");
-            }
+        debug!("Checking exitent payments...");
+        if let Some(payment) = get_confirmed_payment(&rt, &sdk, payment_hash)? {
+            debug!("Checking exitent payments... Found");
+            return Ok(payment);
+        }
+        debug!("Checking exitent payments... None");
+
+        if let Some(payment) = check_for_received_payment(&event_receiver, payment_hash)? {
+            return Ok(payment);
         }
     }
-    Ok(None)
+
+    runtime_error!(
+        NotificationHandlingErrorCode::ExpectedPaymentNotReceived,
+        "Expected incoming payment with hash {payment_hash} but it was not received"
+    )
+}
+
+fn check_for_received_payment(
+    event_receiver: &Receiver<BreezEvent>,
+    payment_hash: &str,
+) -> NotificationHandlingResult<Option<Payment>> {
+    debug!("Waiting for payment to be received...");
+    match event_receiver.recv_timeout(Duration::from_secs(2)) {
+        Ok(BreezEvent::InvoicePaid { details }) if details.payment_hash == payment_hash => {
+            debug!("Waiting for payment to be received... Received");
+            debug!("Waiting for synced event...");
+            // We want to wait as long as possible to decrease the likelihood of
+            // the signer being shut down while HTLCs are still in-flight.
+            wait_for_synced_event(event_receiver)?;
+            debug!("Waiting for synced event... Synced");
+            Ok(details.payment)
+        }
+        Ok(_) | Err(RecvTimeoutError::Timeout) => Ok(None),
+        Err(RecvTimeoutError::Disconnected) => {
+            permanent_failure!("The SDK stopped running unexpectedly");
+        }
+    }
 }
 
 /// Wait for synced event without timeout.
