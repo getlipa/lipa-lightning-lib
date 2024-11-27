@@ -10,8 +10,7 @@ use crate::lightning::receive_limits::ReceiveAmountLimits;
 use crate::locker::Locker;
 use crate::support::Support;
 use crate::{
-    CalculateLspFeeResponse, ExchangeRate, LspFee, MaxRoutingFeeConfig, MaxRoutingFeeMode,
-    RuntimeErrorCode,
+    ExchangeRate, LspFee, LspFeeResponse, MaxRoutingFeeConfig, MaxRoutingFeeMode, RuntimeErrorCode,
 };
 use perro::MapToError;
 use std::sync::Arc;
@@ -127,7 +126,8 @@ impl Lightning {
         ))
     }
 
-    /// Calculate the actual LSP fee for the given amount of an incoming payment.
+    /// Get the LSP fee params as well as
+    /// the actual LSP fee for the given amount of an incoming payment (optional).
     /// If the already existing inbound capacity is enough, no new channel is required.
     ///
     /// Parameters:
@@ -140,8 +140,8 @@ impl Lightning {
     /// which uses fee offer from the LSP that is valid for a longer time period
     ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
-        self.support.calculate_lsp_fee_for_amount(amount_sat, None)
+    pub fn calculate_lsp_fee(&self, amount_sat: Option<u64>) -> Result<LspFeeResponse> {
+        self.support.calculate_lsp_fee(amount_sat, None)
     }
 
     /// When *receiving* payments, a new channel MAY be required. A fee will be charged to the user.

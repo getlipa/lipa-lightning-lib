@@ -4,15 +4,15 @@ use crate::onchain::{get_onchain_resolving_fees, query_onchain_fee_rate};
 use crate::support::Support;
 use crate::util::unix_timestamp_to_system_time;
 use crate::{
-    Amount, CalculateLspFeeResponse, FailedSwapInfo, OnchainResolvingFees, ResolveFailedSwapInfo,
-    RuntimeErrorCode, SwapAddressInfo,
+    Amount, CalculateLspFeeResponse, FailedSwapInfo, LspFeeResponse, OnchainResolvingFees,
+    ResolveFailedSwapInfo, RuntimeErrorCode, SwapAddressInfo,
 };
 use breez_sdk_core::error::ReceiveOnchainError;
 use breez_sdk_core::{
     BitcoinAddressData, Network, OpeningFeeParams, PrepareRefundRequest, ReceiveOnchainRequest,
     RefundRequest,
 };
-use perro::{ensure, runtime_error, MapToError, OptionToError};
+use perro::{ensure, runtime_error, MapToError};
 use std::sync::Arc;
 
 const TWO_WEEKS: u32 = 2 * 7 * 24 * 60 * 60;
@@ -201,9 +201,8 @@ impl Swap {
     ) -> Result<String> {
         let lsp_fee_param = lsp_fee_param.unwrap_or(
             self.support
-                .calculate_lsp_fee_for_amount(failed_swap_info.amount.sats, Some(TWO_WEEKS))?
-                .lsp_fee_params
-                .ok_or_permanent_failure("lsp_fee_param is expected to never be None")?, // todo stop treating lsp_fee_param as an Option anywhere. In reality it is always Some(). Leaving it as is for now, to not break backwards-compatibility
+                .calculate_lsp_fee(None, Some(TWO_WEEKS))?
+                .lsp_fee_params,
         );
 
         let swap_address_info = self
@@ -302,9 +301,8 @@ impl Swap {
     /// * `amount_sat` - amount in sats to compute LSP fee for
     ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
-        self.support
-            .calculate_lsp_fee_for_amount(amount_sat, Some(TWO_WEEKS))
+    pub fn calculate_lsp_fee(&self, amount_sat: Option<u64>) -> Result<LspFeeResponse> {
+        self.support.calculate_lsp_fee(amount_sat, Some(TWO_WEEKS))
     }
 
     /// Calculate the actual LSP fee for the given amount of an incoming payment,

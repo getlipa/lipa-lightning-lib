@@ -11,7 +11,7 @@ use crate::support::Support;
 use crate::{OnchainResolvingFees, RuntimeErrorCode, SwapToLightningFees};
 use breez_sdk_core::ReceiveOnchainRequest;
 use log::error;
-use perro::MapToError;
+use perro::{MapToError, OptionToError};
 use std::sync::Arc;
 
 pub struct Onchain {
@@ -55,13 +55,13 @@ where
     F: FnOnce(String) -> Result<(Sats, Sats, u32)>,
 {
     let rate = support.get_exchange_rate();
-    let lsp_fees = swap.calculate_lsp_fee_for_amount(amount.msats)?;
+    let lsp_fees = swap.calculate_lsp_fee(Some(amount.msats))?;
 
     let swap_info = support
         .rt
         .handle()
         .block_on(support.sdk.receive_onchain(ReceiveOnchainRequest {
-            opening_fee_params: lsp_fees.lsp_fee_params,
+            opening_fee_params: Some(lsp_fees.lsp_fee_params),
         }))
         .ok();
 
@@ -87,12 +87,13 @@ where
         return Ok(None);
     }
 
-    let lsp_fees = swap.calculate_lsp_fee_for_amount(amount.msats)?;
+    let lsp_fee_response = swap.calculate_lsp_fee(Some(amount.msats))?;
+    let lsp_fee = lsp_fee_response.lsp_fee.ok_or_permanent_failure("calculate_lsp_fee doesn't return a nominal lsp fee even though a payment amount has been specified")?;
 
     if swap_info.is_none()
         || sent_amount.sats < (swap_info.clone().unwrap().min_allowed_deposit as u64)
         || sent_amount.sats > (swap_info.clone().unwrap().max_allowed_deposit as u64)
-        || sent_amount.sats <= lsp_fees.lsp_fee.sats
+        || sent_amount.sats <= lsp_fee.sats
     {
         return Ok(Some(OnchainResolvingFees {
             swap_fees: None,
@@ -105,11 +106,11 @@ where
     let swap_to_lightning_fees = SwapToLightningFees {
         swap_fee: swap_fee.sats.as_sats().to_amount_up(&rate),
         onchain_fee: onchain_fee.to_amount_up(&rate),
-        channel_opening_fee: lsp_fees.lsp_fee.clone(),
-        total_fees: (swap_fee.sats + onchain_fee.sats + lsp_fees.lsp_fee.sats)
+        channel_opening_fee: lsp_fee.clone(),
+        total_fees: (swap_fee.sats + onchain_fee.sats + lsp_fee.sats)
             .as_sats()
             .to_amount_up(&rate),
-        lsp_fee_params: lsp_fees.lsp_fee_params,
+        lsp_fee_params: lsp_fee_response.lsp_fee_params,
     };
 
     Ok(Some(OnchainResolvingFees {

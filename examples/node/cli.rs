@@ -618,8 +618,8 @@ fn calculate_lsp_fee(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
         .ok_or(anyhow!("Amount in SAT is required"))?
         .parse()
         .context("Amount should be a positive integer number")?;
-    let response = node.lightning().calculate_lsp_fee_for_amount(amount)?;
-    println!(" LSP fee: {}", amount_to_string(&response.lsp_fee));
+    let response = node.lightning().calculate_lsp_fee(Some(amount))?;
+    println!(" LSP fee: {}", amount_to_string(&response.lsp_fee.unwrap()));
     Ok(())
 }
 
@@ -632,8 +632,11 @@ fn calculate_swap_lsp_fee(
         .ok_or(anyhow!("Amount in SAT is required"))?
         .parse()
         .context("Amount should be a positive integer number")?;
-    let response = node.onchain().swap().calculate_lsp_fee_for_amount(amount)?;
-    println!("LSP fee for Swaps: {}", amount_to_string(&response.lsp_fee));
+    let response = node.onchain().swap().calculate_lsp_fee(Some(amount))?;
+    println!(
+        "LSP fee for Swaps: {}",
+        amount_to_string(&response.lsp_fee.unwrap())
+    );
     Ok(())
 }
 
@@ -1700,10 +1703,10 @@ fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
         .swap_fees
         .ok_or(anyhow!("Swap isn't available, not enough on-chain funds"))?;
 
-    let txid = node
-        .onchain()
-        .channel_close()
-        .swap(resolving_fees.sats_per_vbyte, swap_fees.lsp_fee_params)?;
+    let txid = node.onchain().channel_close().swap(
+        resolving_fees.sats_per_vbyte,
+        Some(swap_fees.lsp_fee_params),
+    )?;
 
     println!("Sweeping transaction: {txid}");
 

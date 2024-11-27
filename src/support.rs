@@ -9,8 +9,8 @@ use crate::pocketclient::PocketClient;
 use crate::task_manager::TaskManager;
 use crate::util::LogIgnoreError;
 use crate::{
-    CalculateLspFeeResponse, ChannelsInfo, ExchangeRate, LightningNodeConfig, NodeInfo, OfferKind,
-    RuntimeErrorCode, UserPreferences,
+    CalculateLspFeeResponse, ChannelsInfo, ExchangeRate, LightningNodeConfig, LspFeeResponse,
+    NodeInfo, OfferKind, RuntimeErrorCode, UserPreferences,
 };
 use breez_sdk_core::{
     BreezServices, OpenChannelFeeRequest, OpeningFeeParams, ReportIssueRequest,
@@ -109,7 +109,8 @@ impl Support {
         Ok(node_state.utxos)
     }
 
-    /// Calculate the actual LSP fee for the given amount of an incoming payment.
+    /// Get the LSP fee params as well as
+    /// the actual LSP fee for the given amount of an incoming payment (optional).
     /// If the already existing inbound capacity is enough, no new channel is required.
     /// The LSP may offer multiple fee rates, tied to different expiration dates.
     /// Increased expiry dates mean higher fee rates.
@@ -123,13 +124,14 @@ impl Support {
     /// provided to [`Bolt11::create`]
     ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee_for_amount(
+    pub fn calculate_lsp_fee(
         &self,
-        amount_sat: u64,
+        amount_sat: Option<u64>,
         expiry: Option<u32>,
-    ) -> Result<CalculateLspFeeResponse> {
+    ) -> Result<LspFeeResponse> {
+        let amount_msat = amount_sat.map(|amount| amount.as_sats().msats);
         let req = OpenChannelFeeRequest {
-            amount_msat: Some(amount_sat.as_sats().msats),
+            amount_msat,
             expiry,
         };
         let res = self
@@ -140,13 +142,19 @@ impl Support {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to compute opening channel fee",
             )?;
-        Ok(CalculateLspFeeResponse {
-            lsp_fee: res
-                .fee_msat
-                .ok_or_permanent_failure("Breez SDK open_channel_fee returned None lsp fee when provided with Some(amount_msat)")?
-                .as_msats()
-                .to_amount_up(&self.get_exchange_rate()),
-            lsp_fee_params: Some(res.fee_params),
+        let lsp_fee = match amount_sat {
+            None => None,
+            Some(_) => {
+                let fee_msat = res
+                    .fee_msat
+                    .ok_or_permanent_failure("Breez SDK open_channel_fee returned None lsp fee when provided with Some(amount_msat)")?;
+                Some(fee_msat.as_msats().to_amount_up(&self.get_exchange_rate()))
+            }
+        };
+
+        Ok(LspFeeResponse {
+            lsp_fee,
+            lsp_fee_params: res.fee_params,
         })
     }
 
