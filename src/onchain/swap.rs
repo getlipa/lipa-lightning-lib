@@ -199,10 +199,19 @@ impl Swap {
         sats_per_vbyte: u32,
         lsp_fee_param: Option<OpeningFeeParams>,
     ) -> Result<String> {
-        let swap_address_info = self.create(lsp_fee_param.clone()).map_to_runtime_error(
-            RuntimeErrorCode::NodeUnavailable,
-            "Couldn't generate swap address",
-        )?;
+        let lsp_fee_param = lsp_fee_param.unwrap_or(
+            self.support
+                .retrieve_lsp_fee_for_amount(failed_swap_info.amount.sats, Some(TWO_WEEKS))?
+                .lsp_fee_params
+                .ok_or_permanent_failure("lsp_fee_param is expected to never be None")?, // todo stop treating lsp_fee_param as an Option anywhere. In reality it is always Some(). Leaving it as is for now, to not break backwards-compatibility
+        );
+
+        let swap_address_info = self
+            .create(Some(lsp_fee_param.clone()))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Couldn't generate swap address",
+            )?;
 
         let prepare_response = self
             .support
@@ -232,10 +241,6 @@ impl Swap {
                 "Failed swap amount is too big for creating new swap"
             )
         );
-
-        // todo stop treating lsp_fee_param as an Option anywhere. In reality it is always Some(). Leaving it as is for now, to not break backwards-compatibility
-        let lsp_fee_param =
-            lsp_fee_param.ok_or_permanent_failure("lsp_fee_param is expected to never be None")?;
 
         let lsp_fees = self
             .compute_lsp_fee_for_amount(send_amount_sats, lsp_fee_param)
