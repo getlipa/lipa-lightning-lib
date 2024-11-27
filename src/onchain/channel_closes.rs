@@ -245,7 +245,7 @@ impl ChannelClose {
         if let Some(lsp_fee_params) = lsp_fee_params {
             let lsp_fee = self
                 .support
-                .compute_lsp_fee_for_amount(send_amount_sats, lsp_fee_params)
+                .calculate_lsp_fee_for_amount_locally(send_amount_sats, lsp_fee_params)
                 .lsp_fee
                 .sats;
             if lsp_fee >= send_amount_sats {

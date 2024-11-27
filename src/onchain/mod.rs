@@ -55,7 +55,7 @@ where
     F: FnOnce(String) -> Result<(Sats, Sats, u32)>,
 {
     let rate = support.get_exchange_rate();
-    let lsp_fees = swap.retrieve_lsp_fee_for_amount(amount.msats)?;
+    let lsp_fees = swap.calculate_lsp_fee_for_amount(amount.msats)?;
 
     let swap_info = support
         .rt
@@ -87,7 +87,7 @@ where
         return Ok(None);
     }
 
-    let lsp_fees = swap.retrieve_lsp_fee_for_amount(amount.msats)?;
+    let lsp_fees = swap.calculate_lsp_fee_for_amount(amount.msats)?;
 
     if swap_info.is_none()
         || sent_amount.sats < (swap_info.clone().unwrap().min_allowed_deposit as u64)

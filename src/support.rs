@@ -109,7 +109,7 @@ impl Support {
         Ok(node_state.utxos)
     }
 
-    /// Retrieve the actual LSP fee for the given amount of an incoming payment.
+    /// Calculate the actual LSP fee for the given amount of an incoming payment.
     /// If the already existing inbound capacity is enough, no new channel is required.
     /// The LSP may offer multiple fee rates, tied to different expiration dates.
     /// Increased expiry dates mean higher fee rates.
@@ -123,7 +123,7 @@ impl Support {
     /// provided to [`Bolt11::create`]
     ///
     /// Requires network: **yes**
-    pub fn retrieve_lsp_fee_for_amount(
+    pub fn calculate_lsp_fee_for_amount(
         &self,
         amount_sat: u64,
         expiry: Option<u32>,
@@ -159,7 +159,7 @@ impl Support {
     /// * `lsp_fee_param` - Fee terms offered by the LSP
     ///
     /// Requires network: **no**
-    pub(crate) fn compute_lsp_fee_for_amount(
+    pub(crate) fn calculate_lsp_fee_for_amount_locally(
         &self,
         amount_sat: u64,
         lsp_fee_param: OpeningFeeParams,

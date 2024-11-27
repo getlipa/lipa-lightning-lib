@@ -635,7 +635,7 @@ impl LightningNode {
     /// Requires network: **yes**
     #[deprecated = "lightning().calculate_lsp_fee_for_amount() should be used instead"]
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
-        self.lightning.retrieve_lsp_fee_for_amount(amount_sat)
+        self.lightning.calculate_lsp_fee_for_amount(amount_sat)
     }
 
     /// Get the current limits for the amount that can be transferred in a single payment.
