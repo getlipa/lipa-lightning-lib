@@ -332,8 +332,6 @@ interface Swap {
     [Throws=LnError]
     CalculateLspFeeResponse retrieve_lsp_fee_for_amount(u64 amount_sat);
 
-    CalculateLspFeeResponse compute_lsp_fee_for_amount(u64 amount_sat, OpeningFeeParams lsp_fee_params);
-
     [Throws=LnError]
     OnchainResolvingFees? determine_resolving_fees(FailedSwapInfo failed_swap_info);
 

@@ -159,7 +159,7 @@ impl Support {
     /// * `lsp_fee_param` - Fee terms offered by the LSP
     ///
     /// Requires network: **no**
-    pub fn compute_lsp_fee_for_amount(
+    pub(crate) fn compute_lsp_fee_for_amount(
         &self,
         amount_sat: u64,
         lsp_fee_param: OpeningFeeParams,
