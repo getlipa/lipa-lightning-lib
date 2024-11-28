@@ -239,6 +239,7 @@ impl Swap {
         );
 
         let lsp_fees = self
+            .support
             .calculate_lsp_fee_for_amount_locally(send_amount_sats, lsp_fee_param)?
             .lsp_fee
             .sats;
@@ -304,24 +305,6 @@ impl Swap {
     ) -> Result<CalculateLspFeeResponseV2> {
         self.support
             .calculate_lsp_fee_for_amount(amount_sat, Some(TWO_WEEKS))
-    }
-
-    /// Calculate the actual LSP fee for the given amount of an incoming payment,
-    /// providing the fee params that the LSP offers.
-    /// Returns 0 if no new channel is required.
-    ///
-    /// Parameters:
-    /// * `amount_sat` - amount in sats to compute LSP fee for
-    /// * `lsp_fee_param` - Fee terms offered by the LSP
-    ///
-    /// Requires network: **no**
-    fn calculate_lsp_fee_for_amount_locally(
-        &self,
-        amount_sat: u64,
-        lsp_fee_param: OpeningFeeParams,
-    ) -> Result<CalculateLspFeeResponseV2> {
-        self.support
-            .calculate_lsp_fee_for_amount_locally(amount_sat, lsp_fee_param)
     }
 }
 
