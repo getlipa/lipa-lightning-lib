@@ -9,8 +9,8 @@ use crate::pocketclient::PocketClient;
 use crate::task_manager::TaskManager;
 use crate::util::LogIgnoreError;
 use crate::{
-    CalculateLspFeeResponse, ChannelsInfo, ExchangeRate, LightningNodeConfig, LspFeeResponse,
-    NodeInfo, OfferKind, RuntimeErrorCode, UserPreferences,
+    CalculateLspFeeResponse, CalculateLspFeeResponseV2, ChannelsInfo, ExchangeRate,
+    LightningNodeConfig, NodeInfo, OfferKind, RuntimeErrorCode, UserPreferences,
 };
 use breez_sdk_core::{
     BreezServices, OpenChannelFeeRequest, OpeningFeeParams, ReportIssueRequest,
@@ -128,7 +128,7 @@ impl Support {
         &self,
         amount_sat: Option<u64>,
         expiry: Option<u32>,
-    ) -> Result<LspFeeResponse> {
+    ) -> Result<CalculateLspFeeResponseV2> {
         let amount_msat = amount_sat.map(|amount| amount.as_sats().msats);
         let req = OpenChannelFeeRequest {
             amount_msat,
@@ -152,7 +152,7 @@ impl Support {
             }
         };
 
-        Ok(LspFeeResponse {
+        Ok(CalculateLspFeeResponseV2 {
             lsp_fee,
             lsp_fee_params: res.fee_params,
         })

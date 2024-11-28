@@ -4,8 +4,8 @@ use crate::onchain::{get_onchain_resolving_fees, query_onchain_fee_rate};
 use crate::support::Support;
 use crate::util::unix_timestamp_to_system_time;
 use crate::{
-    Amount, CalculateLspFeeResponse, FailedSwapInfo, LspFeeResponse, OnchainResolvingFees,
-    ResolveFailedSwapInfo, RuntimeErrorCode, SwapAddressInfo,
+    Amount, CalculateLspFeeResponse, CalculateLspFeeResponseV2, FailedSwapInfo,
+    OnchainResolvingFees, ResolveFailedSwapInfo, RuntimeErrorCode, SwapAddressInfo,
 };
 use breez_sdk_core::error::ReceiveOnchainError;
 use breez_sdk_core::{
@@ -301,7 +301,7 @@ impl Swap {
     /// * `amount_sat` - amount in sats to compute LSP fee for
     ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee(&self, amount_sat: Option<u64>) -> Result<LspFeeResponse> {
+    pub fn calculate_lsp_fee(&self, amount_sat: Option<u64>) -> Result<CalculateLspFeeResponseV2> {
         self.support.calculate_lsp_fee(amount_sat, Some(TWO_WEEKS))
     }
 

@@ -183,7 +183,7 @@ pub struct CalculateLspFeeResponse {
 }
 
 /// The type returned by [`Swap::calculate_lsp_fee`] and [`Lightning::calculate_lsp_fee`] .
-pub struct LspFeeResponse {
+pub struct CalculateLspFeeResponseV2 {
     /// Indicates the amount that will be charged.
     pub lsp_fee: Option<Amount>,
     /// An internal struct is not supposed to be inspected, but only passed to [`LightningNode::create_invoice`].
