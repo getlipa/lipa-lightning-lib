@@ -174,7 +174,7 @@ pub struct LspFee {
 
 /// The type returned by [`LightningNode::calculate_lsp_fee`].
 ///
-/// #[deprecated = "LspFeeResponse should be used instead"]
+#[deprecated = "CalculateLspFeeResponseV2 should be used instead"]
 pub struct CalculateLspFeeResponse {
     /// Indicates the amount that will be charged.
     pub lsp_fee: Amount,
