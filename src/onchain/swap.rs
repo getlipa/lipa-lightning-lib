@@ -4,7 +4,7 @@ use crate::onchain::{get_onchain_resolving_fees, query_onchain_fee_rate};
 use crate::support::Support;
 use crate::util::unix_timestamp_to_system_time;
 use crate::{
-    Amount, CalculateLspFeeResponse, FailedSwapInfo, OnchainResolvingFees, ResolveFailedSwapInfo,
+    Amount, CalculateLspFeeResponseV2, FailedSwapInfo, OnchainResolvingFees, ResolveFailedSwapInfo,
     RuntimeErrorCode, SwapAddressInfo,
 };
 use breez_sdk_core::error::ReceiveOnchainError;
@@ -199,10 +199,15 @@ impl Swap {
         sats_per_vbyte: u32,
         lsp_fee_param: Option<OpeningFeeParams>,
     ) -> Result<String> {
-        let swap_address_info = self.create(lsp_fee_param.clone()).map_to_runtime_error(
-            RuntimeErrorCode::NodeUnavailable,
-            "Couldn't generate swap address",
-        )?;
+        let lsp_fee_param =
+            lsp_fee_param.unwrap_or(self.support.query_lsp_fee_params(Some(TWO_WEEKS))?);
+
+        let swap_address_info = self
+            .create(Some(lsp_fee_param.clone()))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Couldn't generate swap address",
+            )?;
 
         let prepare_response = self
             .support
@@ -234,9 +239,11 @@ impl Swap {
         );
 
         let lsp_fees = self
-            .calculate_lsp_fee_for_amount(send_amount_sats)?
+            .support
+            .calculate_lsp_fee_for_amount_locally(send_amount_sats, lsp_fee_param)?
             .lsp_fee
             .sats;
+
         ensure!(
             lsp_fees < send_amount_sats,
             runtime_error(
@@ -292,7 +299,10 @@ impl Swap {
     /// * `amount_sat` - amount in sats to compute LSP fee for
     ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
+    pub fn calculate_lsp_fee_for_amount(
+        &self,
+        amount_sat: u64,
+    ) -> Result<CalculateLspFeeResponseV2> {
         self.support
             .calculate_lsp_fee_for_amount(amount_sat, Some(TWO_WEEKS))
     }

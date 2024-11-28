@@ -55,5 +55,5 @@ pub struct SwapToLightningFees {
     pub onchain_fee: Amount,
     pub channel_opening_fee: Amount,
     pub total_fees: Amount,
-    pub lsp_fee_params: Option<OpeningFeeParams>,
+    pub lsp_fee_params: OpeningFeeParams,
 }

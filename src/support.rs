@@ -9,12 +9,12 @@ use crate::pocketclient::PocketClient;
 use crate::task_manager::TaskManager;
 use crate::util::LogIgnoreError;
 use crate::{
-    CalculateLspFeeResponse, ChannelsInfo, ExchangeRate, LightningNodeConfig, NodeInfo, OfferKind,
-    RuntimeErrorCode, UserPreferences,
+    CalculateLspFeeResponseV2, ChannelsInfo, ExchangeRate, LightningNodeConfig, NodeInfo,
+    OfferKind, RuntimeErrorCode, UserPreferences,
 };
 use breez_sdk_core::{
-    BreezServices, OpenChannelFeeRequest, ReportIssueRequest, ReportPaymentFailureDetails,
-    UnspentTransactionOutput,
+    BreezServices, OpenChannelFeeRequest, OpeningFeeParams, ReportIssueRequest,
+    ReportPaymentFailureDetails, UnspentTransactionOutput,
 };
 use crow::OfferManager;
 use honeybadger::Auth;
@@ -109,6 +109,31 @@ impl Support {
         Ok(node_state.utxos)
     }
 
+    /// Query the LSP fee params that the LSP offers.
+    /// Increased expiry dates mean higher fee rates.
+    /// This method returns the best offer within the given expiry.
+    ///
+    /// Parameters:
+    /// * `expiry` - expiry time in seconds
+    ///
+    /// Requires network: **yes**
+    pub(crate) fn query_lsp_fee_params(&self, expiry: Option<u32>) -> Result<OpeningFeeParams> {
+        let req = OpenChannelFeeRequest {
+            amount_msat: None,
+            expiry,
+        };
+        let res = self
+            .rt
+            .handle()
+            .block_on(self.sdk.open_channel_fee(req))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to compute opening channel fee",
+            )?;
+
+        Ok(res.fee_params)
+    }
+
     /// Calculate the actual LSP fee for the given amount of an incoming payment.
     /// If the already existing inbound capacity is enough, no new channel is required.
     /// The LSP may offer multiple fee rates, tied to different expiration dates.
@@ -127,9 +152,10 @@ impl Support {
         &self,
         amount_sat: u64,
         expiry: Option<u32>,
-    ) -> Result<CalculateLspFeeResponse> {
+    ) -> Result<CalculateLspFeeResponseV2> {
+        let amount_msat = Some(amount_sat.as_sats().msats);
         let req = OpenChannelFeeRequest {
-            amount_msat: Some(amount_sat.as_sats().msats),
+            amount_msat,
             expiry,
         };
         let res = self
@@ -140,13 +166,50 @@ impl Support {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to compute opening channel fee",
             )?;
-        Ok(CalculateLspFeeResponse {
-            lsp_fee: res
-                .fee_msat
-                .ok_or_permanent_failure("Breez SDK open_channel_fee returned None lsp fee when provided with Some(amount_msat)")?
-                .as_msats()
-                .to_amount_up(&self.get_exchange_rate()),
-            lsp_fee_params: Some(res.fee_params),
+        let fee_msat = res.fee_msat.ok_or_permanent_failure(
+            "Breez SDK open_channel_fee returned None lsp fee when provided with Some(amount_msat)",
+        )?;
+        let lsp_fee = fee_msat.as_msats().to_amount_up(&self.get_exchange_rate());
+
+        Ok(CalculateLspFeeResponseV2 {
+            lsp_fee,
+            lsp_fee_params: res.fee_params,
+        })
+    }
+
+    /// Calculate the actual LSP fee for the given amount of an incoming payment,
+    /// providing the fee params that the LSP offers.
+    /// Returns 0 if no new channel is required.
+    ///
+    /// Parameters:
+    /// * `amount_sat` - amount in sats to compute LSP fee for
+    /// * `lsp_fee_param` - Fee terms offered by the LSP
+    ///
+    /// Requires network: **no**
+    pub(crate) fn calculate_lsp_fee_for_amount_locally(
+        &self,
+        amount_sat: u64,
+        lsp_fee_param: OpeningFeeParams,
+    ) -> Result<CalculateLspFeeResponseV2> {
+        // todo use Breez-SDK to do the lsp fee calculation once this is possible: https://github.com/breez/breez-sdk-greenlight/issues/1131
+
+        let max_receivable = self
+            .get_node_info()?
+            .channels_info
+            .max_receivable_single_payment
+            .sats;
+        let lsp_fee = if amount_sat > max_receivable {
+            let lsp_fee_sat = amount_sat * lsp_fee_param.proportional as u64 / 1_000_000;
+            let lsp_fee_msat_rounded_to_sat = lsp_fee_sat * 1000;
+
+            std::cmp::max(lsp_fee_msat_rounded_to_sat, lsp_fee_param.min_msat)
+        } else {
+            0
+        };
+
+        Ok(CalculateLspFeeResponseV2 {
+            lsp_fee: lsp_fee.as_msats().to_amount_up(&self.get_exchange_rate()),
+            lsp_fee_params: lsp_fee_param,
         })
     }
 

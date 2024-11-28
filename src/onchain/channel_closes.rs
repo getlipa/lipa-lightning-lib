@@ -12,6 +12,8 @@ use breez_sdk_core::{
 use perro::{ensure, invalid_input, MapToError};
 use std::sync::Arc;
 
+const TWO_WEEKS: u32 = 2 * 7 * 24 * 60 * 60;
+
 pub struct ChannelClose {
     support: Arc<Support>,
     swap: Arc<Swap>,
@@ -193,6 +195,12 @@ impl ChannelClose {
         sat_per_vbyte: u32,
         lsp_fee_params: Option<OpeningFeeParams>,
     ) -> std::result::Result<String, RedeemOnchainError> {
+        let lsp_fee_params = lsp_fee_params.unwrap_or(
+            self.support
+                .query_lsp_fee_params(Some(TWO_WEEKS))
+                .map_err(|e| RedeemOnchainError::ServiceConnectivity { err: e.to_string() })?,
+        );
+
         let onchain_balance = self
             .support
             .sdk
@@ -200,12 +208,12 @@ impl ChannelClose {
             .onchain_balance_msat
             .as_msats();
 
-        let swap_address_info =
-            self.swap
-                .create(lsp_fee_params.clone())
-                .map_err(|e| RedeemOnchainError::Generic {
-                    err: format!("Couldn't generate swap address: {}", e),
-                })?;
+        let swap_address_info = self
+            .swap
+            .create(Some(lsp_fee_params.clone()))
+            .map_err(|e| RedeemOnchainError::Generic {
+                err: format!("Couldn't generate swap address: {}", e),
+            })?;
 
         let prepare_response =
             self.support
@@ -242,19 +250,19 @@ impl ChannelClose {
             });
         }
 
-        let lsp_fees = self
-            .swap
-            .calculate_lsp_fee_for_amount(send_amount_sats)
-            .map_err(|_| RedeemOnchainError::ServiceConnectivity {
-                err: "Could not get lsp fees".to_string(),
+        let lsp_fee = self
+            .support
+            .calculate_lsp_fee_for_amount_locally(send_amount_sats, lsp_fee_params)
+            .map_err(|e| RedeemOnchainError::Generic {
+                err: format!("Couldn't retrieve node info: {}", e),
             })?
             .lsp_fee
             .sats;
-        if lsp_fees >= send_amount_sats {
+        if lsp_fee >= send_amount_sats {
             return Err(RedeemOnchainError::InsufficientFunds {
                 err: format!(
                     "Available funds ({} sats after onchain fees) are not enough for lsp fees ({} sats)",
-                    send_amount_sats, lsp_fees,
+                    send_amount_sats, lsp_fee,
                 ),
             });
         }

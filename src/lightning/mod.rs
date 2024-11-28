@@ -10,7 +10,7 @@ use crate::lightning::receive_limits::ReceiveAmountLimits;
 use crate::locker::Locker;
 use crate::support::Support;
 use crate::{
-    CalculateLspFeeResponse, ExchangeRate, LspFee, MaxRoutingFeeConfig, MaxRoutingFeeMode,
+    CalculateLspFeeResponseV2, ExchangeRate, LspFee, MaxRoutingFeeConfig, MaxRoutingFeeMode,
     RuntimeErrorCode,
 };
 use perro::MapToError;
@@ -140,7 +140,10 @@ impl Lightning {
     /// which uses fee offer from the LSP that is valid for a longer time period
     ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee_for_amount(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
+    pub fn calculate_lsp_fee_for_amount(
+        &self,
+        amount_sat: u64,
+    ) -> Result<CalculateLspFeeResponseV2> {
         self.support.calculate_lsp_fee_for_amount(amount_sat, None)
     }
 

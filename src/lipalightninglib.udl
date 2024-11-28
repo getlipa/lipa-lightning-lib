@@ -252,7 +252,7 @@ interface Lightning {
     ReceiveAmountLimits determine_receive_amount_limits();
 
     [Throws=LnError]
-    CalculateLspFeeResponse calculate_lsp_fee_for_amount(u64 amount_sat);
+    CalculateLspFeeResponseV2 calculate_lsp_fee_for_amount(u64 amount_sat);
 
     [Throws=LnError]
     LspFee get_lsp_fee();
@@ -327,7 +327,7 @@ interface Swap {
     SwapAddressInfo create(OpeningFeeParams? lsp_fee_params);
 
     [Throws=LnError]
-    CalculateLspFeeResponse calculate_lsp_fee_for_amount(u64 amount_sat);
+    CalculateLspFeeResponseV2 calculate_lsp_fee_for_amount(u64 amount_sat);
 
     [Throws=LnError]
     OnchainResolvingFees? determine_resolving_fees(FailedSwapInfo failed_swap_info);
@@ -543,6 +543,11 @@ dictionary OpeningFeeParams {
 dictionary CalculateLspFeeResponse {
     Amount lsp_fee;
     OpeningFeeParams? lsp_fee_params;
+};
+
+dictionary CalculateLspFeeResponseV2 {
+    Amount lsp_fee;
+    OpeningFeeParams lsp_fee_params;
 };
 
 [Enum]
@@ -938,7 +943,7 @@ dictionary SwapToLightningFees {
     Amount onchain_fee;
     Amount channel_opening_fee;
     Amount total_fees;
-    OpeningFeeParams? lsp_fee_params;
+    OpeningFeeParams lsp_fee_params;
 };
 
 [Enum]
