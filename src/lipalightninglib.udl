@@ -984,7 +984,7 @@ namespace lipalightninglib {
     TermsAndConditionsStatus get_terms_and_conditions_status(string backend_url, bytes seed, TermsAndConditions terms_and_conditions);
 
     [Throws=LnError]
-    void recover_lightning_node(string backend_url, bytes seed, string local_persistence_path, Level? file_logging_level);
+    void recover_lightning_node(string backend_url, bytes seed, string local_persistence_path, Level? file_logging_level, boolean allow_external_recovery);
 
     [Throws=ParseError]
     void parse_lightning_address([ByRef] string address);

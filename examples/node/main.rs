@@ -49,6 +49,7 @@ fn main() {
             seed.clone(),
             base_dir.clone(),
             Some(Level::Debug),
+            true,
         )
         .unwrap();
     }
