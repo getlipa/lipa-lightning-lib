@@ -253,6 +253,9 @@ impl ChannelClose {
         let lsp_fee = self
             .support
             .calculate_lsp_fee_for_amount_locally(send_amount_sats, lsp_fee_params)
+            .map_err(|e| RedeemOnchainError::Generic {
+                err: format!("Couldn't retrieve node info: {}", e),
+            })?
             .lsp_fee
             .sats;
         if lsp_fee >= send_amount_sats {

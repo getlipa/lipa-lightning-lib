@@ -239,7 +239,7 @@ impl Swap {
         );
 
         let lsp_fees = self
-            .calculate_lsp_fee_for_amount_locally(send_amount_sats, lsp_fee_param)
+            .calculate_lsp_fee_for_amount_locally(send_amount_sats, lsp_fee_param)?
             .lsp_fee
             .sats;
 
@@ -319,7 +319,7 @@ impl Swap {
         &self,
         amount_sat: u64,
         lsp_fee_param: OpeningFeeParams,
-    ) -> CalculateLspFeeResponseV2 {
+    ) -> Result<CalculateLspFeeResponseV2> {
         self.support
             .calculate_lsp_fee_for_amount_locally(amount_sat, lsp_fee_param)
     }
