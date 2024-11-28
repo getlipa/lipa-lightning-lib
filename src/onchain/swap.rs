@@ -307,8 +307,8 @@ impl Swap {
     }
 
     /// Calculate the actual LSP fee for the given amount of an incoming payment,
-    /// providing the fee params provided by the LSP
-    /// If the already existing inbound capacity is enough, no new channel is required.
+    /// providing the fee params that the LSP offers.
+    /// Returns 0 if no new channel is required.
     ///
     /// Parameters:
     /// * `amount_sat` - amount in sats to compute LSP fee for
