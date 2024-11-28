@@ -26,7 +26,7 @@ impl Bolt11 {
     /// * `amount_sat` - the smallest amount of sats required for the node to accept the incoming
     ///   payment (sender will have to pay fees on top of that amount)
     /// * `lsp_fee_params` - the params that will be used to determine the lsp fee.
-    ///    Can be obtained from [`Lightning::calculate_lsp_fee_for_amount`](crate::Lightning::calculate_lsp_fee)
+    ///    Can be obtained from [`Lightning::calculate_lsp_fee_for_amount`](crate::Lightning::calculate_lsp_fee_for_amount)
     ///    to guarantee predicted fees are the ones charged.
     /// * `description` - a description to be embedded into the created invoice
     /// * `metadata` - additional data about the invoice creation used for analytics purposes,

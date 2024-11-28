@@ -148,7 +148,7 @@ impl Support {
     /// provided to [`Bolt11::create`]
     ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee(
+    pub fn calculate_lsp_fee_for_amount(
         &self,
         amount_sat: u64,
         expiry: Option<u32>,

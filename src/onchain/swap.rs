@@ -298,8 +298,12 @@ impl Swap {
     /// * `amount_sat` - amount in sats to compute LSP fee for
     ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponseV2> {
-        self.support.calculate_lsp_fee(amount_sat, Some(TWO_WEEKS))
+    pub fn calculate_lsp_fee_for_amount(
+        &self,
+        amount_sat: u64,
+    ) -> Result<CalculateLspFeeResponseV2> {
+        self.support
+            .calculate_lsp_fee_for_amount(amount_sat, Some(TWO_WEEKS))
     }
 
     /// Calculate the actual LSP fee for the given amount of an incoming payment,
