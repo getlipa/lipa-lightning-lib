@@ -185,7 +185,7 @@ pub struct CalculateLspFeeResponse {
 /// The type returned by [`Swap::calculate_lsp_fee`] and [`Lightning::calculate_lsp_fee`] .
 pub struct CalculateLspFeeResponseV2 {
     /// Indicates the amount that will be charged.
-    pub lsp_fee: Option<Amount>,
+    pub lsp_fee: Amount,
     /// An internal struct is not supposed to be inspected, but only passed to [`LightningNode::create_invoice`].
     pub lsp_fee_params: OpeningFeeParams,
 }
@@ -645,10 +645,10 @@ impl LightningNode {
     /// Requires network: **yes**
     #[deprecated = "lightning().calculate_lsp_fee_for_amount() should be used instead"]
     pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponse> {
-        let response = self.lightning.calculate_lsp_fee(Some(amount_sat))?;
+        let response = self.lightning.calculate_lsp_fee(amount_sat)?;
 
         Ok(CalculateLspFeeResponse {
-            lsp_fee: response.lsp_fee.unwrap(), // Is always Some() because a payment amount is being provided
+            lsp_fee: response.lsp_fee,
             lsp_fee_params: Some(response.lsp_fee_params),
         })
     }

@@ -618,8 +618,8 @@ fn calculate_lsp_fee(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
         .ok_or(anyhow!("Amount in SAT is required"))?
         .parse()
         .context("Amount should be a positive integer number")?;
-    let response = node.lightning().calculate_lsp_fee(Some(amount))?;
-    println!(" LSP fee: {}", amount_to_string(&response.lsp_fee.unwrap()));
+    let response = node.lightning().calculate_lsp_fee(amount)?;
+    println!(" LSP fee: {}", amount_to_string(&response.lsp_fee));
     Ok(())
 }
 
@@ -632,11 +632,8 @@ fn calculate_swap_lsp_fee(
         .ok_or(anyhow!("Amount in SAT is required"))?
         .parse()
         .context("Amount should be a positive integer number")?;
-    let response = node.onchain().swap().calculate_lsp_fee(Some(amount))?;
-    println!(
-        "LSP fee for Swaps: {}",
-        amount_to_string(&response.lsp_fee.unwrap())
-    );
+    let response = node.onchain().swap().calculate_lsp_fee(amount)?;
+    println!("LSP fee for Swaps: {}", amount_to_string(&response.lsp_fee));
     Ok(())
 }
 

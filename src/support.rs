@@ -109,8 +109,32 @@ impl Support {
         Ok(node_state.utxos)
     }
 
-    /// Get the LSP fee params as well as
-    /// the actual LSP fee for the given amount of an incoming payment (optional).
+    /// Query the LSP fee params that the LSP offers
+    /// Increased expiry dates mean higher fee rates.
+    /// This method returns the best offer within the given expiry.
+    ///
+    /// Parameters:
+    /// * `expiry` - expiry time in seconds
+    ///
+    /// Requires network: **yes**
+    pub(crate) fn query_lsp_fee_params(&self, expiry: Option<u32>) -> Result<OpeningFeeParams> {
+        let req = OpenChannelFeeRequest {
+            amount_msat: None,
+            expiry,
+        };
+        let res = self
+            .rt
+            .handle()
+            .block_on(self.sdk.open_channel_fee(req))
+            .map_to_runtime_error(
+                RuntimeErrorCode::NodeUnavailable,
+                "Failed to compute opening channel fee",
+            )?;
+
+        Ok(res.fee_params)
+    }
+
+    /// Calculate the actual LSP fee for the given amount of an incoming payment.
     /// If the already existing inbound capacity is enough, no new channel is required.
     /// The LSP may offer multiple fee rates, tied to different expiration dates.
     /// Increased expiry dates mean higher fee rates.
@@ -126,10 +150,10 @@ impl Support {
     /// Requires network: **yes**
     pub fn calculate_lsp_fee(
         &self,
-        amount_sat: Option<u64>,
+        amount_sat: u64,
         expiry: Option<u32>,
     ) -> Result<CalculateLspFeeResponseV2> {
-        let amount_msat = amount_sat.map(|amount| amount.as_sats().msats);
+        let amount_msat = Some(amount_sat.as_sats().msats);
         let req = OpenChannelFeeRequest {
             amount_msat,
             expiry,
@@ -142,15 +166,10 @@ impl Support {
                 RuntimeErrorCode::NodeUnavailable,
                 "Failed to compute opening channel fee",
             )?;
-        let lsp_fee = match amount_sat {
-            None => None,
-            Some(_) => {
-                let fee_msat = res
-                    .fee_msat
-                    .ok_or_permanent_failure("Breez SDK open_channel_fee returned None lsp fee when provided with Some(amount_msat)")?;
-                Some(fee_msat.as_msats().to_amount_up(&self.get_exchange_rate()))
-            }
-        };
+        let fee_msat = res.fee_msat.ok_or_permanent_failure(
+            "Breez SDK open_channel_fee returned None lsp fee when provided with Some(amount_msat)",
+        )?;
+        let lsp_fee = fee_msat.as_msats().to_amount_up(&self.get_exchange_rate());
 
         Ok(CalculateLspFeeResponseV2 {
             lsp_fee,

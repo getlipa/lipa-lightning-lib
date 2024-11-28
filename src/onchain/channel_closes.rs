@@ -197,9 +197,8 @@ impl ChannelClose {
     ) -> std::result::Result<String, RedeemOnchainError> {
         let lsp_fee_params = lsp_fee_params.unwrap_or(
             self.support
-                .calculate_lsp_fee(None, Some(TWO_WEEKS))
-                .map_err(|e| RedeemOnchainError::ServiceConnectivity { err: e.to_string() })?
-                .lsp_fee_params,
+                .query_lsp_fee_params(Some(TWO_WEEKS))
+                .map_err(|e| RedeemOnchainError::ServiceConnectivity { err: e.to_string() })?,
         );
 
         let onchain_balance = self

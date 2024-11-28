@@ -127,8 +127,7 @@ impl Lightning {
         ))
     }
 
-    /// Get the LSP fee params as well as
-    /// the actual LSP fee for the given amount of an incoming payment (optional).
+    /// Calculate the actual LSP fee for the given amount of an incoming payment.
     /// If the already existing inbound capacity is enough, no new channel is required.
     ///
     /// Parameters:
@@ -141,7 +140,7 @@ impl Lightning {
     /// which uses fee offer from the LSP that is valid for a longer time period
     ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee(&self, amount_sat: Option<u64>) -> Result<CalculateLspFeeResponseV2> {
+    pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponseV2> {
         self.support.calculate_lsp_fee(amount_sat, None)
     }
 

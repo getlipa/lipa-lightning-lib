@@ -199,11 +199,8 @@ impl Swap {
         sats_per_vbyte: u32,
         lsp_fee_param: Option<OpeningFeeParams>,
     ) -> Result<String> {
-        let lsp_fee_param = lsp_fee_param.unwrap_or(
-            self.support
-                .calculate_lsp_fee(None, Some(TWO_WEEKS))?
-                .lsp_fee_params,
-        );
+        let lsp_fee_param =
+            lsp_fee_param.unwrap_or(self.support.query_lsp_fee_params(Some(TWO_WEEKS))?);
 
         let swap_address_info = self
             .create(Some(lsp_fee_param.clone()))
@@ -301,7 +298,7 @@ impl Swap {
     /// * `amount_sat` - amount in sats to compute LSP fee for
     ///
     /// Requires network: **yes**
-    pub fn calculate_lsp_fee(&self, amount_sat: Option<u64>) -> Result<CalculateLspFeeResponseV2> {
+    pub fn calculate_lsp_fee(&self, amount_sat: u64) -> Result<CalculateLspFeeResponseV2> {
         self.support.calculate_lsp_fee(amount_sat, Some(TWO_WEEKS))
     }
 
