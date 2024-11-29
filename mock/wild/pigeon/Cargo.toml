@@ -7,6 +7,6 @@ edition = "2021"
 name = "pigeon"
 
 [dependencies]
-graphql = { git = "https://github.com/getlipa/wild", tag = "v1.27.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.28.0" }
 honeybadger-mock = { path = "../honeybadger" }
 lazy_static = "1.4.0"
