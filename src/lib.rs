@@ -5,6 +5,9 @@
 //! Most functionality can be accessed by creating an instance of [`LightningNode`] and using its methods.
 
 #![allow(clippy::let_unit_value)]
+// clippy::empty_line_after_doc_comments is allowed due to the uniffi rust scaffolding code triggering this lint
+// TODO: check if Uniffi generated code starts to conform to this lint and remove the following statement if so
+#![allow(clippy::empty_line_after_doc_comments)]
 #![allow(deprecated)]
 
 extern crate core;

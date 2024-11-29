@@ -10,12 +10,19 @@ use std::sync::Arc;
 
 /// Performs a recovery procedure by fetching necessary data from remote storage.
 /// It should and can only be called on a fresh install of the app, if the user wants to recover a previously created wallet.
-/// If no existing wallet backup is found, returns an error.
+///
+/// Parameters:
+/// * `backend_url`
+/// * `seed` - the seed from the wallet that will be recovered.
+/// * `local_persistence_path` - the directory where local data will be stored.
+/// * `file_logging_level` - the min log level that will be logged.
+/// * `allow_external_recovery` - defines if recovery of external wallets is allowed.  
 pub fn recover_lightning_node(
     backend_url: String,
     seed: Vec<u8>,
     local_persistence_path: String,
     file_logging_level: Option<log::Level>,
+    allow_external_recovery: bool,
 ) -> Result<()> {
     if let Some(level) = file_logging_level {
         init_logger_once(level, &Path::new(&local_persistence_path).join(LOGS_DIR))?;
@@ -40,5 +47,5 @@ pub fn recover_lightning_node(
 
     AsyncRuntime::new()?
         .handle()
-        .block_on(backup_manager.recover())
+        .block_on(backup_manager.recover(allow_external_recovery))
 }

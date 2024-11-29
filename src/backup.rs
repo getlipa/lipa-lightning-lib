@@ -46,15 +46,23 @@ impl BackupManager {
             .map_to_permanent_failure("Failed to perform backup of local db")
     }
 
-    pub async fn recover(&self) -> Result<()> {
+    pub async fn recover(&self, allow_external_recovery: bool) -> Result<()> {
         let encrypted_local_db = match self.remote_backup_client.recover_backup(SCHEMA_NAME).await {
             Ok(b) => b.encrypted_backup,
             Err(perro::Error::RuntimeError {
                 code: GraphQlRuntimeErrorCode::ObjectNotFound,
                 ..
             }) => {
-                warn!("No backup was found in remote, recovering without");
-                return Ok(());
+                if allow_external_recovery {
+                    warn!("No backup was found in remote, recovering without");
+                    return Ok(());
+                } else {
+                    runtime_error!(
+                        RuntimeErrorCode::BackupNotFound,
+                        "No backup was found in remote, this must be an external wallet. Failing \
+                        because allow_external_recovery is false."
+                    );
+                }
             }
             Err(e) => {
                 runtime_error!(
