@@ -28,6 +28,7 @@ pub struct LightningNodeConfig {
     pub breez_sdk_config: BreezSdkConfig,
     pub max_routing_fee_config: MaxRoutingFeeConfig,
     pub receive_limits_config: ReceiveLimitsConfig,
+    pub topup_referral_code_max_length: u32,
 }
 
 #[derive(Debug, Clone)]

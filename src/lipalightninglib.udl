@@ -285,7 +285,7 @@ interface FiatTopup {
     TermsAndConditionsStatus query_tc_status();
 
     [Throws=LnError]
-    FiatTopupInfo register(string? email, string user_iban, string user_currency);
+    FiatTopupInfo register(string? email, string? referral_code, string user_iban, string user_currency);
 
     [Throws=LnError]
     void reset();
@@ -445,6 +445,7 @@ dictionary LightningNodeConfig {
     BreezSdkConfig breez_sdk_config;
     MaxRoutingFeeConfig max_routing_fee_config;
     ReceiveLimitsConfig receive_limits_config;
+    u32 topup_referral_code_max_length;
 };
 
 dictionary RemoteServicesConfig {

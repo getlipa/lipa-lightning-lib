@@ -27,7 +27,12 @@ impl OfferManager {
         Self {}
     }
 
-    pub fn register_topup(&self, order_id: String, email: Option<String>) -> graphql::Result<()> {
+    pub fn register_topup(
+        &self,
+        order_id: String,
+        email: Option<String>,
+        _referral: Option<String>,
+    ) -> graphql::Result<()> {
         let mut status = TopupStatus::READY;
 
         if let Some(email) = email {

@@ -13,6 +13,7 @@ use std::string::ToString;
 type Result<T> = std::result::Result<T, perro::Error<RuntimeErrorCode>>;
 
 const LOCAL_PERSISTENCE_PATH: &str = ".3l_local_test";
+pub const MAX_REFERRAL_CODE_LENGTH: u32 = 40;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -144,6 +145,7 @@ pub fn start_specific_node(
             max_receive_amount_sat: 1_000_000,
             min_receive_channel_open_fee_multiplier: 2.0,
         },
+        topup_referral_code_max_length: MAX_REFERRAL_CODE_LENGTH,
     };
 
     let node = LightningNode::new(config, events_callback)?;

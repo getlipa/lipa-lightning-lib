@@ -63,6 +63,7 @@ fn test_register_node() {
             max_receive_amount_sat: 1_000_000,
             min_receive_channel_open_fee_multiplier: 2.0,
         },
+        topup_referral_code_max_length: 40,
     };
 
     let events_handler = PrintEventsHandler {};

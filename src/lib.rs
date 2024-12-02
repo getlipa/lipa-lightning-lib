@@ -1054,6 +1054,7 @@ impl LightningNode {
     ///
     /// Parameters:
     /// * `email` - this email will be used to send status information about different topups
+    /// * `referral` - the referral code of another user
     /// * `user_iban` - the user will send fiat from this iban
     /// * `user_currency` - the fiat currency (ISO 4217 currency code) that will be sent for
     ///    exchange. Not all are supported. A consumer of this library should find out about available
@@ -1067,7 +1068,8 @@ impl LightningNode {
         user_iban: String,
         user_currency: String,
     ) -> Result<FiatTopupInfo> {
-        self.fiat_topup.register(email, user_iban, user_currency)
+        self.fiat_topup
+            .register(email, None, user_iban, user_currency)
     }
 
     /// Resets a previous fiat topups registration.
