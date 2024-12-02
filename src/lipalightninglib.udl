@@ -85,7 +85,7 @@ interface LightningNode {
     TermsAndConditionsStatus get_terms_and_conditions_status(TermsAndConditions terms_and_conditions);
 
     [Throws=LnError]
-    FiatTopupInfo register_fiat_topup(string? email, string? referral_code, string user_iban, string user_currency);
+    FiatTopupInfo register_fiat_topup(string? email, string user_iban, string user_currency);
 
     [Throws=LnError]
     void reset_fiat_topup();

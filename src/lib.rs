@@ -1065,12 +1065,11 @@ impl LightningNode {
     pub fn register_fiat_topup(
         &self,
         email: Option<String>,
-        referral: Option<String>,
         user_iban: String,
         user_currency: String,
     ) -> Result<FiatTopupInfo> {
         self.fiat_topup
-            .register(email, referral, user_iban, user_currency)
+            .register(email, None, user_iban, user_currency)
     }
 
     /// Resets a previous fiat topups registration.
