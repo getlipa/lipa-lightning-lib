@@ -846,8 +846,8 @@ name = "chameleon"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.27.0#163d61d0be9ca73644389ec53014a2ec2ec474c1"
 dependencies = [
- "graphql",
- "honeybadger",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
+ "honeybadger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
 ]
 
 [[package]]
@@ -855,7 +855,7 @@ name = "chameleon-mock"
 version = "0.1.0"
 dependencies = [
  "chameleon",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
  "honeybadger-mock",
  "lazy_static",
  "rand",
@@ -1071,8 +1071,8 @@ name = "crow"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.27.0#163d61d0be9ca73644389ec53014a2ec2ec474c1"
 dependencies = [
- "graphql",
- "honeybadger",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
+ "honeybadger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
  "isocountry",
  "isolanguage-1",
 ]
@@ -1082,7 +1082,7 @@ name = "crow-mock"
 version = "0.1.0"
 dependencies = [
  "crow",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
  "honeybadger-mock",
  "isocountry",
  "isolanguage-1",
@@ -1777,6 +1777,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql"
+version = "0.1.0"
+source = "git+https://github.com/getlipa/wild?tag=v1.28.0#8ad85fa3020046a042614c2da7d6f513661311da"
+dependencies = [
+ "chrono",
+ "graphql_client",
+ "log",
+ "perro",
+ "reqwest 0.11.20",
+ "serde",
+]
+
+[[package]]
 name = "graphql-introspection-query"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1980,7 +1993,23 @@ source = "git+https://github.com/getlipa/wild?tag=v1.27.0#163d61d0be9ca73644389e
 dependencies = [
  "base64 0.22.1",
  "bdk",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
+ "hex",
+ "log",
+ "rand",
+ "secp256k1 0.27.0",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "honeybadger"
+version = "1.0.1"
+source = "git+https://github.com/getlipa/wild?tag=v1.28.0#8ad85fa3020046a042614c2da7d6f513661311da"
+dependencies = [
+ "base64 0.22.1",
+ "bdk",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.28.0)",
  "hex",
  "log",
  "rand",
@@ -1993,8 +2022,8 @@ dependencies = [
 name = "honeybadger-mock"
 version = "0.1.0"
 dependencies = [
- "graphql",
- "honeybadger",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
+ "honeybadger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
  "lazy_static",
  "log",
  "rand",
@@ -2646,9 +2675,9 @@ dependencies = [
  "ctor",
  "email_address",
  "file-rotate",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
  "hex",
- "honeybadger",
+ "honeybadger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
  "honeybadger-mock",
  "iban_validate",
  "lazy_static",
@@ -3140,15 +3169,15 @@ name = "parrot"
 version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.27.0#163d61d0be9ca73644389ec53014a2ec2ec474c1"
 dependencies = [
- "graphql",
- "honeybadger",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
+ "honeybadger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
 ]
 
 [[package]]
 name = "parrot-mock"
 version = "0.1.0"
 dependencies = [
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
  "honeybadger-mock",
  "parrot",
 ]
@@ -3357,17 +3386,17 @@ dependencies = [
 [[package]]
 name = "pigeon"
 version = "0.1.0"
-source = "git+https://github.com/getlipa/wild?tag=v1.27.0#163d61d0be9ca73644389ec53014a2ec2ec474c1"
+source = "git+https://github.com/getlipa/wild?tag=v1.28.0#8ad85fa3020046a042614c2da7d6f513661311da"
 dependencies = [
- "graphql",
- "honeybadger",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.28.0)",
+ "honeybadger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.28.0)",
 ]
 
 [[package]]
 name = "pigeon-mock"
 version = "0.1.0"
 dependencies = [
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
  "honeybadger-mock",
  "lazy_static",
 ]
@@ -4686,16 +4715,16 @@ version = "0.1.0"
 source = "git+https://github.com/getlipa/wild?tag=v1.27.0#163d61d0be9ca73644389ec53014a2ec2ec474c1"
 dependencies = [
  "bdk",
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
  "hex",
- "honeybadger",
+ "honeybadger 1.0.1 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
 ]
 
 [[package]]
 name = "squirrel-mock"
 version = "0.1.0"
 dependencies = [
- "graphql",
+ "graphql 0.1.0 (git+https://github.com/getlipa/wild?tag=v1.27.0)",
  "honeybadger-mock",
  "squirrel",
 ]
