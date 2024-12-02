@@ -75,16 +75,25 @@ impl FiatTopup {
     pub fn register(
         &self,
         email: Option<String>,
+        referral: Option<String>,
         user_iban: String,
         user_currency: String,
     ) -> Result<FiatTopupInfo> {
-        debug!("fiat_topup().register() - called with - email: {email:?} - user_iban: {user_iban} - user_currency: {user_currency:?}");
+        debug!("fiat_topup().register() - called with - email: {email:?} - referral code: {referral:?} - user_iban: {user_iban} - user_currency: {user_currency:?}");
         user_iban
             .parse::<Iban>()
             .map_to_invalid_input("Invalid user_iban")?;
 
         if let Some(email) = email.as_ref() {
             EmailAddress::from_str(email).map_to_invalid_input("Invalid email")?;
+        }
+
+        if let Some(referral) = referral.as_ref() {
+            let string_length = referral.len();
+            // todo take valid length from remote config
+            if referral.len() > 30 {
+                invalid_input!("Invalid referral code [string length: {string_length}]");
+            }
         }
 
         let sdk = Arc::clone(&self.support.sdk);
@@ -116,7 +125,7 @@ impl FiatTopup {
 
         self.support
             .offer_manager
-            .register_topup(topup_info.order_id.clone(), email)
+            .register_topup(topup_info.order_id.clone(), email, referral)
             .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
 
         Ok(topup_info)
