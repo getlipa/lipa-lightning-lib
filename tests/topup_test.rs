@@ -40,6 +40,16 @@ fn test_topup() {
         )
         .expect("Couldn't register topup with email and referral code");
 
+    let too_long_referral_code = "12345678901234567890123456789012345678901".to_string();
+    assert!(too_long_referral_code.len() > setup::MAX_REFERRAL_CODE_LENGTH as usize);
+    let result = node.fiat_topup().register(
+        Some("alice-topup@integration.lipa.swiss".to_string()),
+        Some(too_long_referral_code),
+        "CH9289144414389576442".to_string(),
+        "chf".to_string(),
+    );
+    assert!(matches!(result, Err(InvalidInput { .. })));
+
     node.fiat_topup()
         .register(
             Some("alice-topup@integration.lipa.swiss".to_string()),

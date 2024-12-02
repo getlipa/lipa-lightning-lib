@@ -90,8 +90,7 @@ impl FiatTopup {
 
         if let Some(referral) = referral.as_ref() {
             let string_length = referral.len();
-            // todo take valid length from remote config
-            if referral.len() > 30 {
+            if referral.len() > self.support.node_config.topup_referral_code_max_length as usize {
                 invalid_input!("Invalid referral code [string length: {string_length}]");
             }
         }
