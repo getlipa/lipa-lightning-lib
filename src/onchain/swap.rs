@@ -36,19 +36,27 @@ impl Swap {
     ///
     /// Parameters:
     /// * `lsp_fee_params` - the lsp fee parameters to be used if a new channel needs to
-    ///   be opened. Can be obtained using [`LightningNode::calculate_lsp_fee`](crate::LightningNode::calculate_lsp_fee).
+    ///   be opened. Can be obtained using [`Swap::calculate_lsp_fee_for_amount`].
     ///
     /// Requires network: **yes**
     pub fn create(
         &self,
         lsp_fee_params: Option<OpeningFeeParams>,
     ) -> std::result::Result<SwapAddressInfo, ReceiveOnchainError> {
+        let lsp_fee_params = match lsp_fee_params {
+            Some(param) => param,
+            None => self.query_lsp_fee_params().map_err(|_e| {
+                ReceiveOnchainError::ServiceConnectivity {
+                    err: "Could not retrieve lsp fee params".to_string(),
+                }
+            })?,
+        };
         let swap_info = self
             .support
             .rt
             .handle()
             .block_on(self.support.sdk.receive_onchain(ReceiveOnchainRequest {
-                opening_fee_params: lsp_fee_params,
+                opening_fee_params: Some(lsp_fee_params),
             }))?;
         let rate = self.support.get_exchange_rate();
 
@@ -199,8 +207,7 @@ impl Swap {
         sats_per_vbyte: u32,
         lsp_fee_param: Option<OpeningFeeParams>,
     ) -> Result<String> {
-        let lsp_fee_param =
-            lsp_fee_param.unwrap_or(self.support.query_lsp_fee_params(Some(TWO_WEEKS))?);
+        let lsp_fee_param = lsp_fee_param.unwrap_or(self.query_lsp_fee_params()?);
 
         let swap_address_info = self
             .create(Some(lsp_fee_param.clone()))
@@ -290,6 +297,13 @@ impl Swap {
                 created_at: unix_timestamp_to_system_time(s.created_at as u64),
             })
             .collect())
+    }
+
+    /// Query the long living LSP fee params that the LSP offers.
+    ///
+    /// Requires network: **yes**
+    pub fn query_lsp_fee_params(&self) -> Result<OpeningFeeParams> {
+        self.support.query_lsp_fee_params(Some(TWO_WEEKS))
     }
 
     /// Calculate the actual LSP fee for the given amount of a swap.

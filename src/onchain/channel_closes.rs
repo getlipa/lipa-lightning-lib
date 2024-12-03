@@ -12,8 +12,6 @@ use breez_sdk_core::{
 use perro::{ensure, invalid_input, MapToError};
 use std::sync::Arc;
 
-const TWO_WEEKS: u32 = 2 * 7 * 24 * 60 * 60;
-
 pub struct ChannelClose {
     support: Arc<Support>,
     swap: Arc<Swap>,
@@ -196,8 +194,8 @@ impl ChannelClose {
         lsp_fee_params: Option<OpeningFeeParams>,
     ) -> std::result::Result<String, RedeemOnchainError> {
         let lsp_fee_params = lsp_fee_params.unwrap_or(
-            self.support
-                .query_lsp_fee_params(Some(TWO_WEEKS))
+            self.swap
+                .query_lsp_fee_params()
                 .map_err(|e| RedeemOnchainError::ServiceConnectivity { err: e.to_string() })?,
         );
 
