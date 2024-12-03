@@ -34,7 +34,7 @@ pigeon-mock = { path = "mock/wild/pigeon", optional = true }
 squirrel = { git = "https://github.com/getlipa/wild", tag = "v1.28.0", optional = true }
 squirrel-mock = { path = "mock/wild/squirrel", optional = true }
 
-breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.6.4", optional = true }
+breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.6.5", optional = true }
 breez-sdk-mock = { path = "mock/breez-sdk", optional = true }
 
 aes-gcm = "0.10.3"
