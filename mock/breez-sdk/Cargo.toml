@@ -7,7 +7,7 @@ edition = "2021"
 name = "breez_sdk_core"
 
 [dependencies]
-tokio = { version = "1.41.1", features = ["rt-multi-thread", "time", "sync"] }
+tokio = { version = "1.42.0", features = ["rt-multi-thread", "time", "sync"] }
 anyhow = { version = "1.0.94", features = [] }
 bitcoin = { version = "0.30.2", default-features = false }
 breez-sdk-core = { git = "https://github.com/breez/breez-sdk", tag = "0.6.5" }
