@@ -1,11 +1,12 @@
 use crate::amount::{AsSats, Sats, ToAmount};
 use crate::errors::Result;
+use crate::locker::Locker;
 use crate::onchain::{get_onchain_resolving_fees, query_onchain_fee_rate};
 use crate::support::Support;
 use crate::util::unix_timestamp_to_system_time;
 use crate::{
-    Amount, CalculateLspFeeResponseV2, FailedSwapInfo, OnchainResolvingFees, ResolveFailedSwapInfo,
-    RuntimeErrorCode, SwapAddressInfo,
+    Amount, CalculateLspFeeResponseV2, FailedSwapInfo, LspFee, OnchainResolvingFees,
+    ResolveFailedSwapInfo, RuntimeErrorCode, SwapAddressInfo,
 };
 use breez_sdk_core::error::ReceiveOnchainError;
 use breez_sdk_core::{
@@ -319,6 +320,23 @@ impl Swap {
     ) -> Result<CalculateLspFeeResponseV2> {
         self.support
             .calculate_lsp_fee_for_amount(amount_sat, Some(TWO_WEEKS))
+    }
+
+    /// When receiving swaps, a new channel MAY be required. A fee will be charged to the user.
+    /// Get information about the fee charged by the LSP for opening new channels
+    ///
+    /// Requires network: **no**
+    pub fn get_lsp_fee(&self) -> Result<LspFee> {
+        let exchange_rate = self.support.get_exchange_rate();
+        let lsp_fee = self
+            .support
+            .task_manager
+            .lock_unwrap()
+            .get_longer_valid_lsp_fee()?;
+        Ok(LspFee {
+            channel_minimum_fee: lsp_fee.min_msat.as_msats().to_amount_up(&exchange_rate),
+            channel_fee_permyriad: lsp_fee.proportional as u64 / 100,
+        })
     }
 }
 
