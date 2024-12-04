@@ -1,7 +1,6 @@
 use crate::amount::{AsSats, ToAmount};
 use crate::errors::Result;
 use crate::locker::Locker;
-use crate::pocketclient::FiatTopupInfo;
 use crate::support::Support;
 use crate::{
     filter_out_and_log_corrupted_activities, Activities, Activity, Amount, OfferInfo, OfferKind,
@@ -11,6 +10,7 @@ use breez_sdk_core::{
     parse, InputType, ListPaymentsRequest, LnUrlWithdrawRequest, PaymentStatus, PaymentTypeFilter,
     SignMessageRequest,
 };
+use crow::FiatTopupSetupInfo;
 use crow::TopupInfo;
 use email_address::EmailAddress;
 use honeybadger::{TermsAndConditions, TermsAndConditionsStatus};
@@ -70,16 +70,19 @@ impl FiatTopup {
     /// * `user_currency` - the fiat currency (ISO 4217 currency code) that will be sent for
     ///    exchange. Not all are supported. A consumer of this library should find out about available
     ///    ones using other sources.
+    /// * `provider` - a fiat topup provider id.
+    /// * `referral_code` - a code to be provided by users in order to get benefits,
     ///
     /// Requires network: **yes**
     pub fn register(
         &self,
         email: Option<String>,
-        referral: Option<String>,
         user_iban: String,
         user_currency: String,
-    ) -> Result<FiatTopupInfo> {
-        debug!("fiat_topup().register() - called with - email: {email:?} - referral code: {referral:?} - user_iban: {user_iban} - user_currency: {user_currency:?}");
+        provider: String,
+        referral_code: Option<String>,
+    ) -> Result<FiatTopupSetupInfo> {
+        debug!("fiat_topup().register() - called with - email: {email:?} - user_iban: {user_iban} - user_currency: {user_currency:?} - provider: {provider} - referral code: {referral_code:?}");
         user_iban
             .parse::<Iban>()
             .map_to_invalid_input("Invalid user_iban")?;
@@ -88,44 +91,56 @@ impl FiatTopup {
             EmailAddress::from_str(email).map_to_invalid_input("Invalid email")?;
         }
 
-        if let Some(referral) = referral.as_ref() {
-            let string_length = referral.len();
-            if referral.len() > self.support.node_config.topup_referral_code_max_length as usize {
+        if let Some(referral_code) = referral_code.as_ref() {
+            let string_length = referral_code.len();
+            if string_length > self.support.node_config.topup_referral_code_max_length as usize {
                 invalid_input!("Invalid referral code [string length: {string_length}]");
             }
         }
 
-        let sdk = Arc::clone(&self.support.sdk);
-        let sign_message = |message| async move {
-            sdk.sign_message(SignMessageRequest { message })
-                .await
-                .ok()
-                .map(|r| r.signature)
-        };
-        let topup_info = self
+        let challenge = self
+            .support
+            .offer_manager
+            .start_topup_setup(
+                self.support.get_node_info()?.node_pubkey,
+                provider,
+                user_iban.clone(),
+                user_currency,
+                email,
+                referral_code,
+            )
+            .map_to_runtime_error(
+                RuntimeErrorCode::OfferServiceUnavailable,
+                "Failed to start fiat topup setup",
+            )?;
+
+        let message = format!("I confirm my bitcoin wallet. [{}]", challenge.challenge);
+        let signature = self
             .support
             .rt
             .handle()
-            .block_on(self.support.fiat_topup_client.register_pocket_fiat_topup(
-                &user_iban,
-                user_currency,
-                self.support.get_node_info()?.node_pubkey,
-                sign_message,
-            ))
+            .block_on(
+                self.support
+                    .sdk
+                    .sign_message(SignMessageRequest { message }),
+            )
+            .ok()
+            .map(|r| r.signature)
+            .ok_or_runtime_error(RuntimeErrorCode::NodeUnavailable, "Failed to sign message")?;
+
+        let topup_info = self
+            .support
+            .offer_manager
+            .complete_topup_setup(challenge.id, signature, user_iban)
             .map_to_runtime_error(
                 RuntimeErrorCode::OfferServiceUnavailable,
-                "Failed to register pocket fiat topup",
+                "Failed to complete fiat topup setup",
             )?;
 
         self.support
             .data_store
             .lock_unwrap()
             .store_fiat_topup_info(topup_info.clone())?;
-
-        self.support
-            .offer_manager
-            .register_topup(topup_info.order_id.clone(), email, referral)
-            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
 
         Ok(topup_info)
     }
@@ -140,10 +155,10 @@ impl FiatTopup {
             .clear_fiat_topup_info()
     }
 
-    /// Returns the latest [`FiatTopupInfo`] if the user has registered for the fiat topup.
+    /// Returns the latest [`FiatTopupSetupInfo`] if the user has registered for the fiat topup.
     ///
     /// Requires network: **no**
-    pub fn get_info(&self) -> Result<Option<FiatTopupInfo>> {
+    pub fn get_info(&self) -> Result<Option<FiatTopupSetupInfo>> {
         self.support
             .data_store
             .lock_unwrap()

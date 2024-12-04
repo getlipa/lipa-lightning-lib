@@ -433,7 +433,7 @@ fn setup_editor(history_path: &Path) -> Editor<CommandHinter, DefaultHistory> {
     ));
 
     hints.insert(CommandHint::new(
-        "registertopup <IBAN> <currency> [email] [referral code]",
+        "registertopup <IBAN> <currency> <provider> [email] [referral code]",
         "registertopup ",
     ));
     hints.insert(CommandHint::new("resettopup", "resettopup"));
@@ -559,7 +559,7 @@ fn help() {
     println!("  getfailedswapresolvingfees <swap address>");
     println!("  refundfailedswap <swap address> <to address>");
     println!();
-    println!("  registertopup <IBAN> <currency> [email] [referral code]");
+    println!("  registertopup <IBAN> <currency> <provider> [email] [referral code]");
     println!("  resettopup");
     println!("  getregisteredtopup");
     println!("  listoffers");
@@ -1151,12 +1151,18 @@ fn register_topup(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -
 
     let currency = words.next().ok_or(anyhow!("Currency is required"))?;
 
+    let provider = words.next().ok_or(anyhow!("Provider is required"))?;
+
     let email = words.next().map(String::from);
     let referral = words.next().map(String::from);
 
-    let topup_info =
-        node.fiat_topup()
-            .register(email, referral, iban.to_string(), currency.to_string())?;
+    let topup_info = node.fiat_topup().register(
+        email,
+        iban.to_string(),
+        currency.to_string(),
+        provider.to_string(),
+        referral,
+    )?;
     println!("{topup_info:?}");
 
     Ok(())

@@ -16,27 +16,30 @@ fn test_topup() {
     node.fiat_topup()
         .register(
             None,
-            Some("123456789".to_string()),
             "CH8689144834469929874".to_string(),
             "CHF".to_string(),
+            "pocket".to_string(),
+            None,
         )
         .expect("Couldn't register topup without email");
 
     node.fiat_topup()
         .register(
             Some("alice-topup@integration.lipa.swiss".to_string()),
+            "CH0389144436836555818".to_string(),
+            "chf".to_string(),
+            "pocket".to_string(),
             None,
-            "CH8689144834469929874".to_string(),
-            "CHF".to_string(),
         )
         .expect("Couldn't register topup without referral code");
 
     node.fiat_topup()
         .register(
             Some("alice-topup@integration.lipa.swiss".to_string()),
-            None,
             "CH0389144436836555818".to_string(),
             "chf".to_string(),
+            "pocket".to_string(),
+            None,
         )
         .expect("Couldn't register topup with email and referral code");
 
@@ -44,35 +47,39 @@ fn test_topup() {
     assert!(too_long_referral_code.len() > setup::MAX_REFERRAL_CODE_LENGTH as usize);
     let result = node.fiat_topup().register(
         Some("alice-topup@integration.lipa.swiss".to_string()),
-        Some(too_long_referral_code),
         "CH9289144414389576442".to_string(),
         "chf".to_string(),
+        "pocket".to_string(),
+        Some(too_long_referral_code),
     );
     assert!(matches!(result, Err(InvalidInput { .. })));
 
     node.fiat_topup()
         .register(
             Some("alice-topup@integration.lipa.swiss".to_string()),
-            Some("123456789".to_string()),
             "CH9289144414389576442".to_string(),
             "chf".to_string(),
+            "pocket".to_string(),
+            Some("123456789".to_string()),
         )
         .expect("Couldn't register second topup with used email");
 
     node.fiat_topup()
         .register(
             Some("alice-topup2@integration.lipa.swiss".to_string()),
-            None,
             "CH9289144414389576442".to_string(),
             "chf".to_string(),
+            "pocket".to_string(),
+            None,
         )
         .expect("Couldn't re-register topup with different email");
 
     let result = node.fiat_topup().register(
         Some("alice-topup@integration.lipa.swiss".to_string()),
-        None,
         "INVALID_IBAN".to_string(),
         "chf".to_string(),
+        "pocket".to_string(),
+        None,
     );
     assert!(matches!(result, Err(InvalidInput { .. })));
 
@@ -85,9 +92,10 @@ fn test_topup() {
     node.fiat_topup()
         .register(
             None,
-            None,
             "DK1125112511251125".to_string(),
             "eur".to_string(),
+            "pocket".to_string(),
+            None,
         )
         .unwrap();
 
@@ -118,9 +126,10 @@ fn test_topup() {
     node.fiat_topup()
         .register(
             Some("refund@top.up".to_string()),
-            None,
             "DK2225222522252225".to_string(),
             "eur".to_string(),
+            "pocket".to_string(),
+            None,
         )
         .unwrap();
 

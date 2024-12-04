@@ -100,14 +100,7 @@ use crate::task_manager::TaskManager;
 use crate::util::unix_timestamp_to_system_time;
 pub use crate::util::Util;
 
-#[cfg(not(feature = "mock-deps"))]
-#[allow(clippy::single_component_path_imports)]
-use pocketclient;
-#[cfg(feature = "mock-deps")]
-use pocketclient_mock as pocketclient;
-
-pub use crate::pocketclient::FiatTopupInfo;
-use crate::pocketclient::PocketClient;
+pub use crow::FiatTopupSetupInfo;
 
 pub use crate::actions_required::ActionsRequired;
 pub use crate::activities::Activities;
@@ -489,13 +482,6 @@ impl LightningNode {
             Arc::clone(&auth),
         ));
 
-        let fiat_topup_client =
-            PocketClient::new(node_config.remote_services_config.pocket_url.clone())
-                .map_to_runtime_error(
-                    RuntimeErrorCode::OfferServiceUnavailable,
-                    "Couldn't create a fiat topup client",
-                )?;
-
         let persistence_encryption_key = derive_persistence_encryption_key(&strong_typed_seed)?;
         let backup_client = RemoteBackupClient::new(
             node_config.remote_services_config.backend_url.clone(),
@@ -525,7 +511,6 @@ impl LightningNode {
             sdk: Arc::clone(&sdk),
             auth: Arc::clone(&auth),
             async_auth: Arc::clone(&async_auth),
-            fiat_topup_client,
             offer_manager: Arc::clone(&offer_manager),
             rt: Arc::clone(&rt),
             data_store: Arc::clone(&data_store),
@@ -1048,30 +1033,6 @@ impl LightningNode {
             .map_runtime_error_to(RuntimeErrorCode::AuthServiceUnavailable)
     }
 
-    /// Register for fiat topups. Returns information that can be used by the user to transfer fiat
-    /// to the 3rd party exchange service. Once the 3rd party exchange receives funds, the user will
-    /// be able to withdraw sats using LNURL-w.
-    ///
-    /// Parameters:
-    /// * `email` - this email will be used to send status information about different topups
-    /// * `referral` - the referral code of another user
-    /// * `user_iban` - the user will send fiat from this iban
-    /// * `user_currency` - the fiat currency (ISO 4217 currency code) that will be sent for
-    ///    exchange. Not all are supported. A consumer of this library should find out about available
-    ///    ones using other sources.
-    ///
-    /// Requires network: **yes**
-    #[deprecated = "fiat_topup().register() should be used instead"]
-    pub fn register_fiat_topup(
-        &self,
-        email: Option<String>,
-        user_iban: String,
-        user_currency: String,
-    ) -> Result<FiatTopupInfo> {
-        self.fiat_topup
-            .register(email, None, user_iban, user_currency)
-    }
-
     /// Resets a previous fiat topups registration.
     ///
     /// Requires network: **no**
@@ -1464,11 +1425,11 @@ impl LightningNode {
         self.util.log_debug_info()
     }
 
-    /// Returns the latest [`FiatTopupInfo`] if the user has registered for the fiat topup.
+    /// Returns the latest [`FiatTopupSetupInfo`] if the user has registered for the fiat topup.
     ///
     /// Requires network: **no**
     #[deprecated = "fiat_topup().get_info() should be used instead"]
-    pub fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupInfo>> {
+    pub fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupSetupInfo>> {
         self.fiat_topup.get_info()
     }
 
