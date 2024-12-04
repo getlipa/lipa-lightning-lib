@@ -340,6 +340,9 @@ interface Swap {
 
     [Throws=LnError]
     string swap(FailedSwapInfo failed_swap_info, u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_param);
+
+    [Throws=LnError]
+    LspFee get_lsp_fee();
 };
 
 interface ReverseSwap {

@@ -631,7 +631,7 @@ impl LightningNode {
     /// Get information about the fee charged by the LSP for opening new channels
     ///
     /// Requires network: **no**
-    #[deprecated = "lightning().get_lsp_fee() should be used instead"]
+    #[deprecated = "lightning().get_lsp_fee() or swap().get_lsp_fee() should be used instead"]
     pub fn query_lsp_fee(&self) -> Result<LspFee> {
         self.lightning.get_lsp_fee()
     }

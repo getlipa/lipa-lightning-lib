@@ -27,7 +27,8 @@ pub(crate) struct TaskManager {
     exchange_rates: Arc<Mutex<Vec<ExchangeRate>>>,
     data_store: Arc<Mutex<DataStore>>,
     sdk: Arc<BreezServices>,
-    lsp_fee: Arc<Mutex<Option<OpeningFeeParams>>>,
+    lsp_fee_cheaper: Arc<Mutex<Option<OpeningFeeParams>>>,
+    lsp_fee_longer_valid: Arc<Mutex<Option<OpeningFeeParams>>>,
     backup_manager: Arc<BackupManager>,
     events_callback: Arc<Box<dyn EventsCallback>>,
     breez_health_status: Arc<Mutex<Option<BreezHealthCheckStatus>>>,
@@ -69,7 +70,8 @@ impl TaskManager {
             exchange_rates: Arc::new(Mutex::new(exchange_rates)),
             data_store,
             sdk,
-            lsp_fee: Arc::new(Mutex::new(None)),
+            lsp_fee_cheaper: Arc::new(Mutex::new(None)),
+            lsp_fee_longer_valid: Arc::new(Mutex::new(None)),
             backup_manager: Arc::new(backup_manager),
             events_callback,
             breez_health_status: Arc::new(Mutex::new(None)),
@@ -82,11 +84,23 @@ impl TaskManager {
         self.exchange_rates.lock_unwrap().clone()
     }
 
-    pub fn get_lsp_fee(&self) -> Result<OpeningFeeParams> {
-        self.lsp_fee.lock_unwrap().clone().ok_or_runtime_error(
-            RuntimeErrorCode::LspServiceUnavailable,
-            "Cached LSP fee isn't available",
-        )
+    pub fn get_cheaper_lsp_fee(&self) -> Result<OpeningFeeParams> {
+        self.lsp_fee_cheaper
+            .lock_unwrap()
+            .clone()
+            .ok_or_runtime_error(
+                RuntimeErrorCode::LspServiceUnavailable,
+                "Cached cheaper LSP fee isn't available",
+            )
+    }
+    pub fn get_longer_valid_lsp_fee(&self) -> Result<OpeningFeeParams> {
+        self.lsp_fee_longer_valid
+            .lock_unwrap()
+            .clone()
+            .ok_or_runtime_error(
+                RuntimeErrorCode::LspServiceUnavailable,
+                "Cached longer valid LSP fee isn't available",
+            )
     }
 
     pub fn foreground(&mut self) {
@@ -180,10 +194,12 @@ impl TaskManager {
 
     fn start_lsp_fee_update(&self, period: Duration) -> RepeatingTaskHandle {
         let sdk = Arc::clone(&self.sdk);
-        let lsp_fee = Arc::clone(&self.lsp_fee);
+        let lsp_fee_longer_valid = Arc::clone(&self.lsp_fee_longer_valid);
+        let lsp_fee_cheaper = Arc::clone(&self.lsp_fee_cheaper);
         self.runtime_handle.spawn_repeating_task(period, move || {
             let sdk = Arc::clone(&sdk);
-            let lsp_fee = Arc::clone(&lsp_fee);
+            let lsp_fee_longer_valid = Arc::clone(&lsp_fee_longer_valid);
+            let lsp_fee_cheaper = Arc::clone(&lsp_fee_cheaper);
 
             async move {
                 debug!("Starting lsp fee update task");
@@ -194,10 +210,21 @@ impl TaskManager {
                             .get_cheapest_opening_fee_params()
                         {
                             Ok(opening_fee_params) => {
-                                *lsp_fee.lock_unwrap() = Some(opening_fee_params);
+                                *lsp_fee_cheaper.lock_unwrap() = Some(opening_fee_params);
                             }
                             Err(e) => {
                                 error!("Failed to retrieve cheapest opening fee params: {e}");
+                            }
+                        };
+                        match lsp_information
+                            .opening_fee_params_list
+                            .get_48h_opening_fee_params()
+                        {
+                            Ok(opening_fee_params) => {
+                                *lsp_fee_longer_valid.lock_unwrap() = Some(opening_fee_params);
+                            }
+                            Err(e) => {
+                                error!("Failed to retrieve 48 hours opening fee params: {e}");
                             }
                         };
                     }

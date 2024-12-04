@@ -144,6 +144,7 @@ fn node_can_start() {
 fn lsp_fee_can_be_fetched() {
     let sender = TransactingNode::new(NodeType::Sender).unwrap();
     wait_for!(sender.node.lightning().get_lsp_fee().is_ok());
+    wait_for!(sender.node.onchain().swap().get_lsp_fee().is_ok());
 }
 
 #[test]
