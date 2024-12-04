@@ -3,8 +3,8 @@ use crate::errors::Result;
 use crate::migrations::migrate;
 use crate::{EnableStatus, ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
 
-use crate::pocketclient::FiatTopupInfo;
 use chrono::{DateTime, Utc};
+use crow::FiatTopupSetupInfo;
 use crow::{PermanentFailureCode, TemporaryFailureCode};
 use perro::MapToError;
 use rusqlite::{backup, params, Connection, OptionalExtension, Params, Row};
@@ -299,7 +299,7 @@ impl DataStore {
             .collect()
     }
 
-    pub fn store_fiat_topup_info(&self, fiat_topup_info: FiatTopupInfo) -> Result<()> {
+    pub fn store_fiat_topup_info(&self, fiat_topup_info: FiatTopupSetupInfo) -> Result<()> {
         let dt: DateTime<Utc> = SystemTime::now().into();
         self.conn
             .execute(
@@ -322,7 +322,7 @@ impl DataStore {
         Ok(())
     }
 
-    pub fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupInfo>> {
+    pub fn retrieve_latest_fiat_topup_info(&self) -> Result<Option<FiatTopupSetupInfo>> {
         let mut statement = self.conn.prepare(
             "SELECT order_id, debitor_iban, creditor_reference, creditor_iban, creditor_bank_name, creditor_bank_street, creditor_bank_postal_code, creditor_bank_town, creditor_bank_country, creditor_bank_bic, creditor_name, creditor_street, creditor_postal_code, creditor_town, creditor_country, currency FROM fiat_topup_info ORDER BY created_at DESC LIMIT 1",
         ).map_to_permanent_failure("Failed to prepare query latest fiat topup info statement")?;
@@ -677,8 +677,8 @@ pub fn to_offer_error(code: Option<String>) -> Option<PocketOfferError> {
     })
 }
 
-fn fiat_topup_info_from_row(row: &Row) -> rusqlite::Result<Option<FiatTopupInfo>> {
-    Ok(Some(FiatTopupInfo {
+fn fiat_topup_info_from_row(row: &Row) -> rusqlite::Result<Option<FiatTopupSetupInfo>> {
+    Ok(Some(FiatTopupSetupInfo {
         order_id: row.get(0)?,
         debitor_iban: row.get(1)?,
         creditor_reference: row.get(2)?,
@@ -705,7 +705,7 @@ mod tests {
     use crate::{EnableStatus, ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
 
     use crate::analytics::AnalyticsConfig;
-    use crate::pocketclient::FiatTopupInfo;
+    use crow::FiatTopupSetupInfo;
     use crow::TopupError::TemporaryFailure;
     use crow::{PermanentFailureCode, TemporaryFailureCode};
     use std::fs;
@@ -1242,7 +1242,7 @@ mod tests {
 
         assert_eq!(data_store.retrieve_latest_fiat_topup_info().unwrap(), None);
 
-        let mut fiat_topup_info = FiatTopupInfo {
+        let mut fiat_topup_info = FiatTopupSetupInfo {
             order_id: "961b8ee9-74cc-4844-9fe8-b02ce0702663".to_string(),
             debitor_iban: "CH4889144919566329178".to_string(),
             creditor_reference: "8584-9931-ABCD".to_string(),

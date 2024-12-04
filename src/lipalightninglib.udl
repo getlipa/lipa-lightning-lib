@@ -85,9 +85,6 @@ interface LightningNode {
     TermsAndConditionsStatus get_terms_and_conditions_status(TermsAndConditions terms_and_conditions);
 
     [Throws=LnError]
-    FiatTopupInfo register_fiat_topup(string? email, string user_iban, string user_currency);
-
-    [Throws=LnError]
     void reset_fiat_topup();
 
     [Throws=LnError]
@@ -157,7 +154,7 @@ interface LightningNode {
     void log_debug_info();
 
     [Throws=LnError]
-    FiatTopupInfo? retrieve_latest_fiat_topup_info();
+    FiatTopupSetupInfo? retrieve_latest_fiat_topup_info();
 
     [Throws=LnError]
     BreezHealthCheckStatus get_health_status();
@@ -285,13 +282,13 @@ interface FiatTopup {
     TermsAndConditionsStatus query_tc_status();
 
     [Throws=LnError]
-    FiatTopupInfo register(string? email, string? referral_code, string user_iban, string user_currency);
+    FiatTopupSetupInfo register(string? email, string user_iban, string user_currency, string provider, string? referral_code);
 
     [Throws=LnError]
     void reset();
 
     [Throws=LnError]
-    FiatTopupInfo? get_info();
+    FiatTopupSetupInfo? get_info();
 
     [Throws=LnError]
     Amount calculate_payout_fee(OfferInfo offer);
@@ -719,7 +716,7 @@ dictionary Amount {
     FiatValue? fiat;
 };
 
-dictionary FiatTopupInfo {
+dictionary FiatTopupSetupInfo {
     string order_id;
     string debitor_iban;
     string creditor_reference;

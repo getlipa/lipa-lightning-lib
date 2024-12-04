@@ -1,9 +1,0 @@
-[package]
-name = "pocketclient-mock"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-perro = { git = "https://github.com/getlipa/perro", tag = "v1.2.0" }
-pocketclient = { path = "../../pocketclient" }
-uuid = { version = "1.10.0", features = ["v4"] }

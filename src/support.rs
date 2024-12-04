@@ -5,7 +5,6 @@ use crate::data_store::DataStore;
 use crate::errors::Result;
 use crate::locker::Locker;
 use crate::phone_number::PhoneNumberPrefixParser;
-use crate::pocketclient::PocketClient;
 use crate::task_manager::TaskManager;
 use crate::util::LogIgnoreError;
 use crate::{
@@ -28,7 +27,6 @@ pub(crate) struct Support {
     pub sdk: Arc<BreezServices>,
     pub auth: Arc<Auth>,
     pub async_auth: Arc<honeybadger::asynchronous::Auth>,
-    pub fiat_topup_client: PocketClient,
     pub offer_manager: Arc<OfferManager>,
     pub rt: Arc<AsyncRuntime>,
     pub data_store: Arc<Mutex<DataStore>>,

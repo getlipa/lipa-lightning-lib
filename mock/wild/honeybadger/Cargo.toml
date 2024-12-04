@@ -7,8 +7,8 @@ edition = "2021"
 name = "honeybadger"
 
 [dependencies]
-graphql = { git = "https://github.com/getlipa/wild", tag = "v1.28.0" }
-honeybadger = { git = "https://github.com/getlipa/wild", tag = "v1.28.0" }
+graphql = { git = "https://github.com/getlipa/wild", tag = "v1.29.0" }
+honeybadger = { git = "https://github.com/getlipa/wild", tag = "v1.29.0" }
 rand = "0.8.5"
 secp256k1 = { version = "0.27.0", features = ["global-context"] }
 tokio = "1.37.0"
