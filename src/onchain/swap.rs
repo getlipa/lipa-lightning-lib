@@ -16,8 +16,6 @@ use breez_sdk_core::{
 use perro::{ensure, runtime_error, MapToError};
 use std::sync::Arc;
 
-const TWO_WEEKS: u32 = 2 * 7 * 24 * 60 * 60;
-
 pub struct Swap {
     support: Arc<Support>,
 }
@@ -36,22 +34,14 @@ impl Swap {
     /// If a swap is in progress, this method will return an error.
     ///
     /// Parameters:
-    /// * `lsp_fee_params` - the lsp fee parameters to be used if a new channel needs to
-    ///   be opened. Can be obtained using [`Swap::calculate_lsp_fee_for_amount`].
     ///
     /// Requires network: **yes**
-    pub fn create(
-        &self,
-        lsp_fee_params: Option<OpeningFeeParams>,
-    ) -> std::result::Result<SwapAddressInfo, ReceiveOnchainError> {
-        let lsp_fee_params = match lsp_fee_params {
-            Some(param) => param,
-            None => self.query_lsp_fee_params().map_err(|_e| {
-                ReceiveOnchainError::ServiceConnectivity {
+    pub fn create(&self) -> std::result::Result<SwapAddressInfo, ReceiveOnchainError> {
+        let lsp_fee_params =
+            self.get_lsp_fee_params()
+                .map_err(|_e| ReceiveOnchainError::ServiceConnectivity {
                     err: "Could not retrieve lsp fee params".to_string(),
-                }
-            })?,
-        };
+                })?;
         let swap_info = self
             .support
             .rt
@@ -196,26 +186,15 @@ impl Swap {
     /// Parameters:
     /// * `sat_per_vbyte` - the fee rate to use for the on-chain transaction.
     ///   Can be obtained with [`Swap::determine_resolving_fees`].
-    /// * `lsp_fee_params` - the lsp fee params for opening a new channel if necessary.
-    ///   Can be obtained with [`Swap::determine_resolving_fees`].
     ///
     /// Returns the txid of the sweeping tx.
     ///
     /// Requires network: **yes**
-    pub fn swap(
-        &self,
-        failed_swap_info: FailedSwapInfo,
-        sats_per_vbyte: u32,
-        lsp_fee_param: Option<OpeningFeeParams>,
-    ) -> Result<String> {
-        let lsp_fee_param = lsp_fee_param.unwrap_or(self.query_lsp_fee_params()?);
-
-        let swap_address_info = self
-            .create(Some(lsp_fee_param.clone()))
-            .map_to_runtime_error(
-                RuntimeErrorCode::NodeUnavailable,
-                "Couldn't generate swap address",
-            )?;
+    pub fn swap(&self, failed_swap_info: FailedSwapInfo, sats_per_vbyte: u32) -> Result<String> {
+        let swap_address_info = self.create().map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Couldn't generate swap address",
+        )?;
 
         let prepare_response = self
             .support
@@ -248,7 +227,7 @@ impl Swap {
 
         let lsp_fees = self
             .support
-            .calculate_lsp_fee_for_amount_locally(send_amount_sats, lsp_fee_param)?
+            .calculate_lsp_fee_for_amount(send_amount_sats, self.get_lsp_fee_params()?)?
             .lsp_fee
             .sats;
 
@@ -300,13 +279,6 @@ impl Swap {
             .collect())
     }
 
-    /// Query the long living LSP fee params that the LSP offers.
-    ///
-    /// Requires network: **yes**
-    pub fn query_lsp_fee_params(&self) -> Result<OpeningFeeParams> {
-        self.support.query_lsp_fee_params(Some(TWO_WEEKS))
-    }
-
     /// Calculate the actual LSP fee for the given amount of a swap.
     /// If the already existing inbound capacity is enough, no new channel is required.
     ///
@@ -319,7 +291,7 @@ impl Swap {
         amount_sat: u64,
     ) -> Result<CalculateLspFeeResponseV2> {
         self.support
-            .calculate_lsp_fee_for_amount(amount_sat, Some(TWO_WEEKS))
+            .calculate_lsp_fee_for_amount(amount_sat, self.get_lsp_fee_params()?)
     }
 
     /// When receiving swaps, a new channel MAY be required. A fee will be charged to the user.
@@ -328,15 +300,18 @@ impl Swap {
     /// Requires network: **no**
     pub fn get_lsp_fee(&self) -> Result<LspFee> {
         let exchange_rate = self.support.get_exchange_rate();
-        let lsp_fee = self
-            .support
-            .task_manager
-            .lock_unwrap()
-            .get_longer_valid_lsp_fee()?;
+        let lsp_fee = self.get_lsp_fee_params()?;
         Ok(LspFee {
             channel_minimum_fee: lsp_fee.min_msat.as_msats().to_amount_up(&exchange_rate),
             channel_fee_permyriad: lsp_fee.proportional as u64 / 100,
         })
+    }
+
+    pub(crate) fn get_lsp_fee_params(&self) -> Result<OpeningFeeParams> {
+        self.support
+            .task_manager
+            .lock_unwrap()
+            .get_longer_valid_lsp_fee()
     }
 }
 

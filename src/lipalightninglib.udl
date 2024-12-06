@@ -321,7 +321,7 @@ interface Onchain {
 
 interface Swap {
     [Throws=SwapError]
-    SwapAddressInfo create(OpeningFeeParams? lsp_fee_params);
+    SwapAddressInfo create();
 
     [Throws=LnError]
     CalculateLspFeeResponseV2 calculate_lsp_fee_for_amount(u64 amount_sat);
@@ -336,7 +336,7 @@ interface Swap {
     string sweep(SweepFailedSwapInfo sweep_failed_swap_info);
 
     [Throws=LnError]
-    string swap(FailedSwapInfo failed_swap_info, u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_param);
+    string swap(FailedSwapInfo failed_swap_info, u32 sats_per_vbyte);
 
     [Throws=LnError]
     LspFee get_lsp_fee();
@@ -364,7 +364,7 @@ interface ChannelClose {
     string sweep(SweepChannelCloseInfo sweep_info);
 
     [Throws=SweepError]
-    string swap(u32 sats_per_vbyte, OpeningFeeParams? lsp_fee_params);
+    string swap(u32 sats_per_vbyte);
 };
 
 interface Activities {

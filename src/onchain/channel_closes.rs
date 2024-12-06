@@ -6,8 +6,7 @@ use crate::support::Support;
 use crate::{Amount, OnchainResolvingFees, RuntimeErrorCode, SweepInfo, CLN_DUST_LIMIT_SAT};
 use breez_sdk_core::error::RedeemOnchainError;
 use breez_sdk_core::{
-    BitcoinAddressData, Network, OpeningFeeParams, PrepareRedeemOnchainFundsRequest,
-    RedeemOnchainFundsRequest,
+    BitcoinAddressData, Network, PrepareRedeemOnchainFundsRequest, RedeemOnchainFundsRequest,
 };
 use perro::{ensure, invalid_input, MapToError};
 use std::sync::Arc;
@@ -188,17 +187,7 @@ impl ChannelClose {
     /// Returns the txid of the sweeping tx.
     ///
     /// Requires network: **yes**
-    pub fn swap(
-        &self,
-        sat_per_vbyte: u32,
-        lsp_fee_params: Option<OpeningFeeParams>,
-    ) -> std::result::Result<String, RedeemOnchainError> {
-        let lsp_fee_params = lsp_fee_params.unwrap_or(
-            self.swap
-                .query_lsp_fee_params()
-                .map_err(|e| RedeemOnchainError::ServiceConnectivity { err: e.to_string() })?,
-        );
-
+    pub fn swap(&self, sat_per_vbyte: u32) -> std::result::Result<String, RedeemOnchainError> {
         let onchain_balance = self
             .support
             .sdk
@@ -208,7 +197,7 @@ impl ChannelClose {
 
         let swap_address_info = self
             .swap
-            .create(Some(lsp_fee_params.clone()))
+            .create()
             .map_err(|e| RedeemOnchainError::Generic {
                 err: format!("Couldn't generate swap address: {}", e),
             })?;
@@ -248,9 +237,16 @@ impl ChannelClose {
             });
         }
 
+        let lsp_fee_params =
+            self.swap
+                .get_lsp_fee_params()
+                .map_err(|e| RedeemOnchainError::Generic {
+                    err: format!("Couldn't retrieve lsp fee params: {}", e),
+                })?;
+
         let lsp_fee = self
             .support
-            .calculate_lsp_fee_for_amount_locally(send_amount_sats, lsp_fee_params)
+            .calculate_lsp_fee_for_amount(send_amount_sats, lsp_fee_params)
             .map_err(|e| RedeemOnchainError::Generic {
                 err: format!("Couldn't retrieve node info: {}", e),
             })?

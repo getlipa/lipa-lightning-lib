@@ -1004,7 +1004,7 @@ fn pay_open_invoice(node: &LightningNode, words: &mut dyn Iterator<Item = &str>)
 }
 
 fn get_swap_address(node: &LightningNode) -> Result<()> {
-    let swap_address_info = node.onchain().swap().create(None)?;
+    let swap_address_info = node.onchain().swap().create()?;
 
     println!("Swap Address Information:");
     println!("  Address             {}", swap_address_info.address);
@@ -1703,14 +1703,10 @@ fn swap_onchain_to_lightning(node: &LightningNode) -> Result<()> {
             "Channel funds cannot be resolved as they are too little"
         ))?;
 
-    let swap_fees = resolving_fees
-        .swap_fees
-        .ok_or(anyhow!("Swap isn't available, not enough on-chain funds"))?;
-
-    let txid = node.onchain().channel_close().swap(
-        resolving_fees.sats_per_vbyte,
-        Some(swap_fees.lsp_fee_params),
-    )?;
+    let txid = node
+        .onchain()
+        .channel_close()
+        .swap(resolving_fees.sats_per_vbyte)?;
 
     println!("Sweeping transaction: {txid}");
 
