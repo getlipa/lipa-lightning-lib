@@ -13,6 +13,7 @@ use crate::{
     CalculateLspFeeResponseV2, ExchangeRate, LspFee, MaxRoutingFeeConfig, MaxRoutingFeeMode,
     RuntimeErrorCode,
 };
+use breez_sdk_core::OpeningFeeParams;
 use perro::MapToError;
 use std::sync::Arc;
 
@@ -144,7 +145,8 @@ impl Lightning {
         &self,
         amount_sat: u64,
     ) -> Result<CalculateLspFeeResponseV2> {
-        self.support.calculate_lsp_fee_for_amount(amount_sat, None)
+        self.support
+            .calculate_lsp_fee_for_amount(amount_sat, self.get_lsp_fee_params()?)
     }
 
     /// When *receiving* payments, a new channel MAY be required. A fee will be charged to the user.
@@ -154,15 +156,18 @@ impl Lightning {
     /// Requires network: **no**
     pub fn get_lsp_fee(&self) -> Result<LspFee> {
         let exchange_rate = self.support.get_exchange_rate();
-        let lsp_fee = self
-            .support
-            .task_manager
-            .lock_unwrap()
-            .get_cheaper_lsp_fee()?;
+        let lsp_fee = self.get_lsp_fee_params()?;
         Ok(LspFee {
             channel_minimum_fee: lsp_fee.min_msat.as_msats().to_amount_up(&exchange_rate),
             channel_fee_permyriad: lsp_fee.proportional as u64 / 100,
         })
+    }
+
+    pub(crate) fn get_lsp_fee_params(&self) -> Result<OpeningFeeParams> {
+        self.support
+            .task_manager
+            .lock_unwrap()
+            .get_cheaper_lsp_fee()
     }
 }
 
