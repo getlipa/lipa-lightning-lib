@@ -903,18 +903,12 @@ impl BreezServices {
 
     pub async fn onchain_payment_limits(&self) -> SdkResult<OnchainPaymentLimitsResponse> {
         let balance_sat = get_balance_msat() / 1000;
-        let (min_sat, max_sat) = if balance_sat > SWAPPER_ROUTING_FEE_SAT {
-            (
-                SWAPPER_ROUTING_FEE_SAT,
-                balance_sat - SWAPPER_ROUTING_FEE_SAT,
-            )
-        } else {
-            (0, 0)
-        };
+        let max_payable_sat = balance_sat.saturating_sub(SWAPPER_ROUTING_FEE_SAT);
+
         Ok(OnchainPaymentLimitsResponse {
-            min_sat,
-            max_sat,
-            max_payable_sat: max_sat,
+            min_sat: SWAP_MIN_AMOUNT_SAT,
+            max_sat: SWAP_MAX_AMOUNT_SAT,
+            max_payable_sat,
         })
     }
 
