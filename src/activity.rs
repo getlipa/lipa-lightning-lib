@@ -95,8 +95,7 @@ impl Activity {
         } = self
         {
             return reverse_swap_info.status == ReverseSwapStatus::Initial
-                || reverse_swap_info.status == ReverseSwapStatus::InProgress
-                || reverse_swap_info.status == ReverseSwapStatus::CompletedSeen;
+                || reverse_swap_info.status == ReverseSwapStatus::InProgress;
         }
         if let Some(payment_info) = self.get_payment_info() {
             return payment_info.payment_state.is_pending();
