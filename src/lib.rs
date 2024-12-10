@@ -1247,9 +1247,9 @@ impl LightningNode {
     #[deprecated = "onchain().swaps().create() should be used instead"]
     pub fn generate_swap_address(
         &self,
-        lsp_fee_params: Option<OpeningFeeParams>,
+        _lsp_fee_params: Option<OpeningFeeParams>,
     ) -> std::result::Result<SwapAddressInfo, ReceiveOnchainError> {
-        self.onchain.swap().create(lsp_fee_params)
+        self.onchain.swap().create()
     }
 
     /// Lists all unresolved failed swaps. Each individual failed swap can be recovered
@@ -1369,11 +1369,9 @@ impl LightningNode {
         &self,
         failed_swap_info: FailedSwapInfo,
         sats_per_vbyte: u32,
-        lsp_fee_param: Option<OpeningFeeParams>,
+        _lsp_fee_param: Option<OpeningFeeParams>,
     ) -> Result<String> {
-        self.onchain
-            .swap()
-            .swap(failed_swap_info, sats_per_vbyte, lsp_fee_param)
+        self.onchain.swap().swap(failed_swap_info, sats_per_vbyte)
     }
 
     /// Returns the fees for resolving channel closes if there are enough funds to pay for fees.
@@ -1408,11 +1406,9 @@ impl LightningNode {
     pub fn swap_channel_close_funds_to_lightning(
         &self,
         sats_per_vbyte: u32,
-        lsp_fee_params: Option<OpeningFeeParams>,
+        _lsp_fee_params: Option<OpeningFeeParams>,
     ) -> std::result::Result<String, RedeemOnchainError> {
-        self.onchain
-            .channel_close()
-            .swap(sats_per_vbyte, lsp_fee_params)
+        self.onchain.channel_close().swap(sats_per_vbyte)
     }
 
     /// Prints additional debug information to the logs.

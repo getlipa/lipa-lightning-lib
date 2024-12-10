@@ -24,9 +24,9 @@ const LSP_TIMELOCK_DELTA: u32 = 42;
 const LSP_MIN_HTLC_MSAT: i64 = 600;
 const LSP_ADDED_LIQUIDITY_ON_NEW_CHANNELS_MSAT: u64 = 50_000_000;
 const OPENING_FEE_PARAMS_MIN_MSAT: u64 = 5_000_000;
+const OPENING_FEE_PARAMS_MIN_MSAT_MORE_EXPENSIVE: u64 = 6_000_000;
 const OPENING_FEE_PARAMS_PROPORTIONAL: u32 = 50;
-const OPENING_FEE_PARAMS_VALID_UNTIL: &str = "2030-02-16T11:46:49Z";
-const OPENING_FEE_PARAMS_VALID_UNTIL_LONGER: &str = "2031-02-16T11:46:49Z";
+const OPENING_FEE_PARAMS_PROPORTIONAL_MORE_EXPENSIVE: u32 = 100;
 const OPENING_FEE_PARAMS_MAX_IDLE_TIME: u32 = 10000;
 const OPENING_FEE_PARAMS_MAX_CLIENT_TO_SELF_DELAY: u32 = 256;
 const OPENING_FEE_PARAMS_PROMISE: &str = "promite";
@@ -67,7 +67,7 @@ use breez_sdk_core::{
     RedeemOnchainFundsResponse, RefundResponse, ReverseSwapInfo, ReverseSwapPairInfo,
     SendPaymentResponse, ServiceHealthCheckResponse, SignMessageResponse, SwapInfo,
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use hex::FromHex;
 use lazy_static::lazy_static;
 use tokio::runtime::Handle;
@@ -808,10 +808,11 @@ impl BreezServices {
             }
         };
 
+        let (in_two_hours, in_three_days) = get_lsp_fee_params_expiry_dates();
         let valid_until = if req.expiry.is_some() {
-            OPENING_FEE_PARAMS_VALID_UNTIL.to_string()
+            in_two_hours.to_rfc3339()
         } else {
-            OPENING_FEE_PARAMS_VALID_UNTIL_LONGER.to_string()
+            in_three_days.to_rfc3339()
         };
 
         Ok(OpenChannelFeeResponse {
@@ -1055,6 +1056,8 @@ impl BreezServices {
     }
 
     pub async fn lsp_info(&self) -> SdkResult<LspInformation> {
+        let (in_two_hours, in_three_days) = get_lsp_fee_params_expiry_dates();
+
         Ok(LspInformation {
             id: LSP_ID.to_string(),
             name: LSP_NAME.to_string(),
@@ -1067,14 +1070,24 @@ impl BreezServices {
             min_htlc_msat: LSP_MIN_HTLC_MSAT,
             lsp_pubkey: vec![],
             opening_fee_params_list: OpeningFeeParamsMenu {
-                values: vec![OpeningFeeParams {
-                    min_msat: OPENING_FEE_PARAMS_MIN_MSAT,
-                    proportional: OPENING_FEE_PARAMS_PROPORTIONAL,
-                    valid_until: OPENING_FEE_PARAMS_VALID_UNTIL.to_string(),
-                    max_idle_time: OPENING_FEE_PARAMS_MAX_IDLE_TIME,
-                    max_client_to_self_delay: OPENING_FEE_PARAMS_MAX_CLIENT_TO_SELF_DELAY,
-                    promise: OPENING_FEE_PARAMS_PROMISE.to_string(),
-                }],
+                values: vec![
+                    OpeningFeeParams {
+                        min_msat: OPENING_FEE_PARAMS_MIN_MSAT,
+                        proportional: OPENING_FEE_PARAMS_PROPORTIONAL,
+                        valid_until: in_two_hours.to_rfc3339(),
+                        max_idle_time: OPENING_FEE_PARAMS_MAX_IDLE_TIME,
+                        max_client_to_self_delay: OPENING_FEE_PARAMS_MAX_CLIENT_TO_SELF_DELAY,
+                        promise: OPENING_FEE_PARAMS_PROMISE.to_string(),
+                    },
+                    OpeningFeeParams {
+                        min_msat: OPENING_FEE_PARAMS_MIN_MSAT_MORE_EXPENSIVE,
+                        proportional: OPENING_FEE_PARAMS_PROPORTIONAL_MORE_EXPENSIVE,
+                        valid_until: in_three_days.to_rfc3339(),
+                        max_idle_time: OPENING_FEE_PARAMS_MAX_IDLE_TIME,
+                        max_client_to_self_delay: OPENING_FEE_PARAMS_MAX_CLIENT_TO_SELF_DELAY,
+                        promise: OPENING_FEE_PARAMS_PROMISE.to_string(),
+                    },
+                ],
             },
         })
     }
@@ -1491,6 +1504,14 @@ fn generate_2_hashes_raw() -> (sha256::Hash, sha256::Hash) {
     let hash1 = sha256::Hash::hash(&generate_32_random_bytes());
 
     (hash1, Hash::hash(hash1.as_byte_array()))
+}
+
+fn get_lsp_fee_params_expiry_dates() -> (DateTime<Utc>, DateTime<Utc>) {
+    let now = Utc::now();
+    let in_two_hours = now + Duration::from_secs(60 * 60 * 2);
+    let in_three_days = now + Duration::from_secs(60 * 60 * 24 * 3);
+
+    (in_two_hours, in_three_days)
 }
 
 struct MockPayment {
