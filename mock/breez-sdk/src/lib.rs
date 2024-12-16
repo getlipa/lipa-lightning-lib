@@ -498,9 +498,10 @@ impl BreezServices {
             "pay.err.connectivity" | "pe.connectivity" => {
                 *PAYMENT_OUTCOME.lock().await = PaymentOutcome::ServiceConnectivity
             }
+            "mimic.activities" | "ma" => self.simulate_activities(),
             "mimic.pay2addr" | "mp" => self.simulate_payments(PaymentType::Sent, 10, true).await,
             "channels.close_largest" | "cclose" => close_channel_with_largest_balance().await,
-            "channels.confirm_pending_closes" | "cconf" => confirm_pending_channel_closes().await,
+            "channels.confirm_pending_closes" | "cconf" => confirm_pending_channel_closes(),
             "swaps.start" | "ss" => self.start_swap(req.amount_msat / 1_000).await?,
             "swaps.confirm_onchain" | "sc" => self.confirm_swap_onchain().await?,
             "swaps.redeem" | "sr" => {
@@ -1200,6 +1201,31 @@ impl BreezServices {
         Ok(())
     }
 
+    fn simulate_activities(&self) {
+        self.simulate_channle_closes();
+    }
+
+    fn simulate_channle_closes(&self) {
+        close_channel(Channel {
+            capacity_msat: 10_000_000,
+            local_balance_msat: 0,
+        });
+        close_channel(Channel {
+            capacity_msat: 10_000_000,
+            local_balance_msat: 5_000_000,
+        });
+        confirm_pending_channel_closes();
+
+        close_channel(Channel {
+            capacity_msat: 20_000_000,
+            local_balance_msat: 0,
+        });
+        close_channel(Channel {
+            capacity_msat: 20_000_000,
+            local_balance_msat: 7_000_000,
+        });
+    }
+
     async fn simulate_payments(
         &self,
         payment_type: PaymentType,
@@ -1433,31 +1459,35 @@ async fn close_channel_with_largest_balance() {
         .map(|(i, _)| i);
 
     if let Some(i) = max_index {
-        let c = channels.remove(i);
-        CHANNELS_PENDING_CLOSE.lock().unwrap().push(c.clone());
-
-        let now = Utc::now().timestamp();
-        PAYMENTS.lock().unwrap().push(Payment {
-            id: now.to_string(),
-            payment_type: PaymentType::ClosedChannel,
-            payment_time: now,
-            amount_msat: c.local_balance_msat,
-            fee_msat: 0,
-            status: PaymentStatus::Pending,
-            error: None,
-            description: None,
-            details: PaymentDetails::ClosedChannel {
-                data: ClosedChannelPaymentDetails {
-                    state: ChannelState::PendingClose,
-                    funding_txid: TX_ID_DUMMY.to_string(),
-                    short_channel_id: Some("mock_short_channel_id".to_string()),
-                    closing_txid: Some(TX_ID_DUMMY.to_string()),
-                },
-            },
-            metadata: None,
-        })
+        let channel = channels.remove(i);
+        close_channel(channel);
     }
 }
+
+fn close_channel(channel: Channel) {
+    let now = Utc::now().timestamp();
+    PAYMENTS.lock().unwrap().push(Payment {
+        id: now.to_string(),
+        payment_type: PaymentType::ClosedChannel,
+        payment_time: now,
+        amount_msat: channel.local_balance_msat,
+        fee_msat: 0,
+        status: PaymentStatus::Pending,
+        error: None,
+        description: None,
+        details: PaymentDetails::ClosedChannel {
+            data: ClosedChannelPaymentDetails {
+                state: ChannelState::PendingClose,
+                funding_txid: TX_ID_DUMMY.to_string(),
+                short_channel_id: Some("mock_short_channel_id".to_string()),
+                closing_txid: Some(TX_ID_DUMMY.to_string()),
+            },
+        },
+        metadata: None,
+    });
+    CHANNELS_PENDING_CLOSE.lock().unwrap().push(channel);
+}
+
 fn get_onchain_balance_msat() -> u64 {
     CHANNELS_CLOSED
         .lock()
@@ -1476,7 +1506,7 @@ fn get_pending_onchain_balance_msat() -> u64 {
         .sum()
 }
 
-async fn confirm_pending_channel_closes() {
+fn confirm_pending_channel_closes() {
     CHANNELS_CLOSED
         .lock()
         .unwrap()
