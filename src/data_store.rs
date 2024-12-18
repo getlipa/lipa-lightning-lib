@@ -6,7 +6,7 @@ use crate::{EnableStatus, ExchangeRate, OfferKind, PocketOfferError, TzConfig, U
 use chrono::{DateTime, Utc};
 use crow::FiatTopupSetupInfo;
 use crow::{PermanentFailureCode, TemporaryFailureCode};
-use perro::MapToError;
+use perro::{ensure, invalid_input, MapToError};
 use rusqlite::{backup, params, Connection, OptionalExtension, Params, Row};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -250,7 +250,8 @@ impl DataStore {
         personal_note: Option<&str>,
     ) -> Result<()> {
         self.backup_status = BackupStatus::WaitingForBackup;
-        self.conn
+        let number_of_rows = self
+            .conn
             .execute(
                 "
                 UPDATE payments \
@@ -259,7 +260,10 @@ impl DataStore {
                 params![personal_note, payment_hash],
             )
             .map_to_permanent_failure("Failed to store personal note in local db")?;
-
+        ensure!(
+            number_of_rows == 1,
+            invalid_input("Payment not found to set personal note")
+        );
         Ok(())
     }
 
