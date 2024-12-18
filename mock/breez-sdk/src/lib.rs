@@ -47,6 +47,7 @@ use breez_sdk_core::error::{
 };
 use breez_sdk_core::lnurl::pay::{LnUrlPayResult, LnUrlPaySuccessData};
 use breez_sdk_core::InputType::Bolt11;
+use breez_sdk_core::PaymentDetails::Ln;
 pub use breez_sdk_core::{
     parse_invoice, BitcoinAddressData, BreezEvent, ClosedChannelPaymentDetails, ConnectRequest,
     EnvironmentType, EventListener, GreenlightCredentials, GreenlightNodeConfig, HealthCheckStatus,
@@ -513,6 +514,15 @@ impl BreezServices {
             "swaps.expire" | "se" => {
                 self.expire_swap().await?;
             }
+            "clearwallet.issuetx" | "ci" => {
+                self.issue_clear_wallet_tx().await;
+            }
+            "clearwallet.confirmtx" | "cc" => {
+                self.confirm_clear_wallet_tx().await;
+            }
+            "clearwallet.simulate_cancellation" | "cs" => {
+                self.simulate_clear_wallet_cancellation().await;
+            }
             _ => {}
         }
 
@@ -958,7 +968,7 @@ impl BreezServices {
             lockup_txid: Some("LOCKUP-TXID-DUMMY".to_string()),
             claim_txid: Some("CLAIM-TXID-DUMMY".to_string()),
             onchain_amount_sat: req.prepare_res.sender_amount_sat,
-            status: ReverseSwapStatus::Initial,
+            status: ReverseSwapStatus::InProgress,
         };
 
         let (invoice, preimage, payment_hash) = self.create_invoice(amount_msat, "");
@@ -982,7 +992,9 @@ impl BreezServices {
         PAYMENTS.lock().unwrap().push(payment.clone());
 
         self.event_listener
-            .on_event(BreezEvent::PaymentSucceed { details: payment });
+            .on_event(BreezEvent::ReverseSwapUpdated {
+                details: reverse_swap_info.clone(),
+            });
 
         Ok(PayOnchainResponse { reverse_swap_info })
     }
@@ -1181,6 +1193,25 @@ impl BreezServices {
         }
 
         Ok(())
+    }
+    async fn issue_clear_wallet_tx(&self) {
+        Self::change_status_of_all_reverse_swaps(ReverseSwapStatus::CompletedSeen).await;
+    }
+    async fn confirm_clear_wallet_tx(&self) {
+        Self::change_status_of_all_reverse_swaps(ReverseSwapStatus::CompletedConfirmed).await;
+    }
+    async fn simulate_clear_wallet_cancellation(&self) {
+        Self::change_status_of_all_reverse_swaps(ReverseSwapStatus::Cancelled).await;
+    }
+
+    async fn change_status_of_all_reverse_swaps(status: ReverseSwapStatus) {
+        PAYMENTS.lock().unwrap().iter_mut().for_each(|payment| {
+            if let Ln { ref mut data } = payment.details {
+                if let Some(reverse_swap_info) = &mut data.reverse_swap_info {
+                    reverse_swap_info.status = status;
+                }
+            }
+        });
     }
 
     async fn expire_swap(&self) -> Result<()> {
