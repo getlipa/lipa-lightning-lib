@@ -498,7 +498,7 @@ impl BreezServices {
             "pay.err.connectivity" | "pe.connectivity" => {
                 *PAYMENT_OUTCOME.lock().await = PaymentOutcome::ServiceConnectivity
             }
-            "mimic.activities" | "ma" => self.simulate_activities(),
+            "mimic.activities" | "ma" => self.simulate_activities(req.amount_msat),
             "mimic.pay2addr" | "mp" => self.simulate_payments(PaymentType::Sent, 10, true).await,
             "channels.close_largest" | "cclose" => close_channel_with_largest_balance().await,
             "channels.confirm_pending_closes" | "cconf" => confirm_pending_channel_closes(),
@@ -1201,18 +1201,18 @@ impl BreezServices {
         Ok(())
     }
 
-    fn simulate_activities(&self) {
-        self.simulate_channle_closes();
+    fn simulate_activities(&self, amount_msat: u64) {
+        self.simulate_channle_closes(amount_msat);
     }
 
-    fn simulate_channle_closes(&self) {
+    fn simulate_channle_closes(&self, amount_msat: u64) {
         close_channel(Channel {
             capacity_msat: 10_000_000,
             local_balance_msat: 0,
         });
         close_channel(Channel {
             capacity_msat: 10_000_000,
-            local_balance_msat: 5_000_000,
+            local_balance_msat: amount_msat,
         });
         confirm_pending_channel_closes();
 
