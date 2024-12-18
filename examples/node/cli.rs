@@ -255,24 +255,8 @@ pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
                     }
                 }
                 "sweep" => {
-                    let address = words
-                        .next()
-                        .ok_or_else(|| "Address is required".to_string());
-
-                    let address = match address {
-                        Ok(a) => a.to_string(),
-                        Err(e) => {
-                            println!("{}", e.red());
-                            return;
-                        }
-                    };
-                    match sweep(node, address.clone()) {
-                        Ok(txid) => {
-                            println!();
-                            println!("Transaction Id: {txid}");
-                            println!("Payout address: {address}")
-                        }
-                        Err(message) => println!("{}", format!("{message:#}").red()),
+                    if let Err(message) = sweep(node, &mut words) {
+                        println!("{}", format!("{message:#}").red());
                     }
                 }
                 "clearwalletinfo" => {
@@ -1451,10 +1435,25 @@ fn set_personal_note(node: &LightningNode, words: &mut dyn Iterator<Item = &str>
     Ok(())
 }
 
-fn sweep(node: &LightningNode, address: String) -> Result<String> {
-    let address_data = get_bitcoin_address_data(node.util().decode_data(address)?)?;
+fn sweep(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
+    let address = words.next().ok_or(anyhow!("Address is required"))?;
+    let address_data = node.util().decode_data(address.to_string())?;
+    let address_data = get_bitcoin_address_data(address_data)?;
     let sweep_info = node.onchain().channel_close().prepare_sweep(address_data)?;
-    Ok(node.onchain().channel_close().sweep(sweep_info)?)
+    println!("     Payout address: {}", sweep_info.address);
+    println!(
+        "             Amount: {}",
+        amount_to_string(&sweep_info.amount)
+    );
+    println!(
+        "On-chain fee amount: {}",
+        amount_to_string(&sweep_info.onchain_fee_amount)
+    );
+    println!("  On-chain fee rate: {}", sweep_info.onchain_fee_rate);
+
+    let txid = node.onchain().channel_close().sweep(sweep_info)?;
+    println!("     Transaction Id: {txid}");
+    Ok(())
 }
 
 fn clear_wallet_info(node: &LightningNode) -> Result<()> {

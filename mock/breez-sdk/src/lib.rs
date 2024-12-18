@@ -1241,7 +1241,7 @@ impl BreezServices {
                 let prefix: Vec<u8> = (0..10).map(|_| rng.gen_range(b'a'..=b'z')).collect();
                 Some(format!(
                     "{}@wallet.lipa.swiss",
-                    String::from_utf8(prefix.to_vec()).unwrap()
+                    String::from_utf8(prefix).unwrap()
                 ))
             } else {
                 None
