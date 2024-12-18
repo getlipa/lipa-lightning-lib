@@ -51,11 +51,18 @@ impl EventListener for LipaEventListener {
                         .swap_received(hex::encode(details.payment_hash));
                 }
             }
-            BreezEvent::ReverseSwapUpdated { details } => {
-                if details.status == ReverseSwapStatus::CompletedConfirmed {
+            BreezEvent::ReverseSwapUpdated { details } => match details.status {
+                ReverseSwapStatus::CompletedSeen => {
                     self.events_callback.reverse_swap_sent(details.id);
                 }
-            }
+                ReverseSwapStatus::CompletedConfirmed => {
+                    self.events_callback.reverse_swap_settled(details.id);
+                }
+                ReverseSwapStatus::Cancelled => {
+                    self.events_callback.reverse_swap_cancelled(details.id);
+                }
+                _ => {}
+            },
         }
     }
 }

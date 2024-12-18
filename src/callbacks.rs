@@ -41,12 +41,27 @@ pub trait EventsCallback: Send + Sync {
     ///   this swap.
     fn swap_received(&self, payment_hash: String);
 
-    /// This callback will be called when a reverse swap has completed.
+    /// This callback will be called when a TX of an on-chain send has been broadcasted to the Bitcoin network.
     ///
     /// Parameters:
     /// * `reverse_swap_id` - can be used to find the [`Activity`](crate::Activity) corresponding to
     ///   this swap using [`get_by_reverse_swap`](crate::Activities::get_by_reverse_swap).
     fn reverse_swap_sent(&self, reverse_swap_id: String);
+
+    /// This callback will be called when an on-chain send has been confirmed on-chain.
+    ///
+    /// Parameters:
+    /// * `reverse_swap_id` - can be used to find the [`Activity`](crate::Activity) corresponding to
+    ///   this swap using [`get_by_reverse_swap`](crate::Activities::get_by_reverse_swap).
+    fn reverse_swap_settled(&self, reverse_swap_id: String);
+
+    /// This callback will be called when an on-chain send has failed and is thus cancelled.
+    /// The initial invoice funds are unlocked for the sender. (payment failed)
+    ///
+    /// Parameters:
+    /// * `reverse_swap_id` - can be used to find the [`Activity`](crate::Activity) corresponding to
+    ///   this swap using [`get_by_reverse_swap`](crate::Activities::get_by_reverse_swap).
+    fn reverse_swap_cancelled(&self, reverse_swap_id: String);
 
     /// This callback will be called when a change to the Breez services health is noticed
     ///

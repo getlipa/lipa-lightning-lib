@@ -499,6 +499,8 @@ callback interface EventsCallback {
     void channel_closed(string channel_id, string reason);
     void swap_received(string payment_hash);
     void reverse_swap_sent(string reverse_swap_id);
+    void reverse_swap_settled(string reverse_swap_id);
+    void reverse_swap_cancelled(string reverse_swap_id);
     void breez_health_status_changed_to(BreezHealthCheckStatus status);
     void synced();
 };
