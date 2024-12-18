@@ -144,8 +144,7 @@ impl ActionsRequired {
         self.support
             .data_store
             .lock_unwrap()
-            .store_hidden_channel_close_onchain_funds_amount_sat(onchain_balance_sat)?;
-        Ok(())
+            .store_hidden_channel_close_onchain_funds_amount_sat(onchain_balance_sat)
     }
 
     /// Hides the unresolved failed swap action required item in case the amount cannot be
