@@ -1427,9 +1427,10 @@ fn payment_uuid(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
 
 fn set_personal_note(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> Result<()> {
     let payment_hash = words.next().ok_or(anyhow!("Payment Hash is required"))?;
-    let note = words.collect::<Vec<_>>().join(" ").to_string();
+    let note = words.collect::<Vec<_>>().join(" ");
+
     node.activities()
-        .set_personal_note(payment_hash.to_string(), note)?;
+        .set_personal_note(payment_hash.to_string(), note.to_string())?;
 
     Ok(())
 }
