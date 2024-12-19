@@ -1195,20 +1195,27 @@ impl BreezServices {
         Ok(())
     }
     async fn issue_clear_wallet_tx(&self) {
-        Self::change_status_of_all_reverse_swaps(ReverseSwapStatus::CompletedSeen).await;
+        self.change_status_of_all_reverse_swaps(ReverseSwapStatus::CompletedSeen)
+            .await;
     }
     async fn confirm_clear_wallet_tx(&self) {
-        Self::change_status_of_all_reverse_swaps(ReverseSwapStatus::CompletedConfirmed).await;
+        self.change_status_of_all_reverse_swaps(ReverseSwapStatus::CompletedConfirmed)
+            .await;
     }
     async fn simulate_clear_wallet_cancellation(&self) {
-        Self::change_status_of_all_reverse_swaps(ReverseSwapStatus::Cancelled).await;
+        self.change_status_of_all_reverse_swaps(ReverseSwapStatus::Cancelled)
+            .await;
     }
 
-    async fn change_status_of_all_reverse_swaps(status: ReverseSwapStatus) {
+    async fn change_status_of_all_reverse_swaps(&self, status: ReverseSwapStatus) {
         PAYMENTS.lock().unwrap().iter_mut().for_each(|payment| {
             if let Ln { ref mut data } = payment.details {
                 if let Some(reverse_swap_info) = &mut data.reverse_swap_info {
                     reverse_swap_info.status = status;
+                    self.event_listener
+                        .on_event(BreezEvent::ReverseSwapUpdated {
+                            details: reverse_swap_info.clone(),
+                        });
                 }
             }
         });
