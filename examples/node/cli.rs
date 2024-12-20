@@ -1322,7 +1322,18 @@ fn print_activity(activity: Activity) -> Result<()> {
             if let Some(incoming_payment_info) = incoming_payment_info {
                 print_incoming_payment(incoming_payment_info)?;
             }
-            println!("      Swap:            {swap_info:?}");
+            let created_at: DateTime<Utc> = swap_info.created_at.time.into();
+            let timezone = FixedOffset::east_opt(swap_info.created_at.timezone_utc_offset_secs)
+                .ok_or(anyhow!("east_opt failed"))?;
+            let created_at = created_at
+                .with_timezone(&timezone)
+                .format("%d/%m/%Y %T UTC");
+            println!("      Swap address:     {}", swap_info.bitcoin_address);
+            println!("      Swap created at:  {created_at}");
+            println!(
+                "      Swap amount:      {}",
+                amount_to_string(&swap_info.paid_amount)
+            );
             Ok(())
         }
         Activity::ReverseSwap {
