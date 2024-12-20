@@ -315,7 +315,6 @@ pub enum FeatureFlag {
 pub struct LightningNode {
     sdk: Arc<BreezServices>,
     auth: Arc<Auth>,
-    offer_manager: Arc<OfferManager>,
     rt: Arc<AsyncRuntime>,
     node_config: LightningNodeConfig,
     activities: Arc<Activities>,
@@ -552,7 +551,6 @@ impl LightningNode {
         Ok(LightningNode {
             sdk,
             auth,
-            offer_manager,
             rt,
             node_config,
             activities,
@@ -1047,11 +1045,9 @@ impl LightningNode {
     /// Topup id can be obtained from [`OfferKind::Pocket`].
     ///
     /// Requires network: **yes**
-    #[deprecated = "fiat_topup().dismiss_topup() should be used instead"]
+    #[deprecated = "actions_required().dismiss_topup() should be used instead"]
     pub fn hide_topup(&self, id: String) -> Result<()> {
-        self.offer_manager
-            .hide_topup(id)
-            .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)
+        self.actions_required().dismiss_topup(id)
     }
 
     /// List action required items.
