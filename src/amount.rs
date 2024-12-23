@@ -14,10 +14,6 @@ impl Sats {
             msats: sats * 1000,
         }
     }
-
-    pub(crate) fn msats(&self) -> Msats {
-        Msats { msats: self.msats }
-    }
 }
 
 pub(crate) struct Msats {
@@ -89,6 +85,12 @@ pub struct FiatValue {
 pub struct Amount {
     pub sats: u64,
     pub fiat: Option<FiatValue>,
+}
+
+impl Amount {
+    pub fn to_msats(&self) -> u64 {
+        self.sats.as_sats().msats
+    }
 }
 
 pub(crate) trait ToAmount {

@@ -96,7 +96,7 @@ impl Swap {
         get_onchain_resolving_fees(
             &self.support,
             self,
-            failed_swap_info.amount.sats.as_sats().msats(),
+            failed_swap_info.amount.to_msats().as_msats(),
             prepare_onchain_tx,
         )
     }

@@ -233,13 +233,13 @@ impl FiatTopup {
         .max_withdrawable;
 
         ensure!(
-            max_withdrawable_msats <= offer.amount.sats.as_sats().msats,
+            max_withdrawable_msats <= offer.amount.to_msats(),
             permanent_failure("LNURLw provides more")
         );
 
         let exchange_rate = self.support.get_exchange_rate();
 
-        Ok((offer.amount.sats.as_sats().msats - max_withdrawable_msats)
+        Ok((offer.amount.to_msats() - max_withdrawable_msats)
             .as_msats()
             .to_amount_up(&exchange_rate))
     }

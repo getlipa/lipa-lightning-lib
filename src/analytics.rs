@@ -1,4 +1,3 @@
-use crate::amount::AsSats;
 use crate::async_runtime::Handle;
 use crate::errors::Result;
 use crate::key_derivation::derive_analytics_key;
@@ -68,7 +67,7 @@ impl AnalyticsInterceptor {
             return;
         }
 
-        let invoice_amount = invoice_details.amount.map(|a| a.sats.as_sats().msats);
+        let invoice_amount = invoice_details.amount.map(|a| a.to_msats());
         let paid_amount_msat = match paid_amount.or(invoice_amount) {
             Some(a) => a,
             None => {

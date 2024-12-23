@@ -85,7 +85,7 @@ impl Lightning {
             MaxRoutingFeeMode::Relative { max_fee_permyriad } => {
                 Permyriad(max_fee_permyriad).of(&amount).msats
             }
-            MaxRoutingFeeMode::Absolute { max_fee_amount } => max_fee_amount.sats.as_sats().msats,
+            MaxRoutingFeeMode::Absolute { max_fee_amount } => max_fee_amount.to_msats(),
         };
 
         let node_state = self.support.sdk.node_info().map_to_runtime_error(
