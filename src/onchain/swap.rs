@@ -13,7 +13,7 @@ use breez_sdk_core::{
     BitcoinAddressData, Network, OpeningFeeParams, PrepareRefundRequest, ReceiveOnchainRequest,
     RefundRequest,
 };
-use perro::{ensure, runtime_error, MapToError};
+use perro::{ensure, permanent_failure, runtime_error, MapToError};
 use std::sync::Arc;
 
 pub struct Swap {
@@ -133,6 +133,10 @@ impl Swap {
 
         let rate = self.support.get_exchange_rate();
         let onchain_fee = response.refund_tx_fee_sat.as_sats().to_amount_up(&rate);
+        ensure!(
+            failed_swap_info.amount.sats > onchain_fee.sats,
+            permanent_failure("Swap amount is below fees")
+        );
         let recovered_amount = (failed_swap_info.amount.sats - onchain_fee.sats)
             .as_sats()
             .to_amount_down(&rate);
