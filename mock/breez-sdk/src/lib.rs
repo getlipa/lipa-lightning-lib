@@ -102,6 +102,7 @@ lazy_static! {
     static ref PAYMENT_OUTCOME: Mutex<PaymentOutcome> = Mutex::new(PaymentOutcome::Success);
     static ref PAYMENTS: std::sync::Mutex<Vec<Payment>> = std::sync::Mutex::new(Vec::new());
     static ref SWAPS: Mutex<Vec<SwapInfo>> = Mutex::new(Vec::new());
+    static ref PENDING_LNURL_WITHDRAWALS: Mutex<Vec<MockPayment>> = Mutex::new(Vec::new());
     static ref CHANNELS: std::sync::Mutex<Vec<Channel>> = std::sync::Mutex::new(Vec::new());
     static ref CHANNELS_PENDING_CLOSE: std::sync::Mutex<Vec<Channel>> =
         std::sync::Mutex::new(Vec::new());
@@ -401,7 +402,7 @@ impl BreezServices {
         let (invoice, preimage, payment_hash) =
             self.create_invoice(req.amount_msat, &req.description.unwrap_or_default());
 
-        let payment = create_payment(MockPayment {
+        let payment = MockPayment {
             payment_type: PaymentType::Received,
             amount_msat: req.amount_msat - lsp_fee_msat,
             fee_msat: lsp_fee_msat,
@@ -417,17 +418,9 @@ impl BreezServices {
             lnurl_withdraw_endpoint: Some("https://lnurl.dummy.com/lnurl-withdraw".to_string()),
             swap_info: None,
             reverse_swap_info: None,
-        });
+        };
 
-        PAYMENTS.lock().unwrap().push(payment.clone());
-
-        self.event_listener.on_event(BreezEvent::InvoicePaid {
-            details: InvoicePaidDetails {
-                payment_hash: payment_hash.clone(),
-                bolt11: invoice.clone(),
-                payment: Some(payment),
-            },
-        });
+        PENDING_LNURL_WITHDRAWALS.lock().await.push(payment);
 
         Ok(LnUrlWithdrawResult::Ok {
             data: breez_sdk_core::LnUrlWithdrawSuccessData {
@@ -447,6 +440,29 @@ impl BreezServices {
                 },
             },
         })
+    }
+
+    pub async fn settle_ln_url_withdrawals(&self) {
+        let pending_withdrawals = {
+            let mut lock = PENDING_LNURL_WITHDRAWALS.lock().await;
+            std::mem::take(&mut *lock)
+        };
+
+        for mock_payment in pending_withdrawals.into_iter() {
+            let payment_hash = mock_payment.payment_hash.clone();
+            let bolt11 = mock_payment.bolt11.clone();
+            let payment = create_payment(mock_payment);
+
+            PAYMENTS.lock().unwrap().push(payment.clone());
+
+            self.event_listener.on_event(BreezEvent::InvoicePaid {
+                details: InvoicePaidDetails {
+                    payment_hash,
+                    bolt11,
+                    payment: Some(payment),
+                },
+            });
+        }
     }
 
     pub async fn receive_payment(
@@ -522,6 +538,9 @@ impl BreezServices {
             }
             "clearwallet.simulate_cancellation" | "cs" => {
                 self.simulate_clear_wallet_cancellation().await;
+            }
+            "topup.settle" | "ts" => {
+                self.settle_ln_url_withdrawals().await;
             }
             _ => {}
         }
