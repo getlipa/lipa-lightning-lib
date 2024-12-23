@@ -1170,7 +1170,7 @@ fn collect_last_offer(node: &LightningNode) -> Result<()> {
         .max_by_key(|o| o.created_at)
         .ok_or(anyhow!("No uncompleted offers available"))?;
     let payment_hash = node.fiat_topup().request_collection(offer)?;
-    println!("Collected offer payment hash: {payment_hash}");
+    println!("Started offer collection process for offer with payment hash: {payment_hash}");
 
     Ok(())
 }
