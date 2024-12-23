@@ -395,9 +395,7 @@ impl BreezServices {
         &self,
         req: LnUrlWithdrawRequest,
     ) -> Result<LnUrlWithdrawResult, LnUrlWithdrawError> {
-        let lsp_fee_msat = receive_payment_mock_channels(req.amount_msat)
-            .await
-            .map_err(|e| LnUrlWithdrawError::InvalidAmount { err: e.to_string() })?;
+        let lsp_fee_msat = calculate_lsp_opening_fee(req.amount_msat).await;
 
         let (invoice, preimage, payment_hash) =
             self.create_invoice(req.amount_msat, &req.description.unwrap_or_default());
@@ -1454,11 +1452,8 @@ async fn receive_payment_mock_channels(amount_msat: u64) -> Result<u64> {
         }
         Ok(0)
     } else {
+        let lsp_fee = calculate_lsp_opening_fee(amount_msat).await;
         let mut channels = CHANNELS.lock().unwrap();
-        let lsp_fee = max(
-            OPENING_FEE_PARAMS_MIN_MSAT,
-            amount_msat * OPENING_FEE_PARAMS_PROPORTIONAL as u64 / 10_000,
-        );
         if amount_msat < lsp_fee {
             return Err(anyhow!(
                 "Invalid amount_msat ({amount_msat}) - not enough to cover channel opening fees ({lsp_fee})"
@@ -1469,6 +1464,17 @@ async fn receive_payment_mock_channels(amount_msat: u64) -> Result<u64> {
             local_balance_msat: amount_msat - lsp_fee,
         });
         Ok(lsp_fee)
+    }
+}
+
+async fn calculate_lsp_opening_fee(amount_msat: u64) -> u64 {
+    if amount_msat <= get_inbound_liquidity_msat() {
+        0
+    } else {
+        max(
+            OPENING_FEE_PARAMS_MIN_MSAT,
+            amount_msat * OPENING_FEE_PARAMS_PROPORTIONAL as u64 / 10_000,
+        )
     }
 }
 
