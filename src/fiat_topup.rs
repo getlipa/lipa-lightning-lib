@@ -277,7 +277,47 @@ impl FiatTopup {
                 amount_msat: collectable_amount,
                 description: None,
             })) {
-            Ok(breez_sdk_core::LnUrlWithdrawResult::Ok { data }) => data.invoice.payment_hash,
+            Ok(breez_sdk_core::LnUrlWithdrawResult::Ok { data }) => {
+                match offer.offer_kind.clone() {
+                    OfferKind::Pocket { id, .. } => self
+                        .support
+                        .offer_manager
+                        .hide_topup(id)
+                        .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?,
+                };
+                self.support
+                    .store_payment_info(&data.invoice.payment_hash, Some(offer.offer_kind.clone()));
+                let channel_opening_fee_msat = if let Some(payment_amount_msat) =
+                    data.invoice.amount_msat
+                {
+                    let lsp_fee_params = {
+                        self.support
+                            .task_manager
+                            .lock_unwrap()
+                            .get_cheaper_lsp_fee()?
+                    };
+                    let lsp_fee_calculation_result = self.support.calculate_lsp_fee_for_amount(
+                        payment_amount_msat.as_msats().to_amount_up(&None).sats,
+                        lsp_fee_params,
+                    )?;
+                    Some(lsp_fee_calculation_result.lsp_fee.to_msats())
+                } else {
+                    None
+                };
+
+                self.support
+                    .data_store
+                    .lock_unwrap()
+                    .store_created_invoice(
+                        &data.invoice.payment_hash,
+                        &data.invoice.bolt11,
+                        &channel_opening_fee_msat,
+                        data.invoice.timestamp + data.invoice.expiry,
+                    )
+                    .map_to_permanent_failure("Failed to persist invoice in lnurl-withdraw flow")?;
+
+                data.invoice.payment_hash
+            }
             Ok(breez_sdk_core::LnUrlWithdrawResult::Timeout { .. }) => runtime_error!(
                 RuntimeErrorCode::OfferServiceUnavailable,
                 "Failed to withdraw offer due to timeout on submitting invoice"
