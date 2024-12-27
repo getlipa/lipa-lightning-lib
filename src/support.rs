@@ -8,8 +8,8 @@ use crate::phone_number::PhoneNumberPrefixParser;
 use crate::task_manager::TaskManager;
 use crate::util::LogIgnoreError;
 use crate::{
-    CalculateLspFeeResponseV2, ChannelsInfo, ExchangeRate, LightningNodeConfig, NodeInfo,
-    OfferKind, RuntimeErrorCode, UserPreferences,
+    CalculateLspFeeResponseV2, ChannelsInfo, ExchangeRate, LightningNodeConfig, NodeInfo, Offer,
+    RuntimeErrorCode, UserPreferences,
 };
 use breez_sdk_core::{
     BreezServices, OpeningFeeParams, ReportIssueRequest, ReportPaymentFailureDetails,
@@ -170,7 +170,7 @@ impl Support {
             .log_ignore_error(Level::Warn, "Failed to report issue");
     }
 
-    pub fn store_payment_info(&self, hash: &str, offer: Option<OfferKind>) {
+    pub fn store_payment_info(&self, hash: &str, offer: Option<Offer>) {
         let user_preferences = self.user_preferences.lock_unwrap().clone();
         let exchange_rates = self.get_exchange_rates();
         self.data_store

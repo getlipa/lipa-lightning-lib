@@ -640,7 +640,7 @@ interface MaxRoutingFeeMode {
 interface Activity {
     IncomingPayment(IncomingPaymentInfo incoming_payment_info);
     OutgoingPayment(OutgoingPaymentInfo outgoing_payment_info);
-    OfferClaim(IncomingPaymentInfo incoming_payment_info, OfferKind offer_kind);
+    OfferClaim(IncomingPaymentInfo incoming_payment_info, Offer offer);
     Swap(IncomingPaymentInfo? incoming_payment_info, SwapInfo swap_info);
     ReverseSwap(OutgoingPaymentInfo outgoing_payment_info, ReverseSwapInfo reverse_swap_info);
     ChannelClose(ChannelCloseInfo channel_close_info);
@@ -748,7 +748,7 @@ interface ActionRequiredItem {
 };
 
 dictionary OfferInfo {
-    OfferKind offer_kind;
+    Offer offer;
     Amount amount;
     string? lnurlw;
     timestamp created_at;
@@ -787,18 +787,15 @@ interface PocketOfferError {
     );
 };
 
-[Enum]
-interface OfferKind {
-    Pocket(
-        string id,
-        ExchangeRate exchange_rate,
-        u64 topup_value_minor_units,
-        u64? topup_value_sats,
-        u64 exchange_fee_minor_units,
-        u16 exchange_fee_rate_permyriad,
-        Amount? lightning_payout_fee,
-        PocketOfferError? error
-    );
+dictionary Offer {
+    string id;
+    ExchangeRate exchange_rate;
+    u64 topup_value_minor_units;
+    u64? topup_value_sats;
+    u64 exchange_fee_minor_units;
+    u16 exchange_fee_rate_permyriad;
+    Amount? lightning_payout_fee;
+    PocketOfferError? error;
 };
 
 enum OfferStatus {

@@ -83,7 +83,7 @@ pub use crate::node_config::{
     RemoteServicesConfig, TzConfig, TzTime,
 };
 pub use crate::notification_handling::{handle_notification, Notification, NotificationToggles};
-pub use crate::offer::{OfferInfo, OfferKind, OfferStatus};
+pub use crate::offer::{Offer, OfferInfo, OfferStatus};
 pub use crate::payment::{
     IncomingPaymentInfo, OutgoingPaymentInfo, PaymentInfo, PaymentState, Recipient,
 };
@@ -1042,7 +1042,7 @@ impl LightningNode {
     /// Hides the topup with the given id. Can be called on expired topups so that they stop being returned
     /// by [`LightningNode::query_uncompleted_offers`].
     ///
-    /// Topup id can be obtained from [`OfferKind::Pocket`].
+    /// Topup id can be obtained from [`Offer`].
     ///
     /// Requires network: **yes**
     #[deprecated = "actions_required().dismiss_topup() should be used instead"]
@@ -1684,40 +1684,16 @@ pub(crate) fn enable_backtrace() {
     env::set_var("RUST_BACKTRACE", "1");
 }
 
-fn fill_payout_fee(
-    offer: OfferKind,
-    requested_amount: Msats,
-    rate: &Option<ExchangeRate>,
-) -> OfferKind {
-    match offer {
-        OfferKind::Pocket {
-            id,
-            exchange_rate,
-            topup_value_minor_units,
-            topup_value_sats,
-            exchange_fee_minor_units,
-            exchange_fee_rate_permyriad,
-            lightning_payout_fee: _,
-            error,
-        } => {
-            let lightning_payout_fee = topup_value_sats.map(|v| {
-                (v.as_sats().msats - requested_amount.msats)
-                    .as_msats()
-                    .to_amount_up(rate)
-            });
+fn fill_payout_fee(offer: Offer, requested_amount: Msats, rate: &Option<ExchangeRate>) -> Offer {
+    let lightning_payout_fee = offer.topup_value_sats.map(|v| {
+        (v.as_sats().msats - requested_amount.msats)
+            .as_msats()
+            .to_amount_up(rate)
+    });
 
-            OfferKind::Pocket {
-                id,
-                exchange_rate,
-                topup_value_minor_units,
-                topup_value_sats,
-                exchange_fee_minor_units,
-                exchange_fee_rate_permyriad,
-                lightning_payout_fee,
-                error,
-            }
-        }
-    }
+    let mut offer = offer.clone();
+    offer.lightning_payout_fee = lightning_payout_fee;
+    offer
 }
 
 // TODO provide corrupted acticity information partially instead of hiding it

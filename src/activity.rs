@@ -1,5 +1,5 @@
 use crate::payment::{IncomingPaymentInfo, OutgoingPaymentInfo, PaymentInfo};
-use crate::{Amount, OfferKind, SwapInfo, TzTime};
+use crate::{Amount, Offer, SwapInfo, TzTime};
 
 use crate::reverse_swap::ReverseSwapInfo;
 use breez_sdk_core::ReverseSwapStatus;
@@ -23,7 +23,7 @@ pub enum Activity {
     // Topup, referrals.
     OfferClaim {
         incoming_payment_info: IncomingPaymentInfo,
-        offer_kind: OfferKind,
+        offer: Offer,
     },
     /// An On-chain to Lightning swap.
     ///

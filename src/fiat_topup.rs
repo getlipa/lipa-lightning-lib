@@ -3,7 +3,7 @@ use crate::errors::Result;
 use crate::locker::Locker;
 use crate::support::Support;
 use crate::{
-    filter_out_and_log_corrupted_activities, Activities, Activity, Amount, OfferInfo, OfferKind,
+    filter_out_and_log_corrupted_activities, Activities, Activity, Amount, Offer, OfferInfo,
     OfferStatus, PaymentState, RuntimeErrorCode,
 };
 use breez_sdk_core::{
@@ -278,15 +278,12 @@ impl FiatTopup {
                 description: None,
             })) {
             Ok(breez_sdk_core::LnUrlWithdrawResult::Ok { data }) => {
-                match offer.offer_kind.clone() {
-                    OfferKind::Pocket { id, .. } => self
-                        .support
-                        .offer_manager
-                        .hide_topup(id)
-                        .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?,
-                };
                 self.support
-                    .store_payment_info(&data.invoice.payment_hash, Some(offer.offer_kind.clone()));
+                    .offer_manager
+                    .hide_topup(offer.offer.id.clone())
+                    .map_runtime_error_to(RuntimeErrorCode::OfferServiceUnavailable)?;
+                self.support
+                    .store_payment_info(&data.invoice.payment_hash, Some(offer.offer.clone()));
                 let channel_opening_fee_msat = if let Some(payment_amount_msat) =
                     data.invoice.amount_msat
                 {
@@ -353,8 +350,7 @@ impl FiatTopup {
             }
         };
 
-        self.support
-            .store_payment_info(&hash, Some(offer.offer_kind));
+        self.support.store_payment_info(&hash, Some(offer.offer));
 
         Ok(hash)
     }
@@ -367,7 +363,7 @@ fn filter_out_recently_claimed_topups(
     let pocket_id = |a: Activity| match a {
         Activity::OfferClaim {
             incoming_payment_info: _,
-            offer_kind: OfferKind::Pocket { id, .. },
+            offer: Offer { id, .. },
         } => Some(id),
         _ => None,
     };
@@ -387,8 +383,8 @@ mod tests {
     use crate::fiat_topup::filter_out_recently_claimed_topups;
     use crate::node_config::WithTimezone;
     use crate::{
-        Activity, Amount, ExchangeRate, IncomingPaymentInfo, InvoiceDetails, OfferKind,
-        PaymentInfo, PaymentState, TzConfig,
+        Activity, Amount, ExchangeRate, IncomingPaymentInfo, InvoiceDetails, Offer, PaymentInfo,
+        PaymentState, TzConfig,
     };
     use crow::{TopupInfo, TopupStatus};
     use std::time::SystemTime;
@@ -469,7 +465,7 @@ mod tests {
                 received_on: None,
                 received_lnurl_comment: None,
             },
-            offer_kind: OfferKind::Pocket {
+            offer: Offer {
                 id: "123".to_string(),
                 exchange_rate: ExchangeRate {
                     currency_code: "".to_string(),
@@ -495,7 +491,7 @@ mod tests {
                 received_on: None,
                 received_lnurl_comment: None,
             },
-            offer_kind: OfferKind::Pocket {
+            offer: Offer {
                 id: "234".to_string(),
                 exchange_rate: ExchangeRate {
                     currency_code: "".to_string(),

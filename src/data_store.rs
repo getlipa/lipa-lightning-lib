@@ -1,7 +1,7 @@
 use crate::analytics::AnalyticsConfig;
 use crate::errors::Result;
 use crate::migrations::migrate;
-use crate::{EnableStatus, ExchangeRate, OfferKind, PocketOfferError, TzConfig, UserPreferences};
+use crate::{EnableStatus, ExchangeRate, Offer, PocketOfferError, TzConfig, UserPreferences};
 
 use chrono::{DateTime, Utc};
 use crow::FiatTopupSetupInfo;
@@ -16,7 +16,7 @@ pub(crate) const BACKUP_DB_FILENAME_SUFFIX: &str = ".backup";
 pub(crate) struct LocalPaymentData {
     pub user_preferences: UserPreferences,
     pub exchange_rate: ExchangeRate,
-    pub offer: Option<OfferKind>,
+    pub offer: Option<Offer>,
     pub personal_note: Option<String>,
     pub received_on: Option<String>,
     pub received_lnurl_comment: Option<String>,
@@ -59,7 +59,7 @@ impl DataStore {
         payment_hash: &str,
         user_preferences: UserPreferences,
         exchange_rates: Vec<ExchangeRate>,
-        offer: Option<OfferKind>,
+        offer: Option<Offer>,
         received_on: Option<String>,
         received_lnurl_comment: Option<String>,
     ) -> Result<()> {
@@ -89,7 +89,7 @@ impl DataStore {
         )
         .map_to_permanent_failure("Failed to add payment info to db")?;
 
-        if let Some(OfferKind::Pocket {
+        if let Some(Offer {
             id: pocket_id,
             exchange_rate:
                 ExchangeRate {
@@ -556,8 +556,8 @@ fn exchange_rate_from_row(row: &Row) -> rusqlite::Result<ExchangeRate> {
     })
 }
 
-fn offer_kind_from_row(row: &Row) -> rusqlite::Result<Option<OfferKind>> {
-    if let Some(pocket_id) = row.get(5)? {
+fn offer_from_row(row: &Row) -> rusqlite::Result<Option<Offer>> {
+    if let Some(id) = row.get(5)? {
         let fiat_currency: String = row.get(6)?;
         let rate: u32 = row.get(7)?;
         let exchanged_at: chrono::DateTime<chrono::Utc> = row.get(8)?;
@@ -573,8 +573,8 @@ fn offer_kind_from_row(row: &Row) -> rusqlite::Result<Option<OfferKind>> {
             updated_at: exchanged_at,
         };
 
-        return Ok(Some(OfferKind::Pocket {
-            id: pocket_id,
+        return Ok(Some(Offer {
+            id,
             exchange_rate: exchange_rate.clone(),
             topup_value_minor_units,
             topup_value_sats,
@@ -594,7 +594,7 @@ fn local_payment_data_from_row(row: &Row) -> rusqlite::Result<LocalPaymentData> 
     let fiat_currency: String = row.get(2)?;
     let rate: u32 = row.get(3)?;
     let updated_at: chrono::DateTime<chrono::Utc> = row.get(4)?;
-    let offer = offer_kind_from_row(row)?;
+    let offer = offer_from_row(row)?;
     let personal_note = row.get(14)?;
     let received_on = row.get(15)?;
     let received_lnurl_comment = row.get(16)?;
@@ -706,7 +706,7 @@ fn fiat_topup_info_from_row(row: &Row) -> rusqlite::Result<Option<FiatTopupSetup
 mod tests {
     use crate::data_store::{CreatedInvoice, DataStore};
     use crate::node_config::TzConfig;
-    use crate::{EnableStatus, ExchangeRate, OfferKind, PocketOfferError, UserPreferences};
+    use crate::{EnableStatus, ExchangeRate, Offer, PocketOfferError, UserPreferences};
 
     use crate::analytics::AnalyticsConfig;
     use crow::FiatTopupSetupInfo;
@@ -749,7 +749,7 @@ mod tests {
             rate: 5123,
             updated_at: SystemTime::now(),
         };
-        let offer_kind = OfferKind::Pocket {
+        let offer = Offer {
             id: "id".to_string(),
             exchange_rate: exchange_rate.clone(),
             topup_value_minor_units: 51245,
@@ -767,7 +767,7 @@ mod tests {
             rate: 5123,
             updated_at: SystemTime::now(),
         };
-        let offer_kind_no_error = OfferKind::Pocket {
+        let offer_no_error = Offer {
             id: "id".to_string(),
             exchange_rate: exchange_rate.clone(),
             topup_value_minor_units: 51245,
@@ -795,7 +795,7 @@ mod tests {
                 "hash",
                 user_preferences.clone(),
                 exchange_rates.clone(),
-                Some(offer_kind.clone()),
+                Some(offer.clone()),
                 None,
                 None,
             )
@@ -817,7 +817,7 @@ mod tests {
                 "hash - no error",
                 user_preferences.clone(),
                 exchange_rates,
-                Some(offer_kind_no_error.clone()),
+                Some(offer_no_error.clone()),
                 Some("received_on".to_string()),
                 Some("received_lnurl_comment".to_string()),
             )
@@ -829,7 +829,7 @@ mod tests {
             .is_none());
 
         let local_payment_data = data_store.retrieve_payment_info("hash").unwrap().unwrap();
-        assert_eq!(local_payment_data.offer.unwrap(), offer_kind);
+        assert_eq!(local_payment_data.offer.unwrap(), offer);
         assert_eq!(
             local_payment_data.user_preferences,
             user_preferences.clone()
@@ -859,10 +859,7 @@ mod tests {
             .retrieve_payment_info("hash - no error")
             .unwrap()
             .unwrap();
-        assert_eq!(
-            local_payment_data.offer.as_ref().unwrap(),
-            &offer_kind_no_error
-        );
+        assert_eq!(local_payment_data.offer.as_ref().unwrap(), &offer_no_error);
         assert_eq!(
             local_payment_data.received_on.as_ref().unwrap(),
             "received_on"
@@ -905,133 +902,114 @@ mod tests {
         let mut data_store = DataStore::new(&format!("{TEST_DB_PATH}/{db_name}")).unwrap();
 
         // Temporary failures
-        let offer_kind_no_route = build_offer_kind_with_error(PocketOfferError::TemporaryFailure {
+        let offer_no_route = build_offer_with_error(PocketOfferError::TemporaryFailure {
             code: TemporaryFailureCode::NoRoute,
         });
-        store_payment_with_offer_and_test(
-            offer_kind_no_route,
-            &mut data_store,
-            "offer_kind_no_route",
-        );
+        store_payment_with_offer_and_test(offer_no_route, &mut data_store, "offer_no_route");
 
-        let offer_kind_invoice_expired =
-            build_offer_kind_with_error(PocketOfferError::TemporaryFailure {
-                code: TemporaryFailureCode::InvoiceExpired,
-            });
-        store_payment_with_offer_and_test(
-            offer_kind_invoice_expired,
-            &mut data_store,
-            "offer_kind_invoice_expired",
-        );
-
-        let offer_kind_unexpected =
-            build_offer_kind_with_error(PocketOfferError::TemporaryFailure {
-                code: TemporaryFailureCode::Unexpected,
-            });
-        store_payment_with_offer_and_test(
-            offer_kind_unexpected,
-            &mut data_store,
-            "offer_kind_unexpected",
-        );
-
-        let offer_kind_unknown = build_offer_kind_with_error(PocketOfferError::TemporaryFailure {
-            code: TemporaryFailureCode::Unknown { msg: "Test".into() },
+        let offer_invoice_expired = build_offer_with_error(PocketOfferError::TemporaryFailure {
+            code: TemporaryFailureCode::InvoiceExpired,
         });
         store_payment_with_offer_and_test(
-            offer_kind_unknown,
+            offer_invoice_expired,
             &mut data_store,
-            "offer_kind_unknown",
+            "offer_invoice_expired",
         );
+
+        let offer_unexpected = build_offer_with_error(PocketOfferError::TemporaryFailure {
+            code: TemporaryFailureCode::Unexpected,
+        });
+        store_payment_with_offer_and_test(offer_unexpected, &mut data_store, "offer_unexpected");
+
+        let offer_unknown = build_offer_with_error(PocketOfferError::TemporaryFailure {
+            code: TemporaryFailureCode::Unknown { msg: "Test".into() },
+        });
+        store_payment_with_offer_and_test(offer_unknown, &mut data_store, "offer_unknown");
 
         // Permanent failures
-        let offer_kind_threshold_exceeded =
-            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
-                code: PermanentFailureCode::ThresholdExceeded,
-            });
+        let offer_threshold_exceeded = build_offer_with_error(PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::ThresholdExceeded,
+        });
         store_payment_with_offer_and_test(
-            offer_kind_threshold_exceeded,
+            offer_threshold_exceeded,
             &mut data_store,
-            "offer_kind_threshold_exceeded",
+            "offer_threshold_exceeded",
         );
 
-        let offer_kind_order_inactive =
-            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
-                code: PermanentFailureCode::OrderInactive,
-            });
+        let offer_order_inactive = build_offer_with_error(PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::OrderInactive,
+        });
         store_payment_with_offer_and_test(
-            offer_kind_order_inactive.clone(),
+            offer_order_inactive.clone(),
             &mut data_store,
-            "offer_kind_order_inactive",
+            "offer_order_inactive",
         );
 
-        let offer_kind_companies_unsupported =
-            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
+        let offer_companies_unsupported =
+            build_offer_with_error(PocketOfferError::PermanentFailure {
                 code: PermanentFailureCode::CompaniesUnsupported,
             });
         store_payment_with_offer_and_test(
-            offer_kind_companies_unsupported,
+            offer_companies_unsupported,
             &mut data_store,
-            "offer_kind_companies_unsupported",
+            "offer_companies_unsupported",
         );
 
-        let offer_kind_country_unsuported =
-            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
-                code: PermanentFailureCode::CountryUnsupported,
-            });
+        let offer_country_unsuported = build_offer_with_error(PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::CountryUnsupported,
+        });
         store_payment_with_offer_and_test(
-            offer_kind_country_unsuported,
+            offer_country_unsuported,
             &mut data_store,
-            "offer_kind_country_unsuported",
+            "offer_country_unsuported",
         );
 
-        let offer_kind_other_risk_detected =
-            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
+        let offer_other_risk_detected =
+            build_offer_with_error(PocketOfferError::PermanentFailure {
                 code: PermanentFailureCode::OtherRiskDetected,
             });
         store_payment_with_offer_and_test(
-            offer_kind_other_risk_detected,
+            offer_other_risk_detected,
             &mut data_store,
-            "offer_kind_other_risk_detected",
+            "offer_other_risk_detected",
         );
 
-        let offer_kind_customer_requested =
-            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
-                code: PermanentFailureCode::CustomerRequested,
-            });
+        let offer_customer_requested = build_offer_with_error(PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::CustomerRequested,
+        });
         store_payment_with_offer_and_test(
-            offer_kind_customer_requested,
+            offer_customer_requested,
             &mut data_store,
-            "offer_kind_customer_requested",
+            "offer_customer_requested",
         );
 
-        let offer_kind_account_not_matching =
-            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
+        let offer_account_not_matching =
+            build_offer_with_error(PocketOfferError::PermanentFailure {
                 code: PermanentFailureCode::AccountNotMatching,
             });
         store_payment_with_offer_and_test(
-            offer_kind_account_not_matching,
+            offer_account_not_matching,
             &mut data_store,
-            "offer_kind_account_not_matching",
+            "offer_account_not_matching",
         );
 
-        let offer_kind_payout_expired =
-            build_offer_kind_with_error(PocketOfferError::PermanentFailure {
-                code: PermanentFailureCode::PayoutExpired,
-            });
+        let offer_payout_expired = build_offer_with_error(PocketOfferError::PermanentFailure {
+            code: PermanentFailureCode::PayoutExpired,
+        });
         store_payment_with_offer_and_test(
-            offer_kind_payout_expired,
+            offer_payout_expired,
             &mut data_store,
-            "offer_kind_payout_expired",
+            "offer_payout_expired",
         );
     }
 
-    fn build_offer_kind_with_error(error: PocketOfferError) -> OfferKind {
+    fn build_offer_with_error(error: PocketOfferError) -> Offer {
         let exchange_rate = ExchangeRate {
             currency_code: "EUR".to_string(),
             rate: 5123,
             updated_at: SystemTime::now(),
         };
-        OfferKind::Pocket {
+        Offer {
             id: "id".to_string(),
             exchange_rate: exchange_rate.clone(),
             topup_value_minor_units: 51245,
@@ -1043,7 +1021,7 @@ mod tests {
         }
     }
 
-    fn store_payment_with_offer_and_test(offer: OfferKind, data_store: &mut DataStore, hash: &str) {
+    fn store_payment_with_offer_and_test(offer: Offer, data_store: &mut DataStore, hash: &str) {
         let user_preferences = UserPreferences {
             fiat_currency: "EUR".to_string(),
             timezone_config: TzConfig {

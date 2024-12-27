@@ -19,10 +19,10 @@ use std::path::Path;
 use std::time::SystemTime;
 use uniffi_lipalightninglib::{
     ActionRequiredItem, Activity, Amount, ChannelCloseInfo, ChannelCloseState, DecodedData,
-    ExchangeRate, FailedSwapInfo, FeatureFlag, FiatValue, IncomingPaymentInfo,
-    InvoiceCreationMetadata, InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails,
-    LnUrlWithdrawDetails, MaxRoutingFeeMode, OfferInfo, OfferKind, OutgoingPaymentInfo,
-    PaymentInfo, PaymentMetadata, RangeHit, Recipient, TzConfig,
+    FailedSwapInfo, FeatureFlag, FiatValue, IncomingPaymentInfo, InvoiceCreationMetadata,
+    InvoiceDetails, LightningNode, LiquidityLimit, LnUrlPayDetails, LnUrlWithdrawDetails,
+    MaxRoutingFeeMode, Offer, OfferInfo, OutgoingPaymentInfo, PaymentInfo, PaymentMetadata,
+    RangeHit, Recipient, TzConfig,
 };
 
 pub(crate) fn poll_for_user_input(node: &LightningNode, log_file_path: &str) {
@@ -1176,56 +1176,42 @@ fn collect_last_offer(node: &LightningNode) -> Result<()> {
 }
 
 fn print_offer(offer: &OfferInfo) {
-    let kind = match offer.offer_kind {
-        OfferKind::Pocket { .. } => "Pocket",
-    };
-
     let created_at: DateTime<Local> = offer.created_at.into();
     let expires_at: Option<DateTime<Local>> = offer.expires_at.map(Into::into);
 
-    println!("{kind} offer created at {created_at}:");
+    println!("Offer created at {created_at}:");
     println!("      Expires at:         {expires_at:?}");
     println!(
         "      Amount:             {}",
         amount_to_string(&offer.amount)
     );
     println!("      LNURL-w:            {:?}", offer.lnurlw);
-    match &offer.offer_kind {
-        OfferKind::Pocket {
-            id,
-            exchange_rate,
-            topup_value_minor_units,
-            exchange_fee_minor_units,
-            exchange_fee_rate_permyriad,
-            error,
-            ..
-        } => {
-            println!("                   ID:    {id}");
-            println!(
-                "      Value exchanged:    {:.2} {}",
-                *topup_value_minor_units as f64 / 100f64,
-                exchange_rate.currency_code,
-            );
-            println!(
-                "      Exchange fee rate:  {}%",
-                *exchange_fee_rate_permyriad as f64 / 100_f64
-            );
-            println!(
-                "      Exchange fee value: {:.2} {}",
-                *exchange_fee_minor_units as f64 / 100f64,
-                exchange_rate.currency_code,
-            );
-            let exchanged_at: DateTime<Utc> = exchange_rate.updated_at.into();
-            println!(
-                "             Exchanged at:     {}",
-                exchanged_at.format("%d/%m/%Y %T UTC"),
-            );
 
-            if let Some(e) = error {
-                println!("             Failure reason: {e:?}");
-            }
-        }
+    println!("                   ID:    {}", offer.offer.id);
+    println!(
+        "      Value exchanged:    {:.2} {}",
+        offer.offer.topup_value_minor_units as f64 / 100f64,
+        offer.offer.exchange_rate.currency_code,
+    );
+    println!(
+        "      Exchange fee rate:  {}%",
+        offer.offer.exchange_fee_rate_permyriad as f64 / 100_f64
+    );
+    println!(
+        "      Exchange fee value: {:.2} {}",
+        offer.offer.exchange_fee_minor_units as f64 / 100f64,
+        offer.offer.exchange_rate.currency_code,
+    );
+    let exchanged_at: DateTime<Utc> = offer.offer.exchange_rate.updated_at.into();
+    println!(
+        "             Exchanged at:     {}",
+        exchanged_at.format("%d/%m/%Y %T UTC"),
+    );
+
+    if let Some(e) = &offer.offer.error {
+        println!("             Failure reason: {e:?}");
     }
+
     println!("      Status:             {:?}", offer.status);
 }
 
@@ -1309,10 +1295,10 @@ fn print_activity(activity: Activity) -> Result<()> {
         } => print_outgoing_payment(outgoing_payment_info),
         Activity::OfferClaim {
             incoming_payment_info,
-            offer_kind,
+            offer,
         } => {
             print_incoming_payment(incoming_payment_info)?;
-            println!("      Offer:            {}", offer_to_string(offer_kind));
+            println!("      Offer:            {}", offer_to_string(offer));
             Ok(())
         }
         Activity::Swap {
@@ -1520,35 +1506,21 @@ fn clear_wallet(node: &LightningNode, words: &mut dyn Iterator<Item = &str>) -> 
     Ok(())
 }
 
-fn offer_to_string(offer: OfferKind) -> String {
-    match offer {
-        OfferKind::Pocket {
-            id,
-            exchange_rate:
-                ExchangeRate {
-                    currency_code,
-                    rate,
-                    updated_at,
-                },
-            topup_value_minor_units,
-            exchange_fee_minor_units,
-            exchange_fee_rate_permyriad,
-            lightning_payout_fee,
-            ..
-        } => {
-            let updated_at: DateTime<Utc> = updated_at.into();
-            format!(
-				"Pocket exchange ({id}) of {:.2} {currency_code} at {} at rate {rate} SATS per {currency_code}, fee was {:.2}% or {:.2}, payout fee charged {} {currency_code}",
-				topup_value_minor_units as f64 / 100f64,
-				updated_at.format("%d/%m/%Y %T UTC"),
-				exchange_fee_rate_permyriad as f64 / 100f64,
-				exchange_fee_minor_units as f64 / 100f64,
-                lightning_payout_fee
-                    .map(|f| amount_to_string(&f))
-                    .unwrap_or("N/A".to_string()),
-			)
-        }
-    }
+fn offer_to_string(offer: Offer) -> String {
+    let updated_at: DateTime<Utc> = offer.exchange_rate.updated_at.into();
+    let currency_code = offer.exchange_rate.currency_code;
+    let rate = offer.exchange_rate.rate;
+
+    format!("Pocket exchange ({}) of {:.2} {currency_code} at {} at rate {rate} SATS per {currency_code}, fee was {:.2}% or {:.2}, payout fee charged {} {currency_code}",
+            offer.id,
+            offer.topup_value_minor_units as f64 / 100f64,
+            updated_at.format("%d/%m/%Y %T UTC"),
+            offer.exchange_fee_rate_permyriad as f64 / 100f64,
+            offer.exchange_fee_minor_units as f64 / 100f64,
+            offer.lightning_payout_fee
+                .map(|f| amount_to_string(&f))
+                .unwrap_or("N/A".to_string()),
+        )
 }
 
 fn fiat_value_to_string(value: &FiatValue) -> String {
@@ -1591,9 +1563,7 @@ fn calculate_lightning_payout_fee(
 
     let offer = uncompleted_offers
         .into_iter()
-        .find(|o| match &o.offer_kind {
-            OfferKind::Pocket { id, .. } => id == offer_id,
-        })
+        .find(|o| o.offer.id == offer_id)
         .ok_or(anyhow!("Couldn't find offer with id: {offer_id}"))?;
 
     let lightning_payout_fee = node.fiat_topup().calculate_payout_fee(offer)?;

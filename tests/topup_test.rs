@@ -6,7 +6,7 @@ use perro::Error::InvalidInput;
 use std::time::Duration;
 
 use serial_test::file_serial;
-use uniffi_lipalightninglib::{ActionRequiredItem, OfferInfo, OfferKind, OfferStatus};
+use uniffi_lipalightninglib::{ActionRequiredItem, OfferInfo, OfferStatus};
 
 #[test]
 #[file_serial(key, path => "/tmp/3l-int-tests-lock")]
@@ -113,7 +113,6 @@ fn test_topup() {
     assert!(matches!(
         uncompleted_offers.first().unwrap(),
         OfferInfo {
-            offer_kind: OfferKind::Pocket { .. },
             status: OfferStatus::READY,
             ..
         }
@@ -147,25 +146,21 @@ fn test_topup() {
     assert!(matches!(
         uncompleted_offers.first().unwrap(),
         OfferInfo {
-            offer_kind: OfferKind::Pocket { .. },
             status: OfferStatus::REFUNDED,
             ..
         }
     ));
 
-    let refunded_topup_id = match &uncompleted_offers.first().unwrap().offer_kind {
-        OfferKind::Pocket { id, .. } => id.to_string(),
-    };
-
+    let refunded_topup_id = &uncompleted_offers.first().unwrap().offer.id.to_string();
     node.actions_required()
         .dismiss_topup(refunded_topup_id.clone())
         .unwrap();
 
     let uncompleted_offers =
         offer_info_from_actions_required_list(&node.actions_required().list().unwrap());
-    uncompleted_offers.iter().find(|o| match &o.offer_kind {
-        OfferKind::Pocket { id, .. } => id.to_string(),
-    } == refunded_topup_id);
+    uncompleted_offers
+        .iter()
+        .find(|o| &o.offer.id.to_string() == refunded_topup_id);
 }
 
 fn offer_info_from_actions_required_list(list: &[ActionRequiredItem]) -> Vec<OfferInfo> {
