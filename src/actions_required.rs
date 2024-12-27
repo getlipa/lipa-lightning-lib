@@ -124,7 +124,7 @@ impl ActionsRequired {
     /// Hides the topup with the given id. Can be called on expired topups so that they stop being returned
     /// by [`ActionsRequired::list`].
     ///
-    /// Topup id can be obtained from [`OfferKind::Pocket`](crate::OfferKind::Pocket).
+    /// Topup id can be obtained from [`Offer`](crate::Offer).
     ///
     /// Requires network: **yes**
     pub fn dismiss_topup(&self, id: String) -> Result<()> {

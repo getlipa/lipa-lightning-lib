@@ -357,14 +357,14 @@ impl Activities {
                     .remote_services_config
                     .lipa_lightning_domain,
             )?;
-            let offer_kind = fill_payout_fee(
+            let offer = fill_payout_fee(
                 offer,
                 incoming_payment_info.requested_amount.sats.as_msats(),
                 &exchange_rate,
             );
             Ok(Activity::OfferClaim {
                 incoming_payment_info,
-                offer_kind,
+                offer,
             })
         } else if let Some(ref s) = payment_details.swap_info {
             let swap_info = SwapInfo {

@@ -18,35 +18,32 @@ pub enum OfferStatus {
     SETTLED,
 }
 
+/// Values are denominated in the fiat currency the user sent to the exchange.
+/// The currency code can be found in `exchange_rate`.
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub enum OfferKind {
-    /// An offer related to a topup using the Pocket exchange
-    /// Values are denominated in the fiat currency the user sent to the exchange.
-    /// The currency code can be found in `exchange_rate`.
-    Pocket {
-        id: String,
-        /// The exchange rate used by the exchange to exchange fiat to sats.
-        exchange_rate: ExchangeRate,
-        /// The original fiat amount sent to the exchange.
-        topup_value_minor_units: u64,
-        /// The sat amount after the exchange. Isn't available for topups collected before version v0.30.0-beta.
-        topup_value_sats: Option<u64>,
-        /// The fee paid to perform the exchange from fiat to sats.
-        exchange_fee_minor_units: u64,
-        /// The rate of the fee expressed in permyriad (e.g. 1.5% would be 150).
-        exchange_fee_rate_permyriad: u16,
-        /// Optional payout fees collected by pocket.
-        lightning_payout_fee: Option<Amount>,
-        /// The optional error that might have occurred in the offer withdrawal process.
-        error: Option<PocketOfferError>,
-    },
+pub struct Offer {
+    pub id: String,
+    /// The exchange rate used by the exchange to exchange fiat to sats.
+    pub exchange_rate: ExchangeRate,
+    /// The original fiat amount sent to the exchange.
+    pub topup_value_minor_units: u64,
+    /// The sat amount after the exchange. Isn't available for topups collected before version v0.30.0-beta.
+    pub topup_value_sats: Option<u64>,
+    /// The fee paid to perform the exchange from fiat to sats.
+    pub exchange_fee_minor_units: u64,
+    /// The rate of the fee expressed in permyriad (e.g. 1.5% would be 150).
+    pub exchange_fee_rate_permyriad: u16,
+    /// Optional payout fees collected by pocket.
+    pub lightning_payout_fee: Option<Amount>,
+    /// The optional error that might have occurred in the offer withdrawal process.
+    pub error: Option<PocketOfferError>,
 }
 
 /// Information on a funds offer that can be claimed
 /// using [`crate::LightningNode::request_offer_collection`].
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub struct OfferInfo {
-    pub offer_kind: OfferKind,
+    pub offer: Offer,
     /// Amount available for withdrawal
     pub amount: Amount,
     /// The lnurlw string that will be used to withdraw this offer. Can be empty if the offer isn't
@@ -75,7 +72,7 @@ impl OfferInfo {
         };
 
         OfferInfo {
-            offer_kind: OfferKind::Pocket {
+            offer: Offer {
                 id: topup_info.id,
                 exchange_rate,
                 topup_value_minor_units: topup_info.topup_value_minor_units,
