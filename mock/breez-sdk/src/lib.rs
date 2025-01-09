@@ -60,13 +60,14 @@ pub use breez_sdk_core::{
     PrepareRedeemOnchainFundsRequest, PrepareRefundRequest, ReceiveOnchainRequest,
     ReceivePaymentRequest, ReceivePaymentResponse, RedeemOnchainFundsRequest, RefundRequest,
     ReportIssueRequest, ReportPaymentFailureDetails, ReverseSwapFeesRequest, ReverseSwapStatus,
-    SendPaymentRequest, SignMessageRequest, SwapAmountType, SwapStatus, UnspentTransactionOutput,
+    SendPaymentRequest, SignMessageRequest, SwapAmountType, SwapInfo, SwapStatus,
+    UnspentTransactionOutput,
 };
 use breez_sdk_core::{
     ChannelState, Config, LspInformation, NodeState, OpenChannelFeeResponse, PayOnchainResponse,
     PrepareRedeemOnchainFundsResponse, PrepareRefundResponse, RecommendedFees,
     RedeemOnchainFundsResponse, RefundResponse, ReverseSwapInfo, ReverseSwapPairInfo,
-    SendPaymentResponse, ServiceHealthCheckResponse, SignMessageResponse, SwapInfo,
+    SendPaymentResponse, ServiceHealthCheckResponse, SignMessageResponse,
 };
 use chrono::{DateTime, Utc};
 use hex::FromHex;
@@ -1349,6 +1350,11 @@ impl BreezServices {
             .unwrap();
 
         (invoice.to_string(), preimage, payment_hash.to_string())
+    }
+
+    pub async fn claim_reverse_swap(&self, _address: String) -> SdkResult<()> {
+        self.issue_clear_wallet_tx().await;
+        Ok(())
     }
 }
 
