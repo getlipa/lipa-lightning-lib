@@ -216,7 +216,7 @@ fn start_address_txs_confirmed(words: &mut dyn Iterator<Item = &str>) -> Result<
         "{{
          \"template\": \"address_txs_confirmed\",
          \"data\": {{
-          \"payment_hash\": \"{address}\"
+          \"address\": \"{address}\"
          }}
         }}"
     );

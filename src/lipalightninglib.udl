@@ -1003,6 +1003,7 @@ dictionary Secret {
 interface Notification {
     Bolt11PaymentReceived(u64 amount_sat, string payment_hash);
     OnchainPaymentSwappedIn(u64 amount_sat, string payment_hash);
+    OnchainPaymentSwappedOut();
     LnurlInvoiceCreated(u64 amount_sat);
 };
 
