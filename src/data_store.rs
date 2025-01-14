@@ -6,7 +6,8 @@ use crate::{EnableStatus, ExchangeRate, Offer, PocketOfferError, TzConfig, UserP
 use chrono::{DateTime, Utc};
 use crow::FiatTopupSetupInfo;
 use crow::{PermanentFailureCode, TemporaryFailureCode};
-use perro::{ensure, invalid_input, MapToError};
+use log::debug;
+use perro::MapToError;
 use rusqlite::{backup, params, Connection, OptionalExtension, Params, Row};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -14,8 +15,8 @@ pub(crate) const BACKUP_DB_FILENAME_SUFFIX: &str = ".backup";
 
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) struct LocalPaymentData {
-    pub user_preferences: UserPreferences,
-    pub exchange_rate: ExchangeRate,
+    pub user_preferences: Option<UserPreferences>,
+    pub exchange_rate: Option<ExchangeRate>,
     pub offer: Option<Offer>,
     pub personal_note: Option<String>,
     pub received_on: Option<String>,
@@ -74,7 +75,7 @@ impl DataStore {
         tx.execute(
             "\
             INSERT INTO payments (hash, timezone_id, timezone_utc_offset_secs, fiat_currency, \
-            exchange_rates_history_snaphot_id, received_on, received_lnurl_comment)\
+            exchange_rates_history_snapshot_id, received_on, received_lnurl_comment)\
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)\
             ",
             (
@@ -141,7 +142,7 @@ impl DataStore {
             o.exchange_fee_minor_units, o.exchange_fee_rate_permyriad, o.error, o.topup_value_sats, \
             payments.personal_note, payments.received_on, payments.received_lnurl_comment \
             FROM payments \
-            LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snaphot_id=h.snapshot_id \
+            LEFT JOIN exchange_rates_history h on payments.exchange_rates_history_snapshot_id=h.snapshot_id \
                 AND payments.fiat_currency=h.fiat_currency \
             LEFT JOIN offers o ON o.payment_hash=payments.hash \
             WHERE hash=? \
@@ -260,10 +261,24 @@ impl DataStore {
                 params![personal_note, payment_hash],
             )
             .map_to_permanent_failure("Failed to store personal note in local db")?;
-        ensure!(
-            number_of_rows == 1,
-            invalid_input("Payment not found to set personal note")
-        );
+
+        if number_of_rows == 0 {
+            debug!(
+                "Payment with hash [{}] not found in local db, inserting new row.",
+                payment_hash
+            );
+            self.conn
+                .execute(
+                    "
+                INSERT INTO payments (personal_note, hash) \
+                    VALUES (?1, ?2);",
+                    params![personal_note, payment_hash],
+                )
+                .map_to_permanent_failure(
+                    "Failed to insert new payment to store personal note in local db",
+                )?;
+        }
+
         Ok(())
     }
 
@@ -589,34 +604,55 @@ fn offer_from_row(row: &Row) -> rusqlite::Result<Option<Offer>> {
 }
 
 fn local_payment_data_from_row(row: &Row) -> rusqlite::Result<LocalPaymentData> {
-    let timezone_id: String = row.get(0)?;
-    let timezone_utc_offset_secs: i32 = row.get(1)?;
-    let fiat_currency: String = row.get(2)?;
-    let rate: u32 = row.get(3)?;
-    let updated_at: chrono::DateTime<chrono::Utc> = row.get(4)?;
+    let user_preferences = user_preferences_from_row(row)?;
+    let exchange_rate = payment_exchange_rate_from_row(row)?;
     let offer = offer_from_row(row)?;
     let personal_note = row.get(14)?;
     let received_on = row.get(15)?;
     let received_lnurl_comment = row.get(16)?;
 
     Ok(LocalPaymentData {
-        user_preferences: UserPreferences {
-            fiat_currency: fiat_currency.clone(),
-            timezone_config: TzConfig {
-                timezone_id,
-                timezone_utc_offset_secs,
-            },
-        },
-        exchange_rate: ExchangeRate {
-            currency_code: fiat_currency,
-            rate,
-            updated_at: SystemTime::from(updated_at),
-        },
+        user_preferences,
+        exchange_rate,
         offer,
         personal_note,
         received_on,
         received_lnurl_comment,
     })
+}
+
+fn user_preferences_from_row(row: &Row) -> rusqlite::Result<Option<UserPreferences>> {
+    let timezone_id: Option<String> = row.get(0)?;
+    let timezone_utc_offset_secs: Option<i32> = row.get(1)?;
+    let fiat_currency = row.get(2)?;
+
+    match (timezone_id, timezone_utc_offset_secs, fiat_currency) {
+        (Some(timezone_id), Some(timezone_utc_offset_secs), Some(fiat_currency)) => {
+            Ok(Some(UserPreferences {
+                fiat_currency,
+                timezone_config: TzConfig {
+                    timezone_id,
+                    timezone_utc_offset_secs,
+                },
+            }))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn payment_exchange_rate_from_row(row: &Row) -> rusqlite::Result<Option<ExchangeRate>> {
+    let currency_code: Option<String> = row.get(2)?;
+    let rate: Option<u32> = row.get(3)?;
+    let updated_at: Option<DateTime<Utc>> = row.get(4)?;
+
+    match (currency_code, rate, updated_at) {
+        (Some(currency_code), Some(rate), Some(updated_at)) => Ok(Some(ExchangeRate {
+            currency_code,
+            rate,
+            updated_at: SystemTime::from(updated_at),
+        })),
+        _ => Ok(None),
+    }
 }
 
 pub fn from_offer_error(error: Option<PocketOfferError>) -> Option<String> {
@@ -704,7 +740,7 @@ fn fiat_topup_info_from_row(row: &Row) -> rusqlite::Result<Option<FiatTopupSetup
 
 #[cfg(test)]
 mod tests {
-    use crate::data_store::{CreatedInvoice, DataStore};
+    use crate::data_store::{CreatedInvoice, DataStore, LocalPaymentData};
     use crate::node_config::TzConfig;
     use crate::{EnableStatus, ExchangeRate, Offer, PocketOfferError, UserPreferences};
 
@@ -831,14 +867,21 @@ mod tests {
         let local_payment_data = data_store.retrieve_payment_info("hash").unwrap().unwrap();
         assert_eq!(local_payment_data.offer.unwrap(), offer);
         assert_eq!(
-            local_payment_data.user_preferences,
-            user_preferences.clone()
+            local_payment_data.user_preferences.as_ref().unwrap(),
+            &user_preferences.clone()
         );
         assert_eq!(
-            local_payment_data.exchange_rate.currency_code,
+            local_payment_data
+                .exchange_rate
+                .as_ref()
+                .unwrap()
+                .currency_code,
             user_preferences.fiat_currency
         );
-        assert_eq!(local_payment_data.exchange_rate.rate, 4123);
+        assert_eq!(
+            local_payment_data.exchange_rate.as_ref().unwrap().rate,
+            4123
+        );
 
         let local_payment_data = data_store
             .retrieve_payment_info("hash - no offer")
@@ -846,14 +889,21 @@ mod tests {
             .unwrap();
         assert!(local_payment_data.offer.is_none());
         assert_eq!(
-            local_payment_data.user_preferences,
-            user_preferences.clone()
+            local_payment_data.user_preferences.as_ref().unwrap(),
+            &user_preferences.clone()
         );
         assert_eq!(
-            local_payment_data.exchange_rate.currency_code,
+            local_payment_data
+                .exchange_rate
+                .as_ref()
+                .unwrap()
+                .currency_code,
             user_preferences.fiat_currency
         );
-        assert_eq!(local_payment_data.exchange_rate.rate, 4123);
+        assert_eq!(
+            local_payment_data.exchange_rate.as_ref().unwrap().rate,
+            4123
+        );
 
         let local_payment_data = data_store
             .retrieve_payment_info("hash - no error")
@@ -893,6 +943,25 @@ mod tests {
         assert_eq!(
             local_payment_data_without_note_from_store,
             local_payment_data
+        );
+
+        data_store
+            .update_personal_note("hash - no local data", Some("a note"))
+            .unwrap();
+        let local_payment_data_with_note_from_store = data_store
+            .retrieve_payment_info("hash - no local data")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            local_payment_data_with_note_from_store,
+            LocalPaymentData {
+                user_preferences: None,
+                exchange_rate: None,
+                offer: None,
+                personal_note: Some(String::from("a note")),
+                received_on: None,
+                received_lnurl_comment: None,
+            }
         );
     }
     #[test]

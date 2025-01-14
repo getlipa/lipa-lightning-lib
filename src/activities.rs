@@ -322,8 +322,15 @@ impl Activities {
         let (exchange_rate, tz_config, personal_note, offer, received_on, received_lnurl_comment) =
             match local_payment_data {
                 Some(data) => (
-                    Some(data.exchange_rate),
-                    data.user_preferences.timezone_config,
+                    data.exchange_rate
+                        .or_else(|| self.support.get_exchange_rate()),
+                    data.user_preferences.map(|u| u.timezone_config).unwrap_or(
+                        self.support
+                            .user_preferences
+                            .lock_unwrap()
+                            .timezone_config
+                            .clone(),
+                    ),
                     data.personal_note,
                     data.offer,
                     data.received_on,
@@ -512,27 +519,39 @@ impl Activities {
             .lock_unwrap()
             .retrieve_payment_info(&invoice_details.payment_hash)?
             .ok_or_permanent_failure("Locally created invoice doesn't have local payment data")?;
-        let exchange_rate = Some(local_payment_data.exchange_rate);
-        let invoice_details = InvoiceDetails::from_ln_invoice(invoice, &exchange_rate);
+        let invoice_details =
+            InvoiceDetails::from_ln_invoice(invoice, &local_payment_data.exchange_rate);
         // For receiving payments, we use the invoice timestamp.
+        let timezone_config = local_payment_data
+            .user_preferences
+            .map(|u| u.timezone_config)
+            .unwrap_or(
+                self.support
+                    .user_preferences
+                    .lock_unwrap()
+                    .timezone_config
+                    .clone(),
+            );
         let time = invoice_details
             .creation_timestamp
-            .with_timezone(local_payment_data.user_preferences.timezone_config);
+            .with_timezone(timezone_config);
         let lsp_fees = created_invoice
             .channel_opening_fees
             .unwrap_or_default()
             .as_msats()
-            .to_amount_up(&exchange_rate);
+            .to_amount_up(&local_payment_data.exchange_rate);
         let requested_amount = invoice_details
             .amount
             .clone()
             .ok_or_permanent_failure("Locally created invoice doesn't include an amount")?
             .sats
             .as_sats()
-            .to_amount_down(&exchange_rate);
+            .to_amount_down(&local_payment_data.exchange_rate);
 
         let amount = requested_amount.clone().sats - lsp_fees.sats;
-        let amount = amount.as_sats().to_amount_down(&exchange_rate);
+        let amount = amount
+            .as_sats()
+            .to_amount_down(&local_payment_data.exchange_rate);
 
         let personal_note = local_payment_data.personal_note;
 
