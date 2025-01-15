@@ -89,7 +89,7 @@ ctor = "0.2.9"
 qrcode = { version = "0.14.1", default-features = false }
 rustyline = { version = "15.0.0", features = ["derive"] }
 serial_test = { version = "3.2.0", features = ["file_locks"] }
-strip-ansi-escapes = "0.2.0"
+strip-ansi-escapes = "0.2.1"
 thousands = "0.2.0"
 lazy_static = "1.5.0"
 
