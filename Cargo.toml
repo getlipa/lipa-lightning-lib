@@ -45,7 +45,7 @@ hex = "0.4.3"
 iban_validate = "4.0.1"
 log = "0.4.25"
 num_enum = "0.7.3"
-phonenumber = "0.3.6"
+phonenumber = "0.3.7"
 rand = "0.8.5"
 regex = { version = "1.11.1" }
 rusqlite_migration = "1"
