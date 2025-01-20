@@ -1053,7 +1053,7 @@ fn refund_failed_swap(node: &LightningNode, words: &mut dyn Iterator<Item = &str
         .swap()
         .sweep(resolve_failed_swap_info)
         .map_err(|e| anyhow!("Failed to resolve failed swap: {e}"))?;
-    println!("Successfully broadcasted refund transaction - txid: {txid}");
+    println!("Successfully broadcast refund transaction - txid: {txid}");
 
     Ok(())
 }
