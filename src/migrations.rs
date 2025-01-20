@@ -162,6 +162,28 @@ const MIGRATION_18_FIAT_CURRENCY: &str = "
     );
 ";
 
+const MIGRATION_19_PAYMENT_OPTIONAL_FIELDS: &str = "
+    CREATE TABLE payments_new (
+        hash TEXT NOT NULL PRIMARY KEY ON CONFLICT REPLACE,
+        timezone_id TEXT DEFAULT NULL,
+        timezone_utc_offset_secs INTEGER NULL,
+        fiat_currency TEXT DEFAULT NULL,
+        exchange_rates_history_snapshot_id INTEGER NULL,
+        personal_note TEXT DEFAULT NULL,
+        received_on TEXT DEFAULT NULL,
+        received_lnurl_comment TEXT DEFAULT NULL
+    );
+
+    INSERT INTO payments_new (hash, timezone_id, timezone_utc_offset_secs, fiat_currency,
+        exchange_rates_history_snapshot_id, personal_note, received_on, received_lnurl_comment)
+        SELECT hash, timezone_id, timezone_utc_offset_secs, fiat_currency, exchange_rates_history_snaphot_id, personal_note, received_on, received_lnurl_comment
+        FROM payments;
+
+    DROP TABLE payments;
+
+    ALTER TABLE payments_new RENAME TO payments;
+";
+
 pub(crate) fn migrate(conn: &mut Connection) -> Result<()> {
     migrations()
         .to_latest(conn)
@@ -188,6 +210,7 @@ fn migrations() -> Migrations<'static> {
         M::up(MIGRATION_16_HIDDEN_CHANNEL_CLOSE_AMOUNT),
         M::up(MIGRATION_17_HIDDEN_FAILED_SWAPS),
         M::up(MIGRATION_18_FIAT_CURRENCY),
+        M::up(MIGRATION_19_PAYMENT_OPTIONAL_FIELDS),
     ])
 }
 
