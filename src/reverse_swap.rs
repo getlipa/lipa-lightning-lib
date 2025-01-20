@@ -11,7 +11,7 @@ pub struct ReverseSwapInfo {
     /// The tx id of the claim tx, which is the final tx in the reverse swap flow, which send funds
     /// to the targeted on-chain address.
     ///
-    /// It will only be present once the claim tx is broadcasted.
+    /// It will only be present once the claim tx is broadcast.
     pub claim_txid: Option<String>,
     pub status: ReverseSwapStatus,
 }
