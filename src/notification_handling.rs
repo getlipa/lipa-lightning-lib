@@ -248,10 +248,7 @@ fn handle_reverse_swap_notification(
     sdk: Arc<BreezServices>,
     address: String,
 ) -> NotificationHandlingResult<Notification> {
-    debug!(
-        "Trying to claim reverse swap with lock address: {}",
-        address
-    );
+    debug!("Trying to claim reverse swap with lock address: {address}");
 
     rt.handle()
         .block_on(sdk.claim_reverse_swap(address))
