@@ -14,13 +14,11 @@ use crate::{
 };
 use breez_sdk_core::{
     BreezEvent, BreezServices, EventListener, OpenChannelFeeRequest, Payment, PaymentStatus,
-    ReceivePaymentRequest,
+    ReceivePaymentRequest, SwapInfo,
 };
 use log::{debug, Level};
 use parrot::AnalyticsClient;
-use perro::{
-    ensure, invalid_input, permanent_failure, runtime_error, MapToError, OptionToError, ResultTrait,
-};
+use perro::{ensure, invalid_input, permanent_failure, runtime_error, MapToError, ResultTrait};
 use pigeon::submit_lnurl_pay_invoice;
 use serde::Deserialize;
 use std::path::Path;
@@ -52,6 +50,9 @@ pub enum Notification {
         amount_sat: u64,
         payment_hash: String,
     },
+    /// The notification that an on-chain pay transaction has been broadcast successfully.
+    // TODO: Return `payment_hash` and `amount_sat`. Requires changes by the Breez SDK https://github.com/breez/breez-sdk-greenlight/issues/1159
+    OnchainPaymentSwappedOut {},
     /// The notification that an invoice was created and submitted for payment as part of an
     /// incoming LNURL payment.
     /// The `amount_sat` of the created invoice is provided.
@@ -210,26 +211,14 @@ fn handle_payment_received_notification(
     })
 }
 
-fn handle_address_txs_confirmed_notification(
+fn handle_swap_notification(
     rt: AsyncRuntime,
     sdk: Arc<BreezServices>,
     event_receiver: Receiver<BreezEvent>,
     address: String,
+    in_progress_swap: SwapInfo,
     timeout_instant: Instant,
 ) -> NotificationHandlingResult<Notification> {
-    let in_progress_swap = rt
-        .handle()
-        .block_on(sdk.in_progress_swap())
-        .map_to_runtime_error(
-            RuntimeErrorCode::NodeUnavailable,
-            "Failed to get in-progress swap",
-        )
-        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?
-        .ok_or_runtime_error(
-            NotificationHandlingErrorCode::InProgressSwapNotFound,
-            "Received an address_txs_confirmed event when no swap is in progress",
-        )?;
-
     ensure!(
         in_progress_swap.bitcoin_address == address,
         runtime_error(
@@ -252,6 +241,52 @@ fn handle_address_txs_confirmed_notification(
         amount_sat: payment.amount_msat / 1000,
         payment_hash,
     })
+}
+
+fn handle_reverse_swap_notification(
+    rt: AsyncRuntime,
+    sdk: Arc<BreezServices>,
+    address: String,
+) -> NotificationHandlingResult<Notification> {
+    debug!("Trying to claim reverse swap with lock address: {address}");
+
+    rt.handle()
+        .block_on(sdk.claim_reverse_swap(address))
+        .map_to_runtime_error(
+            NotificationHandlingErrorCode::NodeUnavailable,
+            "Failed to claim reverse swap",
+        )?;
+
+    Ok(Notification::OnchainPaymentSwappedOut {})
+}
+
+fn handle_address_txs_confirmed_notification(
+    rt: AsyncRuntime,
+    sdk: Arc<BreezServices>,
+    event_receiver: Receiver<BreezEvent>,
+    address: String,
+    timeout_instant: Instant,
+) -> NotificationHandlingResult<Notification> {
+    if let Some(in_progress_swap) = rt
+        .handle()
+        .block_on(sdk.in_progress_swap())
+        .map_to_runtime_error(
+            RuntimeErrorCode::NodeUnavailable,
+            "Failed to get in-progress swap",
+        )
+        .map_runtime_error_using(NotificationHandlingErrorCode::from_runtime_error)?
+    {
+        return handle_swap_notification(
+            rt,
+            sdk,
+            event_receiver,
+            address,
+            in_progress_swap,
+            timeout_instant,
+        );
+    }
+
+    handle_reverse_swap_notification(rt, sdk, address)
 }
 
 fn handle_lnurl_pay_request_notification(
@@ -463,12 +498,12 @@ fn wait_for_payment(
     timeout_instant: Instant,
 ) -> NotificationHandlingResult<Payment> {
     while Instant::now() < timeout_instant {
-        debug!("Checking exitent payments...");
+        debug!("Checking existent payments...");
         if let Some(payment) = get_confirmed_payment(&rt, &sdk, payment_hash)? {
-            debug!("Checking exitent payments... Found");
+            debug!("Checking existent payments... Found");
             return Ok(payment);
         }
-        debug!("Checking exitent payments... None");
+        debug!("Checking existent payments... None");
 
         if let Some(payment) = check_for_received_payment(&event_receiver, payment_hash)? {
             return Ok(payment);
