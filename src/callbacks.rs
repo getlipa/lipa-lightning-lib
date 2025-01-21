@@ -41,7 +41,7 @@ pub trait EventsCallback: Send + Sync {
     ///   this swap.
     fn swap_received(&self, payment_hash: String);
 
-    /// This callback will be called when a TX of an on-chain send has been broadcasted to the Bitcoin network.
+    /// This callback will be called when a TX of an on-chain send has been broadcast to the Bitcoin network.
     ///
     /// Parameters:
     /// * `reverse_swap_id` - can be used to find the [`Activity`](crate::Activity) corresponding to
