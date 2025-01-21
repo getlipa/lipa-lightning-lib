@@ -32,7 +32,7 @@ jobs:
         env:
           CARGO_CONFIG_TOML_BREEZ: ${{ secrets.CARGO_CONFIG_TOML_BREEZ }}
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.0
+        uses: Swatinem/rust-cache@v2.7.7
       - name: Restore .3l_local_test cache
         uses: actions/cache/restore@v4
         with:
