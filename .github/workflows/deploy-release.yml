@@ -385,10 +385,10 @@ jobs:
         id: set-var
         run: |
           if [[ $BRANCH_NAMES == *'main'* ]]; then
-            echo "::set-output name=is_main::true"
+            echo "is_main=true" >> $GITHUB_OUTPUT
             echo "Setting is_main to true"
           else
-            echo "::set-output name=is_main::false"
+            echo "is_main=false" >> $GITHUB_OUTPUT
             echo "Setting is_main to false"
           fi
 
