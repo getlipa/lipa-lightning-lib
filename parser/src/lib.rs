@@ -8,6 +8,7 @@ use nom::character::complete::space0;
 use nom::error::Error;
 use nom::sequence::delimited;
 use nom::Finish;
+use nom::Parser;
 
 /// Enum representing possible errors why parsing could fail.
 #[derive(Debug, PartialEq)]
@@ -27,7 +28,9 @@ pub enum ParseError {
 }
 
 pub fn parse_lightning_address(address: &str) -> Result<(), ParseError> {
-    let r = delimited(space0, lightning_address, space0)(address).finish();
+    let r = delimited(space0, lightning_address, space0)
+        .parse(address)
+        .finish();
     match r {
         Ok(("", ())) => Ok(()),
         Ok((rem, ())) => Err(ParseError::ExcessSuffix(address.len() - rem.len())),
@@ -39,7 +42,9 @@ pub fn parse_lightning_address(address: &str) -> Result<(), ParseError> {
 }
 
 pub fn parse_phone_number(number: &str) -> Result<String, ParseError> {
-    let r = delimited(space0, phone_number, space0)(number).finish();
+    let r = delimited(space0, phone_number, space0)
+        .parse(number)
+        .finish();
     match r {
         Ok(("", digits)) if digits.is_empty() => Err(ParseError::Incomplete),
         Ok(("", digits)) => Ok(digits),

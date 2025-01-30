@@ -26,12 +26,13 @@ fn punycode_label(s: &str) -> IResult<&str, Label> {
 
 fn unicode_label(s: &str) -> IResult<&str, Label> {
     // Leading, trailing, or doubled hyphens are not allowed.
-    let (s, parts) = separated_list1(nom_char('-'), take_while1(is_label_char))(s)?;
+    let (s, parts) = separated_list1(nom_char('-'), take_while1(is_label_char)).parse(s)?;
     if s.starts_with('-') {
         return preceded(
             nom_char('-'),
             take_while1(is_label_char).map(|_| Label::UnicodeWithHyphens),
-        )(s);
+        )
+        .parse(s);
     }
     match parts.as_slice() {
         [] => Err(nom::Err::Failure(Error {
@@ -65,7 +66,7 @@ fn is_valid_top_level_domain(label: &Label) -> bool {
 }
 
 pub(crate) fn domain(s: &str) -> IResult<&str, ()> {
-    let (s, labels) = separated_list1(nom_char('.'), label)(s)?;
+    let (s, labels) = separated_list1(nom_char('.'), label).parse(s)?;
     if !s.starts_with('.') && labels.len() > 1 {
         if let Some(label) = labels.last() {
             if is_valid_top_level_domain(label) {
@@ -73,5 +74,5 @@ pub(crate) fn domain(s: &str) -> IResult<&str, ()> {
             }
         }
     }
-    preceded(nom_char('.'), label.map(std::mem::drop))(s)
+    preceded(nom_char('.'), label.map(std::mem::drop)).parse(s)
 }
