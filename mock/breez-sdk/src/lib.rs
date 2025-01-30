@@ -196,7 +196,7 @@ impl BreezServices {
 
                 let amount_msat = max(provided_amount_msat, invoice_amount_msat);
 
-                let routing_fee_msat = rand::thread_rng().gen_range(1000..4000);
+                let routing_fee_msat = rand::rng().random_range(1000..4000);
                 if get_balance_msat() < amount_msat {
                     return Err(SendPaymentError::RouteNotFound {
                         err: "Ran out of routes".into(),
@@ -1289,12 +1289,12 @@ impl BreezServices {
         ln_address: bool,
     ) {
         for _ in 0..number_of_payments {
-            let amount_msat = rand::thread_rng().gen_range(1000..1_000_000_000);
+            let amount_msat = rand::rng().random_range(1000..1_000_000_000);
             let (invoice, preimage, payment_hash) = self.create_invoice(amount_msat, "");
 
             let ln_address = if ln_address {
-                let mut rng = rand::thread_rng();
-                let prefix: Vec<u8> = (0..10).map(|_| rng.gen_range(b'a'..=b'z')).collect();
+                let mut rng = rand::rng();
+                let prefix: Vec<u8> = (0..10).map(|_| rng.random_range(b'a'..=b'z')).collect();
                 Some(format!(
                     "{}@wallet.lipa.swiss",
                     String::from_utf8(prefix).unwrap()
@@ -1306,7 +1306,7 @@ impl BreezServices {
             let payment = create_payment(MockPayment {
                 payment_type: payment_type.clone(),
                 amount_msat,
-                fee_msat: rand::thread_rng().gen_range(1000..4000),
+                fee_msat: rand::rng().random_range(1000..4000),
                 description: None,
                 payment_hash,
                 payment_preimage: preimage,
@@ -1669,6 +1669,6 @@ fn create_payment(p: MockPayment) -> Payment {
 
 fn generate_32_random_bytes() -> Vec<u8> {
     let mut bytes = vec![0; 32];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     bytes
 }
