@@ -1,6 +1,6 @@
 use cipher::generic_array::{ArrayLength, GenericArray};
 use rand::rngs::OsRng;
-use rand::RngCore;
+use rand::TryRngCore;
 
 pub(crate) fn generate_random_bytes<N: ArrayLength<u8>>() -> Result<GenericArray<u8, N>, String> {
     let mut bytes = GenericArray::<u8, N>::default();
