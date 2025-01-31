@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use bitcoin::hashes::{sha256, Hash};
-use lightning_invoice::PaymentSecret;
+use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, InvoiceBuilder};
 use rand::{Rng, RngCore};
 use secp256k1::{Secp256k1, SecretKey};
